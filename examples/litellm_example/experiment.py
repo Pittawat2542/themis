@@ -1,9 +1,9 @@
-"""Implementation for running the OpenAI example experiment."""
+"""Implementation for running the LiteLLM example experiment."""
 
 from __future__ import annotations
 
-# Import the OpenAI-compatible provider to ensure it's registered
-from themis.generation.providers import openai_compatible  # noqa: F401
+# Import the LiteLLM provider to ensure it's registered
+from themis.generation.providers import litellm_provider  # noqa: F401
 
 from themis.core import entities as core_entities
 from themis.evaluation import extractors, metrics

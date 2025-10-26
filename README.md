@@ -14,7 +14,7 @@ Themis orchestrates prompt templates, LLM providers, generation strategies, eval
 - **🎯 Config-driven**: Define experiments in JSON/YAML, run them with a single command
 - **🔄 Resumable**: Automatic caching and resume—never lose your expensive LLM runs
 - **📊 Systematic**: Grid search over models × prompts × sampling strategies
-- **🔌 Provider-agnostic**: Works with OpenAI, Anthropic, local LLMs (LM Studio, Ollama, vLLM), or custom providers
+- **🔌 Provider-agnostic**: Works with 100+ LLM providers via LiteLLM (OpenAI, Anthropic, Azure, AWS Bedrock, Google AI, local LLMs, and more)
 - **📈 Built-in evaluation**: Exact match, math verification, custom metrics
 - **🎓 Production-ready**: Type-safe configs, structured logging, progress tracking
 
@@ -254,7 +254,9 @@ uv run python -m themis.cli list-providers
 uv run python -m themis.cli list-providers --verbose
 ```
 
-Shows built-in providers (fake, openai-compatible, vllm) and any custom registered providers.
+Shows built-in providers (fake, litellm, vllm) and any custom registered providers.
+
+**Note:** The `litellm` provider supports 100+ LLM providers including OpenAI, Anthropic, Azure OpenAI, AWS Bedrock, Google AI, Cohere, and many more. See [docs/LITELLM_PROVIDER.md](docs/LITELLM_PROVIDER.md) for details.
 
 #### `list-benchmarks` - Available Datasets
 
@@ -398,13 +400,18 @@ Themis uses JSON or YAML for configuration. Here's a complete example:
   "models": [
     {
       "name": "gpt-4",
-      "provider": "openai-compatible",
+      "provider": "litellm",
       "provider_options": {
-        "base_url": "http://localhost:1234/v1",
-        "api_key": "not-needed",
-        "model_mapping": {"gpt-4": "qwen2.5-7b-instruct"},
+        "api_key": "sk-...",
         "timeout": 60,
-        "n_parallel": 2
+        "n_parallel": 10
+      }
+    },
+    {
+      "name": "claude-3-opus-20240229",
+      "provider": "anthropic",
+      "provider_options": {
+        "timeout": 120
       }
     }
   ],
@@ -431,7 +438,7 @@ Themis uses JSON or YAML for configuration. Here's a complete example:
 
 **Models:**
 - `name`: Model identifier
-- `provider`: `fake`, `openai-compatible`, or custom
+- `provider`: `litellm`, `openai`, `anthropic`, `azure`, `bedrock`, `fake`, or custom
 - `provider_options`: Provider-specific configuration (API keys, endpoints, timeouts)
 
 **Samplings:**
@@ -557,7 +564,7 @@ uv run python -m themis.cli math500 \
 ✅ **Grid Search**: Cartesian product over models × samplings × prompts  
 ✅ **Progress Tracking**: tqdm progress bars and structured logging  
 ✅ **Type Safety**: Pydantic validation for configs and runtime entities  
-✅ **Provider Agnostic**: Unified interface for OpenAI, Anthropic, local LLMs, custom APIs  
+✅ **Provider Agnostic**: Unified interface for 100+ providers via LiteLLM (OpenAI, Anthropic, Azure, Bedrock, local LLMs, etc.)
 ✅ **Math Evaluation**: Built-in math-verify integration for numeric correctness  
 ✅ **Export Options**: CSV, JSON, HTML output formats  
 ✅ **Multi-Experiment Projects**: Organize related experiments with shared configs  
@@ -604,7 +611,7 @@ MIT License - see LICENSE file for details
 
 ## Roadmap
 
-- [ ] Additional provider support (Anthropic native, Google Vertex AI)
+- [x] Universal provider support via LiteLLM (100+ providers)
 - [ ] Web UI for experiment visualization
 - [ ] Distributed generation support
 - [ ] Advanced metrics (BLEU, ROUGE, semantic similarity)
