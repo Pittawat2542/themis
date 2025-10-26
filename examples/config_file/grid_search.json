@@ -1,0 +1,41 @@
+{
+  "run_id": "grid-search",
+  "storage_dir": ".cache/grid-search",
+  "resume": true,
+  "models": [
+    {
+      "name": "model-a",
+      "provider": "fake",
+      "description": "First model for grid search"
+    },
+    {
+      "name": "model-b",
+      "provider": "fake",
+      "description": "Second model for grid search",
+      "provider_options": {
+        "seed": 42
+      }
+    }
+  ],
+  "samplings": [
+    {
+      "name": "greedy",
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "max_tokens": 512
+    },
+    {
+      "name": "balanced",
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "max_tokens": 512
+    }
+  ],
+  "datasets": [
+    {
+      "name": "demo",
+      "kind": "demo",
+      "limit": 10
+    }
+  ]
+}

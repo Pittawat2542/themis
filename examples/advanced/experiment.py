@@ -8,7 +8,9 @@ from themis.evaluation import extractors, metrics, strategies as evaluation_stra
 from themis.experiment import builder as experiment_builder
 from themis.experiment import orchestrator
 from themis.generation import templates
+from themis.utils.progress import ProgressReporter
 from themis.generation import strategies as generation_strategies
+from themis.project import ProjectExperiment
 
 from experiments.example.config import ModelConfig
 
@@ -16,6 +18,47 @@ from . import datasets
 from .config import AdvancedExperimentConfig
 from .generation import PrioritizedGenerationRunner, TrackingProviderRouter
 from .pipeline import SubjectAwareEvaluationPipeline
+
+
+def create_project_experiment(config: AdvancedExperimentConfig) -> ProjectExperiment:
+    """Create a project experiment from the advanced configuration."""
+    
+    prompt_text = _prompt_for_style(config.prompt_style)
+    template = templates.PromptTemplate(
+        name=f"advanced-{config.prompt_style}",
+        template=prompt_text,
+        metadata={"style": config.prompt_style},
+    )
+
+    sampling_parameters = [profile.to_sampling_config() for profile in config.samplings]
+    model_bindings = [_make_binding(model_cfg) for model_cfg in config.models]
+
+    definition = experiment_builder.ExperimentDefinition(
+        templates=[template],
+        sampling_parameters=sampling_parameters,
+        model_bindings=model_bindings,
+        dataset_id_field="unique_id",
+        reference_field="answer",
+        metadata_fields=("subject", "level", "dataset_name"),
+        context_builder=lambda row: {"problem": row["problem"]},
+    )
+    
+    # Create project experiment
+    project_experiment = ProjectExperiment(
+        name=f"advanced-math-experiment-{config.prompt_style}",
+        description=f"Advanced math experiment using {config.prompt_style} prompt style",
+        definition=definition,
+        metadata={
+            "storage_dir": config.storage_dir,
+            "run_id": config.run_id,
+            "resume": config.resume,
+            "prompt_style": config.prompt_style,
+            "test_time_attempts": config.test_time_attempts,
+            "enable_subject_breakdown": config.enable_subject_breakdown,
+        }
+    )
+    
+    return project_experiment
 
 
 def run_experiment(config: AdvancedExperimentConfig) -> orchestrator.ExperimentReport:
@@ -59,12 +102,20 @@ def run_experiment(config: AdvancedExperimentConfig) -> orchestrator.ExperimentR
     )
 
     built = builder.build(definition, storage_dir=config.storage_dir)
+    
+    # Calculate total tasks for progress reporting
+    total_tasks = 0
+    for row in rows:
+        # Each row will be processed for each model and sampling combination
+        total_tasks += len(config.models) * len(config.samplings)
 
-    report = built.orchestrator.run(
-        dataset=rows,
-        run_id=config.run_id,
-        resume=config.resume,
-    )
+    with ProgressReporter(total=total_tasks, description="Generating") as progress:
+        report = built.orchestrator.run(
+            dataset=rows,
+            run_id=config.run_id,
+            resume=config.resume,
+            on_result=progress.on_result,
+        )
 
     if config.enable_subject_breakdown:
         report.metadata["subject_breakdown"] = built.pipeline.subject_breakdown
@@ -76,7 +127,9 @@ def run_experiment(config: AdvancedExperimentConfig) -> orchestrator.ExperimentR
 
 
 def summarize_subject_breakdown(report: orchestrator.ExperimentReport) -> str:
-    breakdown = report.metadata.get("subject_breakdown") or {}
+    breakdown = report.metadata.get("subject_breakdown", {})
+    if not isinstance(breakdown, dict):
+        breakdown = {}
     summary = (
         ", ".join(f"{subj}: {score:.2f}" for subj, score in breakdown.items()) or "n/a"
     )
@@ -134,4 +187,4 @@ def _make_evaluation_strategy_resolver(attempts: int):
     return lambda record: evaluation_strategies.AttemptAwareEvaluationStrategy()
 
 
-__all__ = ["run_experiment", "summarize_subject_breakdown"]
+__all__ = ["run_experiment", "summarize_subject_breakdown", "create_project_experiment"]

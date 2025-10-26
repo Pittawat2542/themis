@@ -1,7 +1,6 @@
-
-from experiments.advanced_example import cli as advanced_cli
-from experiments.advanced_example import config as advanced_config
-from experiments.advanced_example import experiment as advanced_experiment
+from examples.advanced import cli as advanced_cli
+from examples.advanced import config as advanced_config
+from examples.advanced import experiment as advanced_experiment
 
 
 def test_advanced_experiment_runs_and_tracks_subjects(tmp_path):

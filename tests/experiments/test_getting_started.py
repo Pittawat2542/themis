@@ -1,7 +1,6 @@
-
-from experiments.example import cli as example_cli
-from experiments.example import config as example_config
-from experiments.example import experiment as example_experiment
+from examples.getting_started import cli as example_cli
+from examples.getting_started import config as example_config
+from examples.getting_started import experiment as example_experiment
 
 
 def test_run_experiment_with_demo(tmp_path):

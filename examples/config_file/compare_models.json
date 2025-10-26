@@ -1,0 +1,43 @@
+{
+  "run_id": "model-comparison",
+  "storage_dir": ".cache/model-comparison",
+  "resume": true,
+  "models": [
+    {
+      "name": "model-variant-a",
+      "provider": "fake",
+      "description": "Baseline model"
+    },
+    {
+      "name": "model-variant-b",
+      "provider": "fake",
+      "description": "Experimental model",
+      "provider_options": {
+        "seed": 123
+      }
+    },
+    {
+      "name": "model-variant-c",
+      "provider": "fake",
+      "description": "Another variant",
+      "provider_options": {
+        "seed": 456
+      }
+    }
+  ],
+  "samplings": [
+    {
+      "name": "standard",
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "max_tokens": 512
+    }
+  ],
+  "datasets": [
+    {
+      "name": "demo",
+      "kind": "demo",
+      "limit": 20
+    }
+  ]
+}

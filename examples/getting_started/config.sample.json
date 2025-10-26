@@ -1,0 +1,27 @@
+{
+  "run_id": "math500-demo",
+  "storage_dir": ".cache/math500-demo",
+  "resume": true,
+  "models": [
+    {
+      "name": "fake-math-llm",
+      "provider": "fake",
+      "description": "Heuristic math model"
+    }
+  ],
+  "samplings": [
+    {
+      "name": "zero-shot",
+      "temperature": 0.0,
+      "top_p": 0.95,
+      "max_tokens": 512
+    }
+  ],
+  "datasets": [
+    {
+      "name": "demo",
+      "kind": "demo",
+      "limit": 2
+    }
+  ]
+}
