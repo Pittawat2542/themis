@@ -121,8 +121,12 @@ being able to override it for specific runs.
 All CLI commands accept `--overrides` arguments interpreted by Hydra:
 
 ```bash
+# First generate a config file
+uv run python -m themis.cli init --output my_config.yaml
+
+# Then run with overrides
 uv run python -m themis.cli run-config \
-  --config configs/math500_demo.yaml \
+  --config my_config.yaml \
   --overrides generation.provider.options.seed=99 max_samples=5
 ```
 
@@ -135,7 +139,8 @@ separate arguments.
 from pathlib import Path
 from themis.config import load_experiment_config, run_experiment_from_config
 
-cfg = load_experiment_config(Path("configs/math500_demo.yaml"), overrides=["max_samples=3"])
+# Load your config file (create with: uv run python -m themis.cli init)
+cfg = load_experiment_config(Path("my_config.yaml"), overrides=["max_samples=3"])
 report = run_experiment_from_config(cfg)
 print(report.metadata["successful_generations"])
 ```

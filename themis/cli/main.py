@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import sys
 from pathlib import Path
 from typing import Annotated, Iterable, Literal, Sequence
 
@@ -17,8 +19,17 @@ from themis.datasets import math500 as math500_dataset
 from themis.experiment import export as experiment_export
 from themis.experiment import math as math_experiment
 from themis.experiment import storage as experiment_storage
+from themis.providers.registry import _REGISTRY
 from themis.utils.logging_utils import configure_logging
 from themis.utils.progress import ProgressReporter
+
+# Import provider modules to ensure they register themselves
+try:
+    from themis.generation import clients  # noqa: F401 - registers fake provider
+    from themis.generation.providers import openai_compatible  # noqa: F401
+    from themis.generation.providers import vllm_provider  # noqa: F401
+except ImportError:
+    pass  # Some providers may not be available
 
 app = App(help="Run Themis experiments from the command line")
 
@@ -231,6 +242,330 @@ def _effective_total(total: int, limit: int | None) -> int:
     if limit is None:
         return total
     return min(total, limit)
+
+
+@app.command(name="list-providers")
+def list_providers(
+    *,
+    verbose: Annotated[
+        bool, Parameter(help="Show detailed provider information")
+    ] = False,
+) -> int:
+    """List available LLM providers."""
+
+    providers = sorted(_REGISTRY._factories.keys())
+
+    if not providers:
+        print("No providers registered.")
+        return 0
+
+    print("Available Providers:")
+    print("=" * 60)
+
+    provider_info = {
+        "fake": "Built-in fake provider for testing (no API required)",
+        "openai-compatible": "OpenAI-compatible API (LM Studio, Ollama, vLLM, OpenAI)",
+        "vllm": "vLLM server provider for local model hosting",
+    }
+
+    for provider in providers:
+        status = "✓" if provider in provider_info else "·"
+        print(f"{status} {provider}")
+        if verbose and provider in provider_info:
+            print(f"  {provider_info[provider]}")
+
+    if not verbose:
+        print("\nUse --verbose for more details")
+
+    return 0
+
+
+@app.command(name="list-benchmarks")
+def list_benchmarks(
+    *,
+    verbose: Annotated[
+        bool, Parameter(help="Show detailed benchmark information")
+    ] = False,
+) -> int:
+    """List available datasets and benchmarks."""
+
+    benchmarks = [
+        {
+            "name": "math500",
+            "description": "MATH-500 dataset for mathematical reasoning",
+            "source": "huggingface (default) or local",
+            "subjects": [
+                "algebra",
+                "counting_and_probability",
+                "geometry",
+                "intermediate_algebra",
+                "number_theory",
+                "prealgebra",
+                "precalculus",
+            ],
+            "command": "uv run python -m themis.cli math500",
+        },
+        {
+            "name": "demo",
+            "description": "Built-in demo with 2 math problems",
+            "source": "inline",
+            "subjects": ["precalculus", "arithmetic"],
+            "command": "uv run python -m themis.cli demo",
+        },
+        {
+            "name": "inline",
+            "description": "Custom inline dataset (via config file)",
+            "source": "config file",
+            "subjects": "user-defined",
+            "command": "uv run python -m themis.cli run-config --config your_config.yaml",
+        },
+    ]
+
+    print("Available Datasets & Benchmarks:")
+    print("=" * 60)
+
+    for bench in benchmarks:
+        print(f"\n📊 {bench['name']}")
+        print(f"   {bench['description']}")
+        if verbose:
+            print(f"   Source: {bench['source']}")
+            if isinstance(bench["subjects"], list):
+                print(f"   Subjects: {', '.join(bench['subjects'])}")
+            else:
+                print(f"   Subjects: {bench['subjects']}")
+            print(f"   Command: {bench['command']}")
+
+    if not verbose:
+        print("\nUse --verbose for more details and example commands")
+
+    return 0
+
+
+@app.command(name="validate-config")
+def validate_config(
+    *,
+    config: Annotated[Path, Parameter(help="Path to config file to validate")],
+) -> int:
+    """Validate a configuration file without running the experiment."""
+
+    if not config.exists():
+        print(f"❌ Error: Config file not found: {config}")
+        return 1
+
+    print(f"Validating config: {config}")
+    print("-" * 60)
+
+    try:
+        # Try to load as experiment config
+        experiment_config = load_experiment_config(config, overrides=())
+        print("✓ Config file is valid")
+        print(f"\nExperiment: {experiment_config.name}")
+        print(f"Run ID: {experiment_config.run_id or '(auto-generated)'}")
+        print(f"Resume: {experiment_config.resume}")
+        print(f"Max samples: {experiment_config.max_samples or '(unlimited)'}")
+
+        print(f"\nDataset:")
+        print(f"  Source: {experiment_config.dataset.source}")
+        if experiment_config.dataset.limit:
+            print(f"  Limit: {experiment_config.dataset.limit}")
+        if experiment_config.dataset.subjects:
+            print(f"  Subjects: {', '.join(experiment_config.dataset.subjects)}")
+
+        print(f"\nGeneration:")
+        print(f"  Model: {experiment_config.generation.model_identifier}")
+        print(f"  Provider: {experiment_config.generation.provider.name}")
+        print(f"  Temperature: {experiment_config.generation.sampling.temperature}")
+        print(f"  Max tokens: {experiment_config.generation.sampling.max_tokens}")
+
+        if experiment_config.storage.path:
+            print(f"\nStorage: {experiment_config.storage.path}")
+
+        return 0
+    except Exception as e:
+        print(f"❌ Config validation failed: {e}")
+        return 1
+
+
+@app.command(name="info")
+def show_info() -> int:
+    """Show system information and installed components."""
+
+    import themis
+    from themis import _version
+
+    print("Themis Information")
+    print("=" * 60)
+    print(f"Version: {getattr(_version, '__version__', 'unknown')}")
+    print(f"Python: {sys.version.split()[0]}")
+    print(f"Platform: {sys.platform}")
+
+    print("\n📦 Installed Providers:")
+    providers = sorted(_REGISTRY._factories.keys())
+    for provider in providers:
+        print(f"  ✓ {provider}")
+
+    print("\n📊 Available Benchmarks:")
+    benchmarks = ["demo", "math500", "inline (via config)"]
+    for bench in benchmarks:
+        print(f"  ✓ {bench}")
+
+    print("\n📁 Example Locations:")
+    examples_dir = Path(themis.__file__).parent.parent / "examples"
+    if examples_dir.exists():
+        print(f"  {examples_dir}")
+        example_dirs = sorted(
+            [
+                d.name
+                for d in examples_dir.iterdir()
+                if d.is_dir() and not d.name.startswith("_")
+            ]
+        )
+        for ex in example_dirs:
+            print(f"    • {ex}/")
+
+    print("\n📚 Documentation:")
+    print("  examples/README.md - Comprehensive tutorial cookbook")
+    print("  COOKBOOK.md - Quick reference guide")
+    print("  docs/ - Detailed documentation")
+
+    print("\n🚀 Quick Start:")
+    print("  uv run python -m themis.cli demo")
+    print("  uv run python -m themis.cli list-providers")
+    print("  uv run python -m themis.cli list-benchmarks")
+
+    return 0
+
+
+@app.command(name="init")
+def init_config(
+    *,
+    output: Annotated[Path, Parameter(help="Output path for config file")] = Path(
+        "themis_config.yaml"
+    ),
+    template: Annotated[
+        Literal["basic", "math500", "inline"],
+        Parameter(help="Config template to generate"),
+    ] = "basic",
+) -> int:
+    """Generate a sample configuration file for use with run-config."""
+
+    templates = {
+        "basic": """name: my_experiment
+dataset:
+  source: huggingface
+  limit: 50
+generation:
+  model_identifier: fake-math-llm
+  provider:
+    name: fake
+  sampling:
+    temperature: 0.0
+    top_p: 0.95
+    max_tokens: 512
+  runner:
+    max_parallel: 1
+    max_retries: 3
+storage:
+  path: .cache/my_experiment
+run_id: my-experiment-001
+resume: true
+""",
+        "math500": """name: math500_evaluation
+dataset:
+  source: huggingface
+  limit: null  # No limit, run full dataset
+  subjects:
+    - algebra
+    - geometry
+generation:
+  model_identifier: my-model
+  provider:
+    name: openai-compatible
+    options:
+      base_url: http://localhost:1234/v1
+      api_key: not-needed
+      model_name: qwen2.5-7b-instruct
+      timeout: 60
+  sampling:
+    temperature: 0.0
+    top_p: 0.95
+    max_tokens: 512
+  runner:
+    max_parallel: 4
+    max_retries: 3
+    retry_initial_delay: 0.5
+    retry_backoff_multiplier: 2.0
+    retry_max_delay: 2.0
+storage:
+  path: .cache/math500
+run_id: math500-run-001
+resume: true
+max_samples: null
+""",
+        "inline": """name: inline_dataset_experiment
+dataset:
+  source: inline
+  inline_samples:
+    - unique_id: sample-1
+      problem: "What is 2 + 2?"
+      answer: "4"
+      subject: arithmetic
+      level: 1
+    - unique_id: sample-2
+      problem: "Solve for x: 2x + 5 = 13"
+      answer: "4"
+      subject: algebra
+      level: 2
+generation:
+  model_identifier: fake-math-llm
+  provider:
+    name: fake
+  sampling:
+    temperature: 0.0
+    top_p: 0.95
+    max_tokens: 512
+storage:
+  path: .cache/inline_experiment
+run_id: inline-001
+resume: true
+""",
+    }
+
+    if output.exists():
+        print(f"❌ Error: File already exists: {output}")
+        print("   Use a different --output path or delete the existing file")
+        return 1
+
+    config_content = templates[template]
+
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with open(output, "w") as f:
+            f.write(config_content)
+
+        print(f"✓ Created config file: {output}")
+        print(f"  Template: {template}")
+        print("\n📝 Next steps:")
+        print(f"  1. Edit {output} to customize settings")
+        print(
+            f"  2. Validate: uv run python -m themis.cli validate-config --config {output}"
+        )
+        print(f"  3. Run: uv run python -m themis.cli run-config --config {output}")
+
+        if template == "math500":
+            print("\n⚠️  Remember to:")
+            print("  • Update provider.options.base_url with your LLM server endpoint")
+            print("  • Update provider.options.model_name with your actual model")
+            print("  • Set provider.options.api_key if required by your server")
+        elif template == "inline":
+            print("\n💡 Tip:")
+            print("  • Add more samples to dataset.inline_samples list")
+            print("  • Each sample needs: unique_id, problem, answer")
+
+        return 0
+    except Exception as e:
+        print(f"❌ Error creating config file: {e}")
+        return 1
 
 
 def _export_outputs(

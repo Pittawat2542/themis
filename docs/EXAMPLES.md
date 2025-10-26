@@ -33,13 +33,18 @@ uv run python -m themis.cli math500 \
 Use `--source local --data-dir /path/to/mirror` for offline runs.
 
 ## 3. Config-driven experiment
+## Declarative configuration
 
 Every setting (dataset source, provider options, retry/backoff) can be defined in
-a YAML file. The repo ships with `configs/math500_demo.yaml`.
+a YAML file. Generate a config file with the `init` command:
 
 ```bash
+# Generate a config file
+uv run python -m themis.cli init --output my_config.yaml
+
+# Run with optional overrides
 uv run python -m themis.cli run-config \
-  --config configs/math500_demo.yaml \
+  --config my_config.yaml \
   --overrides generation.sampling.temperature=0.2 \
   --log-level trace
 ```
@@ -84,8 +89,12 @@ by default. You can still override this by specifying a specific `path` value or
 The config schema exposes generation runner knobs. Example override:
 
 ```bash
+# First create a config file if you haven't
+uv run python -m themis.cli init --output my_config.yaml
+
+# Then run with retry overrides
 uv run python -m themis.cli run-config \
-  --config configs/math500_demo.yaml \
+  --config my_config.yaml \
   --overrides generation.runner.max_retries=5 generation.runner.retry_initial_delay=0.2
 ```
 
@@ -99,7 +108,8 @@ Use the config runtime helpers to embed Themis inside notebooks or scripts:
 from pathlib import Path
 from themis.config import load_experiment_config, run_experiment_from_config
 
-cfg = load_experiment_config(Path("configs/math500_demo.yaml"))
+# Load your config (create with: uv run python -m themis.cli init)
+cfg = load_experiment_config(Path("my_config.yaml"))
 report = run_experiment_from_config(cfg)
 print(report.metadata["successful_generations"])
 ```

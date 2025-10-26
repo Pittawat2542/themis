@@ -1,166 +1,618 @@
 # Themis
 
-Lightweight experimentation harness for text-generation systems. Themis stitches
-prompt templates, LLM providers, generation strategies, evaluation metrics, and
-storage/resume behaviors into reproducible pipelines.
+> **Lightweight experimentation harness for text-generation systems**
 
-## At a glance
+Themis orchestrates prompt templates, LLM providers, generation strategies, evaluation metrics, and storage into reproducible, resumable pipelines for systematic LLM experimentation.
 
-- Generation domain: prompt templates, sampling plans, provider registry, retrying
-  runners, and routing helpers.
-- Evaluation domain: extraction utilities (JSON, math-verify), metrics, and
-  strategies for multi-attempt scoring.
-- Experiment domain: orchestration, storage, and CLI wiring with Hydra configs,
-  progress reporting, and structured logging.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Table of contents
+---
 
-1. [Architecture](#architecture)
-2. [Quick start](#quick-start)
-3. [CLI workflows](#cli-workflows)
-4. [Configuration](#configuration)
-5. [Logging & progress](#logging--progress)
-6. [Examples](#examples)
-7. [Extending Themis](#extending-themis)
+## Why Themis?
+
+- **🎯 Config-driven**: Define experiments in JSON/YAML, run them with a single command
+- **🔄 Resumable**: Automatic caching and resume—never lose your expensive LLM runs
+- **📊 Systematic**: Grid search over models × prompts × sampling strategies
+- **🔌 Provider-agnostic**: Works with OpenAI, Anthropic, local LLMs (LM Studio, Ollama, vLLM), or custom providers
+- **📈 Built-in evaluation**: Exact match, math verification, custom metrics
+- **🎓 Production-ready**: Type-safe configs, structured logging, progress tracking
+
+---
+
+## Table of Contents
+
+1. [Installation](#installation)
+2. [Quick Start](#quick-start)
+3. [Examples & Tutorials](#examples--tutorials)
+4. [Core Concepts](#core-concepts)
+5. [CLI Reference](#cli-reference)
+6. [Configuration](#configuration)
+7. [Architecture](#architecture)
 8. [Development](#development)
+9. [Documentation](#documentation)
 
-## Architecture
+---
 
-Experiments flow from CLI/config ➜ builders ➜ generation plan ➜ runner/providers ➜
-evaluation ➜ report. See `docs/DIAGRAM.md` for a mermaid overview and
-`docs/ADDING_COMPONENTS.md` for extension points.
+## Installation
 
-## Quick start
-
-```bash
-uv run python -m themis.cli --help  # print CLI help
-uv run python -m themis.cli demo    # smoke-test two inline math prompts
-uv run python -m themis.cli math500 --help
-uv run pytest                       # execute the unit tests
-```
-
-The demo uses the bundled fake math model so you can verify the full pipeline
-without credentials.
-
-## CLI workflows
-
-### MATH-500 helper
-
-Run the zero-shot benchmark with resumability and caching:
+### Using uv (Recommended)
 
 ```bash
-uv run python -m themis.cli math500 \
-  --source local \
-  --data-dir /path/to/MATH-500 \
-  --limit 50 \
-  --storage .cache/themis \
-  --run-id math500-local \
-  --temperature 0.1 \
-  --log-level info
+# Clone the repository
+git clone https://github.com/yourusername/themis.git
+cd themis
+
+# Install with uv
+uv sync
+
+# Verify installation
+uv run python -m themis.cli --version
 ```
 
-Use `--source huggingface` (default) to fetch directly from the HF hub. Cached
-datasets and generation results are keyed by `--run-id`, so subsequent executions
-reuse prior work when `--resume` is true.
-
-### Config-driven runs
-
-Every CLI feature is configurable via Hydra/OmegaConf. Point the runner at a YAML
-file (the repo ships with `configs/math500_demo.yaml`):
+### Using pip
 
 ```bash
-uv run python -m themis.cli run-config \
-  --config configs/math500_demo.yaml \
-  --overrides generation.sampling.temperature=0.2 max_samples=1 \
-  --log-level trace
+# Basic installation
+pip install -e .
+
+# With development tools
+pip install -e ".[dev]"
+
+# With math evaluation support
+pip install -e ".[math]"
+
+# Full installation
+pip install -e ".[dev,math]"
 ```
 
-Overrides let you tweak scenarios without editing files. Configs support inline
-datasets, local/HF sources, provider options, retry/backoff knobs, and storage
-paths. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full schema.
+### Requirements
 
-## Configuration
+- Python 3.12+
+- Dependencies: `pydantic`, `cyclopts`, `hydra-core`, `tqdm`, `httpx`
 
-- `themis.config.schema` defines the structured config (dataset/generation/storage).
-- `themis.config.loader` merges YAML with defaults and applies Hydra-style overrides.
-- `themis.config.runtime` exposes `run_experiment_from_config` plus `load_dataset_from_config`
-  so notebooks and services can reuse the exact same flow as the CLI.
+---
 
-Common recipes—inline datasets, retry overrides, and programmatic usage—are
-covered in [docs/EXAMPLES.md](docs/EXAMPLES.md).
+## Quick Start
 
-## Logging & progress
+### 1. Explore Available Components
 
-All CLI commands accept `--log-level` (`critical`, `error`, `warning`, `info`,
-`debug`, `trace`). Under the hood `themis.utils.logging_utils.configure_logging`
-sets up structured timestamps, while runners and evaluation pipelines emit
-per-attempt traceability.
+See what's available in your installation:
 
-While an experiment runs, `tqdm` progress bars show how many samples have been
-processed (respecting `--max-samples`). You can attach your own callback via the
-`on_result` hook provided to `ExperimentOrchestrator.run`.
+```bash
+# Show system info and quick start
+uv run python -m themis.cli info
 
-## Examples & Cookbook
+# List available LLM providers
+uv run python -m themis.cli list-providers --verbose
 
-**Start here:** [`examples/README.md`](examples/README.md) – A comprehensive, hands-on cookbook with 5 progressive examples.
+# List available benchmarks
+uv run python -m themis.cli list-benchmarks --verbose
+```
+
+### 2. Run the Built-in Demo
+
+Test your installation with the fake model provider:
+
+```bash
+# Run a quick smoke test
+uv run python -m themis.cli demo
+
+# See what's happening
+uv run python -m themis.cli demo --log-level info
+```
+
+This runs two inline math prompts through a fake LLM provider to verify the pipeline works end-to-end.
+
+### 3. Try Your First Real Experiment
+
+Start with the comprehensive examples cookbook:
+
+```bash
+# Your first experiment (15 minutes)
+uv run python -m examples.getting_started.cli run
+
+# Preview what will happen
+uv run python -m examples.getting_started.cli run --dry-run
+
+# Export results
+uv run python -m examples.getting_started.cli run --csv-output results.csv
+```
+
+### 4. Connect to a Real LLM
+
+Use any OpenAI-compatible endpoint (LM Studio, Ollama, vLLM, OpenAI):
+
+```bash
+# Generate a config file
+uv run python -m themis.cli init --template math500 --output my_config.yaml
+
+# Edit my_config.yaml: set base_url, api_key, model name
+# Then validate it
+uv run python -m themis.cli validate-config --config my_config.yaml
+
+# Run the experiment
+uv run python -m themis.cli run-config --config my_config.yaml
+
+# Or use the example-based approach
+cp examples/openai_compatible/config.sample.json my_config.json
+# Edit my_config.json, then:
+uv run python -m examples.openai_compatible.cli run \
+  --config-path my_config.json \
+  --n-records 10
+```
+
+---
+
+## Examples & Tutorials
+
+**👉 Start here: [`examples/README.md`](examples/README.md)**
+
+A comprehensive, hands-on cookbook with 5 progressive tutorials:
 
 ### Learning Path
 
-1. **[getting_started](examples/getting_started/)** – Your first experiment (15 min)
-   - Basics: prompts, models, sampling, evaluation
-   - Run programmatically or via CLI
-   
-2. **[config_file](examples/config_file/)** – Configuration-driven workflows (20 min)
-   - JSON configs, grid searches, resumability
-   - Systematic parameter sweeps
-   
-3. **[openai_compatible](examples/openai_compatible/)** – Real LLM endpoints (30 min)
-   - Connect to LM Studio, Ollama, vLLM, OpenAI
-   - Run on real benchmarks (MATH-500)
-   
-4. **[projects](examples/projects/)** – Organizing multiple experiments (45 min)
-   - Project structure for research workflows
-   - Share configs, compare approaches
-   
-5. **[advanced](examples/advanced/)** – Advanced customization (60 min)
-   - Custom runners, pipelines, metrics
-   - Agentic workflows, instrumentation
+| Example | Focus | Time | What You'll Learn |
+|---------|-------|------|-------------------|
+| **[getting_started](examples/getting_started/)** | Basics | 15 min | Prompts, models, sampling, evaluation |
+| **[config_file](examples/config_file/)** | Configuration | 20 min | JSON configs, grid searches, resumability |
+| **[openai_compatible](examples/openai_compatible/)** | Real LLMs | 30 min | LM Studio, Ollama, vLLM, OpenAI, MATH-500 |
+| **[projects](examples/projects/)** | Organization | 45 min | Multi-experiment projects, research workflows |
+| **[advanced](examples/advanced/)** | Customization | 60 min | Custom runners, pipelines, metrics, agentic workflows |
 
-**Quick start:**
+### Quick Reference
+
+**🚀 [COOKBOOK.md](COOKBOOK.md)** - Cheat sheet with common patterns and troubleshooting
+
+**Example commands:**
 ```bash
-# Run your first experiment
+# Basic experiment
 uv run python -m examples.getting_started.cli run
 
-# Try with a real LLM endpoint
-uv run python -m examples.openai_compatible.cli run --config-path config.sample.json
+# Grid search (2 models × 3 temperatures)
+uv run python -m examples.config_file.cli run --config-path grid_search.json
+
+# Real LLM evaluation
+uv run python -m examples.openai_compatible.cli run --config-path my_config.json
+
+# Multi-experiment project
+uv run python -m examples.projects.cli list-experiments
+uv run python -m examples.projects.cli run --experiment zero-shot
+
+# Custom behavior
+uv run python -m examples.advanced.cli run --enable-subject-breakdown
 ```
 
-See also `docs/EXAMPLES.md` for additional recipes and patterns.
+---
 
-## Extending Themis
+## Core Concepts
 
-- **`examples/README.md`** – comprehensive cookbook with 5 progressive examples.
-- **`docs/ADDING_COMPONENTS.md`** – add providers, datasets, prompts, strategies, metrics.
-- **`examples/advanced/`** – advanced customization examples (custom runners, pipelines, metrics).
-- **`docs/DIAGRAM.md`** – architecture diagram for presentations/reviews.
+### Three-Layer Architecture
 
-The reusable `themis.experiment.builder` module assembles plans, runners,
-pipelines, and storage from declarative definitions so new experiments mostly
-specify templates and metrics.
+```
+╭─────────────────────────────────────────────────────────╮
+│  Configuration Layer (JSON/YAML/CLI)                    │
+│  • Dataset specs • Models • Sampling • Storage          │
+╰─────────────────────────────────────────────────────────╯
+                         ↓
+╭─────────────────────────────────────────────────────────╮
+│  Experiment Layer (Orchestration)                       │
+│  • Builder patterns • Runner coordination               │
+│  • Progress tracking • Caching & resume                 │
+╰─────────────────────────────────────────────────────────╯
+                         ↓
+╭───────────────────────╮    ╭────────────────────────────╮
+│  Generation Domain    │    │  Evaluation Domain         │
+│  • Prompts            │───▶│  • Extractors (JSON/math) │
+│  • Providers          │    │  • Metrics (exact/custom)  │
+│  • Sampling plans     │    │  • Aggregation             │
+│  • Retry logic        │    │                            │
+╰───────────────────────╯    ╰────────────────────────────╯
+```
+
+### Key Components
+
+- **Generation**: Prompt templates → Provider routing → Sampling strategies → Retry/backoff
+- **Evaluation**: Response extraction → Metric computation → Multi-attempt scoring → Aggregation
+- **Experiment**: Dataset loading → Generation plans → Runner execution → Storage → Reporting
+
+See [`docs/DIAGRAM.md`](docs/DIAGRAM.md) for detailed architecture diagrams.
+
+---
+
+## CLI Reference
+
+Themis provides experiment commands and utility commands:
+
+### Utility Commands
+
+Quick commands for discovering and configuring Themis:
+
+#### `info` - System Information
+
+Show installed components and quick start guide:
+
+```bash
+uv run python -m themis.cli info
+```
+
+Displays:
+- Version and Python info
+- Installed providers
+- Available benchmarks
+- Example locations
+- Documentation links
+
+#### `list-providers` - Available LLM Providers
+
+List all registered LLM providers:
+
+```bash
+uv run python -m themis.cli list-providers
+
+# Show detailed information
+uv run python -m themis.cli list-providers --verbose
+```
+
+Shows built-in providers (fake, openai-compatible, vllm) and any custom registered providers.
+
+#### `list-benchmarks` - Available Datasets
+
+List available datasets and benchmarks:
+
+```bash
+uv run python -m themis.cli list-benchmarks
+
+# Show details with subjects and commands
+uv run python -m themis.cli list-benchmarks --verbose
+```
+
+Shows math500, demo, and inline dataset options.
+
+#### `init` - Generate Config File
+
+Create a sample configuration file:
+
+```bash
+# Basic template
+uv run python -m themis.cli init
+
+# MATH-500 with OpenAI-compatible endpoint
+uv run python -m themis.cli init --template math500 --output my_config.yaml
+
+# Inline dataset template
+uv run python -m themis.cli init --template inline --output custom.yaml
+```
+
+Available templates:
+- `basic` - Simple fake provider setup for testing
+- `math500` - MATH-500 benchmark with OpenAI-compatible provider
+- `inline` - Custom inline dataset with examples
+
+#### `validate-config` - Validate Configuration
+
+Check a config file for errors without running:
+
+```bash
+uv run python -m themis.cli validate-config --config my_config.yaml
+```
+
+Shows parsed configuration and identifies errors before running expensive experiments.
+
+---
+
+### Experiment Commands
+
+Commands for running experiments:
+
+#### `demo` - Built-in Smoke Test
+
+Quick verification using fake providers:
+
+```bash
+uv run python -m themis.cli demo [OPTIONS]
+
+Options:
+  --log-level TEXT    Logging verbosity: critical|error|warning|info|debug|trace
+  --help             Show help message
+```
+
+#### `math500` - MATH-500 Benchmark
+
+Zero-shot evaluation on the MATH-500 dataset:
+
+```bash
+uv run python -m themis.cli math500 [OPTIONS]
+
+Options:
+  --source TEXT       Dataset source: 'huggingface' (default) or 'local'
+  --data-dir PATH     Local MATH-500 directory (if --source local)
+  --limit INTEGER     Limit number of samples (for testing)
+  --storage PATH      Cache directory (default: .cache/themis)
+  --run-id TEXT       Unique run identifier for resumability
+  --temperature FLOAT Model temperature (default: 0.1)
+  --log-level TEXT    Logging verbosity
+  --resume / --no-resume  Resume from cache (default: true)
+
+Examples:
+  # Quick test with 50 samples
+  uv run python -m themis.cli math500 --limit 50
+
+  # Full evaluation with custom storage
+  uv run python -m themis.cli math500 \
+    --storage .cache/math500-eval \
+    --run-id run-2024-01-15 \
+    --temperature 0.0
+
+  # Use local MATH-500 dataset
+  uv run python -m themis.cli math500 \
+    --source local \
+    --data-dir /path/to/MATH-500 \
+    --limit 100
+```
+
+#### `run-config` - Config-Driven Experiments
+
+Execute experiments defined in YAML config files:
+
+```bash
+uv run python -m themis.cli run-config [OPTIONS]
+
+Options:
+  --config PATH       Path to YAML configuration file
+  --overrides TEXT    Hydra-style overrides (space-separated)
+  --log-level TEXT    Logging verbosity
+
+Examples:
+  # Generate a config file first
+  uv run python -m themis.cli init --output my_config.yaml
+
+  # Run from config
+  uv run python -m themis.cli run-config --config my_config.yaml
+
+  # Override specific parameters
+  uv run python -m themis.cli run-config \
+    --config my_config.yaml \
+    --overrides "generation.sampling.temperature=0.2 max_samples=100"
+
+  # Multiple overrides
+  uv run python -m themis.cli run-config \
+    --config my_config.yaml \
+    --overrides "storage.run_id=new-run dataset.limit=50" \
+    --log-level debug
+```
+
+---
+
+## Configuration
+
+### Config File Structure
+
+Themis uses JSON or YAML for configuration. Here's a complete example:
+
+```json
+{
+  "run_id": "my-experiment",
+  "storage_dir": ".cache/my-experiment",
+  "resume": true,
+  "models": [
+    {
+      "name": "gpt-4",
+      "provider": "openai-compatible",
+      "provider_options": {
+        "base_url": "http://localhost:1234/v1",
+        "api_key": "not-needed",
+        "model_mapping": {"gpt-4": "qwen2.5-7b-instruct"},
+        "timeout": 60,
+        "n_parallel": 2
+      }
+    }
+  ],
+  "samplings": [
+    {"name": "greedy", "temperature": 0.0, "max_tokens": 512},
+    {"name": "creative", "temperature": 0.8, "max_tokens": 512}
+  ],
+  "datasets": [
+    {
+      "name": "math500",
+      "kind": "math500_hf",
+      "limit": 50
+    }
+  ]
+}
+```
+
+### Configuration Options
+
+**Core settings:**
+- `run_id`: Unique identifier for caching and resumability
+- `storage_dir`: Where to cache generations and results
+- `resume`: Continue from previous runs (default: true)
+
+**Models:**
+- `name`: Model identifier
+- `provider`: `fake`, `openai-compatible`, or custom
+- `provider_options`: Provider-specific configuration (API keys, endpoints, timeouts)
+
+**Samplings:**
+- `name`: Sampling strategy name
+- `temperature`: Randomness (0.0 = deterministic, 1.0+ = creative)
+- `max_tokens`: Maximum response length
+- `top_p`, `top_k`: Nucleus/top-k sampling (optional)
+
+**Datasets:**
+- `name`: Dataset identifier
+- `kind`: `demo`, `math500_hf`, `math500_local`, `inline`, or custom
+- `limit`: Maximum samples (for testing)
+- `source_path`: Path for local datasets (optional)
+
+See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the complete schema and [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for common recipes.
+
+---
+
+## Architecture
+
+### Module Organization
+
+```
+themis/
+├── cli/                 # Command-line interface (Cyclopts)
+├── config/              # Configuration schema & loader (Pydantic, Hydra)
+├── core/                # Core entities (prompts, sampling specs, results)
+├── datasets/            # Dataset loaders (inline, HuggingFace, local)
+├── evaluation/          # Extractors, metrics, evaluation strategies
+├── experiment/          # Orchestration, builder patterns, storage
+├── generation/          # Generation strategies, runners, retry logic
+├── interfaces/          # Abstract base classes
+├── project/             # Multi-experiment project management
+├── providers/           # LLM provider implementations
+└── utils/               # Logging, progress tracking, helpers
+```
+
+### Extension Points
+
+Themis is designed for extensibility:
+
+- **Custom providers**: Implement `Provider` interface for new LLM APIs
+- **Custom datasets**: Implement `DatasetLoader` for new data sources
+- **Custom metrics**: Implement `Metric` interface for domain-specific evaluation
+- **Custom runners**: Override generation loops for specialized workflows
+- **Custom pipelines**: Build evaluation pipelines with custom extractors
+
+See [`docs/ADDING_COMPONENTS.md`](docs/ADDING_COMPONENTS.md) for detailed extension guides and [`examples/advanced/`](examples/advanced/) for working examples.
+
+---
 
 ## Development
 
+### Running Tests
+
 ```bash
-uv run python -m themis.cli demo              # smoke test
-uv run python -m themis.cli math500 --limit 5 # targeted run
-uv run pytest                                 # full test suite
+# Full test suite
+uv run pytest
+
+# Specific test file
+uv run pytest tests/generation/test_strategies.py
+
+# With coverage
+uv run pytest --cov=themis --cov-report=html
+
+# Verbose output
+uv run pytest -v
 ```
 
-Optional extras:
+### Project Commands
 
-- `uv pip install '.[dev]'` – testing.
-- `uv pip install '.[math]'` – math-verify integration for numeric datasets.
+```bash
+# Smoke test core CLI
+uv run python -m themis.cli demo
 
-Linting/formatting is intentionally lightweight; rely on `pytest` plus type
-checkers in your editor. Use storage paths under `.cache/` to keep generated data
-local and gitignored.
+# Test example pipelines
+uv run python -m examples.getting_started.cli run --dry-run
+
+# Run with specific storage (keeps cache local)
+uv run python -m themis.cli math500 \
+  --storage .cache/dev-test \
+  --limit 5
+```
+
+### Code Style
+
+- Python 3.12+, PEP 8 (4-space indent)
+- Type hints throughout (mypy-compatible)
+- Dataclasses and Pydantic models for configs/entities
+- File names: `snake_case`
+- Classes: `PascalCase`
+- CLI commands: `dashed-names` (handled by Cyclopts)
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Run `uv run pytest` to verify
+5. Submit a pull request with:
+   - Summary of changes
+   - Test evidence
+   - Documentation updates (if applicable)
+   - Links to related issues
+
+---
+
+## Documentation
+
+### Core Documentation
+
+- **[examples/README.md](examples/README.md)** - Comprehensive tutorial cookbook (START HERE!)
+- **[COOKBOOK.md](COOKBOOK.md)** - Quick reference and cheat sheet
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - Complete configuration schema
+- **[docs/ADDING_COMPONENTS.md](docs/ADDING_COMPONENTS.md)** - Extension guide
+- **[docs/DIAGRAM.md](docs/DIAGRAM.md)** - Architecture diagrams
+- **[docs/EXAMPLES.md](docs/EXAMPLES.md)** - Additional recipes and patterns
+- **[AGENTS.md](AGENTS.md)** - Repository guidelines for AI agents
+
+### Key Features
+
+✅ **Resumability**: Automatic caching by `run_id`—interrupted runs pick up where they left off  
+✅ **Grid Search**: Cartesian product over models × samplings × prompts  
+✅ **Progress Tracking**: tqdm progress bars and structured logging  
+✅ **Type Safety**: Pydantic validation for configs and runtime entities  
+✅ **Provider Agnostic**: Unified interface for OpenAI, Anthropic, local LLMs, custom APIs  
+✅ **Math Evaluation**: Built-in math-verify integration for numeric correctness  
+✅ **Export Options**: CSV, JSON, HTML output formats  
+✅ **Multi-Experiment Projects**: Organize related experiments with shared configs  
+
+---
+
+## Use Cases
+
+### Academic Research
+- Systematic prompt engineering experiments
+- Model comparison studies
+- Benchmark evaluations (MATH, GSM8K, etc.)
+- Reproducible experiment pipelines
+
+### LLM Development
+- Testing model variants during training
+- Evaluating fine-tuned models
+- Comparing sampling strategies
+- A/B testing prompts and templates
+
+### Production Monitoring
+- Regression testing for model updates
+- Quality assurance on real-world examples
+- Performance benchmarking
+- Cost/latency analysis
+
+---
+
+## License
+
+MIT License - see LICENSE file for details
+
+---
+
+## Getting Help
+
+- **Start with examples**: [`examples/README.md`](examples/README.md) has comprehensive tutorials
+- **Quick reference**: [`COOKBOOK.md`](COOKBOOK.md) for common patterns
+- **Check docs**: [`docs/`](docs/) directory has detailed guides
+- **Search issues**: Look for similar problems in GitHub issues
+- **Create issue**: Open a new issue with your question or bug report
+
+---
+
+## Roadmap
+
+- [ ] Additional provider support (Anthropic native, Google Vertex AI)
+- [ ] Web UI for experiment visualization
+- [ ] Distributed generation support
+- [ ] Advanced metrics (BLEU, ROUGE, semantic similarity)
+- [ ] Experiment comparison dashboard
+- [ ] Cost tracking and optimization
+
+---
+
+**Happy experimenting!** 🚀
+
+For a guided introduction, start with the [examples](examples/README.md). For quick lookups, check the [cookbook](COOKBOOK.md).
