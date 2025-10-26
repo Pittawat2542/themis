@@ -1,0 +1,35 @@
+name: math500_zero_shot
+dataset:
+  source: inline
+  inline_samples:
+    - unique_id: demo-1
+      problem: "Convert the point (0,3) in rectangular coordinates to polar coordinates."
+      answer: "\\left( 3, \\frac{\\pi}{2} \\right)"
+      subject: precalculus
+      level: 2
+    - unique_id: demo-2
+      problem: "What is 7 + 5?"
+      answer: "12"
+      subject: arithmetic
+      level: 1
+generation:
+  model_identifier: fake-math-llm
+  provider:
+    name: fake
+    options:
+      seed: 1234
+  sampling:
+    temperature: 0.0
+    top_p: 0.95
+    max_tokens: 512
+  runner:
+    max_parallel: 1
+    max_retries: 3
+    retry_initial_delay: 0.1
+    retry_backoff_multiplier: 2.0
+    retry_max_delay: 1.0
+storage:
+  path: null
+max_samples: null
+run_id: null
+resume: true

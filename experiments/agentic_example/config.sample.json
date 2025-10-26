@@ -1,0 +1,16 @@
+{
+  "run_id": "agentic-demo",
+  "storage_dir": ".cache/agentic-demo",
+  "resume": true,
+  "planner_prompt": "List the steps required to solve {problem} before answering.",
+  "final_prompt_prefix": "Now produce the final numeric answer.",
+  "models": [
+    {"name": "fake-math-llm", "provider": "fake"}
+  ],
+  "samplings": [
+    {"name": "agent", "temperature": 0.2, "top_p": 0.95, "max_tokens": 400}
+  ],
+  "datasets": [
+    {"name": "demo", "kind": "demo", "limit": 2}
+  ]
+}

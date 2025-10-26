@@ -1,0 +1,125 @@
+"""Shared dataclasses that represent Themis' internal world."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
+
+
+@dataclass(frozen=True)
+class SamplingConfig:
+    temperature: float
+    top_p: float
+    max_tokens: int
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    identifier: str
+    provider: str
+    default_sampling: SamplingConfig | None = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PromptSpec:
+    name: str
+    template: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PromptRender:
+    spec: PromptSpec
+    text: str
+    context: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def prompt_text(self) -> str:
+        return self.text
+
+    @property
+    def template_name(self) -> str:
+        return self.spec.name
+
+
+@dataclass(frozen=True)
+class Reference:
+    kind: str
+    value: Any
+
+
+@dataclass(frozen=True)
+class ModelOutput:
+    text: str
+    raw: Any | None = None
+
+
+@dataclass(frozen=True)
+class ModelError:
+    message: str
+    kind: str = "model_error"
+    details: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class GenerationTask:
+    prompt: PromptRender
+    model: ModelSpec
+    sampling: SamplingConfig
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    reference: Reference | None = None
+
+
+@dataclass
+class GenerationRecord:
+    task: GenerationTask
+    output: ModelOutput | None
+    error: ModelError | None
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    attempts: List["GenerationRecord"] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class EvaluationItem:
+    record: GenerationRecord
+    reference: Reference | None
+
+
+@dataclass(frozen=True)
+class MetricScore:
+    metric_name: str
+    value: float
+    details: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EvaluationSummary:
+    scores: List[MetricScore]
+    failures: List[str] = field(default_factory=list)
+
+
+@dataclass
+class EvaluationRecord:
+    sample_id: str | None
+    scores: List[MetricScore]
+    failures: List[str] = field(default_factory=list)
+
+
+__all__ = [
+    "SamplingConfig",
+    "ModelSpec",
+    "PromptSpec",
+    "PromptRender",
+    "Reference",
+    "ModelOutput",
+    "ModelError",
+    "GenerationTask",
+    "GenerationRecord",
+    "EvaluationItem",
+    "EvaluationRecord",
+    "MetricScore",
+    "EvaluationSummary",
+]
