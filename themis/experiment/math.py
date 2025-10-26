@@ -9,11 +9,12 @@ from themis.core import entities as core_entities
 from themis.evaluation import extractors, math_verify_utils, metrics, pipeline
 from themis.experiment import orchestrator, storage as experiment_storage
 from themis.generation import clients, plan, runner, templates
+from themis.interfaces import ModelProvider
 
 
 def build_math500_zero_shot_experiment(
     *,
-    model_client: clients.FakeMathModelClient | None = None,
+    model_client: ModelProvider | None = None,
     model_name: str = "fake-math-llm",
     provider_name: str = "fake",
     temperature: float | None = None,
@@ -56,9 +57,25 @@ def build_math500_zero_shot_experiment(
         context_builder=lambda row: {"problem": row.get("problem", "")},
     )
 
+    # Extract runner options with proper type conversion
+    runner_kwargs = {}
+    if runner_options:
+        # Convert values to appropriate types with type checking
+        if "max_parallel" in runner_options and runner_options["max_parallel"] is not None:
+            runner_kwargs["max_parallel"] = int(str(runner_options["max_parallel"]))
+        if "max_retries" in runner_options and runner_options["max_retries"] is not None:
+            runner_kwargs["max_retries"] = int(str(runner_options["max_retries"]))
+        if "retry_initial_delay" in runner_options and runner_options["retry_initial_delay"] is not None:
+            runner_kwargs["retry_initial_delay"] = float(str(runner_options["retry_initial_delay"]))
+        if "retry_backoff_multiplier" in runner_options and runner_options["retry_backoff_multiplier"] is not None:
+            runner_kwargs["retry_backoff_multiplier"] = float(str(runner_options["retry_backoff_multiplier"]))
+        if "retry_max_delay" in runner_options:
+            retry_max_delay = runner_options["retry_max_delay"]
+            runner_kwargs["retry_max_delay"] = float(str(retry_max_delay)) if retry_max_delay is not None else None
+            
     math_runner = runner.GenerationRunner(
         provider=model_client or clients.FakeMathModelClient(),
-        **(runner_options or {}),
+        **runner_kwargs,
     )
     if math_verify_utils.math_verify_available():
         extractor = extractors.MathVerifyExtractor()
@@ -104,14 +121,44 @@ def run_math500_zero_shot(
 
 
 def summarize_report(report: orchestrator.ExperimentReport) -> str:
+    # Get exact match metric
     exact = report.evaluation_report.metrics.get("ExactMatch")
-    mean = exact.mean if exact else 0.0
-    count = exact.count if exact else 0
-    failures = len(report.failures) + len(report.evaluation_report.failures)
-    return (
-        f"Evaluated {report.metadata['total_samples']} samples | "
-        f"exact match: {mean:.3f} over {count} generations | failures: {failures}"
-    )
+    exact_mean = exact.mean if exact else 0.0
+    exact_count = exact.count if exact else 0
+    
+    # Get MathVerify metric if available
+    math_verify = report.evaluation_report.metrics.get("MathVerifyAccuracy")
+    math_verify_mean = math_verify.mean if math_verify else None
+    math_verify_count = math_verify.count if math_verify else 0
+    
+    # Get failure counts
+    generation_failures = len(report.failures)
+    evaluation_failures = len(report.evaluation_report.failures)
+    total_failures = generation_failures + evaluation_failures
+    
+    # Get metadata
+    total_samples = report.metadata.get('total_samples', 0)
+    successful_generations = report.metadata.get('successful_generations', 0)
+    failed_generations = report.metadata.get('failed_generations', 0)
+    
+    # Build summary string
+    summary_parts = [
+        f"Evaluated {total_samples} samples",
+        f"Successful generations: {successful_generations}/{total_samples}",
+        f"Exact match: {exact_mean:.3f} ({exact_count} evaluated)"
+    ]
+    
+    # Add MathVerify accuracy if available
+    if math_verify_mean is not None:
+        summary_parts.append(f"MathVerify accuracy: {math_verify_mean:.3f} ({math_verify_count} evaluated)")
+    
+    # Add failure information
+    if total_failures > 0:
+        summary_parts.append(f"Failures: {total_failures} (gen: {failed_generations}, eval: {evaluation_failures})")
+    else:
+        summary_parts.append("No failures")
+    
+    return " | ".join(summary_parts)
 
 
 __all__ = [

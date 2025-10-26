@@ -48,6 +48,7 @@ class DatasetConfig:
 @dataclass
 class StorageConfig:
     path: str | None = None
+    default_path: str | None = None  # New field for default storage path
 
 
 @dataclass

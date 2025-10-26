@@ -30,6 +30,7 @@ generation:
     retry_max_delay: 1.0
 storage:
   path: null
+  default_path: .cache/themis  # Default storage path for generation and evaluation results
 max_samples: null
 run_id: null
 resume: true

@@ -33,7 +33,7 @@ evaluation ➜ report. See `docs/DIAGRAM.md` for a mermaid overview and
 ## Quick start
 
 ```bash
-uv run python main.py               # print CLI help
+uv run python -m themis.cli --help  # print CLI help
 uv run python -m themis.cli demo    # smoke-test two inline math prompts
 uv run python -m themis.cli math500 --help
 uv run pytest                       # execute the unit tests
@@ -100,25 +100,49 @@ While an experiment runs, `tqdm` progress bars show how many samples have been
 processed (respecting `--max-samples`). You can attach your own callback via the
 `on_result` hook provided to `ExperimentOrchestrator.run`.
 
-## Examples
+## Examples & Cookbook
 
-`docs/EXAMPLES.md` walks through:
+**Start here:** [`examples/README.md`](examples/README.md) – A comprehensive, hands-on cookbook with 5 progressive examples.
 
-1. Demo run
-2. Cached math500 evaluation
-3. Config-driven executions
-4. Inline datasets
-5. Retry/backoff overrides
-6. Programmatic embeddings
+### Learning Path
 
-Use it as a cookbook when onboarding teammates.
+1. **[getting_started](examples/getting_started/)** – Your first experiment (15 min)
+   - Basics: prompts, models, sampling, evaluation
+   - Run programmatically or via CLI
+   
+2. **[config_file](examples/config_file/)** – Configuration-driven workflows (20 min)
+   - JSON configs, grid searches, resumability
+   - Systematic parameter sweeps
+   
+3. **[openai_compatible](examples/openai_compatible/)** – Real LLM endpoints (30 min)
+   - Connect to LM Studio, Ollama, vLLM, OpenAI
+   - Run on real benchmarks (MATH-500)
+   
+4. **[projects](examples/projects/)** – Organizing multiple experiments (45 min)
+   - Project structure for research workflows
+   - Share configs, compare approaches
+   
+5. **[advanced](examples/advanced/)** – Advanced customization (60 min)
+   - Custom runners, pipelines, metrics
+   - Agentic workflows, instrumentation
+
+**Quick start:**
+```bash
+# Run your first experiment
+uv run python -m examples.getting_started.cli run
+
+# Try with a real LLM endpoint
+uv run python -m examples.openai_compatible.cli run --config-path config.sample.json
+```
+
+See also `docs/EXAMPLES.md` for additional recipes and patterns.
 
 ## Extending Themis
 
-- `docs/ADDING_COMPONENTS.md` – add providers, datasets, prompts, strategies, metrics.
-- `experiments/example`, `experiments/advanced_example`, `experiments/agentic_example`
-  – runnable references (each exposes `python -m experiments.<name>.cli`).
-- `docs/DIAGRAM.md` – architecture diagram for presentations/reviews.
+- **`examples/README.md`** – comprehensive cookbook with 5 progressive examples.
+- **`docs/ADDING_COMPONENTS.md`** – add providers, datasets, prompts, strategies, metrics.
+- **`examples/advanced/`** – advanced customization examples (custom runners, pipelines, metrics).
+- **`docs/DIAGRAM.md`** – architecture diagram for presentations/reviews.
 
 The reusable `themis.experiment.builder` module assembles plans, runners,
 pipelines, and storage from declarative definitions so new experiments mostly

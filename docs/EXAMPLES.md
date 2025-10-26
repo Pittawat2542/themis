@@ -50,7 +50,7 @@ Hydra/OmegaConf overrides let you tweak scenarios without editing the file.
 
 Create `my_inline.yaml`:
 
-```yaml
+```
 name: math500_zero_shot
 dataset:
   source: inline
@@ -64,7 +64,8 @@ generation:
     options:
       seed: 42
 storage:
-  path: .cache/inline-demo
+  path: null              # No specific path, will use default_path
+  default_path: .cache/themis  # Default storage location for all experiments
 max_samples: 1
 ```
 
@@ -73,6 +74,10 @@ Run:
 ```bash
 uv run python -m themis.cli run-config --config my_inline.yaml --log-level info
 ```
+
+This configuration will store generation and evaluation results in the `.cache/themis` directory
+by default. You can still override this by specifying a specific `path` value or using the
+`--overrides storage.path=/custom/path` CLI option.
 
 ## 5. Adjust retry/backoff behavior
 

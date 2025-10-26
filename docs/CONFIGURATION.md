@@ -102,13 +102,19 @@ The runner records attempt metadata and the CLI logs each retry.
 
 ```yaml
 storage:
-  path: .cache/themis
+  path: .cache/themis      # Specific storage path (takes precedence)
+  default_path: .cache/runs # Default storage path when path is not specified
 run_id: math500-smoke
 resume: true
 ```
 
 Generations and evaluation scores are cached per `run_id`. Reruns reuse any task
 already in storage, so you can interrupt long runs safely.
+
+If `path` is specified, it will be used for storage. If `path` is null/empty but 
+`default_path` is specified, then `default_path` will be used as the storage location.
+This allows you to set a default storage location for all experiments while still
+being able to override it for specific runs.
 
 ## Hydra overrides
 

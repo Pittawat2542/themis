@@ -56,9 +56,11 @@ def load_dataset_from_config(
 def _build_experiment(
     config: schema.ExperimentConfig,
 ) -> experiment_orchestrator.ExperimentOrchestrator:
+    # Use the specific path if provided, otherwise use the default path
+    storage_path = config.storage.path or config.storage.default_path
     storage = (
-        experiment_storage.ExperimentStorage(Path(config.storage.path))
-        if config.storage.path
+        experiment_storage.ExperimentStorage(Path(storage_path))
+        if storage_path
         else None
     )
     sampling_cfg = core_entities.SamplingConfig(
