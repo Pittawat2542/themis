@@ -12,7 +12,7 @@ from themis.utils.progress import ProgressReporter
 from themis.generation import strategies as generation_strategies
 from themis.project import ProjectExperiment
 
-from experiments.example.config import ModelConfig
+from ..getting_started.config import ModelConfig
 
 from . import datasets
 from .config import AdvancedExperimentConfig

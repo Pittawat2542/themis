@@ -41,6 +41,7 @@ class DatasetConfig:
     source: str = "huggingface"
     data_dir: str | None = None
     limit: int | None = None
+    split: str = "test"
     subjects: list[str] = field(default_factory=list)
     inline_samples: list[dict[str, Any]] = field(default_factory=list)
 

@@ -21,11 +21,12 @@ def build_math500_zero_shot_experiment(
     sampling: core_entities.SamplingConfig | None = None,
     storage: experiment_storage.ExperimentStorage | None = None,
     runner_options: dict[str, object] | None = None,
+    task_name: str = "math500",
 ) -> orchestrator.ExperimentOrchestrator:
-    """Create an experiment orchestrator tailored for the MATH-500 benchmark."""
+    """Create an experiment orchestrator tailored for competition math benchmarks."""
 
     prompt_template = templates.PromptTemplate(
-        name="math-zero-shot-json",
+        name=f"{task_name}-zero-shot-json",
         template=dedent(
             """
             You are an expert competition mathematician. Solve the following problem in a zero-shot
@@ -36,7 +37,7 @@ def build_math500_zero_shot_experiment(
             {problem}
             """
         ).strip(),
-        metadata={"task": "math500", "expect_boxed": True},
+        metadata={"task": task_name, "expect_boxed": True},
     )
 
     sampling = sampling or core_entities.SamplingConfig(

@@ -40,6 +40,10 @@ strategies, and metrics to a Themis-powered experiment.
 3. **Resumability**
    - The orchestrator caches the entire dataset per run ID so reruns can replay
      the exact same rows even if the source isn’t available.
+4. **Tests**
+   - Add regression coverage for new benchmarks: dataset loader unit tests,
+     runtime/config integration tests, and a CLI smoke test that exercises the
+     new command against a small local fixture.
 
 ## Prompts / Tasks
 

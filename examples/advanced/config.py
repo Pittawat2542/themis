@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 
-from experiments.example.config import (
+from ..getting_started.config import (
     DatasetConfig,
     ExampleExperimentConfig,
     ModelConfig,

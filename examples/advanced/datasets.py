@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import List
 
-from experiments.example import datasets as base_datasets
-from experiments.example.config import DatasetConfig
+from ..getting_started import datasets as base_datasets
+from ..getting_started.config import DatasetConfig
 
 
 def load_all_datasets(dataset_configs: List[DatasetConfig]) -> List[dict[str, object]]:

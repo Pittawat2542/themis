@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Annotated, Iterable, Literal, Sequence
+from typing import Annotated, Callable, Iterable, Literal, Sequence
 
 from cyclopts import App, Parameter
 
@@ -15,9 +15,15 @@ from themis.config import (
     run_experiment_from_config,
     summarize_report_for_config,
 )
-from themis.datasets import math500 as math500_dataset
+from themis.datasets import (
+    competition_math as competition_math_dataset,
+    math500 as math500_dataset,
+    mmlu_pro as mmlu_pro_dataset,
+    super_gpqa as super_gpqa_dataset,
+)
 from themis.experiment import export as experiment_export
 from themis.experiment import math as math_experiment
+from themis.experiment import mcq as mcq_experiment
 from themis.experiment import storage as experiment_storage
 from themis.providers.registry import _REGISTRY
 from themis.utils.logging_utils import configure_logging
@@ -134,9 +140,398 @@ def math500_cmd(
         limit=limit,
         subjects=subject_filter,
     )
+    return _run_math_benchmark(
+        rows,
+        max_samples=max_samples,
+        storage=storage,
+        run_id=run_id,
+        resume=resume,
+        temperature=temperature,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title="math500",
+        task_name="math500",
+    )
+
+@app.command(name="aime24")
+def aime24_cmd(
+    *,
+    source: Annotated[
+        Literal["huggingface", "local"], Parameter(help="Dataset source")
+    ] = "huggingface",
+    split: Annotated[str, Parameter(help="Dataset split to load")] = "test",
+    data_dir: Annotated[
+        Path | None, Parameter(help="Directory containing local dataset")
+    ] = None,
+    limit: Annotated[int | None, Parameter(help="Max rows to load")] = None,
+    subjects: Annotated[
+        tuple[str, ...], Parameter(help="Optional subject filters")
+    ] = (),
+    max_samples: Annotated[int | None, Parameter(help="Maximum samples to run")] = None,
+    storage: Annotated[
+        Path | None, Parameter(help="Cache directory for datasets/results")
+    ] = None,
+    run_id: Annotated[str | None, Parameter(help="Identifier for cached run")] = None,
+    resume: Annotated[
+        bool, Parameter(help="Reuse cached generations when storage is set")
+    ] = True,
+    temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
+    log_level: Annotated[
+        str, Parameter(help="Logging level (critical/error/warning/info/debug/trace)")
+    ] = "info",
+    csv_output: Annotated[
+        Path | None, Parameter(help="Write CSV export to this path")
+    ] = None,
+    html_output: Annotated[
+        Path | None, Parameter(help="Write HTML summary to this path")
+    ] = None,
+    json_output: Annotated[
+        Path | None, Parameter(help="Write JSON export to this path")
+    ] = None,
+) -> int:
+    """Run the AIME 2024 benchmark."""
+
+    configure_logging(log_level)
+    subject_filter = list(subjects) if subjects else None
+    rows = _load_competition_math_dataset(
+        dataset="math-ai/aime24",
+        subset=None,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subject_filter,
+    )
+
+    return _run_math_benchmark(
+        rows,
+        max_samples=max_samples,
+        storage=storage,
+        run_id=run_id,
+        resume=resume,
+        temperature=temperature,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title="aime24",
+        task_name="aime24",
+    )
+
+
+@app.command(name="aime25")
+def aime25_cmd(
+    *,
+    source: Annotated[
+        Literal["huggingface", "local"], Parameter(help="Dataset source")
+    ] = "huggingface",
+    split: Annotated[str, Parameter(help="Dataset split to load")] = "test",
+    data_dir: Annotated[
+        Path | None, Parameter(help="Directory containing local dataset")
+    ] = None,
+    limit: Annotated[int | None, Parameter(help="Max rows to load")] = None,
+    subjects: Annotated[
+        tuple[str, ...], Parameter(help="Optional subject filters")
+    ] = (),
+    max_samples: Annotated[int | None, Parameter(help="Maximum samples to run")] = None,
+    storage: Annotated[
+        Path | None, Parameter(help="Cache directory for datasets/results")
+    ] = None,
+    run_id: Annotated[str | None, Parameter(help="Identifier for cached run")] = None,
+    resume: Annotated[
+        bool, Parameter(help="Reuse cached generations when storage is set")
+    ] = True,
+    temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
+    log_level: Annotated[
+        str, Parameter(help="Logging level (critical/error/warning/info/debug/trace)")
+    ] = "info",
+    csv_output: Annotated[
+        Path | None, Parameter(help="Write CSV export to this path")
+    ] = None,
+    html_output: Annotated[
+        Path | None, Parameter(help="Write HTML summary to this path")
+    ] = None,
+    json_output: Annotated[
+        Path | None, Parameter(help="Write JSON export to this path")
+    ] = None,
+) -> int:
+    """Run the AIME 2025 benchmark."""
+
+    configure_logging(log_level)
+    subject_filter = list(subjects) if subjects else None
+    rows = _load_competition_math_dataset(
+        dataset="math-ai/aime25",
+        subset=None,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subject_filter,
+    )
+
+    return _run_math_benchmark(
+        rows,
+        max_samples=max_samples,
+        storage=storage,
+        run_id=run_id,
+        resume=resume,
+        temperature=temperature,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title="aime25",
+        task_name="aime25",
+    )
+
+
+@app.command(name="amc23")
+def amc23_cmd(
+    *,
+    source: Annotated[
+        Literal["huggingface", "local"], Parameter(help="Dataset source")
+    ] = "huggingface",
+    split: Annotated[str, Parameter(help="Dataset split to load")] = "test",
+    data_dir: Annotated[
+        Path | None, Parameter(help="Directory containing local dataset")
+    ] = None,
+    limit: Annotated[int | None, Parameter(help="Max rows to load")] = None,
+    subjects: Annotated[
+        tuple[str, ...], Parameter(help="Optional subject filters")
+    ] = (),
+    max_samples: Annotated[int | None, Parameter(help="Maximum samples to run")] = None,
+    storage: Annotated[
+        Path | None, Parameter(help="Cache directory for datasets/results")
+    ] = None,
+    run_id: Annotated[str | None, Parameter(help="Identifier for cached run")] = None,
+    resume: Annotated[
+        bool, Parameter(help="Reuse cached generations when storage is set")
+    ] = True,
+    temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
+    log_level: Annotated[
+        str, Parameter(help="Logging level (critical/error/warning/info/debug/trace)")
+    ] = "info",
+    csv_output: Annotated[
+        Path | None, Parameter(help="Write CSV export to this path")
+    ] = None,
+    html_output: Annotated[
+        Path | None, Parameter(help="Write HTML summary to this path")
+    ] = None,
+    json_output: Annotated[
+        Path | None, Parameter(help="Write JSON export to this path")
+    ] = None,
+) -> int:
+    """Run the AMC 2023 benchmark."""
+
+    configure_logging(log_level)
+    subject_filter = list(subjects) if subjects else None
+    rows = _load_competition_math_dataset(
+        dataset="math-ai/amc23",
+        subset=None,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subject_filter,
+    )
+
+    return _run_math_benchmark(
+        rows,
+        max_samples=max_samples,
+        storage=storage,
+        run_id=run_id,
+        resume=resume,
+        temperature=temperature,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title="amc23",
+        task_name="amc23",
+    )
+
+
+@app.command(name="olympiadbench")
+def olympiadbench_cmd(
+    *,
+    source: Annotated[
+        Literal["huggingface", "local"], Parameter(help="Dataset source")
+    ] = "huggingface",
+    split: Annotated[str, Parameter(help="Dataset split to load")] = "test",
+    data_dir: Annotated[
+        Path | None, Parameter(help="Directory containing local dataset")
+    ] = None,
+    limit: Annotated[int | None, Parameter(help="Max rows to load")] = None,
+    subjects: Annotated[
+        tuple[str, ...], Parameter(help="Optional subject filters")
+    ] = (),
+    max_samples: Annotated[int | None, Parameter(help="Maximum samples to run")] = None,
+    storage: Annotated[
+        Path | None, Parameter(help="Cache directory for datasets/results")
+    ] = None,
+    run_id: Annotated[str | None, Parameter(help="Identifier for cached run")] = None,
+    resume: Annotated[
+        bool, Parameter(help="Reuse cached generations when storage is set")
+    ] = True,
+    temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
+    log_level: Annotated[
+        str, Parameter(help="Logging level (critical/error/warning/info/debug/trace)")
+    ] = "info",
+    csv_output: Annotated[
+        Path | None, Parameter(help="Write CSV export to this path")
+    ] = None,
+    html_output: Annotated[
+        Path | None, Parameter(help="Write HTML summary to this path")
+    ] = None,
+    json_output: Annotated[
+        Path | None, Parameter(help="Write JSON export to this path")
+    ] = None,
+) -> int:
+    """Run the OlympiadBench benchmark."""
+
+    configure_logging(log_level)
+    subject_filter = list(subjects) if subjects else None
+    rows = _load_competition_math_dataset(
+        dataset="math-ai/olympiadbench",
+        subset=None,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subject_filter,
+    )
+
+    return _run_math_benchmark(
+        rows,
+        max_samples=max_samples,
+        storage=storage,
+        run_id=run_id,
+        resume=resume,
+        temperature=temperature,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title="olympiadbench",
+        task_name="olympiadbench",
+    )
+
+
+@app.command(name="beyondaime")
+def beyond_aime_cmd(
+    *,
+    source: Annotated[
+        Literal["huggingface", "local"], Parameter(help="Dataset source")
+    ] = "huggingface",
+    split: Annotated[str, Parameter(help="Dataset split to load")] = "test",
+    data_dir: Annotated[
+        Path | None, Parameter(help="Directory containing local dataset")
+    ] = None,
+    limit: Annotated[int | None, Parameter(help="Max rows to load")] = None,
+    subjects: Annotated[
+        tuple[str, ...], Parameter(help="Optional subject filters")
+    ] = (),
+    max_samples: Annotated[int | None, Parameter(help="Maximum samples to run")] = None,
+    storage: Annotated[
+        Path | None, Parameter(help="Cache directory for datasets/results")
+    ] = None,
+    run_id: Annotated[str | None, Parameter(help="Identifier for cached run")] = None,
+    resume: Annotated[
+        bool, Parameter(help="Reuse cached generations when storage is set")
+    ] = True,
+    temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
+    log_level: Annotated[
+        str, Parameter(help="Logging level (critical/error/warning/info/debug/trace)")
+    ] = "info",
+    csv_output: Annotated[
+        Path | None, Parameter(help="Write CSV export to this path")
+    ] = None,
+    html_output: Annotated[
+        Path | None, Parameter(help="Write HTML summary to this path")
+    ] = None,
+    json_output: Annotated[
+        Path | None, Parameter(help="Write JSON export to this path")
+    ] = None,
+) -> int:
+    """Run the BeyondAIME benchmark."""
+
+    configure_logging(log_level)
+    subject_filter = list(subjects) if subjects else None
+    rows = _load_competition_math_dataset(
+        dataset="ByteDance-Seed/BeyondAIME",
+        subset=None,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subject_filter,
+    )
+
+    return _run_math_benchmark(
+        rows,
+        max_samples=max_samples,
+        storage=storage,
+        run_id=run_id,
+        resume=resume,
+        temperature=temperature,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title="beyondaime",
+        task_name="beyondaime",
+    )
+
+
+@app.command(name="supergpqa")
+def supergpqa_cmd(
+    *,
+    source: Annotated[
+        Literal["huggingface", "local"], Parameter(help="Dataset source")
+    ] = "huggingface",
+    split: Annotated[str, Parameter(help="Dataset split to load")] = "test",
+    data_dir: Annotated[
+        Path | None, Parameter(help="Directory containing local dataset")
+    ] = None,
+    limit: Annotated[int | None, Parameter(help="Max rows to load")] = None,
+    subjects: Annotated[
+        tuple[str, ...], Parameter(help="Subjects or categories to filter")
+    ] = (),
+    max_samples: Annotated[int | None, Parameter(help="Maximum samples to run")] = None,
+    storage: Annotated[
+        Path | None, Parameter(help="Cache directory for datasets/results")
+    ] = None,
+    run_id: Annotated[str | None, Parameter(help="Identifier for cached run")] = None,
+    resume: Annotated[
+        bool, Parameter(help="Reuse cached generations when storage is set")
+    ] = True,
+    temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
+    log_level: Annotated[
+        str, Parameter(help="Logging level (critical/error/warning/info/debug/trace)")
+    ] = "info",
+    csv_output: Annotated[
+        Path | None, Parameter(help="Write CSV export to this path")
+    ] = None,
+    html_output: Annotated[
+        Path | None, Parameter(help="Write HTML summary to this path")
+    ] = None,
+    json_output: Annotated[
+        Path | None, Parameter(help="Write JSON export to this path")
+    ] = None,
+) -> int:
+    """Run the SuperGPQA multiple-choice evaluation."""
+
+    configure_logging(log_level)
+    subject_filter = list(subjects) if subjects else None
+    rows = _load_multiple_choice_dataset(
+        loader=super_gpqa_dataset.load_super_gpqa,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subject_filter,
+    )
 
     storage_impl = experiment_storage.ExperimentStorage(storage) if storage else None
-    experiment = math_experiment.build_math500_zero_shot_experiment(
+    experiment = mcq_experiment.build_multiple_choice_json_experiment(
+        dataset_name="supergpqa",
+        task_id="supergpqa",
         temperature=temperature,
         storage=storage_impl,
     )
@@ -150,13 +545,90 @@ def math500_cmd(
             resume=resume,
             on_result=progress.on_result,
         )
-    print(math_experiment.summarize_report(report))
+    print(mcq_experiment.summarize_report(report))
     _export_outputs(
         report,
         csv_output=csv_output,
         html_output=html_output,
         json_output=json_output,
-        title="math500 experiment",
+        title="supergpqa experiment",
+    )
+    return 0
+
+
+@app.command(name="mmlu-pro")
+def mmlu_pro_cmd(
+    *,
+    source: Annotated[
+        Literal["huggingface", "local"], Parameter(help="Dataset source")
+    ] = "huggingface",
+    split: Annotated[str, Parameter(help="Dataset split to load")] = "test",
+    data_dir: Annotated[
+        Path | None, Parameter(help="Directory containing local dataset")
+    ] = None,
+    limit: Annotated[int | None, Parameter(help="Max rows to load")] = None,
+    subjects: Annotated[
+        tuple[str, ...], Parameter(help="Subjects or categories to filter")
+    ] = (),
+    max_samples: Annotated[int | None, Parameter(help="Maximum samples to run")] = None,
+    storage: Annotated[
+        Path | None, Parameter(help="Cache directory for datasets/results")
+    ] = None,
+    run_id: Annotated[str | None, Parameter(help="Identifier for cached run")] = None,
+    resume: Annotated[
+        bool, Parameter(help="Reuse cached generations when storage is set")
+    ] = True,
+    temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
+    log_level: Annotated[
+        str, Parameter(help="Logging level (critical/error/warning/info/debug/trace)")
+    ] = "info",
+    csv_output: Annotated[
+        Path | None, Parameter(help="Write CSV export to this path")
+    ] = None,
+    html_output: Annotated[
+        Path | None, Parameter(help="Write HTML summary to this path")
+    ] = None,
+    json_output: Annotated[
+        Path | None, Parameter(help="Write JSON export to this path")
+    ] = None,
+) -> int:
+    """Run the MMLU-Pro multiple-choice evaluation."""
+
+    configure_logging(log_level)
+    subject_filter = list(subjects) if subjects else None
+    rows = _load_multiple_choice_dataset(
+        loader=mmlu_pro_dataset.load_mmlu_pro,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subject_filter,
+    )
+
+    storage_impl = experiment_storage.ExperimentStorage(storage) if storage else None
+    experiment = mcq_experiment.build_multiple_choice_json_experiment(
+        dataset_name="mmlu-pro",
+        task_id="mmlu_pro",
+        temperature=temperature,
+        storage=storage_impl,
+    )
+
+    total = _effective_total(len(rows), max_samples)
+    with ProgressReporter(total=total, description="Generating") as progress:
+        report = experiment.run(
+            rows,
+            max_samples=max_samples,
+            run_id=run_id,
+            resume=resume,
+            on_result=progress.on_result,
+        )
+    print(mcq_experiment.summarize_report(report))
+    _export_outputs(
+        report,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title="mmlu_pro experiment",
     )
     return 0
 
@@ -216,6 +688,7 @@ def _load_math_dataset(
     data_dir: Path | None,
     limit: int | None,
     subjects: Iterable[str] | None,
+    split: str = "test",
 ):
     if source == "local":
         if data_dir is None:
@@ -226,15 +699,68 @@ def _load_math_dataset(
         samples = math500_dataset.load_math500(
             source="local",
             data_dir=data_dir,
+            split=split,
             limit=limit,
             subjects=subjects,
         )
     else:
         samples = math500_dataset.load_math500(
             source="huggingface",
+            split=split,
             limit=limit,
             subjects=subjects,
         )
+    return [sample.to_generation_example() for sample in samples]
+
+
+def _load_multiple_choice_dataset(
+    *,
+    loader: Callable[..., Sequence],
+    source: Literal["huggingface", "local"],
+    data_dir: Path | None,
+    split: str,
+    limit: int | None,
+    subjects: Iterable[str] | None,
+):
+    if source == "local" and data_dir is None:
+        raise ValueError(
+            "The --data-dir option is required when --source=local so Themis "
+            "knows where to read the dataset."
+        )
+    samples = loader(
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subjects,
+    )
+    return [sample.to_generation_example() for sample in samples]
+
+
+def _load_competition_math_dataset(
+    *,
+    dataset: str,
+    subset: str | None,
+    source: Literal["huggingface", "local"],
+    data_dir: Path | None,
+    split: str,
+    limit: int | None,
+    subjects: Iterable[str] | None,
+):
+    if source == "local" and data_dir is None:
+        raise ValueError(
+            "The --data-dir option is required when --source=local so Themis "
+            "knows where to read the dataset."
+        )
+    samples = competition_math_dataset.load_competition_math(
+        dataset=dataset,
+        subset=subset,
+        source=source,
+        data_dir=data_dir,
+        split=split,
+        limit=limit,
+        subjects=subjects,
+    )
     return [sample.to_generation_example() for sample in samples]
 
 
@@ -242,6 +768,47 @@ def _effective_total(total: int, limit: int | None) -> int:
     if limit is None:
         return total
     return min(total, limit)
+
+
+def _run_math_benchmark(
+    rows: Sequence[dict[str, object]],
+    *,
+    max_samples: int | None,
+    storage: Path | None,
+    run_id: str | None,
+    resume: bool,
+    temperature: float,
+    csv_output: Path | None,
+    html_output: Path | None,
+    json_output: Path | None,
+    title: str,
+    task_name: str,
+) -> int:
+    storage_impl = experiment_storage.ExperimentStorage(storage) if storage else None
+    experiment = math_experiment.build_math500_zero_shot_experiment(
+        temperature=temperature,
+        storage=storage_impl,
+        task_name=task_name,
+    )
+
+    total = _effective_total(len(rows), max_samples)
+    with ProgressReporter(total=total, description="Generating") as progress:
+        report = experiment.run(
+            rows,
+            max_samples=max_samples,
+            run_id=run_id,
+            resume=resume,
+            on_result=progress.on_result,
+        )
+    print(math_experiment.summarize_report(report))
+    _export_outputs(
+        report,
+        csv_output=csv_output,
+        html_output=html_output,
+        json_output=json_output,
+        title=f"{title} experiment",
+    )
+    return 0
 
 
 @app.command(name="list-providers")
@@ -306,6 +873,55 @@ def list_benchmarks(
             "command": "uv run python -m themis.cli math500",
         },
         {
+            "name": "supergpqa",
+            "description": "Graduate-level QA benchmark with multiple-choice questions",
+            "source": "huggingface (default) or local",
+            "subjects": "category filter via --subjects",
+            "command": "uv run python -m themis.cli supergpqa",
+        },
+        {
+            "name": "mmlu-pro",
+            "description": "Professional-level MMLU benchmark with refined distractors",
+            "source": "huggingface (default) or local",
+            "subjects": "subject filter via --subjects",
+            "command": "uv run python -m themis.cli mmlu-pro",
+        },
+        {
+            "name": "aime24",
+            "description": "AIME 2024 competition problems",
+            "source": "huggingface (default) or local",
+            "subjects": "problem set",
+            "command": "uv run python -m themis.cli aime24",
+        },
+        {
+            "name": "aime25",
+            "description": "AIME 2025 competition problems",
+            "source": "huggingface (default) or local",
+            "subjects": "problem set",
+            "command": "uv run python -m themis.cli aime25",
+        },
+        {
+            "name": "amc23",
+            "description": "AMC 2023 competition problems",
+            "source": "huggingface (default) or local",
+            "subjects": "problem set",
+            "command": "uv run python -m themis.cli amc23",
+        },
+        {
+            "name": "olympiadbench",
+            "description": "Mixed Olympiad-style math benchmark",
+            "source": "huggingface (default) or local",
+            "subjects": "competition metadata",
+            "command": "uv run python -m themis.cli olympiadbench",
+        },
+        {
+            "name": "beyondaime",
+            "description": "BeyondAIME advanced math competition set",
+            "source": "huggingface (default) or local",
+            "subjects": "problem set",
+            "command": "uv run python -m themis.cli beyondaime",
+        },
+        {
             "name": "demo",
             "description": "Built-in demo with 2 math problems",
             "source": "inline",
@@ -366,6 +982,7 @@ def validate_config(
 
         print(f"\nDataset:")
         print(f"  Source: {experiment_config.dataset.source}")
+        print(f"  Split: {experiment_config.dataset.split}")
         if experiment_config.dataset.limit:
             print(f"  Limit: {experiment_config.dataset.limit}")
         if experiment_config.dataset.subjects:
@@ -405,7 +1022,18 @@ def show_info() -> int:
         print(f"  ✓ {provider}")
 
     print("\n📊 Available Benchmarks:")
-    benchmarks = ["demo", "math500", "inline (via config)"]
+    benchmarks = [
+        "demo",
+        "math500",
+        "aime24",
+        "aime25",
+        "amc23",
+        "olympiadbench",
+        "beyondaime",
+        "supergpqa",
+        "mmlu-pro",
+        "inline (via config)",
+    ]
     for bench in benchmarks:
         print(f"  ✓ {bench}")
 

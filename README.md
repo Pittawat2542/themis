@@ -269,7 +269,7 @@ uv run python -m themis.cli list-benchmarks
 uv run python -m themis.cli list-benchmarks --verbose
 ```
 
-Shows math500, demo, and inline dataset options.
+Shows math500, competition math benchmarks (aime24/aime25/amc23/olympiadbench/beyondaime), supergpqa, mmlu-pro, demo, and inline dataset options.
 
 #### `init` - Generate Config File
 
@@ -332,7 +332,7 @@ Options:
   --limit INTEGER     Limit number of samples (for testing)
   --storage PATH      Cache directory (default: .cache/themis)
   --run-id TEXT       Unique run identifier for resumability
-  --temperature FLOAT Model temperature (default: 0.1)
+  --temperature FLOAT Model temperature (default: 0.0)
   --log-level TEXT    Logging verbosity
   --resume / --no-resume  Resume from cache (default: true)
 
@@ -351,6 +351,69 @@ Examples:
     --source local \
     --data-dir /path/to/MATH-500 \
     --limit 100
+```
+
+#### Competition Math Benchmarks (`aime24`, `aime25`, `amc23`, `olympiadbench`, `beyondaime`)
+
+Zero-shot evaluation across multiple competition datasets:
+
+```bash
+uv run python -m themis.cli <benchmark> [OPTIONS]
+
+Benchmarks:
+  aime24, aime25, amc23, olympiadbench, beyondaime
+
+Options:
+  --source TEXT       Dataset source: 'huggingface' (default) or 'local'
+  --split TEXT        Dataset split to load (default: test)
+  --data-dir PATH     Local dataset directory (if --source local)
+  --limit INTEGER     Limit number of samples (for smoke tests)
+  --subjects TEXT...  Optional subject filters (if provided by the dataset)
+  --storage PATH      Cache directory for generations
+  --run-id TEXT       Unique run identifier for resumability
+  --temperature FLOAT Model temperature (default: 0.0)
+  --log-level TEXT    Logging verbosity
+  --resume / --no-resume  Resume from cache (default: true)
+```
+
+#### `supergpqa` - SuperGPQA Benchmark
+
+Multiple-choice evaluation on the SuperGPQA dataset:
+
+```bash
+uv run python -m themis.cli supergpqa [OPTIONS]
+
+Options:
+  --source TEXT       Dataset source: 'huggingface' (default) or 'local'
+  --split TEXT        Dataset split to load (default: test)
+  --data-dir PATH     Local dataset directory (if --source local)
+  --limit INTEGER     Limit number of samples (for quick smoke tests)
+  --subjects TEXT...  Optional category filters
+  --storage PATH      Cache directory for generations
+  --run-id TEXT       Unique run identifier for resumability
+  --temperature FLOAT Model temperature (default: 0.0)
+  --log-level TEXT    Logging verbosity
+  --resume / --no-resume  Resume from cache (default: true)
+```
+
+#### `mmlu-pro` - MMLU-Pro Benchmark
+
+Professional-level multiple-choice evaluation with refined distractors:
+
+```bash
+uv run python -m themis.cli mmlu-pro [OPTIONS]
+
+Options:
+  --source TEXT       Dataset source: 'huggingface' (default) or 'local'
+  --split TEXT        Dataset split to load (default: test)
+  --data-dir PATH     Local dataset directory (if --source local)
+  --limit INTEGER     Limit number of samples
+  --subjects TEXT...  Optional subject filters
+  --storage PATH      Cache directory for generations
+  --run-id TEXT       Unique run identifier for resumability
+  --temperature FLOAT Model temperature (default: 0.0)
+  --log-level TEXT    Logging verbosity
+  --resume / --no-resume  Resume from cache (default: true)
 ```
 
 #### `run-config` - Config-Driven Experiments

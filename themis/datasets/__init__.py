@@ -1,5 +1,5 @@
 """Dataset helpers for Themis experiments."""
 
-from . import math500
+from . import competition_math, math500, mmlu_pro, super_gpqa
 
-__all__ = ["math500"]
+__all__ = ["competition_math", "math500", "mmlu_pro", "super_gpqa"]
