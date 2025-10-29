@@ -9,6 +9,7 @@ from typing import Annotated, Callable, Iterable, Literal, Sequence
 
 from cyclopts import App, Parameter
 
+from themis.cli.new_project import create_project
 from themis.config import (
     load_dataset_from_config,
     load_experiment_config,
@@ -1193,6 +1194,25 @@ resume: true
         return 0
     except Exception as e:
         print(f"❌ Error creating config file: {e}")
+        return 1
+
+
+@app.command(name="new-project")
+def new_project(
+    *,
+    project_name: Annotated[str, Parameter(help="The name of the new project")],
+    project_path: Annotated[
+        Path,
+        Parameter(help="The path where the new project will be created"),
+    ] = Path("."),
+) -> int:
+    """Create a new Themis project."""
+    try:
+        create_project(project_name, project_path)
+        print(f"Successfully created new project '{project_name}' in {project_path}")
+        return 0
+    except FileExistsError as e:
+        print(f"Error: {e}")
         return 1
 
 

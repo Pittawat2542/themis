@@ -149,3 +149,27 @@ def test_competition_cli_with_local_dataset(tmp_path, capsys, command):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "exact match" in captured.out.lower()
+
+
+def test_new_project_command(tmp_path, capsys):
+    project_name = "test-project"
+    args = ["new-project", "--project-name", project_name, "--project-path", str(tmp_path)]
+
+    exit_code = cli_main.main(args)
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert f"Successfully created new project '{project_name}'" in captured.out
+
+    project_dir = tmp_path / project_name
+    assert (project_dir / "config.sample.json").exists()
+    assert (project_dir / "cli.py").exists()
+    assert (project_dir / "README.md").exists()
+
+    with open(project_dir / "config.sample.json", "r") as f:
+        config_content = f.read()
+        assert project_name in config_content
+
+    with open(project_dir / "README.md", "r") as f:
+        readme_content = f.read()
+        assert project_name in readme_content
