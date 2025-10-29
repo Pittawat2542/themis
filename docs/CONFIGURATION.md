@@ -125,6 +125,29 @@ If `path` is specified, it will be used for storage. If `path` is null/empty but
 This allows you to set a default storage location for all experiments while still
 being able to override it for specific runs.
 
+## Integrations
+
+Configure external integrations like Weights & Biases (W&B) and Hugging Face Hub.
+
+```yaml
+integrations:
+  wandb:
+    enable: true             # Enable W&B logging
+    project: my-themis-project # W&B project name
+    entity: my-wandb-entity  # W&B entity (username or team)
+    tags: ["llm-eval", "math"]
+  huggingface_hub:
+    enable: true             # Enable Hugging Face Hub uploads
+    repository: my-username/my-themis-results # Hugging Face Hub repository ID
+```
+
+- `wandb.enable`: Set to `true` to enable Weights & Biases logging for experiment metrics and results.
+- `wandb.project`: The name of the W&B project to log to.
+- `wandb.entity`: Your W&B username or team name.
+- `wandb.tags`: A list of tags to associate with the W&B run.
+- `huggingface_hub.enable`: Set to `true` to enable uploading experiment results to the Hugging Face Hub.
+- `huggingface_hub.repository`: The ID of the Hugging Face Hub repository (e.g., `your-username/your-repo-name`) where results will be uploaded as a dataset.
+
 ## Hydra overrides
 
 All CLI commands accept `--overrides` arguments interpreted by Hydra:

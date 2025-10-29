@@ -238,6 +238,21 @@ Enable Weights & Biases and Hugging Face Hub integrations:
 
 ## 🛠️ Common Tasks
 
+### Creating a New Project
+
+Scaffold a new Themis project with a basic structure:
+
+```bash
+uv run python -m themis.cli new-project --project-name my-themis-project
+```
+
+This command creates a directory `my-themis-project` containing:
+- `config.sample.json`: A basic experiment configuration.
+- `cli.py`: A simple CLI to run experiments defined in `config.sample.json`.
+- `README.md`: Project-specific instructions.
+
+After creation, navigate into the new project directory and customize `config.sample.json`.
+
 ### Preview Configuration (Dry Run)
 ```bash
 uv run python -m examples.getting_started.cli run --dry-run

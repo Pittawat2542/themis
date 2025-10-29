@@ -20,6 +20,7 @@ from themis.generation import runner as generation_runner
 from themis.generation import strategies as generation_strategies
 from themis.providers import create_provider
 from themis.interfaces import ModelProvider
+from themis.config import schema as config
 
 
 class ExperimentBuilder:
@@ -87,12 +88,12 @@ class ExperimentBuilder:
             if storage_dir is not None
             else None
         )
-        return ExperimentOrchestrator(
-            generation_plan=generation_plan,
+        orchestrator_obj = orchestrator.ExperimentOrchestrator(
+            generation_plan=plan_obj,
             generation_runner=runner,
-            evaluation_pipeline=evaluation_pipeline,
+            evaluation_pipeline=pipeline,
             storage=storage,
-            integrations_config=config.integrations,
+            integrations_config=config.IntegrationsConfig(),
         )
         return BuiltExperiment(
             orchestrator=orchestrator_obj,

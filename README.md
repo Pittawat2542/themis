@@ -301,6 +301,16 @@ uv run python -m themis.cli validate-config --config my_config.yaml
 
 Shows parsed configuration and identifies errors before running expensive experiments.
 
+#### `new-project` - Create a New Project
+
+Scaffold a new project directory:
+
+```bash
+uv run python -m themis.cli new-project --project-name my-new-project
+```
+
+This will create a new directory called `my-new-project` with a basic project structure, including a sample configuration file, a CLI script, and a README.
+
 ---
 
 ### Experiment Commands
@@ -631,6 +641,7 @@ uv run python -m themis.cli math500 \
 ✅ **Math Evaluation**: Built-in math-verify integration for numeric correctness  
 ✅ **Export Options**: CSV, JSON, HTML output formats  
 ✅ **Multi-Experiment Projects**: Organize related experiments with shared configs  
+✅ **Integrations**: Log results to Weights & Biases and upload artifacts to Hugging Face Hub
 
 ---
 
