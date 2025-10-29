@@ -1,0 +1,53 @@
+{
+  "run_id": "local-prompt-eng-2024",
+  "storage_dir": ".cache/local-prompt-eng",
+  "resume": true,
+  "prompt_variants": [
+    {
+      "name": "zero-shot",
+      "template": "You are an expert mathematician. Solve the problem below and respond with a JSON object containing `answer` and `reasoning` keys only.\\n\\nProblem:\\n{problem}",
+      "description": "Direct problem solving without examples",
+      "metadata": {"strategy": "zero-shot"}
+    },
+    {
+      "name": "few-shot",
+      "template": "You are an expert mathematician. Solve the problem below and respond with a JSON object containing `answer` and `reasoning` keys only.\\n\\nExample:\\nProblem: What is 2+2?\\nAnswer: {\\\"answer\\\": \\\"4\\\", \\\"reasoning\\\": \\\"Simple addition of 2 and 2\\\"}\\n\\nProblem:\\n{problem}\\n\\nAnswer:",
+      "description": "Problem solving with one example",
+      "metadata": {"strategy": "few-shot"}
+    },
+    {
+      "name": "chain-of-thought",
+      "template": "You are an expert mathematician. Think through the problem step-by-step, then provide your final answer.\\n\\nProblem: {problem}\\n\\nStep-by-step reasoning:",
+      "description": "Chain-of-thought reasoning approach",
+      "metadata": {"strategy": "chain-of-thought"}
+    }
+  ],
+  "models": [
+    {
+      "name": "openai/qwen/qwen3-vl-30b",
+      "provider": "litellm",
+      "provider_options": {
+        "api_base": "http://localhost:1234/v1",
+        "api_key": "sk-not-needed",
+        "timeout": 300,
+        "custom_llm_provider": "openai"
+      },
+      "description": "Local Qwen3-VL-30B model via OpenAI-compatible endpoint (requires local server running on port 1234)"
+    }
+  ],
+  "samplings": [
+    {
+      "name": "default",
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "max_tokens": -1
+    }
+  ],
+  "datasets": [
+    {
+      "name": "math-demo",
+      "kind": "demo",
+      "limit": 5
+    }
+  ]
+}

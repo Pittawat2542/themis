@@ -133,13 +133,6 @@ uv run python -m themis.cli validate-config --config my_config.yaml
 
 # Run the experiment
 uv run python -m themis.cli run-config --config my_config.yaml
-
-# Or use the example-based approach
-cp examples/openai_compatible/config.sample.json my_config.json
-# Edit my_config.json, then:
-uv run python -m examples.openai_compatible.cli run \
-  --config-path my_config.json \
-  --n-records 10
 ```
 
 ---
@@ -156,7 +149,7 @@ A comprehensive, hands-on cookbook with 5 progressive tutorials:
 |---------|-------|------|-------------------|
 | **[getting_started](examples/getting_started/)** | Basics | 15 min | Prompts, models, sampling, evaluation |
 | **[config_file](examples/config_file/)** | Configuration | 20 min | JSON configs, grid searches, resumability |
-| **[openai_compatible](examples/openai_compatible/)** | Real LLMs | 30 min | LM Studio, Ollama, vLLM, OpenAI, MATH-500 |
+| **[prompt_engineering](examples/prompt_engineering/)** | Prompt Strategies | 25 min | Zero-shot, few-shot, chain-of-thought, systematic comparison |
 | **[projects](examples/projects/)** | Organization | 45 min | Multi-experiment projects, research workflows |
 | **[advanced](examples/advanced/)** | Customization | 60 min | Custom runners, pipelines, metrics, agentic workflows |
 
@@ -172,8 +165,8 @@ uv run python -m examples.getting_started.cli run
 # Grid search (2 models × 3 temperatures)
 uv run python -m examples.config_file.cli run --config-path grid_search.json
 
-# Real LLM evaluation
-uv run python -m examples.openai_compatible.cli run --config-path my_config.json
+# Prompt engineering experiment
+uv run python -m examples.prompt_engineering.cli run
 
 # Multi-experiment project
 uv run python -m examples.projects.cli list-experiments

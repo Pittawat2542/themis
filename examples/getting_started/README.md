@@ -214,7 +214,7 @@ Evaluated 4 samples | Successful generations: 4/4 | Exact match: 0.750 (4 evalua
 Now that you understand the basics:
 
 - **02_config_file**: Learn advanced configuration techniques
-- **03_openai_compatible**: Connect to real LLM endpoints (LM Studio, Ollama, etc.)
+- **03_prompt_engineering**: Master systematic prompt comparison
 - **04_projects**: Organize multiple experiments in a project
 - **05_advanced**: Customize generation loops and evaluation pipelines
 
@@ -233,7 +233,7 @@ Now that you understand the basics:
 ## Common Issues
 
 **Q: The fake model always returns wrong answers!**
-A: The fake model is just for demonstration. See `03_openai_compatible` for using real models.
+A: The fake model is just for demonstration. See `03_prompt_engineering` for using real models or configuring your own endpoints.
 
 **Q: Where are my results stored?**
 A: Check the `storage_dir` from your config (default: `.cache/math500-demo`). Results are cached there for resumability.

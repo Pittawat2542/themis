@@ -8,7 +8,7 @@ This is a quick reference guide to the Themis examples cookbook. For detailed tu
 |-----------|------------|------|
 | I'm completely new to Themis | [getting_started](examples/getting_started/) | 15 min |
 | I want to run systematic experiments | [config_file](examples/config_file/) | 20 min |
-| I need to use real LLMs | [openai_compatible](examples/openai_compatible/) | 30 min |
+| I want to master prompt engineering | [prompt_engineering](examples/prompt_engineering/) | 25 min |
 | I'm managing multiple experiments | [projects](examples/projects/) | 45 min |
 | I need custom behavior | [advanced](examples/advanced/) | 60 min |
 
@@ -38,15 +38,18 @@ uv run python -m examples.config_file.cli run \
   --resume false
 ```
 
-### Connect to Real LLMs
+### Master Prompt Engineering
 ```bash
-# Start your local LLM server (e.g., LM Studio, Ollama)
-# Then edit examples/openai_compatible/config.sample.json
+# Run prompt engineering experiment
+uv run python -m examples.prompt_engineering.cli run
 
-# Run on MATH-500 benchmark
-uv run python -m examples.openai_compatible.cli run \
-  --config-path examples/openai_compatible/config.sample.json \
-  --n-records 10
+# Run with analysis
+uv run python -m examples.prompt_engineering.cli run --analyze
+
+# Export results for analysis
+uv run python -m examples.prompt_engineering.cli run \
+  --csv-output results.csv \
+  --html-output results.html
 ```
 
 ## 📚 Example Overview
@@ -80,26 +83,27 @@ uv run python -m examples.openai_compatible.cli run \
 - `compare_models.json` - Model comparison
 - `grid_search.json` - Full grid search example
 
-### 3. OpenAI Compatible
-**Location:** `examples/openai_compatible/`
+### 3. Prompt Engineering
+**Location:** `examples/prompt_engineering/`
 
 **What you'll learn:**
-- How to connect to LM Studio, Ollama, vLLM, OpenAI
-- How to configure API endpoints and authentication
-- How to handle timeouts and parallelism
-- How to run on real benchmarks (MATH-500)
+- How to systematically compare different prompting strategies
+- Zero-shot vs few-shot vs chain-of-thought prompting
+- How to analyze prompt effectiveness across models
+- How to export and analyze results
 
 **Key files:**
-- `README.md` - Comprehensive endpoint guide
-- `config.sample.json` - Local LLM configuration
-- `config.comprehensive.json` - Full-featured example
+- `README.md` - Comprehensive prompt engineering guide
+- `USAGE.md` - Detailed usage examples
+- `config.sample.json` - Example configuration
+- `prompts.py` - Prompt template definitions
+- `results_analysis.py` - Analysis utilities
 
-**Supported endpoints:**
-- LM Studio (`http://localhost:1234/v1`)
-- Ollama (`http://localhost:11434/v1`)
-- vLLM (`http://localhost:8000/v1`)
-- OpenAI API (`https://api.openai.com/v1`)
-- Any OpenAI-compatible server
+**Key concepts:**
+- Prompt variations and strategy comparison
+- Built-in metrics for evaluation
+- Export to CSV, JSON, HTML formats
+- Systematic experimentation workflows
 
 ### 4. Projects
 **Location:** `examples/projects/`
@@ -275,12 +279,12 @@ uv run python -m examples.getting_started.cli run \
 
 ### Limit Dataset Size (Quick Testing)
 ```bash
-# Using n-records flag (OpenAI compatible example)
-uv run python -m examples.openai_compatible.cli run \
-  --config-path config.sample.json \
-  --n-records 5
+# Use "limit" in config.json datasets section
+uv run python -m examples.getting_started.cli run \
+  --config-path config.sample.json
 
-# Or use "limit" in config.json datasets section
+# Or modify config to add:
+# "datasets": [{"name": "demo", "kind": "demo", "limit": 5}]
 ```
 
 ### Disable Resume (Force Re-run)
@@ -327,8 +331,8 @@ rm -rf .cache/your-storage-dir
 # 2. Use limit for quick testing
 "limit": 5  # in datasets section
 
-# 3. Use --n-records flag
-uv run python -m examples.openai_compatible.cli run --n-records 3
+# 3. Use fake provider for testing
+"provider": "fake"  # in config.json
 ```
 
 ### Invalid configuration
@@ -354,10 +358,10 @@ python -m json.tool your_config.json
    - Run grid searches
    - Learn about resumability
 
-3. **Connect to real LLMs with `openai_compatible`** (30 min)
-   - Set up a local LLM server
-   - Configure the endpoint
-   - Run on MATH-500
+3. **Master prompt engineering with `prompt_engineering`** (25 min)
+   - Compare zero-shot vs few-shot vs chain-of-thought
+   - Analyze prompt effectiveness across models
+   - Export results for analysis
 
 4. **Organize with `projects`** (45 min)
    - Create a project structure

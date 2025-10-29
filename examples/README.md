@@ -60,32 +60,30 @@ uv run python -m examples.config_file.cli run --config-path grid_search.json
 
 ---
 
-### 🌐 [openai_compatible](openai_compatible/) - Real LLM Endpoints
+### 📝 [prompt_engineering](prompt_engineering/) - Systematic Prompt Comparison
 
-**Connect to actual language models.**
+**Master prompt engineering techniques.**
 
-Learn how to use Themis with real LLM servers:
-- Configure OpenAI-compatible endpoints (LM Studio, Ollama, vLLM)
-- Set up local LLM servers
-- Handle authentication and API keys
-- Run experiments on real benchmarks (MATH-500)
-- Troubleshoot connection and timeout issues
+Learn how to systematically test and compare different prompting strategies:
+- Zero-shot vs few-shot vs chain-of-thought prompting
+- Compare prompt effectiveness across multiple models
+- Use built-in metrics for evaluation
+- Export results for analysis and reporting
 
-**Time to complete:** 30 minutes
+**Time to complete:** 25 minutes
 
-**Key concepts:** Provider options, API authentication, model mapping, timeouts, parallelism
+**Key concepts:** Prompt variations, strategy comparison, effectiveness analysis
 
 **Example commands:**
 ```bash
-# Quick test with local LLM
-uv run python -m examples.openai_compatible.cli run --config-path config.sample.json --n-records 5
+# Run prompt engineering experiment
+uv run python -m examples.prompt_engineering.cli run
 
-# Full evaluation
-uv run python -m examples.openai_compatible.cli run --config-path my_config.json
+# Run with analysis
+uv run python -m examples.prompt_engineering.cli run --analyze
 
-# Export for analysis
-uv run python -m examples.openai_compatible.cli run \
-  --config-path my_config.json \
+# Export results for analysis
+uv run python -m examples.prompt_engineering.cli run \
   --csv-output results.csv \
   --html-output results.html
 ```
@@ -172,10 +170,10 @@ cd examples/config_file
 uv run python -m examples.config_file.cli run --config-path compare_models.json
 ```
 
-**Evaluate on real data:**
+**Evaluate with prompt engineering:**
 ```bash
-cd examples/openai_compatible
-uv run python -m examples.openai_compatible.cli run --config-path config.sample.json
+cd examples/prompt_engineering
+uv run python -m examples.prompt_engineering.cli run --analyze
 ```
 
 **Organize experiments:**
@@ -274,11 +272,16 @@ examples/
 │   ├── compare_sampling.json
 │   ├── compare_models.json
 │   └── grid_search.json
-├── openai_compatible/             # Real LLM endpoints
+├── prompt_engineering/            # Prompt strategy comparison
 │   ├── README.md
+│   ├── USAGE.md
 │   ├── cli.py
+│   ├── config.py
 │   ├── config.sample.json
-│   └── config.comprehensive.json
+│   ├── prompts.py
+│   ├── datasets.py
+│   ├── experiment.py
+│   └── results_analysis.py
 ├── projects/                      # Multi-experiment projects
 │   ├── README.md
 │   ├── cli.py

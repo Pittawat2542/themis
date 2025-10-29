@@ -455,7 +455,7 @@ Storage: .cache/grid-search
 
 ## Next Steps
 
-- **03_openai_compatible**: Configure real LLM endpoints
+- **03_prompt_engineering**: Master systematic prompt comparison
 - **04_projects**: Organize multiple config-driven experiments
 - **05_advanced**: Override behavior with custom code
 
