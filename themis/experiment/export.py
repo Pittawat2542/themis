@@ -39,9 +39,22 @@ def export_report_csv(
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    metadata_by_sample, metadata_fields = _collect_sample_metadata(
+    metadata_by_condition, metadata_fields = _collect_sample_metadata(
         report.generation_results
     )
+    
+    # Create a proper index mapping generation records to their metadata
+    # We assume evaluation records are in the same order as generation records
+    gen_record_index = {}
+    for gen_record in report.generation_results:
+        sample_id = gen_record.task.metadata.get("dataset_id") or gen_record.task.metadata.get("sample_id")
+        prompt_template = gen_record.task.prompt.spec.name
+        model_identifier = gen_record.task.model.identifier
+        sampling_temp = gen_record.task.sampling.temperature
+        sampling_max_tokens = gen_record.task.sampling.max_tokens
+        condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
+        gen_record_index[condition_id] = gen_record
+    
     metric_names = sorted(report.evaluation_report.metrics.keys())
     fieldnames = ["sample_id"] + metadata_fields + [
         f"metric:{name}" for name in metric_names
@@ -52,14 +65,32 @@ def export_report_csv(
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
-        for record in report.evaluation_report.records:
-            row = _row_from_evaluation_record(
-                record,
-                metadata_by_sample=metadata_by_sample,
-                metadata_fields=metadata_fields,
-                metric_names=metric_names,
-                include_failures=include_failures,
-            )
+        
+        # Process evaluation records in the same order as generation records
+        for i, eval_record in enumerate(report.evaluation_report.records):
+            # Find the corresponding generation record by index
+            if i < len(report.generation_results):
+                gen_record = report.generation_results[i]
+                sample_id = gen_record.task.metadata.get("dataset_id") or gen_record.task.metadata.get("sample_id")
+                prompt_template = gen_record.task.prompt.spec.name
+                model_identifier = gen_record.task.model.identifier
+                sampling_temp = gen_record.task.sampling.temperature
+                sampling_max_tokens = gen_record.task.sampling.max_tokens
+                condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
+                metadata = metadata_by_condition.get(condition_id, {})
+            else:
+                # Fallback for extra evaluation records
+                sample_id = eval_record.sample_id or ""
+                metadata = {}
+            
+            row: dict[str, object] = {"sample_id": sample_id}
+            for field in metadata_fields:
+                row[field] = metadata.get(field, "")
+            score_by_name = {score.metric_name: score.value for score in eval_record.scores}
+            for name in metric_names:
+                row[f"metric:{name}"] = score_by_name.get(name, "")
+            if include_failures:
+                row["failures"] = "; ".join(eval_record.failures)
             writer.writerow(row)
     return path
 
@@ -222,7 +253,15 @@ def build_json_report(
         if index >= limit:
             break
         sample_id = record.sample_id or ""
-        sample_metadata = dict(metadata_by_sample.get(sample_id, {}))
+        
+        # Generate the same condition ID used in _collect_sample_metadata
+        prompt_template = record.task.prompt.spec.name
+        model_identifier = record.task.model.identifier
+        sampling_temp = record.task.sampling.temperature
+        sampling_max_tokens = record.task.sampling.max_tokens
+        condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
+        
+        sample_metadata = dict(metadata_by_sample.get(condition_id, {}))
         scores = [
             {
                 "metric": score.metric_name,
@@ -284,7 +323,31 @@ def _row_from_evaluation_record(
     include_failures: bool,
 ) -> dict[str, object]:
     sample_id = record.sample_id or ""
-    metadata = metadata_by_sample.get(sample_id, {})
+    
+    # Generate the same condition ID used in _collect_sample_metadata
+    # We need to map back to the GenerationRecord that created this EvaluationRecord
+    # This is a workaround since we need access to the original task details
+    from themis.core import entities as core_entities
+    
+    # Create a mapping function to find the corresponding generation record
+    # For now, we'll use a simple heuristic based on the available data
+    # In a real implementation, this mapping would need to be passed in
+    
+    # Try to extract condition info from the record's metadata
+    # This is a hack - ideally we'd pass the original task or generation record
+    condition_metadata = {}
+    for score in record.scores:
+        if hasattr(score, 'metadata') and score.metadata:
+            condition_metadata.update(score.metadata)
+    
+    prompt_template = condition_metadata.get('prompt_template', 'unknown')
+    model_identifier = condition_metadata.get('model_identifier', 'unknown')
+    sampling_temp = condition_metadata.get('sampling_temperature', 0.0)
+    sampling_max_tokens = condition_metadata.get('sampling_max_tokens', 100)
+    
+    condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
+    
+    metadata = metadata_by_sample.get(condition_id, {})
     row: dict[str, object] = {"sample_id": sample_id}
     for field in metadata_fields:
         row[field] = metadata.get(field, "")
@@ -304,9 +367,24 @@ def _collect_sample_metadata(
         sample_id = _extract_sample_id(record.task.metadata)
         if sample_id is None:
             sample_id = f"sample-{index}"
-        metadata.setdefault(sample_id, {})
-        metadata[sample_id].update(_metadata_from_task(record))
+        
+        # Create unique identifier for each experimental condition
+        # Include prompt template, model, and sampling to distinguish conditions
+        prompt_template = record.task.prompt.spec.name
+        model_identifier = record.task.model.identifier
+        sampling_temp = record.task.sampling.temperature
+        sampling_max_tokens = record.task.sampling.max_tokens
+        
+        # Create unique condition key
+        condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
+        
+        # Store metadata with unique condition ID
+        condition_metadata = _metadata_from_task(record)
+        metadata[condition_id] = condition_metadata
+        
+    # Collect all field names from all conditions
     fields = sorted({field for meta in metadata.values() for field in meta.keys()})
+    
     return metadata, fields
 
 
