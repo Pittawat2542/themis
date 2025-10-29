@@ -6,26 +6,18 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Sequence
 
-from themis.core import entities as core_entities
+from themis.config.schema import IntegrationsConfig
+from themis.core.entities import (ExperimentFailure, ExperimentReport, GenerationRecord, GenerationTask, MetricScore, EvaluationRecord)
 from themis.evaluation import pipeline as evaluation_pipeline
 from themis.evaluation.reports import EvaluationFailure
 from themis.generation import plan as generation_plan
 from themis.generation import runner as generation_runner
 from themis.experiment import storage as experiment_storage
+from themis.integrations.huggingface import HuggingFaceHubUploader
+from themis.integrations.wandb import WandbTracker
 
 
-@dataclass
-class ExperimentFailure:
-    sample_id: str | None
-    message: str
 
-
-@dataclass
-class ExperimentReport:
-    generation_results: list[core_entities.GenerationRecord]
-    evaluation_report: evaluation_pipeline.EvaluationReport
-    failures: list[ExperimentFailure]
-    metadata: dict[str, object]
 
 
 class ExperimentOrchestrator:
@@ -36,11 +28,23 @@ class ExperimentOrchestrator:
         generation_runner: generation_runner.GenerationRunner,
         evaluation_pipeline: evaluation_pipeline.EvaluationPipeline,
         storage: experiment_storage.ExperimentStorage | None = None,
+        integrations_config: IntegrationsConfig | None = None,
     ) -> None:
         self._plan = generation_plan
         self._runner = generation_runner
         self._evaluation = evaluation_pipeline
         self._storage = storage
+        self._integrations_config = integrations_config or IntegrationsConfig()
+        self._wandb_tracker = (
+            WandbTracker(self._integrations_config.wandb)
+            if self._integrations_config.wandb.enable
+            else None
+        )
+        self._huggingface_hub_uploader = (
+            HuggingFaceHubUploader(self._integrations_config.huggingface_hub)
+            if self._integrations_config.huggingface_hub.enable
+            else None
+        )
 
     def run(
         self,
@@ -51,8 +55,16 @@ class ExperimentOrchestrator:
         run_id: str | None = None,
         resume: bool = True,
         cache_results: bool = True,
-        on_result: Callable[[core_entities.GenerationRecord], None] | None = None,
+        on_result: Callable[[GenerationRecord], None] | None = None,
     ) -> ExperimentReport:
+        if self._wandb_tracker:
+            self._wandb_tracker.init(
+                {
+                    "max_samples": max_samples,
+                    "run_id": run_id,
+                    "resume": resume,
+                }
+            )
         dataset_list = self._resolve_dataset(
             dataset=dataset, dataset_loader=dataset_loader, run_id=run_id
         )
@@ -69,13 +81,13 @@ class ExperimentOrchestrator:
         cached_evaluations = (
             self._load_cached_evaluations(run_identifier) if resume else {}
         )
-        generation_results: list[core_entities.GenerationRecord] = []
+        generation_results: list[GenerationRecord] = []
         failures: list[ExperimentFailure] = []
 
-        pending_tasks: list[core_entities.GenerationTask] = []
-        pending_records: list[core_entities.GenerationRecord] = []
+        pending_tasks: list[GenerationTask] = []
+        pending_records: list[GenerationRecord] = []
         pending_keys: list[str] = []
-        cached_eval_records: list[core_entities.EvaluationRecord] = []
+        cached_eval_records: list[EvaluationRecord] = []
         for task in tasks:
             cache_key = experiment_storage.task_cache_key(task)
             cached = cached_records.get(cache_key)
@@ -150,12 +162,19 @@ class ExperimentOrchestrator:
             + len(evaluation_report.failures),
         }
 
-        return ExperimentReport(
+        report = ExperimentReport(
             generation_results=generation_results,
             evaluation_report=evaluation_report,
             failures=failures,
             metadata=metadata,
         )
+        if self._wandb_tracker:
+            self._wandb_tracker.log_results(report)
+        if self._huggingface_hub_uploader and self._storage:
+            self._huggingface_hub_uploader.upload_results(
+                report, self._storage.get_run_path(run_identifier)
+            )
+        return report
 
     def _default_run_id(self) -> str:
         return datetime.now(timezone.utc).strftime("run-%Y%m%d-%H%M%S")
@@ -180,25 +199,25 @@ class ExperimentOrchestrator:
 
     def _load_cached_records(
         self, run_id: str
-    ) -> dict[str, core_entities.GenerationRecord]:
+    ) -> dict[str, GenerationRecord]:
         if self._storage is None:
             return {}
         return self._storage.load_cached_records(run_id)
 
     def _load_cached_evaluations(
         self, run_id: str
-    ) -> dict[str, core_entities.EvaluationRecord]:
+    ) -> dict[str, EvaluationRecord]:
         if self._storage is None:
             return {}
         return self._storage.load_cached_evaluations(run_id)
 
     def _combine_evaluations(
         self,
-        cached_records: list[core_entities.EvaluationRecord],
+        cached_records: list[EvaluationRecord],
         new_report: evaluation_pipeline.EvaluationReport,
     ) -> evaluation_pipeline.EvaluationReport:
         all_records = list(cached_records) + list(new_report.records)
-        per_metric: dict[str, list[core_entities.MetricScore]] = {}
+        per_metric: dict[str, list[MetricScore]] = {}
         for record in all_records:
             for score in record.scores:
                 per_metric.setdefault(score.metric_name, []).append(score)

@@ -33,6 +33,15 @@ storage:
 max_samples: null                # cap tasks after plan expansion
 run_id: null                     # resume/cache key
 resume: true
+integrations:
+  wandb:
+    enable: false
+    project: null
+    entity: null
+    tags: []
+  huggingface_hub:
+    enable: false
+    repository: null
 ```
 
 Every field is optional; unspecified values fall back to sensible defaults.

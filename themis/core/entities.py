@@ -108,6 +108,23 @@ class EvaluationRecord:
     failures: List[str] = field(default_factory=list)
 
 
+from themis.evaluation import pipeline as evaluation_pipeline
+
+
+@dataclass
+class ExperimentFailure:
+    sample_id: str | None
+    message: str
+
+
+@dataclass
+class ExperimentReport:
+    generation_results: list[GenerationRecord]
+    evaluation_report: evaluation_pipeline.EvaluationReport
+    failures: list[ExperimentFailure]
+    metadata: dict[str, object]
+
+
 __all__ = [
     "SamplingConfig",
     "ModelSpec",
@@ -122,4 +139,6 @@ __all__ = [
     "EvaluationRecord",
     "MetricScore",
     "EvaluationSummary",
+    "ExperimentFailure",
+    "ExperimentReport",
 ]

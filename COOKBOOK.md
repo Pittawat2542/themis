@@ -203,6 +203,39 @@ uv run python -m examples.openai_compatible.cli run \
 }
 ```
 
+### Integrations
+
+Enable Weights & Biases and Hugging Face Hub integrations:
+
+```json
+{
+  "run_id": "integrated-experiment",
+  "storage_dir": ".cache/integrated-experiment",
+  "resume": true,
+  "models": [
+    {"name": "my-model", "provider": "fake"}
+  ],
+  "samplings": [
+    {"name": "greedy", "temperature": 0.0, "max_tokens": 512}
+  ],
+  "datasets": [
+    {"name": "demo", "kind": "demo", "limit": 10}
+  ],
+  "integrations": {
+    "wandb": {
+      "enable": true,
+      "project": "themis-experiments",
+      "entity": "your-wandb-entity",
+      "tags": ["smoke-test", "demo"]
+    },
+    "huggingface_hub": {
+      "enable": true,
+      "repository": "your-hf-username/themis-results"
+    }
+  }
+}
+```
+
 ## 🛠️ Common Tasks
 
 ### Preview Configuration (Dry Run)

@@ -53,11 +53,32 @@ class StorageConfig:
 
 
 @dataclass
+class WandbConfig:
+    enable: bool = False
+    project: str | None = None
+    entity: str | None = None
+    tags: list[str] = field(default_factory=list)
+
+
+@dataclass
+class HuggingFaceHubConfig:
+    enable: bool = False
+    repository: str | None = None
+
+
+@dataclass
+class IntegrationsConfig:
+    wandb: WandbConfig = field(default_factory=WandbConfig)
+    huggingface_hub: HuggingFaceHubConfig = field(default_factory=HuggingFaceHubConfig)
+
+
+@dataclass
 class ExperimentConfig:
     name: str = "math500_zero_shot"
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
+    integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
     max_samples: int | None = None
     run_id: str | None = None
     resume: bool = True

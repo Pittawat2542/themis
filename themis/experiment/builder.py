@@ -87,11 +87,12 @@ class ExperimentBuilder:
             if storage_dir is not None
             else None
         )
-        orchestrator_obj = orchestrator.ExperimentOrchestrator(
-            generation_plan=plan_obj,
+        return ExperimentOrchestrator(
+            generation_plan=generation_plan,
             generation_runner=runner,
-            evaluation_pipeline=pipeline,
+            evaluation_pipeline=evaluation_pipeline,
             storage=storage,
+            integrations_config=config.integrations,
         )
         return BuiltExperiment(
             orchestrator=orchestrator_obj,
