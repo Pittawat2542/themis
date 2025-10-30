@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, Generic, List, TypeVar
+
+# Type variable for generic Reference
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -45,9 +48,25 @@ class PromptRender:
 
 
 @dataclass(frozen=True)
-class Reference:
+class Reference(Generic[T]):
+    """Reference value with optional type information.
+
+    This is a generic dataclass that can hold typed reference values.
+    For backward compatibility, it can be used without type parameters
+    and will behave like Reference[Any].
+
+    Examples:
+        # Untyped (backward compatible)
+        ref = Reference(kind="answer", value="42")
+
+        # Typed
+        ref: Reference[str] = Reference(kind="answer", value="42")
+        ref: Reference[int] = Reference(kind="answer", value=42)
+    """
+
     kind: str
-    value: Any
+    value: T
+    schema: type[T] | None = None  # Optional runtime type information
 
 
 @dataclass(frozen=True)

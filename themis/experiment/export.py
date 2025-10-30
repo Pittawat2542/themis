@@ -249,19 +249,34 @@ def build_json_report(
     limit = sample_limit if sample_limit is not None else len(
         report.evaluation_report.records
     )
+
+    # Build mapping from sample_id to generation records to get task info
+    gen_records_by_sample: dict[str, core_entities.GenerationRecord] = {}
+    for gen_record in report.generation_results:
+        sid = _extract_sample_id(gen_record.task.metadata)
+        if sid:
+            # Use first generation record for each sample (may have multiple with different conditions)
+            if sid not in gen_records_by_sample:
+                gen_records_by_sample[sid] = gen_record
+
     for index, record in enumerate(report.evaluation_report.records):
         if index >= limit:
             break
         sample_id = record.sample_id or ""
-        
-        # Generate the same condition ID used in _collect_sample_metadata
-        prompt_template = record.task.prompt.spec.name
-        model_identifier = record.task.model.identifier
-        sampling_temp = record.task.sampling.temperature
-        sampling_max_tokens = record.task.sampling.max_tokens
-        condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
-        
-        sample_metadata = dict(metadata_by_sample.get(condition_id, {}))
+
+        # Try to find corresponding generation record for this evaluation record
+        gen_record = gen_records_by_sample.get(sample_id)
+
+        # Build condition_id if we have the generation record
+        sample_metadata = {}
+        if gen_record is not None:
+            prompt_template = gen_record.task.prompt.spec.name
+            model_identifier = gen_record.task.model.identifier
+            sampling_temp = gen_record.task.sampling.temperature
+            sampling_max_tokens = gen_record.task.sampling.max_tokens
+            condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
+            sample_metadata = dict(metadata_by_sample.get(condition_id, {}))
+
         scores = [
             {
                 "metric": score.metric_name,

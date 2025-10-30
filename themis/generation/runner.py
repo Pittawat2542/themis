@@ -10,6 +10,7 @@ from typing import Callable, Iterable, Iterator, List
 from themis.core import entities as core_entities
 from themis.generation import strategies
 from themis.interfaces import ModelProvider
+from themis.utils import tracing
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,10 @@ class GenerationRunner:
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:
         start = time.perf_counter()
-        record = self._provider.generate(task)
+
+        with tracing.span("provider_generate", model=task.model.identifier):
+            record = self._provider.generate(task)
+
         elapsed_ms = (time.perf_counter() - start) * 1000
         record.metrics.setdefault("generation_time_ms", elapsed_ms)
         record.metrics.setdefault("prompt_chars", len(task.prompt.text))
@@ -173,13 +177,25 @@ class GenerationRunner:
     def _execute_task(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:
-        strategy = self._strategy_resolver(task)
-        attempt_records: List[core_entities.GenerationRecord] = []
-        for attempt_task in strategy.expand(task):
-            attempt_records.append(self._run_single_attempt(attempt_task))
-        aggregated = strategy.aggregate(task, attempt_records)
-        aggregated.attempts = attempt_records
-        return aggregated
+        task_id = task.metadata.get("dataset_id", "unknown")
+        model_id = task.model.identifier
+
+        with tracing.span("execute_task", task_id=task_id, model=model_id):
+            strategy = self._strategy_resolver(task)
+            attempt_records: List[core_entities.GenerationRecord] = []
+
+            with tracing.span("expand_strategy"):
+                expansion = list(strategy.expand(task))
+
+            for attempt_task in expansion:
+                with tracing.span("run_attempt"):
+                    attempt_records.append(self._run_single_attempt(attempt_task))
+
+            with tracing.span("aggregate_strategy"):
+                aggregated = strategy.aggregate(task, attempt_records)
+
+            aggregated.attempts = attempt_records
+            return aggregated
 
     def _count_tokens(self, text: str) -> int | None:
         counter = getattr(self._provider, "count_tokens", None)
