@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(uv run pytest:*)",
-      "Bash(uv run python:*)"
+      "Bash(uv run python:*)",
+      "Bash(for phase in phase1_features phase2_conversation phase2_tools phase3_evaluation phase4_generation phase5_batching)",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(/dev/null)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []
