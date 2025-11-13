@@ -49,6 +49,18 @@ class RegexExtractor:
 
 
 @dataclass
+class IdentityExtractor:
+    """Extractor that returns the raw output as-is."""
+
+    strip_whitespace: bool = True
+
+    def extract(self, raw_output: str) -> str:
+        if self.strip_whitespace:
+            return raw_output.strip()
+        return raw_output
+
+
+@dataclass
 class MathVerifyExtractor:
     """Extracts the final boxed answer using math-verify parsing."""
 

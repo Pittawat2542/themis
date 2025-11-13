@@ -330,14 +330,46 @@ def create_keyword_stop_strategy(keywords: list[str], message: str = "Continue."
     return DynamicTurnStrategy(planner=planner)
 
 
-__all__ = [
-    "TurnStrategy",
-    "FixedSequenceTurnStrategy",
-    "DynamicTurnStrategy",
-    "RepeatUntilSuccessTurnStrategy",
-    "ConditionalTurnStrategy",
-    "ChainedTurnStrategy",
-    "create_qa_strategy",
-    "create_max_turns_strategy",
-    "create_keyword_stop_strategy",
-]
+# Prompt perturbation and seed helpers for robustness sweeps
+
+import random
+
+
+def set_sampling_seed(task_metadata: dict[str, object], seed: int) -> dict[str, object]:
+    """Attach a deterministic seed to task metadata for providers that support it.
+
+    This does not enforce provider behavior but offers a convention: 'sampling_seed'.
+    """
+    md = dict(task_metadata)
+    md["sampling_seed"] = int(seed)
+    return md
+
+
+def perturb_prompt(text: str, *, seed: int | None = None, max_changes: int = 2) -> str:
+    """Apply small, semantics-preserving perturbations to a prompt.
+
+    Changes include optional punctuation tweaks and inserting polite filler words.
+    """
+    rng = random.Random(seed)
+    t = text
+    changes = 0
+    # Optional punctuation swap
+    if "?" in t and changes < max_changes and rng.random() < 0.5:
+        t = t.replace("?", "??", 1)
+        changes += 1
+    # Optional polite filler insertion
+    fillers = ["please", "kindly", "if possible"]
+    if changes < max_changes and rng.random() < 0.5:
+        words = t.split()
+        if words:
+            idx = rng.randint(0, len(words) - 1)
+            words.insert(idx, rng.choice(fillers))
+            t = " ".join(words)
+            changes += 1
+    return t
+
+
+def create_prompt_variants(base_text: str, *, count: int, seed: int) -> list[str]:
+    """Create multiple perturbed variants of a base prompt with deterministic seeding."""
+    rng = random.Random(seed)
+    return [perturb_prompt(base_text, seed=rng.randint(0, 1_000_000)) for _ in range(max(1, count))]
