@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Iterator, List, Sequence
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class CompetitionMathSample(BaseModel):

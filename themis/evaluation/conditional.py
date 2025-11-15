@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 from themis.core import entities as core_entities
-from themis.evaluation import extractors, pipeline, reports
+from themis.evaluation import pipeline, reports
 from themis.interfaces import Metric
 from themis.utils import tracing
 

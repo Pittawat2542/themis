@@ -1,0 +1,286 @@
+"""Standard evaluation pipeline implementation."""
+
+from __future__ import annotations
+
+import logging
+import time
+from typing import Callable, Sequence
+
+from themis.core import entities as core_entities
+from themis.evaluation import extractors, strategies as evaluation_strategies
+from themis.evaluation.reports import (
+    EvaluationFailure,
+    EvaluationReport,
+    MetricAggregate,
+)
+from themis.interfaces import Metric as MetricInterface
+from themis.utils import tracing
+
+logger = logging.getLogger(__name__)
+
+
+def _default_reference_selector(record: core_entities.GenerationRecord):
+    """Default reference selector from generation record.
+
+    Args:
+        record: Generation record
+
+    Returns:
+        Reference value or None
+    """
+    reference = record.task.reference
+    if reference is None:
+        return None
+    return reference.value
+
+
+def _normalize_references(reference):
+    """Normalize reference to list format.
+
+    Args:
+        reference: Reference value
+
+    Returns:
+        List of references
+    """
+    if isinstance(reference, core_entities.Reference):
+        reference = reference.value
+    if isinstance(reference, list):
+        return reference
+    return [reference]
+
+
+class EvaluationPipeline:
+    """Traditional batch evaluation pipeline.
+
+    This pipeline evaluates generation records using extractors, metrics,
+    and evaluation strategies. It supports slicing for subset analysis.
+
+    Example:
+        >>> pipeline = EvaluationPipeline(
+        ...     extractor=JsonFieldExtractor("answer"),
+        ...     metrics=[ExactMatch()]
+        ... )
+        >>> report = pipeline.evaluate(records)
+
+    Attributes:
+        _extractor: Extractor for parsing model output
+        _metrics: List of metrics to compute
+        _reference_selector: Function to extract reference from record
+        _strategy_resolver: Function to resolve evaluation strategy
+        _slices: List of (name, predicate) tuples for slicing
+    """
+
+    def __init__(
+        self,
+        *,
+        extractor,
+        metrics: Sequence[MetricInterface],
+        reference_selector: Callable[[core_entities.GenerationRecord], object]
+        | None = None,
+        strategy_resolver: Callable[
+            [core_entities.GenerationRecord], evaluation_strategies.EvaluationStrategy
+        ]
+        | None = None,
+    ) -> None:
+        """Initialize evaluation pipeline.
+
+        Args:
+            extractor: Extractor for parsing model output
+            metrics: List of metrics to compute
+            reference_selector: Optional function to extract reference
+            strategy_resolver: Optional function to resolve strategy
+        """
+        self._extractor = extractor
+        self._metrics = list(metrics)
+        self._reference_selector = reference_selector or _default_reference_selector
+        self._strategy_resolver = strategy_resolver or (
+            lambda record: evaluation_strategies.DefaultEvaluationStrategy()
+        )
+        self._slices: list[
+            tuple[str, Callable[[core_entities.GenerationRecord], bool]]
+        ] = []
+
+    def evaluate(
+        self, records: Sequence[core_entities.GenerationRecord]
+    ) -> EvaluationReport:
+        """Evaluate generation records.
+
+        Args:
+            records: Generation records to evaluate
+
+        Returns:
+            Evaluation report with metrics and failures
+        """
+        with tracing.span("evaluate_pipeline", total_records=len(records)):
+            per_metric: dict[str, list[core_entities.MetricScore]] = {
+                metric.name: [] for metric in self._metrics
+            }
+            failures: list[EvaluationFailure] = []
+            per_record: list[core_entities.EvaluationRecord] = []
+            slice_members: dict[str, set[str]] = {
+                name: set() for name, _ in self._slices
+            }
+
+            for record in records:
+                with tracing.span("evaluate_record"):
+                    logger.debug(
+                        "Evaluating sample %s with %s metric(s)",
+                        record.task.metadata.get("dataset_id")
+                        or record.task.metadata.get("sample_id"),
+                        len(self._metrics),
+                    )
+                    strategy = self._strategy_resolver(record)
+                    task_metadata = record.task.metadata
+                    sample_id = task_metadata.get("dataset_id") or task_metadata.get(
+                        "sample_id"
+                    )
+                    for name, fn in self._slices:
+                        try:
+                            if fn(record) and sample_id is not None:
+                                slice_members[name].add(sample_id)
+                        except Exception:
+                            pass
+                    eval_items = list(strategy.prepare(record))
+                    item_scores: list[core_entities.MetricScore] = []
+                    record_failures: list[str] = []
+
+                    for item in eval_items:
+                        if item.record.output is None:
+                            message = "Missing model output"
+                            failures.append(
+                                EvaluationFailure(sample_id=sample_id, message=message)
+                            )
+                            record_failures.append(message)
+                            continue
+                        try:
+                            with tracing.span("extract"):
+                                prediction = self._extractor.extract(
+                                    item.record.output.text
+                                )
+                        except extractors.FieldExtractionError as exc:
+                            message = str(exc)
+                            failures.append(
+                                EvaluationFailure(sample_id=sample_id, message=message)
+                            )
+                            record_failures.append(message)
+                            continue
+
+                        reference = item.reference or self._reference_selector(record)
+                        if reference is None:
+                            continue
+                        references = _normalize_references(reference)
+                        metadata = {"sample_id": sample_id}
+                        extract_start = time.perf_counter()
+                        for metric in self._metrics:
+                            metric_start = time.perf_counter()
+                            try:
+                                with tracing.span(
+                                    "compute_metric", metric_name=metric.name
+                                ):
+                                    score = metric.compute(
+                                        prediction=prediction,
+                                        references=references,
+                                        metadata=metadata,
+                                    )
+                                score.metadata["evaluation_time_ms"] = (
+                                    time.perf_counter() - metric_start
+                                ) * 1000
+                            except Exception as exc:  # pragma: no cover - guarded
+                                message = f"Metric '{metric.name}' failed for sample {sample_id}: {exc}"
+                                logger.warning(message)
+                                failures.append(
+                                    EvaluationFailure(
+                                        sample_id=sample_id, message=message
+                                    )
+                                )
+                                record_failures.append(message)
+                                score = core_entities.MetricScore(
+                                    metric_name=metric.name,
+                                    value=0.0,
+                                    details={"error": str(exc), "skipped": True},
+                                    metadata=dict(metadata),
+                                )
+                                score.metadata["evaluation_time_ms"] = 0.0
+                            item_scores.append(score)
+                        extraction_duration = (
+                            time.perf_counter() - extract_start
+                        ) * 1000
+                        for score in item_scores[-len(self._metrics) :]:
+                            score.metadata.setdefault(
+                                "extraction_time_ms", extraction_duration
+                            )
+
+                    if record_failures and not item_scores:
+                        metadata = {"sample_id": sample_id}
+                        for metric in self._metrics:
+                            item_scores.append(
+                                core_entities.MetricScore(
+                                    metric_name=metric.name,
+                                    value=0.0,
+                                    details={"skipped": True},
+                                    metadata=metadata,
+                                )
+                            )
+
+                    aggregated_scores = strategy.aggregate(record, item_scores)
+                    for score in aggregated_scores:
+                        per_metric[score.metric_name].append(score)
+                    per_record.append(
+                        core_entities.EvaluationRecord(
+                            sample_id=sample_id,
+                            scores=aggregated_scores,
+                            failures=record_failures,
+                        )
+                    )
+
+            aggregates = {
+                name: MetricAggregate.from_scores(name, scores)
+                for name, scores in per_metric.items()
+            }
+
+            return EvaluationReport(
+                metrics=aggregates,
+                failures=failures,
+                records=per_record,
+                slices=self._compute_slice_aggregates(per_metric, slice_members),
+            )
+
+    def register_slice(
+        self, name: str, fn: Callable[[core_entities.GenerationRecord], bool]
+    ) -> None:
+        """Register a slice for subset analysis.
+
+        Args:
+            name: Slice name
+            fn: Predicate function to determine slice membership
+        """
+        self._slices.append((name, fn))
+
+    def _compute_slice_aggregates(
+        self,
+        per_metric: dict[str, list[core_entities.MetricScore]],
+        slice_members: dict[str, set[str]],
+    ) -> dict[str, dict[str, MetricAggregate]]:
+        """Compute metric aggregates for each slice.
+
+        Args:
+            per_metric: Scores by metric name
+            slice_members: Sample IDs by slice name
+
+        Returns:
+            Nested dict of slice -> metric -> aggregate
+        """
+        if not slice_members:
+            return {}
+        slice_aggregates: dict[str, dict[str, MetricAggregate]] = {}
+        for name, members in slice_members.items():
+            slice_scores_by_metric: dict[str, list[core_entities.MetricScore]] = {}
+            for metric_name, scores in per_metric.items():
+                filtered = [s for s in scores if s.metadata.get("sample_id") in members]
+                slice_scores_by_metric[metric_name] = filtered
+            slice_aggregates[name] = {
+                metric_name: MetricAggregate.from_scores(metric_name, scores)
+                for metric_name, scores in slice_scores_by_metric.items()
+            }
+        return slice_aggregates

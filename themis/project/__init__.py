@@ -15,6 +15,6 @@ __all__ = [
     "AblationChart",
     "AblationChartPoint",
     "AblationVariant",
-    "XAblationPattern",
-    "XAblationPatternApplication",
+    "XAbationPattern",
+    "XAbationPatternApplication",
 ]

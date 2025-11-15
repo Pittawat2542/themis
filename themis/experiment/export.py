@@ -351,7 +351,6 @@ def _row_from_evaluation_record(
     # Generate the same condition ID used in _collect_sample_metadata
     # We need to map back to the GenerationRecord that created this EvaluationRecord
     # This is a workaround since we need access to the original task details
-    from themis.core import entities as core_entities
 
     # Create a mapping function to find the corresponding generation record
     # For now, we'll use a simple heuristic based on the available data

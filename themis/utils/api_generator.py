@@ -187,9 +187,6 @@ def _register_function_as_endpoint(
     # Build Pydantic model for request body
     request_model = _create_request_model(func_name, sig, type_hints, param_docs)
 
-    # Determine return type
-    return_type = type_hints.get("return", Any)
-
     # Create endpoint function
     async def endpoint(request: request_model):  # type: ignore
         try:
