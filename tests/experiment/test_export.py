@@ -13,7 +13,9 @@ def _sample_report() -> orchestrator.ExperimentReport:
     template = templates.PromptTemplate(name="demo", template="Explain {topic}")
     sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.95, max_tokens=32)
     model = core_entities.ModelSpec(identifier="demo-model", provider="fake")
-    prompt = core_entities.PromptRender(spec=template, text="Explain graphs", context={})
+    prompt = core_entities.PromptRender(
+        spec=template, text="Explain graphs", context={}
+    )
     task = core_entities.GenerationTask(
         prompt=prompt,
         model=model,
@@ -78,12 +80,26 @@ def test_render_html_report_includes_chart_and_tables():
         y_label="score",
         metric_name="ExactMatch",
         points=(
-            AblationChartPoint(x_value=0.0, label="0.0", metric_value=0.4, metric_name="ExactMatch", count=2),
-            AblationChartPoint(x_value=0.2, label="0.2", metric_value=0.8, metric_name="ExactMatch", count=2),
+            AblationChartPoint(
+                x_value=0.0,
+                label="0.0",
+                metric_value=0.4,
+                metric_name="ExactMatch",
+                count=2,
+            ),
+            AblationChartPoint(
+                x_value=0.2,
+                label="0.2",
+                metric_value=0.8,
+                metric_name="ExactMatch",
+                count=2,
+            ),
         ),
     )
 
-    html_doc = experiment_export.render_html_report(report, charts=[chart], title="Demo report")
+    html_doc = experiment_export.render_html_report(
+        report, charts=[chart], title="Demo report"
+    )
 
     assert "Demo report" in html_doc
     assert "ExactMatch" in html_doc

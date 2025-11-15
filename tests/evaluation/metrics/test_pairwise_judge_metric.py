@@ -10,7 +10,9 @@ from themis.evaluation import metrics
 class StubJudgeProvider(ModelProvider):
     payload: dict
 
-    def generate(self, task: core_entities.GenerationTask) -> core_entities.GenerationRecord:  # type: ignore[override]
+    def generate(
+        self, task: core_entities.GenerationTask
+    ) -> core_entities.GenerationRecord:  # type: ignore[override]
         text = json.dumps(self.payload)
         return core_entities.GenerationRecord(
             task=task,

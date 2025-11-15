@@ -79,9 +79,7 @@ class ConversationContext:
     messages: list[Message] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def add_message(
-        self, role: MessageRole, content: str, **metadata: Any
-    ) -> None:
+    def add_message(self, role: MessageRole, content: str, **metadata: Any) -> None:
         """Add a message to the conversation.
 
         Args:
@@ -89,9 +87,7 @@ class ConversationContext:
             content: Message text content
             **metadata: Additional metadata to attach to message
         """
-        self.messages.append(
-            Message(role=role, content=content, metadata=metadata)
-        )
+        self.messages.append(Message(role=role, content=content, metadata=metadata))
 
     def get_history(self, max_turns: int | None = None) -> list[Message]:
         """Get conversation history.
@@ -117,9 +113,7 @@ class ConversationContext:
         """
         return [msg for msg in self.messages if msg.role == role]
 
-    def to_prompt(
-        self, template: templates.PromptTemplate | None = None
-    ) -> str:
+    def to_prompt(self, template: templates.PromptTemplate | None = None) -> str:
         """Render conversation to prompt string.
 
         Args:

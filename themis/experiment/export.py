@@ -42,36 +42,40 @@ def export_report_csv(
     metadata_by_condition, metadata_fields = _collect_sample_metadata(
         report.generation_results
     )
-    
+
     # Create a proper index mapping generation records to their metadata
     # We assume evaluation records are in the same order as generation records
     gen_record_index = {}
     for gen_record in report.generation_results:
-        sample_id = gen_record.task.metadata.get("dataset_id") or gen_record.task.metadata.get("sample_id")
+        sample_id = gen_record.task.metadata.get(
+            "dataset_id"
+        ) or gen_record.task.metadata.get("sample_id")
         prompt_template = gen_record.task.prompt.spec.name
         model_identifier = gen_record.task.model.identifier
         sampling_temp = gen_record.task.sampling.temperature
         sampling_max_tokens = gen_record.task.sampling.max_tokens
         condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
         gen_record_index[condition_id] = gen_record
-    
+
     metric_names = sorted(report.evaluation_report.metrics.keys())
-    fieldnames = ["sample_id"] + metadata_fields + [
-        f"metric:{name}" for name in metric_names
-    ]
+    fieldnames = (
+        ["sample_id"] + metadata_fields + [f"metric:{name}" for name in metric_names]
+    )
     if include_failures:
         fieldnames.append("failures")
 
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
-        
+
         # Process evaluation records in the same order as generation records
         for i, eval_record in enumerate(report.evaluation_report.records):
             # Find the corresponding generation record by index
             if i < len(report.generation_results):
                 gen_record = report.generation_results[i]
-                sample_id = gen_record.task.metadata.get("dataset_id") or gen_record.task.metadata.get("sample_id")
+                sample_id = gen_record.task.metadata.get(
+                    "dataset_id"
+                ) or gen_record.task.metadata.get("sample_id")
                 prompt_template = gen_record.task.prompt.spec.name
                 model_identifier = gen_record.task.model.identifier
                 sampling_temp = gen_record.task.sampling.temperature
@@ -82,11 +86,13 @@ def export_report_csv(
                 # Fallback for extra evaluation records
                 sample_id = eval_record.sample_id or ""
                 metadata = {}
-            
+
             row: dict[str, object] = {"sample_id": sample_id}
             for field in metadata_fields:
                 row[field] = metadata.get(field, "")
-            score_by_name = {score.metric_name: score.value for score in eval_record.scores}
+            score_by_name = {
+                score.metric_name: score.value for score in eval_record.scores
+            }
             for name in metric_names:
                 row[f"metric:{name}"] = score_by_name.get(name, "")
             if include_failures:
@@ -198,9 +204,7 @@ def render_html_report(
         metric_names,
         limit=sample_limit,
     )
-    chart_sections = "\n".join(
-        _render_chart_section(chart) for chart in charts or ()
-    )
+    chart_sections = "\n".join(_render_chart_section(chart) for chart in charts or ())
     html_doc = f"""<!DOCTYPE html>
 <html lang=\"en\">
 <head>
@@ -246,8 +250,10 @@ def build_json_report(
     )
     metric_names = sorted(report.evaluation_report.metrics.keys())
     samples = []
-    limit = sample_limit if sample_limit is not None else len(
-        report.evaluation_report.records
+    limit = (
+        sample_limit
+        if sample_limit is not None
+        else len(report.evaluation_report.records)
     )
 
     # Build mapping from sample_id to generation records to get task info
@@ -315,7 +321,10 @@ def build_json_report(
         "samples": samples,
         "rendered_sample_limit": limit,
         "total_samples": len(report.evaluation_report.records),
-        "charts": [chart.as_dict() if hasattr(chart, "as_dict") else _chart_to_dict(chart) for chart in charts or ()],
+        "charts": [
+            chart.as_dict() if hasattr(chart, "as_dict") else _chart_to_dict(chart)
+            for chart in charts or ()
+        ],
         "run_failures": [
             {"sample_id": failure.sample_id, "message": failure.message}
             for failure in report.failures
@@ -338,30 +347,30 @@ def _row_from_evaluation_record(
     include_failures: bool,
 ) -> dict[str, object]:
     sample_id = record.sample_id or ""
-    
+
     # Generate the same condition ID used in _collect_sample_metadata
     # We need to map back to the GenerationRecord that created this EvaluationRecord
     # This is a workaround since we need access to the original task details
     from themis.core import entities as core_entities
-    
+
     # Create a mapping function to find the corresponding generation record
     # For now, we'll use a simple heuristic based on the available data
     # In a real implementation, this mapping would need to be passed in
-    
+
     # Try to extract condition info from the record's metadata
     # This is a hack - ideally we'd pass the original task or generation record
     condition_metadata = {}
     for score in record.scores:
-        if hasattr(score, 'metadata') and score.metadata:
+        if hasattr(score, "metadata") and score.metadata:
             condition_metadata.update(score.metadata)
-    
-    prompt_template = condition_metadata.get('prompt_template', 'unknown')
-    model_identifier = condition_metadata.get('model_identifier', 'unknown')
-    sampling_temp = condition_metadata.get('sampling_temperature', 0.0)
-    sampling_max_tokens = condition_metadata.get('sampling_max_tokens', 100)
-    
+
+    prompt_template = condition_metadata.get("prompt_template", "unknown")
+    model_identifier = condition_metadata.get("model_identifier", "unknown")
+    sampling_temp = condition_metadata.get("sampling_temperature", 0.0)
+    sampling_max_tokens = condition_metadata.get("sampling_max_tokens", 100)
+
     condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
-    
+
     metadata = metadata_by_sample.get(condition_id, {})
     row: dict[str, object] = {"sample_id": sample_id}
     for field in metadata_fields:
@@ -382,24 +391,24 @@ def _collect_sample_metadata(
         sample_id = _extract_sample_id(record.task.metadata)
         if sample_id is None:
             sample_id = f"sample-{index}"
-        
+
         # Create unique identifier for each experimental condition
         # Include prompt template, model, and sampling to distinguish conditions
         prompt_template = record.task.prompt.spec.name
         model_identifier = record.task.model.identifier
         sampling_temp = record.task.sampling.temperature
         sampling_max_tokens = record.task.sampling.max_tokens
-        
+
         # Create unique condition key
         condition_id = f"{sample_id}_{prompt_template}_{model_identifier}_{sampling_temp}_{sampling_max_tokens}"
-        
+
         # Store metadata with unique condition ID
         condition_metadata = _metadata_from_task(record)
         metadata[condition_id] = condition_metadata
-        
+
     # Collect all field names from all conditions
     fields = sorted({field for meta in metadata.values() for field in meta.keys()})
-    
+
     return metadata, fields
 
 
@@ -425,13 +434,11 @@ def _render_summary(report: orchestrator.ExperimentReport) -> str:
     metadata_items = sorted(report.metadata.items())
     failures = len(report.failures)
     metadata_html = "\n".join(
-        f"<li class=\"summary-item\"><strong>{html.escape(str(key))}</strong><br /><span class=\"subtle\">{html.escape(str(value))}</span></li>"
+        f'<li class="summary-item"><strong>{html.escape(str(key))}</strong><br /><span class="subtle">{html.escape(str(value))}</span></li>'
         for key, value in metadata_items
     )
-    failure_block = (
-        f"<li class=\"summary-item\"><strong>Run failures</strong><br /><span class=\"subtle\">{failures}</span></li>"
-    )
-    return f"<section><h2>Summary</h2><ul class=\"summary-list\">{metadata_html}{failure_block}</ul></section>"
+    failure_block = f'<li class="summary-item"><strong>Run failures</strong><br /><span class="subtle">{failures}</span></li>'
+    return f'<section><h2>Summary</h2><ul class="summary-list">{metadata_html}{failure_block}</ul></section>'
 
 
 def _render_metric_table(report: orchestrator.ExperimentReport) -> str:
@@ -441,10 +448,12 @@ def _render_metric_table(report: orchestrator.ExperimentReport) -> str:
         rows.append(
             f"<tr><td>{html.escape(name)}</td><td>{metric.count}</td><td>{metric.mean:.4f}</td></tr>"
         )
-    table_body = "\n".join(rows) or "<tr><td colspan=\"3\">No metrics recorded</td></tr>"
+    table_body = "\n".join(rows) or '<tr><td colspan="3">No metrics recorded</td></tr>'
     return (
-        "<section><h2>Metrics</h2><table><thead><tr><th>Metric</th><th>Count" 
-        "</th><th>Mean</th></tr></thead><tbody>" + table_body + "</tbody></table></section>"
+        "<section><h2>Metrics</h2><table><thead><tr><th>Metric</th><th>Count"
+        "</th><th>Mean</th></tr></thead><tbody>"
+        + table_body
+        + "</tbody></table></section>"
     )
 
 
@@ -456,7 +465,11 @@ def _render_sample_table(
     *,
     limit: int,
 ) -> str:
-    head_cells = ["sample_id", *metadata_fields, *[f"metric:{name}" for name in metric_names]]
+    head_cells = [
+        "sample_id",
+        *metadata_fields,
+        *[f"metric:{name}" for name in metric_names],
+    ]
     head_html = "".join(f"<th>{html.escape(label)}</th>" for label in head_cells)
     body_rows: list[str] = []
     for index, record in enumerate(report.evaluation_report.records):
@@ -476,12 +489,12 @@ def _render_sample_table(
         )
     if not body_rows:
         body_rows.append(
-            f"<tr><td colspan=\"{len(head_cells)+1}\">No evaluation records</td></tr>"
+            f'<tr><td colspan="{len(head_cells) + 1}">No evaluation records</td></tr>'
         )
     footer = ""
     if len(report.evaluation_report.records) > limit:
         remaining = len(report.evaluation_report.records) - limit
-        footer = f"<p class=\"subtle\">Showing first {limit} rows ({remaining} more not rendered).</p>"
+        footer = f'<p class="subtle">Showing first {limit} rows ({remaining} more not rendered).</p>'
     return (
         "<section><h2>Sample breakdown</h2><table><thead><tr>"
         + head_html
@@ -496,8 +509,8 @@ def _render_sample_table(
 def _render_chart_section(chart: ChartLike) -> str:
     if not chart.points:
         return (
-            f"<section class=\"chart-section\"><h3 class=\"chart-title\">{html.escape(chart.title)}</h3>"
-            "<p class=\"subtle\">No data points</p></section>"
+            f'<section class="chart-section"><h3 class="chart-title">{html.escape(chart.title)}</h3>'
+            '<p class="subtle">No data points</p></section>'
         )
     svg_markup = _chart_to_svg(chart)
     rows = "\n".join(
@@ -506,13 +519,11 @@ def _render_chart_section(chart: ChartLike) -> str:
         for point in chart.points
     )
     table = (
-        "<table class=\"chart-table\"><thead><tr><th>Label</th><th>X value</th><th>Metric" 
-        "</th><th>Count</th></tr></thead><tbody>"
-        + rows
-        + "</tbody></table>"
+        '<table class="chart-table"><thead><tr><th>Label</th><th>X value</th><th>Metric'
+        "</th><th>Count</th></tr></thead><tbody>" + rows + "</tbody></table>"
     )
     return (
-        f"<section class=\"chart-section\"><h3 class=\"chart-title\">{html.escape(chart.title)}</h3>"
+        f'<section class="chart-section"><h3 class="chart-title">{html.escape(chart.title)}</h3>'
         + svg_markup
         + table
         + "</section>"
@@ -543,28 +554,28 @@ def _chart_to_svg(chart: ChartLike) -> str:
     y_positions = [scale_y(point.metric_value) for point in chart.points]
     polyline = " ".join(f"{x:.2f},{y:.2f}" for x, y in zip(x_positions, y_positions))
     circles = "\n".join(
-        f"<circle cx=\"{x:.2f}\" cy=\"{y:.2f}\" r=\"5\" fill=\"#2563eb\"></circle>"
+        f'<circle cx="{x:.2f}" cy="{y:.2f}" r="5" fill="#2563eb"></circle>'
         for x, y in zip(x_positions, y_positions)
     )
     labels = "\n".join(
-        f"<text x=\"{x:.2f}\" y=\"{height - margin / 4:.2f}\" text-anchor=\"middle\" font-size=\"12\">{html.escape(point.label)}</text>"
+        f'<text x="{x:.2f}" y="{height - margin / 4:.2f}" text-anchor="middle" font-size="12">{html.escape(point.label)}</text>'
         for x, point in zip(x_positions, chart.points)
     )
     y_labels = (
-        f"<text x=\"{margin/2:.2f}\" y=\"{height - margin:.2f}\" font-size=\"12\">{min_value:.2f}</text>"
-        f"<text x=\"{margin/2:.2f}\" y=\"{margin:.2f}\" font-size=\"12\">{max_value:.2f}</text>"
+        f'<text x="{margin / 2:.2f}" y="{height - margin:.2f}" font-size="12">{min_value:.2f}</text>'
+        f'<text x="{margin / 2:.2f}" y="{margin:.2f}" font-size="12">{max_value:.2f}</text>'
     )
     axis_lines = (
-        f"<line x1=\"{margin}\" y1=\"{height - margin}\" x2=\"{width - margin}\" y2=\"{height - margin}\" stroke=\"#94a3b8\" />"
-        f"<line x1=\"{margin}\" y1=\"{margin}\" x2=\"{margin}\" y2=\"{height - margin}\" stroke=\"#94a3b8\" />"
+        f'<line x1="{margin}" y1="{height - margin}" x2="{width - margin}" y2="{height - margin}" stroke="#94a3b8" />'
+        f'<line x1="{margin}" y1="{margin}" x2="{margin}" y2="{height - margin}" stroke="#94a3b8" />'
     )
     polyline_markup = (
-        f"<polyline fill=\"none\" stroke=\"#2563eb\" stroke-width=\"2\" points=\"{polyline}\"></polyline>"
+        f'<polyline fill="none" stroke="#2563eb" stroke-width="2" points="{polyline}"></polyline>'
         if count > 1
         else ""
     )
     return (
-        f"<svg class=\"chart-svg\" viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"{html.escape(chart.metric_name)} vs {html.escape(chart.x_label)}\">"
+        f'<svg class="chart-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(chart.metric_name)} vs {html.escape(chart.x_label)}">'
         + axis_lines
         + polyline_markup
         + circles

@@ -64,12 +64,9 @@ def build_multiple_choice_json_experiment(
 
     def _default_context_builder(row: dict[str, object]) -> dict[str, object]:
         labels: Sequence[str] = tuple(
-            str(label)
-            for label in row.get("choice_labels", [])
+            str(label) for label in row.get("choice_labels", [])
         ) or tuple("ABCD")
-        choices: Sequence[str] = tuple(
-            str(choice) for choice in row.get("choices", [])
-        )
+        choices: Sequence[str] = tuple(str(choice) for choice in row.get("choices", []))
         choice_lines = []
         for label, choice in zip(labels, choices, strict=False):
             choice_lines.append(f"{label}. {choice}")
@@ -91,13 +88,27 @@ def build_multiple_choice_json_experiment(
 
     runner_kwargs = {}
     if runner_options:
-        if "max_parallel" in runner_options and runner_options["max_parallel"] is not None:
+        if (
+            "max_parallel" in runner_options
+            and runner_options["max_parallel"] is not None
+        ):
             runner_kwargs["max_parallel"] = int(str(runner_options["max_parallel"]))
-        if "max_retries" in runner_options and runner_options["max_retries"] is not None:
+        if (
+            "max_retries" in runner_options
+            and runner_options["max_retries"] is not None
+        ):
             runner_kwargs["max_retries"] = int(str(runner_options["max_retries"]))
-        if "retry_initial_delay" in runner_options and runner_options["retry_initial_delay"] is not None:
-            runner_kwargs["retry_initial_delay"] = float(str(runner_options["retry_initial_delay"]))
-        if "retry_backoff_multiplier" in runner_options and runner_options["retry_backoff_multiplier"] is not None:
+        if (
+            "retry_initial_delay" in runner_options
+            and runner_options["retry_initial_delay"] is not None
+        ):
+            runner_kwargs["retry_initial_delay"] = float(
+                str(runner_options["retry_initial_delay"])
+            )
+        if (
+            "retry_backoff_multiplier" in runner_options
+            and runner_options["retry_backoff_multiplier"] is not None
+        ):
             runner_kwargs["retry_backoff_multiplier"] = float(
                 str(runner_options["retry_backoff_multiplier"])
             )
@@ -135,9 +146,7 @@ def summarize_report(report: orchestrator.ExperimentReport) -> str:
     evaluated = exact.count if exact else 0
 
     total_samples = report.metadata.get("total_samples", evaluated)
-    successful_generations = report.metadata.get(
-        "successful_generations", evaluated
-    )
+    successful_generations = report.metadata.get("successful_generations", evaluated)
     failed_generations = report.metadata.get("failed_generations", 0)
     evaluation_failures = len(report.evaluation_report.failures)
     total_failures = failed_generations + evaluation_failures

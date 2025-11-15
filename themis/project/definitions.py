@@ -69,7 +69,9 @@ class Project:
         try:
             return self._experiment_index[name]
         except KeyError as exc:  # pragma: no cover - defensive guard
-            raise KeyError(f"Experiment '{name}' not registered in project '{self.project_id}'") from exc
+            raise KeyError(
+                f"Experiment '{name}' not registered in project '{self.project_id}'"
+            ) from exc
 
     def metadata_for_experiment(self, name: str) -> dict[str, Any]:
         """Merge project-level metadata with experiment-specific overrides."""

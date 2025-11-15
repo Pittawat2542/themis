@@ -8,9 +8,7 @@ def create_prompt_templates(config):
     templates_list = []
     for variant in config.prompt_variants:
         template = templates.PromptTemplate(
-            name=variant.name,
-            template=variant.template,
-            metadata=variant.metadata
+            name=variant.name, template=variant.template, metadata=variant.metadata
         )
         templates_list.append(template)
     return templates_list
@@ -26,11 +24,11 @@ containing `answer` and `reasoning` keys only.
 Problem:
 {problem}
     """.strip(),
-    metadata={"strategy": "zero-shot", "domain": "math"}
+    metadata={"strategy": "zero-shot", "domain": "math"},
 )
 
 FEW_SHOT_MATH = templates.PromptTemplate(
-    name="few-shot-math", 
+    name="few-shot-math",
     template="""
 You are an expert mathematician. Solve the problem below and respond with a JSON object
 containing `answer` and `reasoning` keys only.
@@ -44,7 +42,7 @@ Problem:
 
 Answer:
     """.strip(),
-    metadata={"strategy": "few-shot", "domain": "math"}
+    metadata={"strategy": "few-shot", "domain": "math"},
 )
 
 CHAIN_OF_THOUGHT_MATH = templates.PromptTemplate(
@@ -56,14 +54,14 @@ Problem: {problem}
 
 Step-by-step reasoning:
     """.strip(),
-    metadata={"strategy": "chain-of-thought", "domain": "math"}
+    metadata={"strategy": "chain-of-thought", "domain": "math"},
 )
 
 # More prompt templates for different domains
 ZERO_SHOT_GENERAL = templates.PromptTemplate(
     name="zero-shot-general",
     template="Please answer the following: {question}",
-    metadata={"strategy": "zero-shot", "domain": "general"}
+    metadata={"strategy": "zero-shot", "domain": "general"},
 )
 
 FEW_SHOT_GENERAL = templates.PromptTemplate(
@@ -75,13 +73,13 @@ Answer: Paris
 
 Now answer: {question}
     """.strip(),
-    metadata={"strategy": "few-shot", "domain": "general"}
+    metadata={"strategy": "few-shot", "domain": "general"},
 )
 
 __all__ = [
     "create_prompt_templates",
     "ZERO_SHOT_MATH",
-    "FEW_SHOT_MATH", 
+    "FEW_SHOT_MATH",
     "CHAIN_OF_THOUGHT_MATH",
     "ZERO_SHOT_GENERAL",
     "FEW_SHOT_GENERAL",

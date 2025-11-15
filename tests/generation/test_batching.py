@@ -201,8 +201,12 @@ def test_group_by_prompt_length():
     assert batching.group_by_prompt_length(long_task) == "length_200-300"
 
     # Custom bucket size
-    assert batching.group_by_prompt_length(short_task, bucket_size=50) == "length_50-100"
-    assert batching.group_by_prompt_length(long_task, bucket_size=50) == "length_250-300"
+    assert (
+        batching.group_by_prompt_length(short_task, bucket_size=50) == "length_50-100"
+    )
+    assert (
+        batching.group_by_prompt_length(long_task, bucket_size=50) == "length_250-300"
+    )
 
 
 def test_group_by_model_and_sampling():

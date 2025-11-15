@@ -168,7 +168,7 @@ class AdaptiveEvaluationPipeline(pipeline.EvaluationPipeline):
     def __init__(
         self,
         *,
-        extractor: extractors.Extractor,
+        extractor: Any,
         metric_selector: Callable[[core_entities.GenerationRecord], list[Metric]],
         **kwargs: Any,
     ):
@@ -196,10 +196,10 @@ class AdaptiveEvaluationPipeline(pipeline.EvaluationPipeline):
         """
         with tracing.span("adaptive_evaluation", num_records=len(records)):
             # Group records by which metrics apply
-            metric_groups: dict[tuple[str, ...], list[core_entities.GenerationRecord]] = defaultdict(
-                list
-            )
-            record_metrics: dict[str, list[metrics.Metric]] = {}
+            metric_groups: dict[
+                tuple[str, ...], list[core_entities.GenerationRecord]
+            ] = defaultdict(list)
+            record_metrics: dict[str, list[Metric]] = {}
 
             # Phase 1: Group records by metric set
             with tracing.span("group_by_metrics"):
@@ -243,18 +243,24 @@ class AdaptiveEvaluationPipeline(pipeline.EvaluationPipeline):
             # Phase 3: Aggregate all results
             with tracing.span("aggregate_adaptive_results"):
                 # Collect all metric scores by metric name
-                metric_scores_by_name: dict[str, list[core_entities.MetricScore]] = defaultdict(list)
+                metric_scores_by_name: dict[str, list[core_entities.MetricScore]] = (
+                    defaultdict(list)
+                )
                 for eval_record in all_eval_records:
                     for score_record in eval_record.scores:
-                        metric_scores_by_name[score_record.metric_name].append(score_record)
+                        metric_scores_by_name[score_record.metric_name].append(
+                            score_record
+                        )
 
                 # Compute aggregates
                 metric_aggregates = {}
                 for metric_name, score_objs in metric_scores_by_name.items():
                     if score_objs:
-                        metric_aggregates[metric_name] = reports.MetricAggregate.from_scores(
-                            name=metric_name,
-                            scores=score_objs,
+                        metric_aggregates[metric_name] = (
+                            reports.MetricAggregate.from_scores(
+                                name=metric_name,
+                                scores=score_objs,
+                            )
                         )
 
                 return reports.EvaluationReport(
@@ -371,7 +377,7 @@ def select_by_condition(
 
 
 def combine_selectors(
-    *selectors: Callable[[core_entities.GenerationRecord], list[Metric]]
+    *selectors: Callable[[core_entities.GenerationRecord], list[Metric]],
 ) -> Callable[[core_entities.GenerationRecord], list[Metric]]:
     """Combine multiple selectors (union of their metrics).
 

@@ -13,9 +13,11 @@ from . import datasets as dataset_loader
 from .config import JudgeExperimentConfig, DEFAULT_JUDGE_CONFIG
 
 
-def run_experiment(config: JudgeExperimentConfig | None = None) -> orchestrator.ExperimentReport:
+def run_experiment(
+    config: JudgeExperimentConfig | None = None,
+) -> orchestrator.ExperimentReport:
     """Run judge-based evaluation experiment.
-    
+
     This experiment demonstrates:
     - RubricJudgeMetric: Score candidate solutions using rubric criteria
     - ConsistencyMetric: Measure agreement across multiple judge runs
@@ -42,10 +44,14 @@ def run_experiment(config: JudgeExperimentConfig | None = None) -> orchestrator.
 
     # Create rubric from config
     rubric_config = config.rubrics[0] if config.rubrics else None
-    rubric = rubric_config.criteria if rubric_config else {
-        "correctness": "Answer matches ground truth",
-        "reasoning": "Clear step-by-step explanation",
-    }
+    rubric = (
+        rubric_config.criteria
+        if rubric_config
+        else {
+            "correctness": "Answer matches ground truth",
+            "reasoning": "Clear step-by-step explanation",
+        }
+    )
 
     # Build metrics: RubricJudgeMetric and ConsistencyMetric
     judge_metric = metrics.RubricJudgeMetric(

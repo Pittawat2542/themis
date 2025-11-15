@@ -25,13 +25,13 @@ def test_improved_summarize_report_without_math_verify():
             core_entities.MetricScore("ExactMatch", 0.0, {}, {}),
         ],
     )
-    
+
     eval_report = evaluation_pipeline.EvaluationReport(
         metrics={"ExactMatch": exact_match_metric},
         failures=[],  # No evaluation failures
         records=[],
     )
-    
+
     # Create experiment report with metadata
     report = orchestrator.ExperimentReport(
         generation_results=[],
@@ -43,10 +43,10 @@ def test_improved_summarize_report_without_math_verify():
             "failed_generations": 2,
         },
     )
-    
+
     # Test the summarize function
     summary = math_experiment.summarize_report(report)
-    
+
     # Check that the summary contains the expected information
     assert "Evaluated 10 samples" in summary
     assert "Successful generations: 8/10" in summary
@@ -69,23 +69,25 @@ def test_improved_summarize_report_with_failures():
             core_entities.MetricScore("ExactMatch", 1.0, {}, {}),
         ],
     )
-    
+
     eval_report = evaluation_pipeline.EvaluationReport(
         metrics={"ExactMatch": exact_match_metric},
         failures=[
             evaluation_pipeline.EvaluationFailure("sample-1", "Extraction failed"),
-            evaluation_pipeline.EvaluationFailure("sample-2", "Metric computation failed")
+            evaluation_pipeline.EvaluationFailure(
+                "sample-2", "Metric computation failed"
+            ),
         ],
         records=[],
     )
-    
+
     # Create experiment report with metadata
     report = orchestrator.ExperimentReport(
         generation_results=[],
         evaluation_report=eval_report,
         failures=[
             orchestrator.ExperimentFailure("sample-3", "Generation timeout"),
-            orchestrator.ExperimentFailure("sample-4", "API error")
+            orchestrator.ExperimentFailure("sample-4", "API error"),
         ],
         metadata={
             "total_samples": 10,
@@ -93,10 +95,10 @@ def test_improved_summarize_report_with_failures():
             "failed_generations": 5,
         },
     )
-    
+
     # Test the summarize function
     summary = math_experiment.summarize_report(report)
-    
+
     # Check that the summary contains the expected information
     assert "Evaluated 10 samples" in summary
     assert "Successful generations: 5/10" in summary
@@ -113,23 +115,23 @@ def test_improved_summarize_report_with_math_verify():
         mean=0.7,
         per_sample=[],
     )
-    
+
     math_verify_metric = evaluation_pipeline.MetricAggregate(
         name="MathVerifyAccuracy",
         count=10,
         mean=0.8,
         per_sample=[],
     )
-    
+
     eval_report = evaluation_pipeline.EvaluationReport(
         metrics={
             "ExactMatch": exact_match_metric,
-            "MathVerifyAccuracy": math_verify_metric
+            "MathVerifyAccuracy": math_verify_metric,
         },
         failures=[],
         records=[],
     )
-    
+
     # Create experiment report with metadata
     report = orchestrator.ExperimentReport(
         generation_results=[],
@@ -141,10 +143,10 @@ def test_improved_summarize_report_with_math_verify():
             "failed_generations": 0,
         },
     )
-    
+
     # Test the summarize function
     summary = math_experiment.summarize_report(report)
-    
+
     # Check that the summary contains the expected information
     assert "Evaluated 10 samples" in summary
     assert "Successful generations: 10/10" in summary

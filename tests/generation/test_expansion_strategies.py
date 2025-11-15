@@ -267,9 +267,7 @@ def test_chained_expansion_strategy():
     assert len(tasks) == 3
 
     # Check we have the right combinations
-    task_info = [
-        (t.metadata.get("difficulty"), t.sampling.temperature) for t in tasks
-    ]
+    task_info = [(t.metadata.get("difficulty"), t.sampling.temperature) for t in tasks]
     assert ("easy", 0.0) in task_info
     assert ("hard", 0.0) in task_info
     assert ("hard", 0.9) in task_info
@@ -338,9 +336,7 @@ def test_flexible_generation_plan_with_filter():
 
 def test_flexible_generation_plan_metadata_fields():
     """Test that metadata fields are properly included."""
-    dataset = [
-        {"id": "1", "difficulty": "easy", "category": "math", "extra": "ignore"}
-    ]
+    dataset = [{"id": "1", "difficulty": "easy", "category": "math", "extra": "ignore"}]
 
     template = templates.PromptTemplate(name="t1", template="Problem")
     model = entities.ModelSpec(identifier="model", provider="fake")

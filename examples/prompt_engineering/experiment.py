@@ -36,8 +36,8 @@ def create_project_experiment(config: PromptEngineeringConfig) -> ProjectExperim
         reference_field="answer",  # Field in dataset that contains expected answer
         metadata_fields=("dataset_name", "subject", "level", "prompt_strategy"),
         context_builder=lambda row: {
-            "problem": row["problem"], 
-            "question": row.get("question", row["problem"])  # Support both field names
+            "problem": row["problem"],
+            "question": row.get("question", row["problem"]),  # Support both field names
         },
     )
 
@@ -58,7 +58,7 @@ def create_project_experiment(config: PromptEngineeringConfig) -> ProjectExperim
 
 def run_experiment(config: PromptEngineeringConfig) -> orchestrator.ExperimentReport:
     """Run the prompt engineering experiment."""
-    
+
     # Load dataset rows
     dataset_rows: list[dict[str, object]] = []
     for dataset_cfg in config.datasets:
@@ -66,7 +66,9 @@ def run_experiment(config: PromptEngineeringConfig) -> orchestrator.ExperimentRe
         dataset_rows.extend(rows)
 
     if not dataset_rows:
-        raise ValueError("Prompt engineering experiment requires at least one dataset row")
+        raise ValueError(
+            "Prompt engineering experiment requires at least one dataset row"
+        )
 
     # Create prompt templates from config
     prompt_templates = create_prompt_templates(config)
@@ -82,8 +84,8 @@ def run_experiment(config: PromptEngineeringConfig) -> orchestrator.ExperimentRe
         reference_field="answer",
         metadata_fields=("dataset_name", "subject", "level", "prompt_strategy"),
         context_builder=lambda row: {
-            "problem": row["problem"], 
-            "question": row.get("question", row["problem"])
+            "problem": row["problem"],
+            "question": row.get("question", row["problem"]),
         },
     )
 
@@ -107,7 +109,9 @@ def run_experiment(config: PromptEngineeringConfig) -> orchestrator.ExperimentRe
         # - prompt template
         # - model
         # - sampling configuration
-        total_tasks += len(config.prompt_variants) * len(config.models) * len(config.samplings)
+        total_tasks += (
+            len(config.prompt_variants) * len(config.models) * len(config.samplings)
+        )
 
     print(f"Running experiment with {total_tasks} total tasks...")
     print(f"  - {len(config.prompt_variants)} prompt variants")
@@ -127,15 +131,17 @@ def run_experiment(config: PromptEngineeringConfig) -> orchestrator.ExperimentRe
 
 def summarize_report(report: orchestrator.ExperimentReport) -> str:
     """Create a summary of the prompt engineering experiment results."""
-    
+
     # Extract metric information
     exact_match_metric = report.evaluation_report.metrics.get("ExactMatch")
     response_length_metric = report.evaluation_report.metrics.get("ResponseLength")
-    
+
     exact_mean = exact_match_metric.mean if exact_match_metric else 0.0
     exact_count = exact_match_metric.count if exact_match_metric else 0
-    
-    response_length_mean = response_length_metric.mean if response_length_metric else 0.0
+
+    response_length_mean = (
+        response_length_metric.mean if response_length_metric else 0.0
+    )
 
     # Get failure counts
     generation_failures = len(report.failures)
@@ -146,7 +152,7 @@ def summarize_report(report: orchestrator.ExperimentReport) -> str:
     total_samples = report.metadata.get("total_samples", 0)
     successful_generations = report.metadata.get("successful_generations", 0)
     failed_generations = report.metadata.get("failed_generations", 0)
-    
+
     # Calculate total tasks (samples × prompt variants × models × sampling strategies)
     # We need to extract this information from the report or config
     # For now, we'll calculate based on what we know about the structure
@@ -158,9 +164,11 @@ def summarize_report(report: orchestrator.ExperimentReport) -> str:
         f"Successful generations: {successful_generations}/{total_tasks}",
         f"Exact match accuracy: {exact_mean:.3f} ({exact_count} evaluated)",
     ]
-    
+
     if response_length_mean > 0:
-        summary_parts.append(f"Average response length: {response_length_mean:.1f} characters")
+        summary_parts.append(
+            f"Average response length: {response_length_mean:.1f} characters"
+        )
 
     # Add failure information
     if total_failures > 0:
@@ -175,36 +183,34 @@ def summarize_report(report: orchestrator.ExperimentReport) -> str:
 
 def analyze_by_prompt_strategy(report: orchestrator.ExperimentReport):
     """Analyze results by prompt strategy to compare effectiveness."""
-    
+
     # Group results by prompt strategy
     strategy_results = {}
-    
+
     for record in report.generation_results:
         # Extract prompt strategy from template metadata
         prompt_name = record.task.prompt.template_name
         strategy = record.task.prompt.metadata.get("strategy", "unknown")
-        
+
         if strategy not in strategy_results:
-            strategy_results[strategy] = {
-                "count": 0,
-                "correct": 0,
-                "metrics": {}
-            }
-        
+            strategy_results[strategy] = {"count": 0, "correct": 0, "metrics": {}}
+
         strategy_results[strategy]["count"] += 1
-        
+
         # Check if this record has exact match score
         exact_match_score = record.metrics.get("ExactMatch")
         if exact_match_score and exact_match_score.value == 1.0:
             strategy_results[strategy]["correct"] += 1
-    
+
     # Print comparison
     print("\nPrompt Strategy Comparison:")
     print("-" * 50)
     for strategy, data in strategy_results.items():
         accuracy = data["correct"] / data["count"] if data["count"] > 0 else 0
-        print(f"{strategy:20} | Accuracy: {accuracy:.3f} ({data['correct']}/{data['count']})")
-    
+        print(
+            f"{strategy:20} | Accuracy: {accuracy:.3f} ({data['correct']}/{data['count']})"
+        )
+
     return strategy_results
 
 
@@ -223,8 +229,8 @@ def _make_binding(model_cfg: ModelConfig) -> experiment_builder.ModelBinding:
 
 
 __all__ = [
-    "run_experiment", 
-    "summarize_report", 
+    "run_experiment",
+    "summarize_report",
     "create_project_experiment",
-    "analyze_by_prompt_strategy"
+    "analyze_by_prompt_strategy",
 ]

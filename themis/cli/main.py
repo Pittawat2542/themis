@@ -155,6 +155,7 @@ def math500_cmd(
         task_name="math500",
     )
 
+
 @app.command(name="aime24")
 def aime24_cmd(
     *,

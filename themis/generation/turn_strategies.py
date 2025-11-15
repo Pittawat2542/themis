@@ -118,7 +118,9 @@ class DynamicTurnStrategy:
         strategy = DynamicTurnStrategy(planner)
     """
 
-    planner: Callable[[conv.ConversationContext, core_entities.GenerationRecord], str | None]
+    planner: Callable[
+        [conv.ConversationContext, core_entities.GenerationRecord], str | None
+    ]
 
     def next_turn(
         self,
@@ -209,7 +211,12 @@ class ConditionalTurnStrategy:
         )
     """
 
-    conditions: list[tuple[Callable[[conv.ConversationContext, core_entities.GenerationRecord], bool], str | None]]
+    conditions: list[
+        tuple[
+            Callable[[conv.ConversationContext, core_entities.GenerationRecord], bool],
+            str | None,
+        ]
+    ]
     default: str | None = None
 
     def next_turn(
@@ -290,7 +297,9 @@ def create_qa_strategy(questions: list[str]) -> FixedSequenceTurnStrategy:
     return FixedSequenceTurnStrategy(messages=questions)
 
 
-def create_max_turns_strategy(max_turns: int, message: str = "Continue.") -> DynamicTurnStrategy:
+def create_max_turns_strategy(
+    max_turns: int, message: str = "Continue."
+) -> DynamicTurnStrategy:
     """Create strategy that stops after max turns.
 
     Args:
@@ -301,7 +310,9 @@ def create_max_turns_strategy(max_turns: int, message: str = "Continue.") -> Dyn
         DynamicTurnStrategy that stops after max_turns
     """
 
-    def planner(context: conv.ConversationContext, record: core_entities.GenerationRecord) -> str | None:
+    def planner(
+        context: conv.ConversationContext, record: core_entities.GenerationRecord
+    ) -> str | None:
         if len(context) >= max_turns:
             return None
         return message
@@ -309,7 +320,9 @@ def create_max_turns_strategy(max_turns: int, message: str = "Continue.") -> Dyn
     return DynamicTurnStrategy(planner=planner)
 
 
-def create_keyword_stop_strategy(keywords: list[str], message: str = "Continue.") -> DynamicTurnStrategy:
+def create_keyword_stop_strategy(
+    keywords: list[str], message: str = "Continue."
+) -> DynamicTurnStrategy:
     """Create strategy that stops when any keyword appears in response.
 
     Args:
@@ -320,7 +333,9 @@ def create_keyword_stop_strategy(keywords: list[str], message: str = "Continue."
         DynamicTurnStrategy that stops on keywords
     """
 
-    def planner(context: conv.ConversationContext, record: core_entities.GenerationRecord) -> str | None:
+    def planner(
+        context: conv.ConversationContext, record: core_entities.GenerationRecord
+    ) -> str | None:
         if record.output:
             text_lower = record.output.text.lower()
             if any(kw.lower() in text_lower for kw in keywords):
@@ -372,4 +387,7 @@ def perturb_prompt(text: str, *, seed: int | None = None, max_changes: int = 2) 
 def create_prompt_variants(base_text: str, *, count: int, seed: int) -> list[str]:
     """Create multiple perturbed variants of a base prompt with deterministic seeding."""
     rng = random.Random(seed)
-    return [perturb_prompt(base_text, seed=rng.randint(0, 1_000_000)) for _ in range(max(1, count))]
+    return [
+        perturb_prompt(base_text, seed=rng.randint(0, 1_000_000))
+        for _ in range(max(1, count))
+    ]

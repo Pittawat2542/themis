@@ -106,9 +106,7 @@ def _build_experiment(
     runner_options = asdict(config.generation.runner)
 
     if config.name in _MATH_EXPERIMENT_NAMES:
-        task_name = (
-            _COMPETITION_EXPERIMENTS.get(config.name, {}).get("task", "math500")
-        )
+        task_name = _COMPETITION_EXPERIMENTS.get(config.name, {}).get("task", "math500")
         return math_experiment.build_math500_zero_shot_experiment(
             model_client=provider,
             model_name=config.generation.model_identifier,

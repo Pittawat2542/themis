@@ -30,7 +30,11 @@ class PairwiseJudgeMetric(MetricInterface):
 
         md = dict(metadata or {})
         try:
-            a_text, b_text = prediction if isinstance(prediction, (list, tuple)) else (str(prediction), "")
+            a_text, b_text = (
+                prediction
+                if isinstance(prediction, (list, tuple))
+                else (str(prediction), "")
+            )
         except Exception:
             a_text, b_text = str(prediction), ""
         reference = str(references[0]) if references else ""
@@ -40,7 +44,10 @@ class PairwiseJudgeMetric(MetricInterface):
             if isinstance(self.rubric, dict)
             else [f"- {str(item)}" for item in self.rubric]
         )
-        rubric_text = "\n".join(rubric_lines) or "- correctness\n- reasoning quality\n- formatting"
+        rubric_text = (
+            "\n".join(rubric_lines)
+            or "- correctness\n- reasoning quality\n- formatting"
+        )
 
         template = PromptTemplate(
             name="PairwiseJudgeMetric",
@@ -48,12 +55,17 @@ class PairwiseJudgeMetric(MetricInterface):
                 "You are an impartial evaluator. Compare two candidate responses (A and B) using the rubric below.\n"
                 "Rubric:\n{rubric}\n\n"
                 "If a reference answer is provided, consider it for correctness but judge reasoning quality and formatting separately.\n"
-                "Return strict JSON: {{\"preference\": \"A\"|\"B\"|\"tie\", \"confidence\": float, \"rationale\": str}}.\n\n"
+                'Return strict JSON: {{"preference": "A"|"B"|"tie", "confidence": float, "rationale": str}}.\n\n'
                 "A:\n{a}\n\nB:\n{b}\n\nReference:\n{reference}\n"
             ),
         )
         prompt = template.render_prompt(
-            {"rubric": rubric_text, "a": str(a_text), "b": str(b_text), "reference": reference}
+            {
+                "rubric": rubric_text,
+                "a": str(a_text),
+                "b": str(b_text),
+                "reference": reference,
+            }
         )
 
         sampling = self.sampling or core_entities.SamplingConfig(

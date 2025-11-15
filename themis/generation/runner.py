@@ -40,8 +40,8 @@ class GenerationRunner:
         self._max_retries = max(1, int(max_retries))
         self._retry_initial_delay = max(0.0, retry_initial_delay)
         self._retry_backoff_multiplier = max(1.0, retry_backoff_multiplier)
-        self._retry_max_delay = retry_max_delay if retry_max_delay is None else max(
-            0.0, retry_max_delay
+        self._retry_max_delay = (
+            retry_max_delay if retry_max_delay is None else max(0.0, retry_max_delay)
         )
 
     def run(

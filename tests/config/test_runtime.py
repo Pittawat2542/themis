@@ -62,7 +62,9 @@ def test_inline_dataset_requires_rows():
         dataset=schema.DatasetConfig(source="inline", inline_samples=[])
     )
 
-    with pytest.raises(ValueError, match="inline_samples must contain at least one row"):
+    with pytest.raises(
+        ValueError, match="inline_samples must contain at least one row"
+    ):
         runtime.load_dataset_from_config(config)
 
 

@@ -62,18 +62,36 @@ def build_math500_zero_shot_experiment(
     runner_kwargs = {}
     if runner_options:
         # Convert values to appropriate types with type checking
-        if "max_parallel" in runner_options and runner_options["max_parallel"] is not None:
+        if (
+            "max_parallel" in runner_options
+            and runner_options["max_parallel"] is not None
+        ):
             runner_kwargs["max_parallel"] = int(str(runner_options["max_parallel"]))
-        if "max_retries" in runner_options and runner_options["max_retries"] is not None:
+        if (
+            "max_retries" in runner_options
+            and runner_options["max_retries"] is not None
+        ):
             runner_kwargs["max_retries"] = int(str(runner_options["max_retries"]))
-        if "retry_initial_delay" in runner_options and runner_options["retry_initial_delay"] is not None:
-            runner_kwargs["retry_initial_delay"] = float(str(runner_options["retry_initial_delay"]))
-        if "retry_backoff_multiplier" in runner_options and runner_options["retry_backoff_multiplier"] is not None:
-            runner_kwargs["retry_backoff_multiplier"] = float(str(runner_options["retry_backoff_multiplier"]))
+        if (
+            "retry_initial_delay" in runner_options
+            and runner_options["retry_initial_delay"] is not None
+        ):
+            runner_kwargs["retry_initial_delay"] = float(
+                str(runner_options["retry_initial_delay"])
+            )
+        if (
+            "retry_backoff_multiplier" in runner_options
+            and runner_options["retry_backoff_multiplier"] is not None
+        ):
+            runner_kwargs["retry_backoff_multiplier"] = float(
+                str(runner_options["retry_backoff_multiplier"])
+            )
         if "retry_max_delay" in runner_options:
             retry_max_delay = runner_options["retry_max_delay"]
-            runner_kwargs["retry_max_delay"] = float(str(retry_max_delay)) if retry_max_delay is not None else None
-            
+            runner_kwargs["retry_max_delay"] = (
+                float(str(retry_max_delay)) if retry_max_delay is not None else None
+            )
+
     math_runner = runner.GenerationRunner(
         provider=model_client or clients.FakeMathModelClient(),
         **runner_kwargs,
@@ -126,39 +144,43 @@ def summarize_report(report: orchestrator.ExperimentReport) -> str:
     exact = report.evaluation_report.metrics.get("ExactMatch")
     exact_mean = exact.mean if exact else 0.0
     exact_count = exact.count if exact else 0
-    
+
     # Get MathVerify metric if available
     math_verify = report.evaluation_report.metrics.get("MathVerifyAccuracy")
     math_verify_mean = math_verify.mean if math_verify else None
     math_verify_count = math_verify.count if math_verify else 0
-    
+
     # Get failure counts
     generation_failures = len(report.failures)
     evaluation_failures = len(report.evaluation_report.failures)
     total_failures = generation_failures + evaluation_failures
-    
+
     # Get metadata
-    total_samples = report.metadata.get('total_samples', 0)
-    successful_generations = report.metadata.get('successful_generations', 0)
-    failed_generations = report.metadata.get('failed_generations', 0)
-    
+    total_samples = report.metadata.get("total_samples", 0)
+    successful_generations = report.metadata.get("successful_generations", 0)
+    failed_generations = report.metadata.get("failed_generations", 0)
+
     # Build summary string
     summary_parts = [
         f"Evaluated {total_samples} samples",
         f"Successful generations: {successful_generations}/{total_samples}",
-        f"Exact match: {exact_mean:.3f} ({exact_count} evaluated)"
+        f"Exact match: {exact_mean:.3f} ({exact_count} evaluated)",
     ]
-    
+
     # Add MathVerify accuracy if available
     if math_verify_mean is not None:
-        summary_parts.append(f"MathVerify accuracy: {math_verify_mean:.3f} ({math_verify_count} evaluated)")
-    
+        summary_parts.append(
+            f"MathVerify accuracy: {math_verify_mean:.3f} ({math_verify_count} evaluated)"
+        )
+
     # Add failure information
     if total_failures > 0:
-        summary_parts.append(f"Failures: {total_failures} (gen: {failed_generations}, eval: {evaluation_failures})")
+        summary_parts.append(
+            f"Failures: {total_failures} (gen: {failed_generations}, eval: {evaluation_failures})"
+        )
     else:
         summary_parts.append("No failures")
-    
+
     return " | ".join(summary_parts)
 
 

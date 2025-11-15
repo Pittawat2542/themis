@@ -142,9 +142,7 @@ class AgenticRunner:
         self._max_iterations = max_iterations
         self._tool_call_parser = tool_call_parser or self._default_tool_call_parser
 
-    def run_agentic(
-        self, task: core_entities.GenerationTask
-    ) -> AgenticRecord:
+    def run_agentic(self, task: core_entities.GenerationTask) -> AgenticRecord:
         """Run agentic loop with tool use.
 
         Args:
@@ -174,7 +172,9 @@ class AgenticRunner:
 
             for i in range(self._max_iterations):
                 with tracing.span("agentic_iteration", iteration=i):
-                    logger.debug("Starting agentic iteration %d/%d", i + 1, self._max_iterations)
+                    logger.debug(
+                        "Starting agentic iteration %d/%d", i + 1, self._max_iterations
+                    )
 
                     # Generate with current context
                     with tracing.span("generate"):
@@ -275,7 +275,9 @@ class AgenticRunner:
             lines.append(f"\n- {tool.name}: {tool.description}")
             lines.append(f"  Parameters: {json.dumps(tool.parameters, indent=2)}")
 
-        lines.append("\nTo use a tool, output: TOOL_CALL: {\"name\": \"tool_name\", \"arguments\": {...}}")
+        lines.append(
+            '\nTo use a tool, output: TOOL_CALL: {"name": "tool_name", "arguments": {...}}'
+        )
 
         return "\n".join(lines)
 
@@ -309,7 +311,7 @@ class AgenticRunner:
         calls = []
 
         # Look for TOOL_CALL: {...} pattern
-        pattern = r'TOOL_CALL:\s*(\{.*?\})'
+        pattern = r"TOOL_CALL:\s*(\{.*?\})"
         matches = re.finditer(pattern, text, re.DOTALL)
 
         for match in matches:

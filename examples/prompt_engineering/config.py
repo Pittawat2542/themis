@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 class PromptVariantConfig(BaseModel):
     """Configuration for a single prompt variation."""
+
     name: str
     template: str
     description: str
@@ -91,7 +92,7 @@ Problem:
 {problem}
         """.strip(),
         "description": "Direct problem solving without examples",
-        "metadata": {"strategy": "zero-shot"}
+        "metadata": {"strategy": "zero-shot"},
     },
     {
         "name": "few-shot",
@@ -108,7 +109,7 @@ Problem:
 Answer:
         """.strip(),
         "description": "Problem solving with one example",
-        "metadata": {"strategy": "few-shot"}
+        "metadata": {"strategy": "few-shot"},
     },
     {
         "name": "chain-of-thought",
@@ -120,12 +121,14 @@ Problem: {problem}
 Step-by-step reasoning:
         """.strip(),
         "description": "Chain-of-thought reasoning approach",
-        "metadata": {"strategy": "chain-of-thought"}
-    }
+        "metadata": {"strategy": "chain-of-thought"},
+    },
 ]
 
 DEFAULT_CONFIG = PromptEngineeringConfig(
-    prompt_variants=[PromptVariantConfig(**variant) for variant in DEFAULT_PROMPT_VARIANTS],
+    prompt_variants=[
+        PromptVariantConfig(**variant) for variant in DEFAULT_PROMPT_VARIANTS
+    ],
     models=[
         ModelConfig(
             name="openai/qwen/qwen3-vl-30b",
@@ -134,19 +137,15 @@ DEFAULT_CONFIG = PromptEngineeringConfig(
                 "api_base": "http://localhost:1234/v1",
                 "api_key": "sk-not-needed",
                 "timeout": 300,
-                "custom_llm_provider": "openai"
+                "custom_llm_provider": "openai",
             },
-            description="Local Qwen3-VL-30B model via OpenAI-compatible endpoint (requires local server running on port 1234)"
+            description="Local Qwen3-VL-30B model via OpenAI-compatible endpoint (requires local server running on port 1234)",
         )
     ],
-    samplings=[SamplingProfile(name="default", temperature=0.7, top_p=0.95, max_tokens=-1)],
-    datasets=[
-        DatasetConfig(
-            name="demo",
-            kind="demo",
-            limit=5
-        )
-    ]
+    samplings=[
+        SamplingProfile(name="default", temperature=0.7, top_p=0.95, max_tokens=-1)
+    ],
+    datasets=[DatasetConfig(name="demo", kind="demo", limit=5)],
 )
 
 
@@ -157,7 +156,7 @@ def load_config(path: Path) -> PromptEngineeringConfig:
 
 __all__ = [
     "PromptVariantConfig",
-    "SamplingProfile", 
+    "SamplingProfile",
     "ModelConfig",
     "DatasetConfig",
     "PromptEngineeringConfig",

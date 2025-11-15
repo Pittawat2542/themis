@@ -231,7 +231,7 @@ def group_by_model_and_sampling(task: core_entities.GenerationTask) -> str:
 
 
 def create_grouping_function(
-    *groupers: Callable[[core_entities.GenerationTask], str]
+    *groupers: Callable[[core_entities.GenerationTask], str],
 ) -> Callable[[core_entities.GenerationTask], str]:
     """Create a composite grouping function from multiple groupers.
 

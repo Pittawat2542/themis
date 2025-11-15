@@ -190,9 +190,7 @@ def validate_non_empty_field(field_name: str) -> Callable[[dict], None]:
     return validator
 
 
-def validate_field_type(
-    field_name: str, expected_type: type
-) -> Callable[[dict], None]:
+def validate_field_type(field_name: str, expected_type: type) -> Callable[[dict], None]:
     """Create validator that ensures field has correct type.
 
     Args:

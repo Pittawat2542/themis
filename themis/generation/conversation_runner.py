@@ -84,9 +84,7 @@ class ConversationRunner:
         self._max_turns = max_turns
         self._prompt_template = prompt_template
 
-    def run_conversation(
-        self, task: conv.ConversationTask
-    ) -> conv.ConversationRecord:
+    def run_conversation(self, task: conv.ConversationTask) -> conv.ConversationRecord:
         """Execute a multi-turn conversation.
 
         Args:
@@ -148,7 +146,9 @@ class ConversationRunner:
                         next_message = self._turn_strategy.next_turn(context, record)
 
                     if next_message is None:
-                        logger.debug("Turn strategy ended conversation at turn %d", turn_num)
+                        logger.debug(
+                            "Turn strategy ended conversation at turn %d", turn_num
+                        )
                         break
 
                     # Add user message for next turn

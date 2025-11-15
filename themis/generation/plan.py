@@ -168,13 +168,23 @@ class CartesianExpansionStrategy:
         """Expand using Cartesian product."""
         for row in dataset:
             row_dict = dict(row)
-            ctx = context.context_builder(row_dict) if context.context_builder else row_dict
+            ctx = (
+                context.context_builder(row_dict)
+                if context.context_builder
+                else row_dict
+            )
             dataset_id = row_dict.get(context.dataset_id_field)
-            reference = row_dict.get(context.reference_field) if context.reference_field else None
+            reference = (
+                row_dict.get(context.reference_field)
+                if context.reference_field
+                else None
+            )
 
             for template in context.templates:
                 rendered = template.render_prompt(ctx)
-                base_metadata = self._build_metadata(template, dataset_id, row_dict, context)
+                base_metadata = self._build_metadata(
+                    template, dataset_id, row_dict, context
+                )
 
                 for model in context.models:
                     for sampling in context.sampling_parameters:
@@ -260,9 +270,17 @@ class FilteredExpansionStrategy:
         """Expand with filtering."""
         for row in dataset:
             row_dict = dict(row)
-            ctx = context.context_builder(row_dict) if context.context_builder else row_dict
+            ctx = (
+                context.context_builder(row_dict)
+                if context.context_builder
+                else row_dict
+            )
             dataset_id = row_dict.get(context.dataset_id_field)
-            reference = row_dict.get(context.reference_field) if context.reference_field else None
+            reference = (
+                row_dict.get(context.reference_field)
+                if context.reference_field
+                else None
+            )
 
             for template in context.templates:
                 rendered = template.render_prompt(ctx)
@@ -279,7 +297,9 @@ class FilteredExpansionStrategy:
                                 model=model,
                                 sampling=sampling,
                                 metadata=dict(base_metadata),
-                                reference=self._base_strategy._build_reference(reference, context),
+                                reference=self._base_strategy._build_reference(
+                                    reference, context
+                                ),
                             )
 
 

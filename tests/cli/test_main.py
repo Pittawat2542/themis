@@ -153,7 +153,13 @@ def test_competition_cli_with_local_dataset(tmp_path, capsys, command):
 
 def test_new_project_command(tmp_path, capsys):
     project_name = "test-project"
-    args = ["new-project", "--project-name", project_name, "--project-path", str(tmp_path)]
+    args = [
+        "new-project",
+        "--project-name",
+        project_name,
+        "--project-path",
+        str(tmp_path),
+    ]
 
     exit_code = cli_main.main(args)
 

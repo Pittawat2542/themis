@@ -6,8 +6,12 @@ from themis.generation import templates
 from themis.project import Project, ProjectExperiment
 
 
-def _experiment_definition(name: str = "demo") -> experiment_builder.ExperimentDefinition:
-    template = templates.PromptTemplate(name=f"{name}-template", template="Solve {problem}")
+def _experiment_definition(
+    name: str = "demo",
+) -> experiment_builder.ExperimentDefinition:
+    template = templates.PromptTemplate(
+        name=f"{name}-template", template="Solve {problem}"
+    )
     sampling = core_entities.SamplingConfig(temperature=0.0, top_p=1.0, max_tokens=32)
     model_spec = core_entities.ModelSpec(identifier=f"{name}-model", provider="fake")
     binding = experiment_builder.ModelBinding(spec=model_spec, provider_name="fake")

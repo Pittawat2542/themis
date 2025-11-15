@@ -42,7 +42,7 @@ def run(
     analyze: Annotated[bool, Parameter(help="Show prompt strategy analysis")] = False,
 ) -> int:
     """Run the prompt engineering experiment."""
-    
+
     config = _load_config(config_path)
     config = config.apply_overrides(
         run_id=run_id, storage_dir=storage_dir, resume=resume
@@ -56,17 +56,17 @@ def run(
     print(f"Storage: {config.storage_dir}")
     print(f"Resume: {config.resume}")
     print()
-    
+
     report = run_experiment(config)
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXPERIMENT SUMMARY")
-    print("="*60)
+    print("=" * 60)
     print(summarize_report(report))
-    
+
     if analyze:
         print()
         analyze_by_prompt_strategy(report)
-    
+
     _export_report_outputs(
         report,
         csv_output=csv_output,
@@ -87,24 +87,26 @@ def _load_config(path: Path | None) -> PromptEngineeringConfig:
 def _print_plan_summary(config: PromptEngineeringConfig) -> None:
     """Print a summary of the experiment plan."""
     print("PROMPT ENGINEERING EXPERIMENT PLAN")
-    print("="*50)
-    
+    print("=" * 50)
+
     print(f"Run ID: {config.run_id}")
     print(f"Storage: {config.storage_dir}")
     print(f"Resume: {config.resume}")
-    
+
     print("\nPrompt Variants:")
     for variant in config.prompt_variants:
         print(f"  - {variant.name}: {variant.description}")
-    
+
     print("\nModels:")
     for model in config.models:
         print(f"  - {model.name} ({model.provider}): {model.description}")
-    
+
     print(f"\nSampling Strategies: {len(config.samplings)}")
     for sampling in config.samplings:
-        print(f"  - {sampling.name}: temp={sampling.temperature}, max_tokens={sampling.max_tokens}")
-    
+        print(
+            f"  - {sampling.name}: temp={sampling.temperature}, max_tokens={sampling.max_tokens}"
+        )
+
     print(f"\nDatasets: {len(config.datasets)}")
     for dataset in config.datasets:
         print(f"  - {dataset.name} ({dataset.kind}): limit={dataset.limit or 'all'}")

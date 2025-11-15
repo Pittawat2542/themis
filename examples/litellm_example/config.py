@@ -82,10 +82,8 @@ DEFAULT_CONFIG = OpenAIExampleExperimentConfig(
             provider_options={
                 "base_url": "http://localhost:1234/v1",
                 "api_key": "not-needed",
-                "model_mapping": {
-                    "qwen3-vl-30b": "qwen/qwen3-vl-30b"
-                }
-            }
+                "model_mapping": {"qwen3-vl-30b": "qwen/qwen3-vl-30b"},
+            },
         )
     ],
     samplings=[SamplingProfile(name="zero-shot", temperature=0.7)],

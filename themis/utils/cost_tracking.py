@@ -43,15 +43,16 @@ DEFAULT_PRICING = {
 @dataclass
 class TokenUsage:
     """Token usage statistics for a single API call.
-    
+
     Attributes:
         input_tokens: Number of input/prompt tokens
         output_tokens: Number of output/completion tokens
         total_tokens: Total tokens (input + output)
     """
+
     input_tokens: int
     output_tokens: int
-    
+
     @property
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
@@ -60,7 +61,7 @@ class TokenUsage:
 @dataclass
 class CostRecord:
     """Cost record for a single generation.
-    
+
     Attributes:
         model_identifier: Model name/identifier
         provider: Provider name
@@ -70,6 +71,7 @@ class CostRecord:
         total_cost: Total cost (in USD)
         metadata: Additional metadata (e.g., timestamp, run_id)
     """
+
     model_identifier: str
     provider: str
     usage: TokenUsage
@@ -82,7 +84,7 @@ class CostRecord:
 @dataclass
 class CostSummary:
     """Aggregated cost summary across multiple generations.
-    
+
     Attributes:
         total_cost: Total cost in USD
         total_tokens: Total number of tokens
@@ -92,6 +94,7 @@ class CostSummary:
         cost_by_model: Cost breakdown by model
         cost_by_provider: Cost breakdown by provider
     """
+
     total_cost: float
     total_tokens: int
     total_input_tokens: int
@@ -103,17 +106,17 @@ class CostSummary:
 
 class CostTracker:
     """Track and compute costs for LLM API usage.
-    
+
     This class maintains a record of all API calls and their costs,
     with support for custom pricing models and cost aggregation.
     """
-    
+
     def __init__(
         self,
         pricing: Dict[str, tuple[float, float]] | None = None,
     ) -> None:
         """Initialize cost tracker.
-        
+
         Args:
             pricing: Custom pricing dictionary mapping model names to
                 (input_cost_per_1m, output_cost_per_1m) tuples.
@@ -121,7 +124,7 @@ class CostTracker:
         """
         self.pricing = pricing or DEFAULT_PRICING.copy()
         self.records: List[CostRecord] = []
-    
+
     def add_pricing(
         self,
         model: str,
@@ -129,14 +132,14 @@ class CostTracker:
         output_cost_per_1m: float,
     ) -> None:
         """Add or update pricing for a model.
-        
+
         Args:
             model: Model identifier
             input_cost_per_1m: Cost per 1M input tokens in USD
             output_cost_per_1m: Cost per 1M output tokens in USD
         """
         self.pricing[model] = (input_cost_per_1m, output_cost_per_1m)
-    
+
     def track_generation(
         self,
         record: core_entities.GenerationRecord,
@@ -144,33 +147,33 @@ class CostTracker:
         output_tokens: int | None = None,
     ) -> CostRecord:
         """Track cost for a generation record.
-        
+
         Args:
             record: Generation record to track
             input_tokens: Number of input tokens (if None, estimated from prompt)
             output_tokens: Number of output tokens (if None, estimated from output)
-        
+
         Returns:
             CostRecord with computed costs
         """
         model_id = record.task.model.identifier
         provider = record.task.model.provider
-        
+
         # Extract or estimate token counts
         if input_tokens is None:
             input_tokens = self._estimate_tokens(record.task.prompt.text)
-        
+
         if output_tokens is None and record.output:
             output_tokens = self._estimate_tokens(record.output.text)
         elif output_tokens is None:
             output_tokens = 0
-        
+
         usage = TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens)
-        
+
         # Compute costs
         input_cost, output_cost = self._compute_cost(model_id, usage)
         total_cost = input_cost + output_cost
-        
+
         cost_record = CostRecord(
             model_identifier=model_id,
             provider=provider,
@@ -183,13 +186,13 @@ class CostTracker:
                 "run_id": record.task.metadata.get("run_id"),
             },
         )
-        
+
         self.records.append(cost_record)
         return cost_record
-    
+
     def get_summary(self) -> CostSummary:
         """Compute aggregated cost summary across all tracked records.
-        
+
         Returns:
             CostSummary with aggregated statistics
         """
@@ -203,17 +206,17 @@ class CostTracker:
                 cost_by_model={},
                 cost_by_provider={},
             )
-        
+
         total_cost = sum(r.total_cost for r in self.records)
         total_input_tokens = sum(r.usage.input_tokens for r in self.records)
         total_output_tokens = sum(r.usage.output_tokens for r in self.records)
-        
+
         # Aggregate by model
         cost_by_model: Dict[str, float] = {}
         for record in self.records:
             model = record.model_identifier
             cost_by_model[model] = cost_by_model.get(model, 0.0) + record.total_cost
-        
+
         # Aggregate by provider
         cost_by_provider: Dict[str, float] = {}
         for record in self.records:
@@ -221,7 +224,7 @@ class CostTracker:
             cost_by_provider[provider] = (
                 cost_by_provider.get(provider, 0.0) + record.total_cost
             )
-        
+
         return CostSummary(
             total_cost=total_cost,
             total_tokens=total_input_tokens + total_output_tokens,
@@ -231,16 +234,16 @@ class CostTracker:
             cost_by_model=cost_by_model,
             cost_by_provider=cost_by_provider,
         )
-    
+
     def export_records(self, path: str | Path) -> None:
         """Export cost records to JSON file.
-        
+
         Args:
             path: Output file path
         """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         data = {
             "records": [
                 {
@@ -262,56 +265,56 @@ class CostTracker:
                 "num_requests": len(self.records),
             },
         }
-        
+
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
-    
+
     def _compute_cost(
         self,
         model: str,
         usage: TokenUsage,
     ) -> tuple[float, float]:
         """Compute input and output costs for a model.
-        
+
         Args:
             model: Model identifier
             usage: Token usage statistics
-        
+
         Returns:
             Tuple of (input_cost, output_cost) in USD
         """
         # Try exact match first
         pricing = self.pricing.get(model)
-        
+
         # If no exact match, try prefix matching
         if pricing is None:
             for price_key in self.pricing:
                 if model.startswith(price_key):
                     pricing = self.pricing[price_key]
                     break
-        
+
         # Fall back to generic pricing if model not found
         if pricing is None:
             # Use a reasonable default ($1 per 1M tokens)
             pricing = (1.0, 1.0)
-        
+
         input_cost_per_1m, output_cost_per_1m = pricing
-        
+
         input_cost = (usage.input_tokens / 1_000_000) * input_cost_per_1m
         output_cost = (usage.output_tokens / 1_000_000) * output_cost_per_1m
-        
+
         return input_cost, output_cost
-    
+
     @staticmethod
     def _estimate_tokens(text: str) -> int:
         """Rough estimate of token count from text.
-        
+
         Uses a simple heuristic: ~4 characters per token on average.
         For accurate counts, use provider-specific tokenizers.
-        
+
         Args:
             text: Input text
-        
+
         Returns:
             Estimated token count
         """
@@ -320,10 +323,10 @@ class CostTracker:
 
 def format_cost_summary(summary: CostSummary) -> str:
     """Format cost summary as human-readable string.
-    
+
     Args:
         summary: Cost summary to format
-    
+
     Returns:
         Formatted string representation
     """
@@ -337,7 +340,7 @@ def format_cost_summary(summary: CostSummary) -> str:
         f"API Requests:      {summary.num_requests:,}",
         "",
     ]
-    
+
     if summary.cost_by_model:
         lines.append("Cost by Model:")
         lines.append("-" * 50)
@@ -349,7 +352,7 @@ def format_cost_summary(summary: CostSummary) -> str:
             pct = (cost / summary.total_cost * 100) if summary.total_cost > 0 else 0
             lines.append(f"  {model:30s} ${cost:8.4f} ({pct:5.1f}%)")
         lines.append("")
-    
+
     if summary.cost_by_provider:
         lines.append("Cost by Provider:")
         lines.append("-" * 50)
@@ -360,7 +363,7 @@ def format_cost_summary(summary: CostSummary) -> str:
         ):
             pct = (cost / summary.total_cost * 100) if summary.total_cost > 0 else 0
             lines.append(f"  {provider:30s} ${cost:8.4f} ({pct:5.1f}%)")
-    
+
     return "\n".join(lines)
 
 

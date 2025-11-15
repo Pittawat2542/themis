@@ -18,7 +18,9 @@ class JudgeEvaluationStrategy:
     def prepare(
         self, record: core_entities.GenerationRecord
     ) -> Iterable[core_entities.EvaluationItem]:
-        yield core_entities.EvaluationItem(record=record, reference=record.task.reference)
+        yield core_entities.EvaluationItem(
+            record=record, reference=record.task.reference
+        )
 
     def aggregate(
         self,
@@ -43,6 +45,7 @@ class JudgeEvaluationStrategy:
             agreement = 0.0
             if labels:
                 from collections import Counter
+
                 counts = Counter(labels)
                 agreement = max(counts.values()) / max(1, len(labels))
 

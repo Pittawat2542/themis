@@ -119,7 +119,9 @@ class EvaluationPipeline:
                             continue
                         try:
                             with tracing.span("extract"):
-                                prediction = self._extractor.extract(item.record.output.text)
+                                prediction = self._extractor.extract(
+                                    item.record.output.text
+                                )
                         except extractors.FieldExtractionError as exc:
                             message = str(exc)
                             failures.append(
@@ -137,7 +139,9 @@ class EvaluationPipeline:
                         for metric in self._metrics:
                             metric_start = time.perf_counter()
                             try:
-                                with tracing.span("compute_metric", metric_name=metric.name):
+                                with tracing.span(
+                                    "compute_metric", metric_name=metric.name
+                                ):
                                     score = metric.compute(
                                         prediction=prediction,
                                         references=references,
@@ -147,12 +151,12 @@ class EvaluationPipeline:
                                     time.perf_counter() - metric_start
                                 ) * 1000
                             except Exception as exc:  # pragma: no cover - guarded
-                                message = (
-                                    f"Metric '{metric.name}' failed for sample {sample_id}: {exc}"
-                                )
+                                message = f"Metric '{metric.name}' failed for sample {sample_id}: {exc}"
                                 logger.warning(message)
                                 failures.append(
-                                    EvaluationFailure(sample_id=sample_id, message=message)
+                                    EvaluationFailure(
+                                        sample_id=sample_id, message=message
+                                    )
                                 )
                                 record_failures.append(message)
                                 score = core_entities.MetricScore(
@@ -163,7 +167,9 @@ class EvaluationPipeline:
                                 )
                                 score.metadata["evaluation_time_ms"] = 0.0
                             item_scores.append(score)
-                        extraction_duration = (time.perf_counter() - extract_start) * 1000
+                        extraction_duration = (
+                            time.perf_counter() - extract_start
+                        ) * 1000
                         for score in item_scores[-len(self._metrics) :]:
                             score.metadata.setdefault(
                                 "extraction_time_ms", extraction_duration

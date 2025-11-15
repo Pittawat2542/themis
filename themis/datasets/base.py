@@ -102,9 +102,7 @@ class BaseDataset:
         """Get dataset metadata."""
         return self._metadata
 
-    def filter(
-        self, predicate: Callable[[dict[str, Any]], bool]
-    ) -> BaseDataset:
+    def filter(self, predicate: Callable[[dict[str, Any]], bool]) -> BaseDataset:
         """Return filtered view of dataset.
 
         Args:
@@ -138,7 +136,9 @@ class BaseDataset:
         """
         limited_samples = self._samples[:n]
         logger.debug(
-            "Limited dataset from %d to %d samples", len(self._samples), len(limited_samples)
+            "Limited dataset from %d to %d samples",
+            len(self._samples),
+            len(limited_samples),
         )
 
         return BaseDataset(
@@ -174,9 +174,7 @@ class BaseDataset:
         # Validate distribution
         total_dist = sum(distribution.values())
         if not (0.99 <= total_dist <= 1.01):
-            logger.warning(
-                "Distribution values sum to %f, expected ~1.0", total_dist
-            )
+            logger.warning("Distribution values sum to %f, expected ~1.0", total_dist)
 
         # Calculate sample sizes for each group
         total_samples = len(self._samples)
@@ -190,7 +188,8 @@ class BaseDataset:
         for value, desired_ratio in distribution.items():
             if value not in groups:
                 logger.warning(
-                    "Value '%s' specified in distribution but not found in dataset", value
+                    "Value '%s' specified in distribution but not found in dataset",
+                    value,
                 )
                 continue
 

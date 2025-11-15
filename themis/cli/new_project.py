@@ -5,7 +5,9 @@ from pathlib import Path
 
 def create_project(project_name: str, project_path: Path) -> None:
     if (project_path / project_name).exists():
-        raise FileExistsError(f"Project '{project_name}' already exists in {project_path}")
+        raise FileExistsError(
+            f"Project '{project_name}' already exists in {project_path}"
+        )
 
     project_dir = project_path / project_name
     project_dir.mkdir()

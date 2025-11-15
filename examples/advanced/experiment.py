@@ -22,7 +22,7 @@ from .pipeline import SubjectAwareEvaluationPipeline
 
 def create_project_experiment(config: AdvancedExperimentConfig) -> ProjectExperiment:
     """Create a project experiment from the advanced configuration."""
-    
+
     prompt_text = _prompt_for_style(config.prompt_style)
     template = templates.PromptTemplate(
         name=f"advanced-{config.prompt_style}",
@@ -42,7 +42,7 @@ def create_project_experiment(config: AdvancedExperimentConfig) -> ProjectExperi
         metadata_fields=("subject", "level", "dataset_name"),
         context_builder=lambda row: {"problem": row["problem"]},
     )
-    
+
     # Create project experiment
     project_experiment = ProjectExperiment(
         name=f"advanced-math-experiment-{config.prompt_style}",
@@ -55,9 +55,9 @@ def create_project_experiment(config: AdvancedExperimentConfig) -> ProjectExperi
             "prompt_style": config.prompt_style,
             "test_time_attempts": config.test_time_attempts,
             "enable_subject_breakdown": config.enable_subject_breakdown,
-        }
+        },
     )
-    
+
     return project_experiment
 
 
@@ -102,7 +102,7 @@ def run_experiment(config: AdvancedExperimentConfig) -> orchestrator.ExperimentR
     )
 
     built = builder.build(definition, storage_dir=config.storage_dir)
-    
+
     # Calculate total tasks for progress reporting
     total_tasks = 0
     for row in rows:

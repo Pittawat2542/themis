@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -51,7 +50,9 @@ class HuggingFaceHubUploader:
         # Upload individual generation results
         for record in report.generation_results:
             record_dict = to_dict(record)
-            record_path = storage_path / f"{record.task.metadata.get('dataset_id')}.json"
+            record_path = (
+                storage_path / f"{record.task.metadata.get('dataset_id')}.json"
+            )
             with open(record_path, "w") as f:
                 json.dump(record_dict, f, indent=4)
             self.api.upload_file(

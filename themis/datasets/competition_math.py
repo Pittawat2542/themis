@@ -247,11 +247,7 @@ def _row_to_sample(
         "contest",
         "source",
     }
-    metadata = {
-        key: value
-        for key, value in row.items()
-        if key not in core_keys
-    }
+    metadata = {key: value for key, value in row.items() if key not in core_keys}
     sample = CompetitionMathSample.model_validate(
         {
             "unique_id": str(unique_id),

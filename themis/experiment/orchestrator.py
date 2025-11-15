@@ -7,7 +7,14 @@ from datetime import datetime, timezone
 from typing import Callable, Sequence
 
 from themis.config.schema import IntegrationsConfig
-from themis.core.entities import (ExperimentFailure, ExperimentReport, GenerationRecord, GenerationTask, MetricScore, EvaluationRecord)
+from themis.core.entities import (
+    ExperimentFailure,
+    ExperimentReport,
+    GenerationRecord,
+    GenerationTask,
+    MetricScore,
+    EvaluationRecord,
+)
 from themis.evaluation import pipeline as evaluation_pipeline
 from themis.evaluation.reports import EvaluationFailure
 from themis.generation import plan as generation_plan
@@ -15,9 +22,6 @@ from themis.generation import runner as generation_runner
 from themis.experiment import storage as experiment_storage
 from themis.integrations.huggingface import HuggingFaceHubUploader
 from themis.integrations.wandb import WandbTracker
-
-
-
 
 
 class ExperimentOrchestrator:
@@ -197,16 +201,12 @@ class ExperimentOrchestrator:
             "or set `run_id` with storage configured so cached data can be reloaded."
         )
 
-    def _load_cached_records(
-        self, run_id: str
-    ) -> dict[str, GenerationRecord]:
+    def _load_cached_records(self, run_id: str) -> dict[str, GenerationRecord]:
         if self._storage is None:
             return {}
         return self._storage.load_cached_records(run_id)
 
-    def _load_cached_evaluations(
-        self, run_id: str
-    ) -> dict[str, EvaluationRecord]:
+    def _load_cached_evaluations(self, run_id: str) -> dict[str, EvaluationRecord]:
         if self._storage is None:
             return {}
         return self._storage.load_cached_evaluations(run_id)

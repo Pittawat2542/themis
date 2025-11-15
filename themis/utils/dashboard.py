@@ -22,7 +22,7 @@ def generate_html_dashboard(
     title: str = "Themis Experiment Dashboard",
 ) -> None:
     """Generate HTML dashboard with evaluation results, costs, and statistics.
-    
+
     Args:
         evaluation_report: Evaluation report with metric results
         cost_summary: Optional cost summary
@@ -32,14 +32,14 @@ def generate_html_dashboard(
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     html_content = _generate_html(
         evaluation_report,
         cost_summary,
         statistical_summaries,
         title,
     )
-    
+
     with open(output_path, "w") as f:
         f.write(html_content)
 
@@ -51,22 +51,22 @@ def _generate_html(
     title: str,
 ) -> str:
     """Generate complete HTML dashboard content."""
-    
+
     # Build sections
     metrics_section = _build_metrics_section(evaluation_report.metrics)
-    
+
     stats_section = ""
     if statistical_summaries:
         stats_section = _build_statistics_section(statistical_summaries)
-    
+
     cost_section = ""
     if cost_summary:
         cost_section = _build_cost_section(cost_summary)
-    
+
     failures_section = ""
     if evaluation_report.failures:
         failures_section = _build_failures_section(evaluation_report.failures)
-    
+
     # Compose full HTML
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -259,17 +259,15 @@ def _generate_html(
     </div>
 </body>
 </html>"""
-    
+
     return html
 
 
-def _build_metrics_section(
-    metrics: Dict[str, eval_reports.MetricAggregate]
-) -> str:
+def _build_metrics_section(metrics: Dict[str, eval_reports.MetricAggregate]) -> str:
     """Build metrics overview section."""
     if not metrics:
         return "<p>No metrics available.</p>"
-    
+
     cards = []
     for metric_name, aggregate in metrics.items():
         card = f"""
@@ -285,20 +283,20 @@ def _build_metrics_section(
         </div>
         """
         cards.append(card)
-    
+
     return f"""
     <h2>📊 Metrics Overview</h2>
-    {''.join(cards)}
+    {"".join(cards)}
     """
 
 
 def _build_statistics_section(
-    statistical_summaries: Dict[str, eval_stats.StatisticalSummary]
+    statistical_summaries: Dict[str, eval_stats.StatisticalSummary],
 ) -> str:
     """Build detailed statistics section."""
     if not statistical_summaries:
         return ""
-    
+
     cards = []
     for metric_name, summary in statistical_summaries.items():
         ci_text = ""
@@ -312,7 +310,7 @@ def _build_statistics_section(
                 </div>
             </div>
             """
-        
+
         card = f"""
         <div class="metric-card">
             <div class="metric-name">{metric_name} - Statistical Analysis</div>
@@ -342,16 +340,16 @@ def _build_statistics_section(
         </div>
         """
         cards.append(card)
-    
+
     return f"""
     <h2>📈 Statistical Analysis</h2>
-    {''.join(cards)}
+    {"".join(cards)}
     """
 
 
 def _build_cost_section(cost_summary: cost_tracking.CostSummary) -> str:
     """Build cost tracking section."""
-    
+
     # Model breakdown
     model_items = []
     for model, cost in sorted(
@@ -359,14 +357,16 @@ def _build_cost_section(cost_summary: cost_tracking.CostSummary) -> str:
         key=lambda x: x[1],
         reverse=True,
     ):
-        pct = (cost / cost_summary.total_cost * 100) if cost_summary.total_cost > 0 else 0
+        pct = (
+            (cost / cost_summary.total_cost * 100) if cost_summary.total_cost > 0 else 0
+        )
         model_items.append(f"""
         <div class="cost-item">
             <div class="cost-item-name">{model}</div>
             <div class="cost-item-value">${cost:.4f} ({pct:.1f}%)</div>
         </div>
         """)
-    
+
     # Provider breakdown
     provider_items = []
     for provider, cost in sorted(
@@ -374,14 +374,16 @@ def _build_cost_section(cost_summary: cost_tracking.CostSummary) -> str:
         key=lambda x: x[1],
         reverse=True,
     ):
-        pct = (cost / cost_summary.total_cost * 100) if cost_summary.total_cost > 0 else 0
+        pct = (
+            (cost / cost_summary.total_cost * 100) if cost_summary.total_cost > 0 else 0
+        )
         provider_items.append(f"""
         <div class="cost-item">
             <div class="cost-item-name">{provider}</div>
             <div class="cost-item-value">${cost:.4f} ({pct:.1f}%)</div>
         </div>
         """)
-    
+
     return f"""
     <h2>💰 Cost Tracking</h2>
     <div class="cost-summary">
@@ -409,23 +411,21 @@ def _build_cost_section(cost_summary: cost_tracking.CostSummary) -> str:
     
     <h3>Cost by Model</h3>
     <div class="cost-breakdown">
-        {''.join(model_items)}
+        {"".join(model_items)}
     </div>
     
     <h3>Cost by Provider</h3>
     <div class="cost-breakdown">
-        {''.join(provider_items)}
+        {"".join(provider_items)}
     </div>
     """
 
 
-def _build_failures_section(
-    failures: List[eval_reports.EvaluationFailure]
-) -> str:
+def _build_failures_section(failures: List[eval_reports.EvaluationFailure]) -> str:
     """Build failures section."""
     if not failures:
         return ""
-    
+
     failure_items = []
     for failure in failures[:20]:  # Limit to first 20 failures
         sample_id = failure.sample_id or "Unknown"
@@ -435,15 +435,15 @@ def _build_failures_section(
             {failure.message}
         </div>
         """)
-    
+
     more_text = ""
     if len(failures) > 20:
         more_text = f"<p><em>...and {len(failures) - 20} more failures</em></p>"
-    
+
     return f"""
     <h2>⚠️ Failures ({len(failures)})</h2>
     <div class="failures">
-        {''.join(failure_items)}
+        {"".join(failure_items)}
         {more_text}
     </div>
     """

@@ -43,9 +43,7 @@ def _normalize_answer(value: Any, *, total_choices: int | None = None) -> str:
     if len(text) == 1 and text.isalpha():
         return text.upper()
     if total_choices is not None:
-        mapping = {
-            str(idx): _index_to_label(idx) for idx in range(total_choices)
-        }
+        mapping = {str(idx): _index_to_label(idx) for idx in range(total_choices)}
         normalized = mapping.get(text)
         if normalized:
             return normalized
@@ -158,12 +156,7 @@ def _row_to_sample(row: dict[str, Any], *, index: int, subject: str) -> MmluProS
         or row.get("unique_id")
         or f"mmlu-pro-{index:05d}"
     )
-    question = (
-        row.get("question")
-        or row.get("Question")
-        or row.get("prompt")
-        or ""
-    )
+    question = row.get("question") or row.get("Question") or row.get("prompt") or ""
     choices = _extract_choices(row)
     answer = (
         row.get("answer")
@@ -172,12 +165,18 @@ def _row_to_sample(row: dict[str, Any], *, index: int, subject: str) -> MmluProS
         or row.get("correct")
         or ""
     )
-    metadata_keys = {"question", "Question", "prompt", "choices", "options", "answer", "Answer", "correct_answer", "correct"}
-    metadata = {
-        key: value
-        for key, value in row.items()
-        if key not in metadata_keys
+    metadata_keys = {
+        "question",
+        "Question",
+        "prompt",
+        "choices",
+        "options",
+        "answer",
+        "Answer",
+        "correct_answer",
+        "correct",
     }
+    metadata = {key: value for key, value in row.items() if key not in metadata_keys}
     sample = MmluProSample.model_validate(
         {
             "unique_id": str(unique_id),

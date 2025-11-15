@@ -37,7 +37,10 @@ class RubricJudgeMetric(MetricInterface):
             if isinstance(self.rubric, dict)
             else [f"- {str(item)}" for item in self.rubric]
         )
-        rubric_text = "\n".join(rubric_lines) or "- correctness\n- reasoning quality\n- formatting"
+        rubric_text = (
+            "\n".join(rubric_lines)
+            or "- correctness\n- reasoning quality\n- formatting"
+        )
 
         template = PromptTemplate(
             name="RubricJudgeMetric",
@@ -95,7 +98,11 @@ class RubricJudgeMetric(MetricInterface):
         except Exception:
             pass
 
-        value = sum(scores.values()) / max(1, len(scores)) if scores else (1.0 if verdict == "pass" else 0.0)
+        value = (
+            sum(scores.values()) / max(1, len(scores))
+            if scores
+            else (1.0 if verdict == "pass" else 0.0)
+        )
 
         return core_entities.MetricScore(
             metric_name=self.name,
