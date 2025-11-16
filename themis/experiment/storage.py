@@ -122,6 +122,17 @@ class ExperimentStorage:
                 )
         return evaluations
 
+    def get_run_path(self, run_id: str) -> Path:
+        """Get the filesystem path for a run's storage directory.
+
+        Args:
+            run_id: Unique run identifier
+
+        Returns:
+            Path to the run's storage directory
+        """
+        return self._run_dir(run_id)
+
     def _dataset_path(self, run_id: str) -> Path:
         return self._run_dir(run_id) / "dataset.jsonl"
 

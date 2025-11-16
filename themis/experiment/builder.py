@@ -9,6 +9,8 @@ from themis.core import entities as core_entities
 from themis.evaluation import pipeline as evaluation_pipeline
 from themis.evaluation import strategies as evaluation_strategies
 from themis.experiment import orchestrator, storage as experiment_storage
+from themis.experiment.cache_manager import CacheManager
+from themis.experiment.integration_manager import IntegrationManager
 from themis.experiment.definitions import (
     BuiltExperiment,
     ExperimentDefinition,
@@ -83,18 +85,33 @@ class ExperimentBuilder:
             metrics=self._metrics,
             **pipeline_kwargs,
         )
+
+        # Create storage backend
         storage = (
             experiment_storage.ExperimentStorage(storage_dir)
             if storage_dir is not None
             else None
         )
+
+        # Create managers for better separation of concerns
+        cache_manager = CacheManager(
+            storage=storage,
+            enable_resume=True,
+            enable_cache=True,
+        )
+        integration_manager = IntegrationManager(
+            config=config.IntegrationsConfig()
+        )
+
+        # Create orchestrator with managers
         orchestrator_obj = orchestrator.ExperimentOrchestrator(
             generation_plan=plan_obj,
             generation_runner=runner,
             evaluation_pipeline=pipeline,
-            storage=storage,
-            integrations_config=config.IntegrationsConfig(),
+            cache_manager=cache_manager,
+            integration_manager=integration_manager,
         )
+
         return BuiltExperiment(
             orchestrator=orchestrator_obj,
             plan=plan_obj,
