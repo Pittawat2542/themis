@@ -7,12 +7,7 @@ from pathlib import Path
 from typing import List
 
 from themis.core import entities as core_entities
-from themis.datasets import (
-    competition_math as competition_math_dataset,
-    math500 as math500_dataset,
-    mmlu_pro as mmlu_pro_dataset,
-    super_gpqa as super_gpqa_dataset,
-)
+from themis.datasets import create_dataset, list_datasets
 from themis.experiment import math as math_experiment
 from themis.experiment import mcq as mcq_experiment
 from themis.experiment import orchestrator as experiment_orchestrator
@@ -35,11 +30,20 @@ _COMPETITION_EXPERIMENTS = {
     },
 }
 
-_SUPPORTED_EXPERIMENTS = {
-    "math500_zero_shot",
-    "supergpqa_zero_shot",
-    "mmlu_pro_zero_shot",
-}.union(_COMPETITION_EXPERIMENTS.keys())
+# Mapping from experiment name to dataset registry name
+_EXPERIMENT_TO_DATASET = {
+    "math500_zero_shot": "math500",
+    "supergpqa_zero_shot": "supergpqa",
+    "mmlu_pro_zero_shot": "mmlu-pro",
+    # Competition experiments map to specific dataset aliases
+    "aime24_zero_shot": "aime24",
+    "aime25_zero_shot": "aime25",
+    "amc23_zero_shot": "amc23",
+    "olympiadbench_zero_shot": "olympiadbench",
+    "beyondaime_zero_shot": "beyondaime",
+}
+
+_SUPPORTED_EXPERIMENTS = set(_EXPERIMENT_TO_DATASET.keys())
 
 _MATH_EXPERIMENT_NAMES = {"math500_zero_shot"} | set(_COMPETITION_EXPERIMENTS.keys())
 
@@ -148,6 +152,16 @@ def _build_experiment(
 def _load_dataset(
     config: schema.DatasetConfig, *, experiment_name: str
 ) -> List[dict[str, object]]:
+    """Load dataset samples using the dataset registry.
+
+    Args:
+        config: Dataset configuration
+        experiment_name: Name of the experiment (used to map to dataset)
+
+    Returns:
+        List of sample dictionaries ready for generation
+    """
+    # Handle inline datasets (not in registry)
     if config.source == "inline":
         if not config.inline_samples:
             raise ValueError(
@@ -156,45 +170,22 @@ def _load_dataset(
             )
         return list(config.inline_samples)
 
-    subjects = list(config.subjects) if config.subjects else None
-    if experiment_name == "math500_zero_shot":
-        samples = math500_dataset.load_math500(
-            source=config.source,
-            data_dir=config.data_dir,
-            split=config.split,
-            limit=config.limit,
-            subjects=subjects,
-        )
-    elif experiment_name == "supergpqa_zero_shot":
-        samples = super_gpqa_dataset.load_super_gpqa(
-            source=config.source,
-            data_dir=config.data_dir,
-            split=config.split,
-            limit=config.limit,
-            subjects=subjects,
-        )
-    elif experiment_name == "mmlu_pro_zero_shot":
-        samples = mmlu_pro_dataset.load_mmlu_pro(
-            source=config.source,
-            data_dir=config.data_dir,
-            split=config.split,
-            limit=config.limit,
-            subjects=subjects,
-        )
-    elif experiment_name in _COMPETITION_EXPERIMENTS:
-        dataset_config = _COMPETITION_EXPERIMENTS[experiment_name]
-        samples = competition_math_dataset.load_competition_math(
-            dataset=dataset_config["dataset"],
-            subset=dataset_config.get("subset"),
-            source=config.source,
-            data_dir=config.data_dir,
-            split=config.split,
-            limit=config.limit,
-            subjects=subjects,
-        )
-    else:
+    # Map experiment name to dataset registry name
+    dataset_name = _EXPERIMENT_TO_DATASET.get(experiment_name)
+    if not dataset_name:
         raise ValueError(
             f"Unsupported experiment '{experiment_name}'. Supported experiments:"
             f" {', '.join(sorted(_SUPPORTED_EXPERIMENTS))}."
         )
-    return [sample.to_generation_example() for sample in samples]
+
+    # Prepare options for dataset factory
+    options = {
+        "source": config.source,
+        "data_dir": config.data_dir,
+        "split": config.split,
+        "limit": config.limit,
+        "subjects": list(config.subjects) if config.subjects else None,
+    }
+
+    # Load samples via registry
+    return create_dataset(dataset_name, **options)
