@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generic, List, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Generic, List, TypeVar
+
+if TYPE_CHECKING:
+    from themis.evaluation.reports import EvaluationReport
 
 # Type variable for generic Reference
 T = TypeVar("T")
@@ -127,9 +130,6 @@ class EvaluationRecord:
     failures: List[str] = field(default_factory=list)
 
 
-from themis.evaluation import pipeline as evaluation_pipeline
-
-
 @dataclass
 class ExperimentFailure:
     sample_id: str | None
@@ -139,7 +139,7 @@ class ExperimentFailure:
 @dataclass
 class ExperimentReport:
     generation_results: list[GenerationRecord]
-    evaluation_report: evaluation_pipeline.EvaluationReport
+    evaluation_report: "EvaluationReport"
     failures: list[ExperimentFailure]
     metadata: dict[str, object]
 
