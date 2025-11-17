@@ -42,9 +42,7 @@ class CacheManager:
         """Check if storage is available."""
         return self._storage is not None
 
-    def cache_dataset(
-        self, run_id: str, dataset: Sequence[dict[str, object]]
-    ) -> None:
+    def cache_dataset(self, run_id: str, dataset: Sequence[dict[str, object]]) -> None:
         """Cache dataset for future resumability.
 
         Args:
@@ -54,9 +52,7 @@ class CacheManager:
         if self._storage is not None and self._enable_cache:
             self._storage.cache_dataset(run_id, list(dataset))
 
-    def load_cached_records(
-        self, run_id: str
-    ) -> dict[str, GenerationRecord]:
+    def load_cached_records(self, run_id: str) -> dict[str, GenerationRecord]:
         """Load cached generation records for resuming.
 
         Args:
@@ -69,9 +65,7 @@ class CacheManager:
             return {}
         return self._storage.load_cached_records(run_id)
 
-    def load_cached_evaluations(
-        self, run_id: str
-    ) -> dict[str, EvaluationRecord]:
+    def load_cached_evaluations(self, run_id: str) -> dict[str, EvaluationRecord]:
         """Load cached evaluation records for resuming.
 
         Args:

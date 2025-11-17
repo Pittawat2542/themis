@@ -10,6 +10,8 @@ from cyclopts import Parameter
 from themis.cli.utils import effective_total, export_outputs
 from themis.datasets import (
     competition_math as competition_math_dataset,
+)
+from themis.datasets import (
     math500 as math500_dataset,
 )
 from themis.experiment import math as math_experiment

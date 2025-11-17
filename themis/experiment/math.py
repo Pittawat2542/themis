@@ -7,7 +7,8 @@ from typing import Sequence
 
 from themis.core import entities as core_entities
 from themis.evaluation import extractors, math_verify_utils, metrics, pipeline
-from themis.experiment import orchestrator, storage as experiment_storage
+from themis.experiment import orchestrator
+from themis.experiment import storage as experiment_storage
 from themis.generation import clients, plan, runner, templates
 from themis.interfaces import ModelProvider
 

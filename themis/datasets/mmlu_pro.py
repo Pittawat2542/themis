@@ -9,7 +9,6 @@ from typing import Any, Iterable, Iterator, List, Sequence
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
-
 _DATASET_NAME = "TIGER-Lab/MMLU-Pro"
 _CHOICE_LABELS = tuple(string.ascii_uppercase)
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import threading
+from dataclasses import dataclass
 from typing import Any, Dict
 
 from themis.core import entities as core_entities

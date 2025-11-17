@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, Iterable, List
+from typing import Iterable, List, Protocol
 
 from themis.core import entities as core_entities
 

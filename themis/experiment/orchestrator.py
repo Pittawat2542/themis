@@ -7,20 +7,20 @@ from typing import Callable, Sequence
 
 from themis.config.schema import IntegrationsConfig
 from themis.core.entities import (
+    EvaluationRecord,
     ExperimentFailure,
     ExperimentReport,
     GenerationRecord,
     GenerationTask,
     MetricScore,
-    EvaluationRecord,
 )
 from themis.evaluation import pipeline as evaluation_pipeline
 from themis.evaluation.reports import EvaluationFailure
-from themis.generation import plan as generation_plan
-from themis.generation import runner as generation_runner
 from themis.experiment import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
 from themis.experiment.integration_manager import IntegrationManager
+from themis.generation import plan as generation_plan
+from themis.generation import runner as generation_runner
 
 
 class ExperimentOrchestrator:

@@ -14,8 +14,10 @@ from themis.cli.commands import mcq_benchmarks as mcq_cmds
 # Import provider modules to ensure they register themselves
 try:
     from themis.generation import clients  # noqa: F401 - registers fake provider
-    from themis.generation.providers import litellm_provider  # noqa: F401
-    from themis.generation.providers import vllm_provider  # noqa: F401
+    from themis.generation.providers import (
+        litellm_provider,  # noqa: F401
+        vllm_provider,  # noqa: F401
+    )
 except ImportError:
     pass  # Some providers may not be available
 

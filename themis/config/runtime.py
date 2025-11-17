@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List
 
 from themis.core import entities as core_entities
-from themis.datasets import create_dataset, list_datasets
+from themis.datasets import create_dataset
 from themis.experiment import math as math_experiment
 from themis.experiment import mcq as mcq_experiment
 from themis.experiment import orchestrator as experiment_orchestrator

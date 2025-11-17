@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
 from huggingface_hub import HfApi
 
 from themis.config.schema import HuggingFaceHubConfig
 from themis.core.entities import ExperimentReport
-
-
-from dataclasses import asdict, is_dataclass
 
 
 def to_dict(obj):

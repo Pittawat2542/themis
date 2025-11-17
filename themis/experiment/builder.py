@@ -5,24 +5,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, Type
 
+from themis.config import schema as config
 from themis.core import entities as core_entities
 from themis.evaluation import pipeline as evaluation_pipeline
 from themis.evaluation import strategies as evaluation_strategies
-from themis.experiment import orchestrator, storage as experiment_storage
+from themis.experiment import orchestrator
+from themis.experiment import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
-from themis.experiment.integration_manager import IntegrationManager
 from themis.experiment.definitions import (
     BuiltExperiment,
     ExperimentDefinition,
     ModelBinding,
 )
+from themis.experiment.integration_manager import IntegrationManager
 from themis.generation import plan as generation_plan
 from themis.generation import router as generation_router
 from themis.generation import runner as generation_runner
 from themis.generation import strategies as generation_strategies
-from themis.providers import create_provider
 from themis.interfaces import ModelProvider
-from themis.config import schema as config
+from themis.providers import create_provider
 
 
 class ExperimentBuilder:
@@ -99,9 +100,7 @@ class ExperimentBuilder:
             enable_resume=True,
             enable_cache=True,
         )
-        integration_manager = IntegrationManager(
-            config=config.IntegrationsConfig()
-        )
+        integration_manager = IntegrationManager(config=config.IntegrationsConfig())
 
         # Create orchestrator with managers
         orchestrator_obj = orchestrator.ExperimentOrchestrator(

@@ -8,12 +8,16 @@ from typing import Any
 from sympy import sympify
 
 try:  # pragma: no cover - optional dependency
+    from latex2sympy2_extended.math_normalization import NormalizationConfig
     from math_verify import (
         LatexExtractionConfig,
+    )
+    from math_verify import (
         parse as mv_parse,
+    )
+    from math_verify import (
         verify as mv_verify,
     )
-    from latex2sympy2_extended.math_normalization import NormalizationConfig
 except ImportError:  # pragma: no cover - triggered when math-verify isn't installed
     LatexExtractionConfig = None
     NormalizationConfig = None

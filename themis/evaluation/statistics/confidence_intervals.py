@@ -8,8 +8,8 @@ from typing import List, Sequence
 
 from themis.core import entities as core_entities
 
-from .types import ConfidenceInterval, StatisticalSummary
 from .distributions import inverse_normal_cdf, t_critical_value
+from .types import ConfidenceInterval, StatisticalSummary
 
 
 def compute_confidence_interval(

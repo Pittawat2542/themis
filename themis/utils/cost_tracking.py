@@ -13,7 +13,6 @@ from typing import Dict, List
 
 from themis.core import entities as core_entities
 
-
 # Provider pricing per 1M tokens (as of 2024)
 # Format: {provider_model: (input_cost_per_1m, output_cost_per_1m)}
 DEFAULT_PRICING = {

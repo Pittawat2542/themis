@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Sequence
-import json
 
 from themis.core import entities as core_entities
 from themis.interfaces import Metric as MetricInterface

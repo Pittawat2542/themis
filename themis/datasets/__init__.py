@@ -80,6 +80,7 @@ register_dataset("competition_math", _create_competition_math)
 register_dataset("supergpqa", _create_super_gpqa)
 register_dataset("mmlu-pro", _create_mmlu_pro)
 
+
 # Also register specific competition datasets as aliases
 def _create_aime24(options: dict[str, Any]) -> list[dict[str, Any]]:
     return _create_competition_math({**options, "dataset": "math-ai/aime24"})

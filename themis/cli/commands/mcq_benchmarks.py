@@ -10,6 +10,8 @@ from cyclopts import Parameter
 from themis.cli.utils import effective_total, export_outputs
 from themis.datasets import (
     mmlu_pro as mmlu_pro_dataset,
+)
+from themis.datasets import (
     super_gpqa as super_gpqa_dataset,
 )
 from themis.experiment import mcq as mcq_experiment

@@ -7,7 +7,8 @@ import time
 from typing import Callable, Sequence
 
 from themis.core import entities as core_entities
-from themis.evaluation import extractors, strategies as evaluation_strategies
+from themis.evaluation import extractors
+from themis.evaluation import strategies as evaluation_strategies
 from themis.evaluation.reports import (
     EvaluationFailure,
     EvaluationReport,

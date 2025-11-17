@@ -6,25 +6,25 @@ significance tests, and statistical comparisons across experiment runs.
 
 from __future__ import annotations
 
-from .types import (
-    ConfidenceInterval,
-    StatisticalSummary,
-    ComparisonResult,
-    PermutationTestResult,
-    BootstrapResult,
-    EffectSize,
-)
+from .bootstrap import bootstrap_ci
 from .confidence_intervals import (
     compute_confidence_interval,
     compute_statistical_summary,
 )
+from .effect_sizes import cohens_d, cohens_h
 from .hypothesis_tests import (
     compare_metrics,
-    permutation_test,
     holm_bonferroni,
+    permutation_test,
 )
-from .bootstrap import bootstrap_ci
-from .effect_sizes import cohens_h, cohens_d
+from .types import (
+    BootstrapResult,
+    ComparisonResult,
+    ConfidenceInterval,
+    EffectSize,
+    PermutationTestResult,
+    StatisticalSummary,
+)
 
 __all__ = [
     # Types

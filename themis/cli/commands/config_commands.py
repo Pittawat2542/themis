@@ -86,7 +86,7 @@ def validate_config(
         print(f"Resume: {experiment_config.resume}")
         print(f"Max samples: {experiment_config.max_samples or '(unlimited)'}")
 
-        print(f"\nDataset:")
+        print("\nDataset:")
         print(f"  Source: {experiment_config.dataset.source}")
         print(f"  Split: {experiment_config.dataset.split}")
         if experiment_config.dataset.limit:
@@ -94,7 +94,7 @@ def validate_config(
         if experiment_config.dataset.subjects:
             print(f"  Subjects: {', '.join(experiment_config.dataset.subjects)}")
 
-        print(f"\nGeneration:")
+        print("\nGeneration:")
         print(f"  Model: {experiment_config.generation.model_identifier}")
         print(f"  Provider: {experiment_config.generation.provider.name}")
         print(f"  Temperature: {experiment_config.generation.sampling.temperature}")

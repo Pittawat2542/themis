@@ -5,13 +5,13 @@ from __future__ import annotations
 import math
 import random
 from statistics import mean, stdev
-from typing import List, Sequence, Literal
+from typing import List, Literal, Sequence
 
 from themis.core import entities as core_entities
 
-from .types import ComparisonResult, PermutationTestResult
 from .confidence_intervals import compute_confidence_interval
 from .distributions import t_to_p_value
+from .types import ComparisonResult, PermutationTestResult
 
 
 def compare_metrics(

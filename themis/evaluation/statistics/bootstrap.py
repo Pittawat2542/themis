@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from statistics import mean
-from typing import Sequence, Callable
+from typing import Callable, Sequence
 
 from .types import BootstrapResult
 

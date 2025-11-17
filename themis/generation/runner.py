@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Iterable, Iterator, List
 
 from themis.core import entities as core_entities

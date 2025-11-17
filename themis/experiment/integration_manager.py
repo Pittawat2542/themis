@@ -33,9 +33,7 @@ class IntegrationManager:
 
         # Initialize WandB tracker if enabled
         self._wandb_tracker = (
-            WandbTracker(self._config.wandb)
-            if self._config.wandb.enable
-            else None
+            WandbTracker(self._config.wandb) if self._config.wandb.enable else None
         )
 
         # Initialize HuggingFace Hub uploader if enabled

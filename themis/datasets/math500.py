@@ -8,7 +8,6 @@ from typing import Any, Iterable, Iterator, List, Sequence
 
 from pydantic import BaseModel, Field, field_validator
 
-
 _DATASET_NAME = "HuggingFaceH4/MATH-500"
 
 

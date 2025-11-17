@@ -4,26 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from statistics import mean
-from typing import List, Sequence, Dict, Literal
+from typing import Dict, List, Literal, Sequence
 
-from themis.evaluation.statistics import (
-    bootstrap_ci,
-    permutation_test,
-    cohens_h,
-    cohens_d,
-)
-from themis.evaluation.statistics.types import (
-    BootstrapResult,
-    PermutationTestResult,
-    EffectSize,
-)
 from themis.core import entities as core_entities
 from themis.evaluation.statistics import (
     bootstrap_ci,
-    permutation_test,
-    cohens_h,
     cohens_d,
+    cohens_h,
     holm_bonferroni,
+    permutation_test,
+)
+from themis.evaluation.statistics.types import (
+    BootstrapResult,
+    EffectSize,
+    PermutationTestResult,
 )
 
 
