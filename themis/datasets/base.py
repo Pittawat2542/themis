@@ -17,10 +17,20 @@ logger = logging.getLogger(__name__)
 
 
 class BaseDataset:
-    """Base implementation of EnhancedDatasetAdapter.
+    """Base implementation for dataset classes that implement DatasetAdapter protocol.
 
-    This class provides a reusable implementation of common dataset operations.
+    This class provides a reusable implementation of common dataset operations
+    including filtering, limiting, and stratification. It satisfies the
+    DatasetAdapter protocol by implementing iter_samples().
+
+    The class implements the structural DatasetAdapter protocol without
+    explicit inheritance, using duck typing. At runtime, instances will
+    satisfy isinstance(obj, DatasetAdapter) checks.
+
     Subclasses should provide the initial samples, schema, and metadata.
+
+    Protocol Compliance:
+        Implements DatasetAdapter protocol via iter_samples() method
 
     Examples:
         class MyDataset(BaseDataset):
@@ -40,6 +50,11 @@ class BaseDataset:
                     total_samples=2,
                 )
                 super().__init__(samples, schema, metadata)
+
+        # Verify protocol compliance
+        >>> from themis.interfaces import DatasetAdapter
+        >>> dataset = MyDataset()
+        >>> isinstance(dataset, DatasetAdapter)  # True
     """
 
     def __init__(
