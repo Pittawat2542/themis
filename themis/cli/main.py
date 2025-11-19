@@ -7,7 +7,17 @@ from typing import Sequence
 from cyclopts import App
 
 # Import command modules
-from themis.cli.commands import benchmarks, config_commands, demo, info
+from themis.cli.commands import (
+    benchmarks,
+    comparison,
+    config_commands,
+    cost,
+    demo,
+    info,
+    leaderboard,
+    sample_run,
+    visualize,
+)
 from themis.cli.commands import math_benchmarks as math_cmds
 from themis.cli.commands import mcq_benchmarks as mcq_cmds
 
@@ -48,6 +58,26 @@ app.command(name="list-providers")(benchmarks.list_providers)
 app.command(name="list-benchmarks")(benchmarks.list_benchmarks)
 app.command(name="info")(info.show_info)
 app.command(name="new-project")(info.new_project)
+
+# Register comparison commands
+app.command(name="compare")(comparison.compare_command)
+app.command(name="diff")(comparison.diff_command)
+app.command(name="pareto")(comparison.pareto_command)
+
+# Register cost commands
+app.command(name="estimate-cost")(cost.estimate_cost_command)
+app.command(name="show-pricing")(cost.show_pricing_command)
+
+# Register visualization commands
+app.command(name="visualize")(visualize.visualize_comparison_command)
+app.command(name="visualize-pareto")(visualize.visualize_pareto_command)
+app.command(name="visualize-distribution")(visualize.visualize_distribution_command)
+
+# Register leaderboard command
+app.command(name="leaderboard")(leaderboard.leaderboard_command)
+
+# Register sample-run command
+app.command(name="sample-run")(sample_run.sample_run_command)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

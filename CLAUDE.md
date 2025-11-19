@@ -63,6 +63,98 @@ uv run python -m themis.cli run-config --config my_config.yaml
 
 # Create new project
 uv run python -m themis.cli new-project --project-name my-project
+
+# Compare multiple experiments
+uv run python -m themis.cli compare \
+  --run-ids run-1 run-2 run-3 \
+  --storage .cache/runs \
+  --output comparison.csv
+
+# Show configuration differences
+uv run python -m themis.cli diff \
+  --run-id-a run-1 \
+  --run-id-b run-2 \
+  --storage .cache/runs
+
+# Find Pareto-optimal experiments
+uv run python -m themis.cli pareto \
+  --run-ids run-1 run-2 run-3 \
+  --objectives accuracy cost \
+  --maximize true false
+
+# Estimate experiment cost before running
+uv run python -m themis.cli estimate-cost \
+  --model gpt-4 \
+  --dataset-size 100 \
+  --avg-prompt-tokens 500 \
+  --avg-completion-tokens 300
+
+# Show pricing for specific model
+uv run python -m themis.cli show-pricing --model gpt-4
+
+# List all available models with pricing
+uv run python -m themis.cli show-pricing --list-all
+
+# Compare costs across multiple models
+uv run python -m themis.cli show-pricing \
+  --compare-models gpt-4 \
+  --compare-models gpt-3.5-turbo \
+  --compare-models claude-3-haiku-20240307
+
+# Interactive visualizations (requires plotly: uv sync --extra viz)
+# Create bar chart comparing metrics
+uv run python -m themis.cli visualize \
+  --run-ids run-1 run-2 run-3 \
+  --metric accuracy \
+  --output comparison.html
+
+# Create Pareto frontier visualization
+uv run python -m themis.cli visualize-pareto \
+  --run-ids run-1 run-2 run-3 \
+  --metric1 accuracy \
+  --metric2 cost \
+  --maximize1 true \
+  --maximize2 false \
+  --output pareto.html
+
+# Create dashboard with multiple metrics
+uv run python -m themis.cli visualize \
+  --run-ids run-1 run-2 run-3 \
+  --chart-type dashboard \
+  --output dashboard.html
+
+# Export comparison to LaTeX (for research papers)
+uv run python -m themis.cli compare \
+  --run-ids run-1 run-2 run-3 \
+  --output results.tex
+
+# Generate benchmark leaderboard
+uv run python -m themis.cli leaderboard \
+  --run-ids run-1 run-2 run-3 run-4 \
+  --metric accuracy \
+  --output LEADERBOARD.md
+
+# Leaderboard with custom metadata
+uv run python -m themis.cli leaderboard \
+  --run-ids run-gpt4 run-claude run-gemini \
+  --metric accuracy \
+  --include-metadata model \
+  --include-metadata temperature \
+  --title "Math500 Benchmark Results" \
+  --output leaderboard.md
+
+# Quick sample run before full experiment (test on 5 samples)
+uv run python -m themis.cli sample-run \
+  --config my_config.yaml \
+  --n 5 \
+  --verbose \
+  --show-outputs
+
+# Sample run with cost estimation
+uv run python -m themis.cli sample-run \
+  --config my_config.yaml \
+  --n 10 \
+  --estimate-cost
 ```
 
 ### Example Experiments
@@ -279,9 +371,11 @@ integrations:
 - **examples/README.md** - Comprehensive tutorial cookbook (START HERE!)
 - **COOKBOOK.md** - Quick reference and common patterns
 - **docs/CONFIGURATION.md** - Complete configuration schema
+- **docs/MULTI_EXPERIMENT_COMPARISON.md** - Multi-experiment comparison guide
 - **docs/DIAGRAM.md** - Architecture diagrams
 - **docs/ADDING_COMPONENTS.md** - Extension guide
 - **AGENTS.md** - Repository guidelines for AI agents
+- **IMPROVEMENT_PLAN.md** - Roadmap for future features
 
 ## Best Practices
 
