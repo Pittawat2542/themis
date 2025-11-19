@@ -32,6 +32,9 @@ math = [
     "datasets>=2.20.0",
     "math-verify>=0.8.0",
 ]
+viz = [
+    "plotly>=5.18.0",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"
