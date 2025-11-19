@@ -196,6 +196,7 @@ def render_html_report(
     )
     metric_names = sorted(report.evaluation_report.metrics.keys())
     summary_section = _render_summary(report)
+    cost_section = _render_cost_section(report)
     metrics_table = _render_metric_table(report)
     samples_table = _render_sample_table(
         report,
@@ -225,11 +226,16 @@ def render_html_report(
     .chart-svg {{ width: 100%; height: 320px; }}
     .chart-table {{ margin-top: 0.75rem; }}
     .subtle {{ color: #6b7280; font-size: 0.9rem; }}
+    .cost-highlight {{ color: #059669; font-size: 1.2rem; font-weight: 600; }}
+    .cost-section {{ background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 1px 2px rgba(15,23,42,0.08); margin-bottom: 1.5rem; }}
+    .cost-section h2 {{ font-size: 1.3rem; margin-top: 0; margin-bottom: 1rem; }}
+    .cost-section h3 {{ font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; }}
   </style>
 </head>
 <body>
   <h1>{html.escape(title)}</h1>
   {summary_section}
+  {cost_section}
   {metrics_table}
   {chart_sections}
   {samples_table}
@@ -430,7 +436,10 @@ def _metadata_from_task(record: core_entities.GenerationRecord) -> dict[str, obj
 
 
 def _render_summary(report: orchestrator.ExperimentReport) -> str:
-    metadata_items = sorted(report.metadata.items())
+    # Filter out cost from main summary (we'll show it separately)
+    metadata_items = sorted(
+        (k, v) for k, v in report.metadata.items() if k != "cost"
+    )
     failures = len(report.failures)
     metadata_html = "\n".join(
         f'<li class="summary-item"><strong>{html.escape(str(key))}</strong><br /><span class="subtle">{html.escape(str(value))}</span></li>'
@@ -438,6 +447,75 @@ def _render_summary(report: orchestrator.ExperimentReport) -> str:
     )
     failure_block = f'<li class="summary-item"><strong>Run failures</strong><br /><span class="subtle">{failures}</span></li>'
     return f'<section><h2>Summary</h2><ul class="summary-list">{metadata_html}{failure_block}</ul></section>'
+
+
+def _render_cost_section(report: orchestrator.ExperimentReport) -> str:
+    """Render cost breakdown section if cost data is available."""
+    cost_data = report.metadata.get("cost")
+    if not cost_data or not isinstance(cost_data, dict):
+        return ""
+
+    total_cost = cost_data.get("total_cost", 0.0)
+    generation_cost = cost_data.get("generation_cost", 0.0)
+    evaluation_cost = cost_data.get("evaluation_cost", 0.0)
+    currency = cost_data.get("currency", "USD")
+    token_counts = cost_data.get("token_counts", {})
+    per_model_costs = cost_data.get("per_model_costs", {})
+    api_calls = cost_data.get("api_calls", 0)
+
+    # Main cost summary
+    cost_items = [
+        f'<li class="summary-item"><strong>Total Cost</strong><br /><span class="cost-highlight">${total_cost:.4f} {currency}</span></li>',
+        f'<li class="summary-item"><strong>Generation</strong><br /><span class="subtle">${generation_cost:.4f}</span></li>',
+        f'<li class="summary-item"><strong>Evaluation</strong><br /><span class="subtle">${evaluation_cost:.4f}</span></li>',
+        f'<li class="summary-item"><strong>API Calls</strong><br /><span class="subtle">{api_calls}</span></li>',
+    ]
+
+    # Token counts
+    if token_counts:
+        prompt_tokens = token_counts.get("prompt_tokens", 0)
+        completion_tokens = token_counts.get("completion_tokens", 0)
+        total_tokens = token_counts.get("total_tokens", 0)
+        cost_items.append(
+            f'<li class="summary-item"><strong>Tokens</strong><br />'
+            f'<span class="subtle">{total_tokens:,} total ({prompt_tokens:,} prompt + {completion_tokens:,} completion)</span></li>'
+        )
+
+    cost_summary = "\n".join(cost_items)
+
+    # Per-model breakdown if available
+    model_breakdown = ""
+    if per_model_costs:
+        model_rows = []
+        for model, cost in sorted(
+            per_model_costs.items(), key=lambda x: x[1], reverse=True
+        ):
+            percentage = (cost / total_cost * 100) if total_cost > 0 else 0
+            model_rows.append(
+                f"<tr><td>{html.escape(model)}</td><td>${cost:.4f}</td><td>{percentage:.1f}%</td></tr>"
+            )
+        model_table = "\n".join(model_rows)
+        model_breakdown = f"""
+        <h3>Cost by Model</h3>
+        <table>
+            <thead>
+                <tr><th>Model</th><th>Cost</th><th>% of Total</th></tr>
+            </thead>
+            <tbody>
+                {model_table}
+            </tbody>
+        </table>
+        """
+
+    return f"""
+    <section>
+        <h2>💰 Cost Breakdown</h2>
+        <ul class="summary-list">
+            {cost_summary}
+        </ul>
+        {model_breakdown}
+    </section>
+    """
 
 
 def _render_metric_table(report: orchestrator.ExperimentReport) -> str:
