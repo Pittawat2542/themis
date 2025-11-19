@@ -223,7 +223,9 @@ def compare_provider_costs(
         Dict mapping model names to costs
 
     Example:
-        >>> costs = compare_provider_costs(1000, 500, ["gpt-4", "gpt-3.5-turbo", "claude-3-haiku"])
+        >>> costs = compare_provider_costs(
+        ...     1000, 500, ["gpt-4", "gpt-3.5-turbo", "claude-3-haiku"]
+        ... )
         >>> for model, cost in sorted(costs.items(), key=lambda x: x[1]):
         ...     print(f"{model}: ${cost:.4f}")
         claude-3-haiku: $0.0009

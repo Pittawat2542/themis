@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from themis.core.entities import ExperimentReport
-from themis.evaluation.reports import EvaluationReport, MetricAggregate
-from themis.experiment.storage import ExperimentStorage
 
 
 @dataclass
@@ -90,7 +89,8 @@ class MultiExperimentComparison:
         """Rank experiments by metric value.
 
         Args:
-            metric: Metric name to rank by (can be 'cost' or 'total_cost' for cost ranking)
+            metric: Metric name to rank by (can be 'cost' or 'total_cost'
+                for cost ranking)
             ascending: If True, rank from lowest to highest (default: False)
 
         Returns:
@@ -98,9 +98,7 @@ class MultiExperimentComparison:
         """
         # Special handling for cost metrics
         if metric not in self.metrics and metric not in ("cost", "total_cost"):
-            raise ValueError(
-                f"Metric '{metric}' not found. Available: {self.metrics}"
-            )
+            raise ValueError(f"Metric '{metric}' not found. Available: {self.metrics}")
 
         # Sort experiments, handling None values
         def key_func(row: ComparisonRow) -> tuple[bool, float]:
@@ -138,8 +136,8 @@ class MultiExperimentComparison:
 
         Args:
             objectives: List of metric names to optimize
-            maximize: For each objective, whether to maximize (True) or minimize (False).
-                     Default: maximize all objectives.
+            maximize: For each objective, whether to maximize (True) or
+                minimize (False). Default: maximize all objectives.
 
         Returns:
             List of run_ids on the Pareto frontier
@@ -152,7 +150,8 @@ class MultiExperimentComparison:
 
         if len(maximize) != len(objectives):
             raise ValueError(
-                f"maximize list length ({len(maximize)}) must match objectives length ({len(objectives)})"
+                f"maximize list length ({len(maximize)}) must match "
+                f"objectives length ({len(objectives)})"
             )
 
         # Filter out experiments with missing values
@@ -179,7 +178,7 @@ class MultiExperimentComparison:
                 dominates = True
                 strictly_better_in_one = False
 
-                for obj, should_maximize in zip(objectives, maximize):
+                for obj, should_maximize in zip(objectives, maximize, strict=True):
                     candidate_val = candidate.get_metric(obj)
                     other_val = other.get_metric(obj)
 
@@ -227,9 +226,7 @@ class MultiExperimentComparison:
             "metrics": self.metrics,
         }
 
-    def to_csv(
-        self, output_path: Path | str, include_metadata: bool = True
-    ) -> None:
+    def to_csv(self, output_path: Path | str, include_metadata: bool = True) -> None:
         """Export comparison to CSV.
 
         Args:
@@ -470,7 +467,8 @@ def load_experiment_report(storage_dir: Path, run_id: str) -> ExperimentReport |
         data = json.load(f)
 
     # Reconstruct ExperimentReport from JSON
-    # Note: This is a simplified loader. For production, you'd want proper deserialization
+    # Note: This is a simplified loader. For production,
+    # you'd want proper deserialization
     return data
 
 
@@ -496,7 +494,6 @@ def compare_experiments(
         ValueError: If no valid experiments found
     """
     storage_dir = Path(storage_dir)
-    storage = ExperimentStorage(storage_dir)
 
     comparison_rows: list[ComparisonRow] = []
     all_metrics: set[str] = set()
@@ -528,10 +525,9 @@ def compare_experiments(
 
                 # Count samples and failures
                 sample_count = report_data.get("total_samples", 0)
-                failure_count = (
-                    report_data.get("summary", {}).get("run_failures", 0)
-                    + report_data.get("summary", {}).get("evaluation_failures", 0)
-                )
+                failure_count = report_data.get("summary", {}).get(
+                    "run_failures", 0
+                ) + report_data.get("summary", {}).get("evaluation_failures", 0)
 
                 # Get timestamp from metadata or file modification time
                 timestamp = metadata_dict.get("timestamp")
@@ -550,10 +546,13 @@ def compare_experiments(
                 )
                 comparison_rows.append(row)
             else:
-                print(f"Warning: No report.json found for run '{run_id}', skipping")
+                warnings.warn(
+                    f"No report.json found for run '{run_id}', skipping",
+                    stacklevel=2,
+                )
 
         except Exception as e:
-            print(f"Warning: Failed to load run '{run_id}': {e}")
+            warnings.warn(f"Failed to load run '{run_id}': {e}", stacklevel=2)
             continue
 
     if not comparison_rows:
@@ -571,9 +570,7 @@ def compare_experiments(
     )
 
 
-def diff_configs(
-    run_id_a: str, run_id_b: str, storage_dir: Path | str
-) -> ConfigDiff:
+def diff_configs(run_id_a: str, run_id_b: str, storage_dir: Path | str) -> ConfigDiff:
     """Show configuration differences between two experiments.
 
     Args:

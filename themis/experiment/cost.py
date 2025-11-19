@@ -214,7 +214,8 @@ class BudgetMonitor:
             percentage = (self.current_cost / self.max_cost) * 100
             return (
                 True,
-                f"Warning: {percentage:.0f}% of budget used (${self.current_cost:.2f} / ${self.max_cost:.2f})",
+                f"Warning: {percentage:.0f}% of budget used "
+                f"(${self.current_cost:.2f} / ${self.max_cost:.2f})",
             )
 
         return True, "Budget OK"

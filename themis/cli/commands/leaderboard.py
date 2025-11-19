@@ -13,27 +13,19 @@ from themis.experiment.comparison import compare_experiments
 def leaderboard_command(
     *,
     run_ids: Annotated[list[str], Parameter(help="Run IDs to include in leaderboard")],
-    storage: Annotated[
-        Path, Parameter(help="Storage directory")
-    ] = Path(".cache/runs"),
-    metric: Annotated[
-        str, Parameter(help="Primary metric for ranking")
-    ] = "accuracy",
+    storage: Annotated[Path, Parameter(help="Storage directory")] = Path(".cache/runs"),
+    metric: Annotated[str, Parameter(help="Primary metric for ranking")] = "accuracy",
     format: Annotated[
         str, Parameter(help="Output format: markdown, latex, csv")
     ] = "markdown",
     output: Annotated[
         Path | None, Parameter(help="Output file path (optional)")
     ] = None,
-    title: Annotated[
-        str, Parameter(help="Leaderboard title")
-    ] = "Leaderboard",
+    title: Annotated[str, Parameter(help="Leaderboard title")] = "Leaderboard",
     ascending: Annotated[
         bool, Parameter(help="Rank in ascending order (lower is better)")
     ] = False,
-    include_cost: Annotated[
-        bool, Parameter(help="Include cost column")
-    ] = True,
+    include_cost: Annotated[bool, Parameter(help="Include cost column")] = True,
     include_metadata: Annotated[
         list[str] | None,
         Parameter(help="Metadata fields to include (e.g., model, temperature)"),

@@ -18,13 +18,11 @@ from themis.experiment.visualization import (
 def visualize_comparison_command(
     *,
     run_ids: Annotated[list[str], Parameter(help="Run IDs to visualize")],
-    storage: Annotated[
-        Path, Parameter(help="Storage directory")
-    ] = Path(".cache/runs"),
+    storage: Annotated[Path, Parameter(help="Storage directory")] = Path(".cache/runs"),
     metric: Annotated[str | None, Parameter(help="Metric to visualize")] = None,
-    output: Annotated[
-        Path, Parameter(help="Output HTML file path")
-    ] = Path("visualization.html"),
+    output: Annotated[Path, Parameter(help="Output HTML file path")] = Path(
+        "visualization.html"
+    ),
     chart_type: Annotated[
         str,
         Parameter(help="Chart type: comparison, evolution, dashboard, pareto"),
@@ -107,7 +105,7 @@ def visualize_comparison_command(
         # Export to HTML
         export_interactive_html(fig, output)
         print(f"\n✓ Visualization saved to {output}")
-        print(f"  Open in browser to interact with chart")
+        print("  Open in browser to interact with chart")
 
         return 0
 
@@ -119,16 +117,14 @@ def visualize_comparison_command(
 def visualize_pareto_command(
     *,
     run_ids: Annotated[list[str], Parameter(help="Run IDs to visualize")],
-    storage: Annotated[
-        Path, Parameter(help="Storage directory")
-    ] = Path(".cache/runs"),
+    storage: Annotated[Path, Parameter(help="Storage directory")] = Path(".cache/runs"),
     metric1: Annotated[str, Parameter(help="First metric (x-axis)")],
     metric2: Annotated[str, Parameter(help="Second metric (y-axis)")],
     maximize1: Annotated[bool, Parameter(help="Maximize metric1")] = True,
     maximize2: Annotated[bool, Parameter(help="Maximize metric2")] = True,
-    output: Annotated[
-        Path, Parameter(help="Output HTML file path")
-    ] = Path("pareto.html"),
+    output: Annotated[Path, Parameter(help="Output HTML file path")] = Path(
+        "pareto.html"
+    ),
 ) -> int:
     """Generate Pareto frontier visualization.
 
@@ -178,8 +174,8 @@ def visualize_pareto_command(
         # Export to HTML
         export_interactive_html(fig, output)
         print(f"\n✓ Visualization saved to {output}")
-        print(f"  Red points are Pareto-optimal")
-        print(f"  Blue points are dominated")
+        print("  Red points are Pareto-optimal")
+        print("  Blue points are dominated")
 
         return 0
 
@@ -191,16 +187,14 @@ def visualize_pareto_command(
 def visualize_distribution_command(
     *,
     run_id: Annotated[str, Parameter(help="Run ID to visualize")],
-    storage: Annotated[
-        Path, Parameter(help="Storage directory")
-    ] = Path(".cache/runs"),
+    storage: Annotated[Path, Parameter(help="Storage directory")] = Path(".cache/runs"),
     metric: Annotated[str, Parameter(help="Metric to visualize")],
     plot_type: Annotated[
         str, Parameter(help="Plot type: histogram, box, violin")
     ] = "histogram",
-    output: Annotated[
-        Path, Parameter(help="Output HTML file path")
-    ] = Path("distribution.html"),
+    output: Annotated[Path, Parameter(help="Output HTML file path")] = Path(
+        "distribution.html"
+    ),
 ) -> int:
     """Generate metric distribution visualization.
 

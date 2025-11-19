@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 try:
     import plotly.graph_objects as go
@@ -83,7 +82,7 @@ class InteractiveVisualizer:
                     y=values,
                     text=[f"{v:.4f}" for v in values] if show_values else None,
                     textposition="auto",
-                    hovertemplate="<b>%{x}</b><br>" + f"{metric}: %{y:.4f}<br>"
+                    hovertemplate=f"<b>%{{x}}</b><br>{metric}: %{{y:.4f}}<br>"
                     "<extra></extra>",
                 )
             ]
@@ -362,8 +361,9 @@ class InteractiveVisualizer:
                 col=2,
             )
 
+            default_title = f"Cost Breakdown (Total: ${cost_breakdown.total_cost:.4f})"
             fig.update_layout(
-                title_text=title or f"Cost Breakdown (Total: ${cost_breakdown.total_cost:.4f})",
+                title_text=title or default_title,
                 template="plotly_white",
                 font=dict(size=12),
             )
@@ -383,8 +383,9 @@ class InteractiveVisualizer:
                 ]
             )
 
+            default_title = f"Cost Breakdown (Total: ${cost_breakdown.total_cost:.4f})"
             fig.update_layout(
-                title=title or f"Cost Breakdown (Total: ${cost_breakdown.total_cost:.4f})",
+                title=title or default_title,
                 template="plotly_white",
                 font=dict(size=12),
             )
@@ -514,7 +515,9 @@ class InteractiveVisualizer:
                     name=metric,
                     text=[f"{v:.4f}" for v in values],
                     textposition="auto",
-                    hovertemplate=f"<b>%{{x}}</b><br>{metric}: %{{y:.4f}}<extra></extra>",
+                    hovertemplate=(
+                        f"<b>%{{x}}</b><br>{metric}: %{{y:.4f}}<extra></extra>"
+                    ),
                 ),
                 row=row,
                 col=col,

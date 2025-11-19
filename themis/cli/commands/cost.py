@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 from cyclopts import Parameter
@@ -17,7 +16,9 @@ from themis.experiment.pricing import (
 
 def estimate_cost_command(
     *,
-    model: Annotated[str, Parameter(help="Model identifier (e.g., gpt-4, claude-3-5-sonnet)")],
+    model: Annotated[
+        str, Parameter(help="Model identifier (e.g., gpt-4, claude-3-5-sonnet)")
+    ],
     dataset_size: Annotated[int, Parameter(help="Number of samples in dataset")],
     avg_prompt_tokens: Annotated[
         int, Parameter(help="Average prompt tokens per sample")
@@ -54,14 +55,16 @@ def estimate_cost_command(
         print("=" * 80)
         print(f"\nModel: {model}")
         print(f"Dataset size: {dataset_size} samples")
-        print(f"Avg tokens per sample: {avg_prompt_tokens} prompt + {avg_completion_tokens} completion")
+        print(
+            f"Avg tokens per sample: {avg_prompt_tokens} prompt + {avg_completion_tokens} completion"
+        )
 
-        print(f"\n💰 Estimated Cost")
+        print("\n💰 Estimated Cost")
         print(f"  Total: ${estimate.estimated_cost:.4f}")
         print(f"  Per sample: ${estimate.assumptions['cost_per_sample']:.6f}")
         print(f"  95% CI: ${estimate.lower_bound:.4f} - ${estimate.upper_bound:.4f}")
 
-        print(f"\n📊 Breakdown")
+        print("\n📊 Breakdown")
         for phase, cost in estimate.breakdown_by_phase.items():
             print(f"  {phase.capitalize()}: ${cost:.4f}")
 
@@ -132,10 +135,14 @@ def show_pricing_command(
             prompt_tokens = 1000
             completion_tokens = 500
 
-            costs = compare_provider_costs(prompt_tokens, completion_tokens, compare_models)
+            costs = compare_provider_costs(
+                prompt_tokens, completion_tokens, compare_models
+            )
 
             print("=" * 80)
-            print(f"Cost Comparison ({prompt_tokens} prompt + {completion_tokens} completion tokens)")
+            print(
+                f"Cost Comparison ({prompt_tokens} prompt + {completion_tokens} completion tokens)"
+            )
             print("=" * 80)
             print()
 

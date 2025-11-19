@@ -362,7 +362,11 @@ def pareto_command(
             print(f"  • {run_id}")
             for obj in objectives:
                 val = exp.get_metric(obj)
-                print(f"      {obj}: {val:.4f}" if val is not None else f"      {obj}: N/A")
+                print(
+                    f"      {obj}: {val:.4f}"
+                    if val is not None
+                    else f"      {obj}: N/A"
+                )
 
         # Show dominated experiments
         dominated = [
