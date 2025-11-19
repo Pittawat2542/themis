@@ -80,13 +80,26 @@ class LiteLLMProvider(ModelProvider):
 
             # Extract usage information
             usage = response.usage if hasattr(response, "usage") else None
+            usage_dict = None
             metrics = {}
             if usage:
-                metrics["prompt_tokens"] = getattr(usage, "prompt_tokens", None)
-                metrics["completion_tokens"] = getattr(usage, "completion_tokens", None)
-                metrics["total_tokens"] = getattr(usage, "total_tokens", None)
+                prompt_tokens = getattr(usage, "prompt_tokens", None)
+                completion_tokens = getattr(usage, "completion_tokens", None)
+                total_tokens = getattr(usage, "total_tokens", None)
+
+                metrics["prompt_tokens"] = prompt_tokens
+                metrics["completion_tokens"] = completion_tokens
+                metrics["total_tokens"] = total_tokens
                 # Alias for consistency with other providers
-                metrics["response_tokens"] = metrics["completion_tokens"]
+                metrics["response_tokens"] = completion_tokens
+
+                # Create usage dict for cost tracking
+                if prompt_tokens is not None and completion_tokens is not None:
+                    usage_dict = {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": total_tokens or (prompt_tokens + completion_tokens),
+                    }
 
             # Extract model information
             model_used = getattr(response, "model", task.model.identifier)
@@ -97,7 +110,7 @@ class LiteLLMProvider(ModelProvider):
 
             return core_entities.GenerationRecord(
                 task=task,
-                output=core_entities.ModelOutput(text=text, raw=raw_data),
+                output=core_entities.ModelOutput(text=text, raw=raw_data, usage=usage_dict),
                 error=None,
                 metrics=metrics,
             )

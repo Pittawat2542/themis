@@ -76,6 +76,7 @@ class Reference(Generic[T]):
 class ModelOutput:
     text: str
     raw: Any | None = None
+    usage: Dict[str, int] | None = None  # Token usage: {prompt_tokens, completion_tokens, total_tokens}
 
 
 @dataclass(frozen=True)

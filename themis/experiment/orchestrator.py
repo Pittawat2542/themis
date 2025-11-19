@@ -18,7 +18,9 @@ from themis.evaluation import pipeline as evaluation_pipeline
 from themis.evaluation.reports import EvaluationFailure
 from themis.experiment import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
+from themis.experiment.cost import CostTracker
 from themis.experiment.integration_manager import IntegrationManager
+from themis.experiment.pricing import calculate_cost, get_provider_pricing
 from themis.generation import plan as generation_plan
 from themis.generation import runner as generation_runner
 
@@ -68,6 +70,9 @@ class ExperimentOrchestrator:
         self._integrations = integration_manager or IntegrationManager(
             config=integrations_config or IntegrationsConfig()
         )
+
+        # Initialize cost tracker
+        self._cost_tracker = CostTracker()
 
         # Keep legacy references for backward compatibility
         self._storage = storage
@@ -165,6 +170,23 @@ class ExperimentOrchestrator:
         if pending_tasks:
             for record in self._runner.run(pending_tasks):
                 generation_results.append(record)
+
+                # Track cost for successful generations
+                if record.output and record.output.usage:
+                    usage = record.output.usage
+                    prompt_tokens = usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("completion_tokens", 0)
+                    model = record.task.model.identifier
+
+                    # Calculate cost using pricing database
+                    cost = calculate_cost(model, prompt_tokens, completion_tokens)
+                    self._cost_tracker.record_generation(
+                        model=model,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        cost=cost,
+                    )
+
                 if record.error:
                     failures.append(
                         ExperimentFailure(
@@ -199,6 +221,9 @@ class ExperimentOrchestrator:
             cached_eval_records, new_evaluation_report
         )
 
+        # Get cost breakdown
+        cost_breakdown = self._cost_tracker.get_breakdown()
+
         # Build metadata
         metadata = {
             "total_samples": len(selected_dataset),
@@ -213,6 +238,16 @@ class ExperimentOrchestrator:
                 1 for record in evaluation_report.records if record.failures
             )
             + len(evaluation_report.failures),
+            # Cost tracking
+            "cost": {
+                "total_cost": cost_breakdown.total_cost,
+                "generation_cost": cost_breakdown.generation_cost,
+                "evaluation_cost": cost_breakdown.evaluation_cost,
+                "currency": cost_breakdown.currency,
+                "token_counts": cost_breakdown.token_counts,
+                "api_calls": cost_breakdown.api_calls,
+                "per_model_costs": cost_breakdown.per_model_costs,
+            },
         }
 
         # Create final report
@@ -229,6 +264,10 @@ class ExperimentOrchestrator:
         # Upload to HuggingFace Hub if enabled
         run_path = self._cache.get_run_path(run_identifier)
         self._integrations.upload_results(report, run_path)
+
+        # Save report.json for multi-experiment comparison
+        if cache_results:
+            self._save_report_json(report, run_identifier)
 
         return report
 
@@ -300,3 +339,34 @@ class ExperimentOrchestrator:
             failures=failures,
             records=all_records,
         )
+
+    def _save_report_json(self, report: ExperimentReport, run_id: str) -> None:
+        """Save experiment report as JSON for multi-experiment comparison.
+
+        Args:
+            report: Experiment report to save
+            run_id: Run identifier
+        """
+        from pathlib import Path
+
+        from themis.experiment.export import build_json_report
+
+        # Get run path from cache manager
+        run_path_str = self._cache.get_run_path(run_id)
+        if run_path_str is None:
+            # No storage configured, skip saving report.json
+            return
+
+        run_path = Path(run_path_str)
+        report_path = run_path / "report.json"
+
+        # Build JSON report
+        json_data = build_json_report(report, title=f"Experiment {run_id}")
+
+        # Save to file
+        import json
+
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with report_path.open("w", encoding="utf-8") as f:
+            json.dump(json_data, f, indent=2)
+
