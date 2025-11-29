@@ -154,6 +154,110 @@ uv run python -m examples.advanced.cli run \
 
 ---
 
+### 🔍 [rag_pipeline](rag_pipeline/) - Retrieval-Augmented Generation
+
+**Demonstrate RAG patterns with Themis.**
+
+Learn how to implement retrieval-augmented generation:
+- Custom generation runner with retrieval
+- In-memory vector store using numpy
+- Prompt augmentation with retrieved context
+- Task metadata tracking for analysis
+
+**Time to complete:** 30 minutes
+
+**Key concepts:** Custom runners, retrieval, prompt augmentation, RAG workflows
+
+**Example commands:**
+```bash
+# Run RAG example
+uv run python -m examples.rag_pipeline.cli run
+```
+
+---
+
+### 🤖 [langgraph_agent](langgraph_agent/) - Agentic Workflows
+
+**Integrate LangGraph agents with Themis evaluation.**
+
+Learn how to wrap LangGraph agents for systematic testing:
+- LangGraph state machine integration
+- Multi-step reasoning (planning → execution)
+- Agent metadata and tracking
+- Systematic evaluation of agent outputs
+
+**Time to complete:** 35 minutes
+
+**Key concepts:** Agentic workflows, state machines, multi-step reasoning, LangGraph integration
+
+**Dependencies:** Requires `langgraph`
+```bash
+pip install langgraph
+```
+
+**Example commands:**
+```bash
+# Run LangGraph agent example
+uv run python -m examples.langgraph_agent.cli run
+```
+
+---
+
+### 📊 [finetuning_data](finetuning_data/) - Synthetic Training Data
+
+**Generate high-quality fine-tuning datasets.**
+
+Learn how to create synthetic training data:
+- Generate model responses on datasets
+- Filter for quality and correctness
+- Export to JSONL for fine-tuning
+- Track provenance with metadata
+
+**Time to complete:** 25 minutes
+
+**Key concepts:** Data generation, quality filtering, JSONL export, fine-tuning preparation
+
+**Example commands:**
+```bash
+# Generate fine-tuning data
+uv run python -m examples.finetuning_data.cli run
+
+# Include all responses (not just correct ones)
+uv run python -m examples.finetuning_data.cli run --only-correct false
+```
+
+---
+
+## Additional Examples
+
+### 🔌 [litellm_example](litellm_example/) - LiteLLM Provider Integration
+
+**Connect to 100+ LLM providers.**
+
+Learn how to use LiteLLM to connect to various LLM providers:
+- OpenAI, Anthropic, Azure, AWS Bedrock, Google AI
+- Local LLMs (Ollama, LM Studio, vLLM)
+- Provider configuration and authentication
+- Timeout, retries, and parallelism settings
+
+See the [litellm_example README](litellm_example/README.md) for detailed setup instructions.
+
+---
+
+### ⚖️ [judge_evaluation](judge_evaluation/) - LLM-as-a-Judge
+
+**Evaluate outputs using LLM judges.**
+
+Learn how to use LLM-based evaluation:
+- RubricJudgeMetric for criteria-based scoring
+- ConsistencyMetric for inter-judge agreement
+- Multiple judge evaluation
+- Judge-based quality assessment
+
+See the [judge_evaluation README](judge_evaluation/README.md) for more details.
+
+---
+
 ## Quick Reference
 
 ### Common Tasks
@@ -187,6 +291,24 @@ uv run python -m examples.projects.cli run --experiment zero-shot
 ```bash
 cd examples/advanced
 uv run python -m examples.advanced.cli run --enable-subject-breakdown
+```
+
+**RAG pipeline:**
+```bash
+cd examples/rag_pipeline
+uv run python -m examples.rag_pipeline.cli run
+```
+
+**LangGraph agent:**
+```bash
+cd examples/langgraph_agent
+uv run python -m examples.langgraph_agent.cli run
+```
+
+**Generate fine-tuning data:**
+```bash
+cd examples/finetuning_data
+uv run python -m examples.finetuning_data.cli run
 ```
 
 ### Configuration Patterns
@@ -292,6 +414,28 @@ examples/
     ├── generation.py
     ├── pipeline.py
     └── config.sample.json
+├── rag_pipeline/                  # RAG implementation
+│   ├── README.md
+│   ├── cli.py
+│   ├── knowledge_base.py
+│   ├── retriever.py
+│   ├── experiment.py
+│   └── config.py
+├── langgraph_agent/               # Agentic workflows
+│   ├── README.md
+│   ├── cli.py
+│   ├── agent.py
+│   ├── runner.py
+│   └── experiment.py
+├── finetuning_data/               # Synthetic data generation
+│   ├── README.md
+│   ├── cli.py
+│   ├── pipeline.py
+│   └── experiment.py
+├── litellm_example/               # LiteLLM provider integration
+│   └── ...
+└── judge_evaluation/              # LLM-as-a-judge evaluation
+    └── ...
 ```
 
 ## Tips for Learning
