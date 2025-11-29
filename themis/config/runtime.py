@@ -14,38 +14,9 @@ from themis.experiment import orchestrator as experiment_orchestrator
 from themis.experiment import storage as experiment_storage
 from themis.providers import registry as provider_registry
 
-from . import schema
+from . import registry, schema
 
-_COMPETITION_EXPERIMENTS = {
-    "aime24_zero_shot": {"dataset": "math-ai/aime24", "task": "aime24"},
-    "aime25_zero_shot": {"dataset": "math-ai/aime25", "task": "aime25"},
-    "amc23_zero_shot": {"dataset": "math-ai/amc23", "task": "amc23"},
-    "olympiadbench_zero_shot": {
-        "dataset": "math-ai/olympiadbench",
-        "task": "olympiadbench",
-    },
-    "beyondaime_zero_shot": {
-        "dataset": "ByteDance-Seed/BeyondAIME",
-        "task": "beyondaime",
-    },
-}
 
-# Mapping from experiment name to dataset registry name
-_EXPERIMENT_TO_DATASET = {
-    "math500_zero_shot": "math500",
-    "supergpqa_zero_shot": "supergpqa",
-    "mmlu_pro_zero_shot": "mmlu-pro",
-    # Competition experiments map to specific dataset aliases
-    "aime24_zero_shot": "aime24",
-    "aime25_zero_shot": "aime25",
-    "amc23_zero_shot": "amc23",
-    "olympiadbench_zero_shot": "olympiadbench",
-    "beyondaime_zero_shot": "beyondaime",
-}
-
-_SUPPORTED_EXPERIMENTS = set(_EXPERIMENT_TO_DATASET.keys())
-
-_MATH_EXPERIMENT_NAMES = {"math500_zero_shot"} | set(_COMPETITION_EXPERIMENTS.keys())
 
 
 def run_experiment_from_config(
@@ -73,14 +44,18 @@ def summarize_report_for_config(
     config: schema.ExperimentConfig,
     report: experiment_orchestrator.ExperimentReport,
 ) -> str:
-    if config.name in _MATH_EXPERIMENT_NAMES:
+    if config.task in {
+        "math500",
+        "aime24",
+        "aime25",
+        "amc23",
+        "olympiadbench",
+        "beyondaime",
+    }:
         return math_experiment.summarize_report(report)
-    if config.name in {"supergpqa_zero_shot", "mmlu_pro_zero_shot"}:
+    if config.task in {"supergpqa", "mmlu_pro"}:
         return mcq_experiment.summarize_report(report)
-    raise ValueError(
-        f"Unsupported experiment '{config.name}'. Supported experiments:"
-        f" {', '.join(sorted(_SUPPORTED_EXPERIMENTS))}."
-    )
+    raise ValueError(f"Unsupported task '{config.task}' for summarization.")
 
 
 def load_dataset_from_config(
@@ -90,6 +65,25 @@ def load_dataset_from_config(
 
 
 def _build_experiment(
+    config: schema.ExperimentConfig,
+) -> experiment_orchestrator.ExperimentOrchestrator:
+    if config.task:
+        builder = registry.get_experiment_builder(config.task)
+        return builder(config)
+
+    raise ValueError(
+        "Experiment configuration must specify a 'task'. "
+        f"Available tasks: {', '.join(sorted(registry._EXPERIMENT_BUILDERS.keys()))}"
+    )
+
+
+@registry.register_experiment_builder("math500")
+@registry.register_experiment_builder("aime24")
+@registry.register_experiment_builder("aime25")
+@registry.register_experiment_builder("amc23")
+@registry.register_experiment_builder("olympiadbench")
+@registry.register_experiment_builder("beyondaime")
+def _build_math_experiment(
     config: schema.ExperimentConfig,
 ) -> experiment_orchestrator.ExperimentOrchestrator:
     # Use the specific path if provided, otherwise use the default path
@@ -109,43 +103,66 @@ def _build_experiment(
     )
     runner_options = asdict(config.generation.runner)
 
-    if config.name in _MATH_EXPERIMENT_NAMES:
-        task_name = _COMPETITION_EXPERIMENTS.get(config.name, {}).get("task", "math500")
-        return math_experiment.build_math500_zero_shot_experiment(
-            model_client=provider,
-            model_name=config.generation.model_identifier,
-            storage=storage,
-            sampling=sampling_cfg,
-            provider_name=config.generation.provider.name,
-            runner_options=runner_options,
-            task_name=task_name,
-        )
-    if config.name == "supergpqa_zero_shot":
-        return mcq_experiment.build_multiple_choice_json_experiment(
-            dataset_name="supergpqa",
-            task_id="supergpqa",
-            model_client=provider,
-            model_name=config.generation.model_identifier,
-            storage=storage,
-            sampling=sampling_cfg,
-            provider_name=config.generation.provider.name,
-            runner_options=runner_options,
-        )
-    if config.name == "mmlu_pro_zero_shot":
-        return mcq_experiment.build_multiple_choice_json_experiment(
-            dataset_name="mmlu-pro",
-            task_id="mmlu_pro",
-            model_client=provider,
-            model_name=config.generation.model_identifier,
-            storage=storage,
-            sampling=sampling_cfg,
-            provider_name=config.generation.provider.name,
-            runner_options=runner_options,
-        )
+    # Use the task name from config as the default task name
+    task_name = config.task or "math500"
+    # Override task name if provided in task_options
+    if config.task_options and "task_name" in config.task_options:
+        task_name = config.task_options["task_name"]
 
-    raise ValueError(
-        f"Unsupported experiment '{config.name}'. Supported experiments:"
-        f" {', '.join(sorted(_SUPPORTED_EXPERIMENTS))}."
+    return math_experiment.build_math500_zero_shot_experiment(
+        model_client=provider,
+        model_name=config.generation.model_identifier,
+        storage=storage,
+        sampling=sampling_cfg,
+        provider_name=config.generation.provider.name,
+        runner_options=runner_options,
+        task_name=task_name,
+    )
+
+
+@registry.register_experiment_builder("supergpqa")
+def _build_supergpqa_experiment(
+    config: schema.ExperimentConfig,
+) -> experiment_orchestrator.ExperimentOrchestrator:
+    return _build_mcq_experiment(config, "supergpqa", "supergpqa")
+
+
+@registry.register_experiment_builder("mmlu_pro")
+def _build_mmlu_pro_experiment(
+    config: schema.ExperimentConfig,
+) -> experiment_orchestrator.ExperimentOrchestrator:
+    return _build_mcq_experiment(config, "mmlu-pro", "mmlu_pro")
+
+
+def _build_mcq_experiment(
+    config: schema.ExperimentConfig, dataset_name: str, task_id: str
+) -> experiment_orchestrator.ExperimentOrchestrator:
+    # Use the specific path if provided, otherwise use the default path
+    storage_path = config.storage.path or config.storage.default_path
+    storage = (
+        experiment_storage.ExperimentStorage(Path(storage_path))
+        if storage_path
+        else None
+    )
+    sampling_cfg = core_entities.SamplingConfig(
+        temperature=config.generation.sampling.temperature,
+        top_p=config.generation.sampling.top_p,
+        max_tokens=config.generation.sampling.max_tokens,
+    )
+    provider = provider_registry.create_provider(
+        config.generation.provider.name, **config.generation.provider.options
+    )
+    runner_options = asdict(config.generation.runner)
+
+    return mcq_experiment.build_multiple_choice_json_experiment(
+        dataset_name=dataset_name,
+        task_id=task_id,
+        model_client=provider,
+        model_name=config.generation.model_identifier,
+        storage=storage,
+        sampling=sampling_cfg,
+        provider_name=config.generation.provider.name,
+        runner_options=runner_options,
     )
 
 
@@ -170,12 +187,18 @@ def _load_dataset(
             )
         return list(config.inline_samples)
 
-    # Map experiment name to dataset registry name
-    dataset_name = _EXPERIMENT_TO_DATASET.get(experiment_name)
+    # Use explicit dataset_id if provided
+    dataset_name = config.dataset_id
     if not dataset_name:
+        # Fallback to task name if dataset_id is not provided
+        # This allows simple configs where task name matches dataset name
+        # But we should probably enforce dataset_id for clarity in the future
+        # For now, let's try to infer from task if available in config object passed to this function?
+        # Wait, _load_dataset only gets DatasetConfig and experiment_name.
+        # We should probably pass the full config or at least the task.
+        # But for now, let's rely on dataset_id being present or raise error.
         raise ValueError(
-            f"Unsupported experiment '{experiment_name}'. Supported experiments:"
-            f" {', '.join(sorted(_SUPPORTED_EXPERIMENTS))}."
+            "dataset.dataset_id must be provided when source is not 'inline'."
         )
 
     # Prepare options for dataset factory

@@ -25,6 +25,7 @@ def _inline_samples():
 
 def test_run_experiment_from_inline_config():
     config = schema.ExperimentConfig(
+        task="math500",
         dataset=schema.DatasetConfig(source="inline", inline_samples=_inline_samples()),
         generation=schema.GenerationConfig(
             model_identifier="fake-math-llm",
@@ -59,6 +60,7 @@ def test_run_experiment_from_inline_config():
 
 def test_inline_dataset_requires_rows():
     config = schema.ExperimentConfig(
+        task="math500",
         dataset=schema.DatasetConfig(source="inline", inline_samples=[])
     )
 
@@ -101,8 +103,10 @@ def test_run_supergpqa_config_with_local_dataset(tmp_path):
 
     config = schema.ExperimentConfig(
         name="supergpqa_zero_shot",
+        task="supergpqa",
         dataset=schema.DatasetConfig(
             source="local",
+            dataset_id="supergpqa",
             data_dir=str(data_dir),
             split="test",
         ),
@@ -131,8 +135,10 @@ def test_run_mmlu_pro_config_with_local_dataset(tmp_path):
 
     config = schema.ExperimentConfig(
         name="mmlu_pro_zero_shot",
+        task="mmlu_pro",
         dataset=schema.DatasetConfig(
             source="local",
+            dataset_id="mmlu-pro",
             data_dir=str(data_dir),
             split="test",
         ),
@@ -169,10 +175,15 @@ def test_run_competition_math_configs(tmp_path, experiment_name):
     }
     sample_path.write_text(json.dumps(sample_payload), encoding="utf-8")
 
+    # Map experiment name to task name (remove _zero_shot suffix)
+    task_name = experiment_name.replace("_zero_shot", "")
+    
     config = schema.ExperimentConfig(
         name=experiment_name,
+        task=task_name,
         dataset=schema.DatasetConfig(
             source="local",
+            dataset_id=task_name,
             data_dir=str(data_dir),
             split="test",
         ),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -39,6 +40,7 @@ class GenerationConfig:
 @dataclass
 class DatasetConfig:
     source: str = "huggingface"
+    dataset_id: str | None = None
     data_dir: str | None = None
     limit: int | None = None
     split: str = "test"
@@ -82,3 +84,29 @@ class ExperimentConfig:
     max_samples: int | None = None
     run_id: str | None = None
     resume: bool = True
+    task: str | None = None
+    task_options: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> ExperimentConfig:
+        """Load configuration from a file."""
+        from .loader import load_experiment_config
+
+        return load_experiment_config(Path(path))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ExperimentConfig:
+        """Create configuration from a dictionary."""
+        from omegaconf import OmegaConf
+
+        base = OmegaConf.structured(cls)
+        merged = OmegaConf.merge(base, OmegaConf.create(data))
+        return OmegaConf.to_object(merged)  # type: ignore
+
+    def to_file(self, path: str | Path) -> None:
+        """Save configuration to a file."""
+        from omegaconf import OmegaConf
+
+        conf = OmegaConf.structured(self)
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        OmegaConf.save(conf, Path(path))
