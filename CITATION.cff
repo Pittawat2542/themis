@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Themis: Lightweight evaluation platform for LLM experiments"
+authors:
+  - family-names: "Taveekitworachai"
+    given-names: "Pittawat"
+    orcid: "https://orcid.org/0000-0002-6824-2634"
+date-released: 2025-11-29
+version: 0.1.0
+url: "https://github.com/yourusername/themis"
+license: MIT
+keywords:
+  - llm
+  - experimentation
+  - evaluation
+  - machine-learning
+  - python

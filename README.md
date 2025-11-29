@@ -660,9 +660,35 @@ uv run python -m themis.cli math500 \
 
 ---
 
+
+---
+
+## Citation
+
+If you use Themis in your research, please cite it using the following metadata:
+
+```yaml
+@software{themis2024,
+  author = {Themis Contributors},
+  title = {Themis: Lightweight experimentation harness for text-generation systems},
+  year = {2024},
+  url = {https://github.com/yourusername/themis}
+}
+```
+
+See [`CITATION.cff`](CITATION.cff) for more details.
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for details on how to get started, run tests, and submit pull requests.
+
+---
+
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](LICENSE) file for details
 
 ---
 
