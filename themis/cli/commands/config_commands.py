@@ -122,8 +122,10 @@ def init_config(
     """Generate a sample configuration file for use with run-config."""
     templates = {
         "basic": """name: my_experiment
+task: math500
 dataset:
   source: huggingface
+  dataset_id: math500
   limit: 50
 generation:
   model_identifier: fake-math-llm
@@ -142,8 +144,10 @@ run_id: my-experiment-001
 resume: true
 """,
         "math500": """name: math500_evaluation
+task: math500
 dataset:
   source: huggingface
+  dataset_id: math500
   limit: null  # No limit, run full dataset
   subjects:
     - algebra
@@ -174,6 +178,7 @@ resume: true
 max_samples: null
 """,
         "inline": """name: inline_dataset_experiment
+task: math500
 dataset:
   source: inline
   inline_samples:

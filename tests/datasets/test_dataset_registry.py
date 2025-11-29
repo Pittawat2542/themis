@@ -121,6 +121,8 @@ def test_global_registry_has_builtin_datasets():
     assert "amc23" in datasets
     assert "olympiadbench" in datasets
     assert "beyondaime" in datasets
+    assert "gsm8k" in datasets
+    assert "gpqa" in datasets
 
 
 def test_global_registry_functions():
