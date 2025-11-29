@@ -1,6 +1,6 @@
 # Themis
 
-> **Lightweight experimentation harness for text-generation systems**
+> **Lightweight evaluation platform for LLM experiments**
 
 Themis orchestrates prompt templates, LLM providers, generation strategies, evaluation metrics, and storage into reproducible, resumable pipelines for systematic LLM experimentation.
 
@@ -668,11 +668,11 @@ uv run python -m themis.cli math500 \
 If you use Themis in your research, please cite it using the following metadata:
 
 ```yaml
-@software{themis2024,
-  author = {Themis Contributors},
-  title = {Themis: Lightweight experimentation harness for text-generation systems},
-  year = {2024},
-  url = {https://github.com/yourusername/themis}
+@software{themis2025,
+  author = {Pittawat Taveekitworachai},
+  title = {Themis: Lightweight evaluation platform for LLM experiments},
+  year = {2025},
+  url = {https://github.com/Pittawat2542/themis}
 }
 ```
 
