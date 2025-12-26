@@ -15,6 +15,8 @@ from .effect_sizes import cohens_d, cohens_h
 from .hypothesis_tests import (
     compare_metrics,
     holm_bonferroni,
+    paired_permutation_test,
+    paired_t_test,
     permutation_test,
 )
 from .types import (
@@ -40,6 +42,8 @@ __all__ = [
     # Hypothesis tests
     "compare_metrics",
     "permutation_test",
+    "paired_permutation_test",
+    "paired_t_test",
     "holm_bonferroni",
     # Bootstrap
     "bootstrap_ci",

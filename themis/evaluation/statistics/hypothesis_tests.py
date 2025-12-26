@@ -126,9 +126,7 @@ def permutation_test(
     if not group_a or not group_b:
         raise ValueError("Both groups must be non-empty")
 
-    # Set random seed if provided
-    if seed is not None:
-        random.seed(seed)
+    rng = random.Random(seed)
 
     # Compute observed statistic
     def compute_stat(a: Sequence[float], b: Sequence[float]) -> float:
@@ -151,7 +149,7 @@ def permutation_test(
     count_extreme = 0
     for _ in range(n_permutations):
         # Shuffle and split into two groups
-        random.shuffle(combined)
+        rng.shuffle(combined)
         perm_a = combined[:n_a]
         perm_b = combined[n_a:]
 
@@ -162,13 +160,104 @@ def permutation_test(
         if abs(perm_stat) >= abs(observed):
             count_extreme += 1
 
-    p_value = count_extreme / n_permutations
+    # +1 correction avoids zero p-values with finite permutations
+    p_value = (count_extreme + 1) / (n_permutations + 1)
 
     return PermutationTestResult(
         observed_statistic=observed,
         p_value=p_value,
         n_permutations=n_permutations,
         is_significant=p_value < 0.05,
+    )
+
+
+def paired_permutation_test(
+    group_a: Sequence[float],
+    group_b: Sequence[float],
+    statistic: Literal["mean_diff", "median_diff"] = "mean_diff",
+    n_permutations: int = 10000,
+    seed: int | None = None,
+) -> PermutationTestResult:
+    """Perform paired permutation test using sign flips on paired differences."""
+    if len(group_a) != len(group_b):
+        raise ValueError("Paired test requires equal-length groups")
+    if not group_a:
+        raise ValueError("Paired test requires non-empty groups")
+
+    rng = random.Random(seed)
+    diffs = [b - a for a, b in zip(group_a, group_b)]
+
+    def compute_stat(values: Sequence[float]) -> float:
+        if statistic == "mean_diff":
+            return mean(values)
+        elif statistic == "median_diff":
+            import statistics
+
+            return statistics.median(values)
+        else:
+            raise ValueError(f"Unknown statistic: {statistic}")
+
+    observed = compute_stat(diffs)
+    count_extreme = 0
+    for _ in range(n_permutations):
+        flipped = [d if rng.random() < 0.5 else -d for d in diffs]
+        perm_stat = compute_stat(flipped)
+        if abs(perm_stat) >= abs(observed):
+            count_extreme += 1
+
+    p_value = (count_extreme + 1) / (n_permutations + 1)
+
+    return PermutationTestResult(
+        observed_statistic=observed,
+        p_value=p_value,
+        n_permutations=n_permutations,
+        is_significant=p_value < 0.05,
+    )
+
+
+def paired_t_test(
+    group_a: Sequence[float],
+    group_b: Sequence[float],
+    significance_level: float = 0.05,
+) -> ComparisonResult:
+    """Perform paired t-test on matched samples."""
+    if len(group_a) != len(group_b):
+        raise ValueError("Paired t-test requires equal-length groups")
+    if not group_a:
+        raise ValueError("Paired t-test requires non-empty groups")
+
+    diffs = [b - a for a, b in zip(group_a, group_b)]
+    n = len(diffs)
+    mean_diff = mean(diffs)
+    std_diff = stdev(diffs) if n >= 2 else 0.0
+
+    if std_diff == 0.0:
+        t_stat = 0.0 if mean_diff == 0.0 else float("inf")
+        p_value = 1.0 if mean_diff == 0.0 else 0.0
+    else:
+        se = std_diff / math.sqrt(n)
+        t_stat = mean_diff / se if se > 0 else 0.0
+        p_value = t_to_p_value(abs(t_stat), n - 1)
+
+    baseline_mean = mean(group_a)
+    treatment_mean = mean(group_b)
+    difference = treatment_mean - baseline_mean
+    relative_change = (difference / baseline_mean * 100.0) if baseline_mean != 0 else float("inf")
+
+    baseline_ci = compute_confidence_interval(group_a)
+    treatment_ci = compute_confidence_interval(group_b)
+
+    return ComparisonResult(
+        metric_name="paired",
+        baseline_mean=baseline_mean,
+        treatment_mean=treatment_mean,
+        difference=difference,
+        relative_change=relative_change,
+        t_statistic=t_stat,
+        p_value=p_value,
+        is_significant=p_value < significance_level,
+        baseline_ci=baseline_ci,
+        treatment_ci=treatment_ci,
     )
 
 

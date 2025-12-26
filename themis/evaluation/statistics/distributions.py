@@ -78,6 +78,15 @@ def t_critical_value(df: int, confidence_level: float) -> float:
     Returns:
         Critical value for two-tailed test
     """
+    try:
+        from scipy import stats
+    except Exception:  # pragma: no cover - optional dependency
+        stats = None
+
+    if stats is not None:
+        alpha = (1 - confidence_level) / 2
+        return float(stats.t.ppf(1 - alpha, df))
+
     # For common confidence levels and degrees of freedom, use lookup table
     # Otherwise, use normal approximation for large df
     if df >= 30:
@@ -159,6 +168,15 @@ def t_to_p_value(t_stat: float, df: int) -> float:
     Returns:
         Two-tailed p-value
     """
+    try:
+        from scipy import stats
+    except Exception:  # pragma: no cover - optional dependency
+        stats = None
+
+    if stats is not None:
+        p_one_tail = stats.t.cdf(-abs(t_stat), df)
+        return float(2 * p_one_tail)
+
     # For large df, use normal approximation
     if df >= 30:
         # Use normal distribution CDF

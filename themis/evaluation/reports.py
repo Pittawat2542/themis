@@ -12,10 +12,13 @@ from themis.evaluation.statistics import (
     cohens_d,
     cohens_h,
     holm_bonferroni,
+    paired_permutation_test,
+    paired_t_test,
     permutation_test,
 )
 from themis.evaluation.statistics.types import (
     BootstrapResult,
+    ComparisonResult,
     EffectSize,
     PermutationTestResult,
 )
@@ -63,6 +66,33 @@ def _metric_values(report: EvaluationReport, metric_name: str) -> list[float]:
     return [s.value for s in agg.per_sample]
 
 
+def _metric_values_by_sample(
+    report: EvaluationReport, metric_name: str
+) -> dict[str, float]:
+    values: dict[str, float] = {}
+    for record in report.records:
+        if not record.sample_id:
+            continue
+        for score in record.scores:
+            if score.metric_name == metric_name:
+                values[record.sample_id] = score.value
+                break
+    return values
+
+
+def aligned_metric_values(
+    report_a: EvaluationReport, report_b: EvaluationReport, metric_name: str
+) -> tuple[list[float], list[float]]:
+    values_a = _metric_values_by_sample(report_a, metric_name)
+    values_b = _metric_values_by_sample(report_b, metric_name)
+    common_ids = sorted(set(values_a) & set(values_b))
+    if not common_ids:
+        raise ValueError(f"No overlapping sample_ids for metric '{metric_name}'")
+    aligned_a = [values_a[sample_id] for sample_id in common_ids]
+    aligned_b = [values_b[sample_id] for sample_id in common_ids]
+    return aligned_a, aligned_b
+
+
 def ci_for_metric(
     report: EvaluationReport,
     metric_name: str,
@@ -84,12 +114,34 @@ def permutation_test_for_metric(
     statistic: Literal["mean_diff", "median_diff"] = "mean_diff",
     n_permutations: int = 10000,
     seed: int | None = None,
+    align_by_sample_id: bool = True,
 ) -> PermutationTestResult:
-    values_a = _metric_values(report_a, metric_name)
-    values_b = _metric_values(report_b, metric_name)
+    if align_by_sample_id:
+        values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
+    else:
+        values_a = _metric_values(report_a, metric_name)
+        values_b = _metric_values(report_b, metric_name)
     if not values_a or not values_b:
         raise ValueError(f"Both reports must have scores for metric '{metric_name}'")
     return permutation_test(
+        values_a,
+        values_b,
+        statistic=statistic,
+        n_permutations=n_permutations,
+        seed=seed,
+    )
+
+
+def paired_permutation_test_for_metric(
+    report_a: EvaluationReport,
+    report_b: EvaluationReport,
+    metric_name: str,
+    statistic: Literal["mean_diff", "median_diff"] = "mean_diff",
+    n_permutations: int = 10000,
+    seed: int | None = None,
+) -> PermutationTestResult:
+    values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
+    return paired_permutation_test(
         values_a,
         values_b,
         statistic=statistic,
@@ -115,11 +167,32 @@ def cohens_d_for_metric(
     report_b: EvaluationReport,
     metric_name: str,
 ) -> EffectSize:
-    values_a = _metric_values(report_a, metric_name)
-    values_b = _metric_values(report_b, metric_name)
+    values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
     if len(values_a) < 2 or len(values_b) < 2:
         raise ValueError("Each group must have at least 2 values for Cohen's d")
     return cohens_d(values_a, values_b)
+
+
+def paired_t_test_for_metric(
+    report_a: EvaluationReport,
+    report_b: EvaluationReport,
+    metric_name: str,
+    significance_level: float = 0.05,
+) -> ComparisonResult:
+    values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
+    result = paired_t_test(values_a, values_b, significance_level=significance_level)
+    return ComparisonResult(
+        metric_name=metric_name,
+        baseline_mean=result.baseline_mean,
+        treatment_mean=result.treatment_mean,
+        difference=result.difference,
+        relative_change=result.relative_change,
+        t_statistic=result.t_statistic,
+        p_value=result.p_value,
+        is_significant=result.is_significant,
+        baseline_ci=result.baseline_ci,
+        treatment_ci=result.treatment_ci,
+    )
 
 
 def _slice_metric_values(
@@ -158,18 +231,30 @@ def compare_reports_with_holm(
     statistic: Literal["mean_diff", "median_diff"] = "mean_diff",
     n_permutations: int = 10000,
     seed: int | None = None,
+    paired: bool = True,
 ) -> Dict[str, object]:
     p_values: list[float] = []
     pt_results: Dict[str, PermutationTestResult] = {}
     for name in metric_names:
-        pt = permutation_test_for_metric(
-            report_a,
-            report_b,
-            name,
-            statistic=statistic,
-            n_permutations=n_permutations,
-            seed=seed,
-        )
+        if paired:
+            pt = paired_permutation_test_for_metric(
+                report_a,
+                report_b,
+                name,
+                statistic=statistic,
+                n_permutations=n_permutations,
+                seed=seed,
+            )
+        else:
+            pt = permutation_test_for_metric(
+                report_a,
+                report_b,
+                name,
+                statistic=statistic,
+                n_permutations=n_permutations,
+                seed=seed,
+                align_by_sample_id=True,
+            )
         pt_results[name] = pt
         p_values.append(pt.p_value)
     corrected = holm_bonferroni(p_values)
@@ -195,11 +280,14 @@ __all__ = [
     "EvaluationFailure",
     "MetricAggregate",
     "EvaluationReport",
+    "aligned_metric_values",
     "ci_for_metric",
     "ci_for_slice_metric",
     "permutation_test_for_metric",
+    "paired_permutation_test_for_metric",
     "cohens_h_for_metric",
     "cohens_d_for_metric",
+    "paired_t_test_for_metric",
     "confusion_matrix",
     "compare_reports_with_holm",
 ]

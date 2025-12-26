@@ -42,8 +42,7 @@ def bootstrap_ci(
     if not values:
         raise ValueError("Cannot compute bootstrap CI for empty sequence")
 
-    if seed is not None:
-        random.seed(seed)
+    rng = random.Random(seed)
 
     n = len(values)
     values_list = list(values)
@@ -55,7 +54,7 @@ def bootstrap_ci(
     bootstrap_stats = []
     for _ in range(n_bootstrap):
         # Resample with replacement
-        resample = random.choices(values_list, k=n)
+        resample = rng.choices(values_list, k=n)
         boot_stat = statistic(resample)
         bootstrap_stats.append(boot_stat)
 
