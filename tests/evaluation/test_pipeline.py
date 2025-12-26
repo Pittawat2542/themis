@@ -74,8 +74,8 @@ def test_pipeline_collects_extraction_failures_and_continues():
     assert report.failures[0].sample_id == "sample-2"
     assert "answer.value" in report.failures[0].message
     exact = report.metrics["ExactMatch"]
-    assert exact.count == 2
-    assert exact.mean == 0.5
+    assert exact.count == 1
+    assert exact.mean == 1.0
     assert report.records[1].failures
     assert report.records[1].failures
 
@@ -137,7 +137,43 @@ def test_pipeline_isolates_metric_failures_without_stopping_pipeline():
 
     assert any("BrokenMetric" in failure.message for failure in report.failures)
     broken = report.metrics["BrokenMetric"]
-    assert broken.count == 1
+    assert broken.count == 0
     assert broken.mean == 0.0
     assert report.records[0].failures
     assert "BrokenMetric" in report.records[0].failures[0]
+
+
+def test_pipeline_allows_reference_free_metrics():
+    extractor = extractors.IdentityExtractor()
+    response_length = metrics.ResponseLength()
+    exact_match = metrics.ExactMatch()
+    eval_pipeline = pipeline.EvaluationPipeline(
+        extractor=extractor,
+        metrics=[response_length, exact_match],
+    )
+
+    sampling = core_entities.SamplingConfig(0.1, 0.9, 64)
+    prompt_spec = core_entities.PromptSpec(name="tmp", template="")
+    prompt_render = core_entities.PromptRender(spec=prompt_spec, text="", context={})
+    model_spec = core_entities.ModelSpec(identifier="gpt-4o", provider="test")
+    task = core_entities.GenerationTask(
+        prompt=prompt_render,
+        model=model_spec,
+        sampling=sampling,
+        metadata={"sample_id": "sample-4"},
+        reference=None,
+    )
+    generations = [
+        core_entities.GenerationRecord(
+            task=task,
+            output=core_entities.ModelOutput(text="Hello world"),
+            error=None,
+            metrics={},
+        )
+    ]
+
+    report = eval_pipeline.evaluate(generations)
+
+    assert report.metrics["ResponseLength"].count == 1
+    assert report.metrics["ExactMatch"].count == 0
+    assert any("ExactMatch" in failure.message for failure in report.failures)

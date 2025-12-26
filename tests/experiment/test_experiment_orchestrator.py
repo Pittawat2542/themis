@@ -78,6 +78,12 @@ class CountingPipeline(evaluation_pipeline.EvaluationPipeline):
         return super().evaluate(records)
 
 
+def make_reference_free_pipeline():
+    extractor = extractors.IdentityExtractor()
+    metric = metrics.ResponseLength()
+    return evaluation_pipeline.EvaluationPipeline(extractor=extractor, metrics=[metric])
+
+
 def build_dataset():
     return [
         {"id": "sample-1", "topic": "France", "expected": "Paris", "subject": "geo"},
@@ -154,8 +160,8 @@ def test_experiment_records_generation_failures_and_still_evaluates_successes():
     assert report.metadata["failed_generations"] == 1
     assert len(report.generation_results) == 2
     exact = report.evaluation_report.metrics["ExactMatch"]
-    assert exact.count == 2
-    assert exact.mean == 0.5
+    assert exact.count == 1
+    assert exact.mean == 1.0
     assert report.failures[0].sample_id == "sample-2"
 
 
@@ -177,11 +183,33 @@ def test_experiment_metadata_reports_evaluation_failures():
     report = experiment_runner.run(dataset)
 
     exact = report.evaluation_report.metrics["ExactMatch"]
-    assert exact.count == len(dataset)
+    assert exact.count == 0
     assert exact.mean == 0.0
     assert report.metadata["evaluation_failures"] == len(dataset) + len(
         report.evaluation_report.failures
     )
+
+
+def test_experiment_supports_reference_free_metrics():
+    dataset = [
+        {"id": "sample-1", "topic": "France", "expected": None, "subject": "geo"},
+        {"id": "sample-2", "topic": "Germany", "expected": None, "subject": "geo"},
+    ]
+    answers = {row["id"]: "Paris" for row in dataset}
+    runner_impl = EchoRunner(answers_by_sample_id=answers)
+    plan = make_plan()
+    eval_pipeline = make_reference_free_pipeline()
+
+    experiment_runner = orchestrator.ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=runner_impl,
+        evaluation_pipeline=eval_pipeline,
+    )
+
+    report = experiment_runner.run(dataset)
+
+    length_metric = report.evaluation_report.metrics["ResponseLength"]
+    assert length_metric.count == 2
 
 
 def test_experiment_skips_evaluation_when_cached(tmp_path):

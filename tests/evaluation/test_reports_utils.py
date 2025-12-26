@@ -1,3 +1,5 @@
+import pytest
+
 from themis.core import entities as core_entities
 from themis.evaluation import metrics, extractors, pipeline, reports
 
@@ -28,14 +30,14 @@ def test_reports_ci_and_permutation_and_effect_sizes():
     metric = metrics.ExactMatch()
     eval_pipeline = pipeline.EvaluationPipeline(extractor=extractor, metrics=[metric])
 
-    # Two small groups with clear difference (A: all correct, B: mixed)
+    # Two small paired groups with clear difference (A: all correct, B: mixed)
     group_a = [
-        make_generation_record("a1", "Paris", "Paris"),
-        make_generation_record("a2", "Paris", "Paris"),
+        make_generation_record("sample-1", "Paris", "Paris"),
+        make_generation_record("sample-2", "Paris", "Paris"),
     ]
     group_b = [
-        make_generation_record("b1", "Paris", "Paris"),
-        make_generation_record("b2", "Lyon", "Paris"),
+        make_generation_record("sample-1", "Paris", "Paris"),
+        make_generation_record("sample-2", "Lyon", "Paris"),
     ]
 
     report_a = eval_pipeline.evaluate(group_a)
@@ -54,3 +56,51 @@ def test_reports_ci_and_permutation_and_effect_sizes():
     # Effect sizes
     h = reports.cohens_h_for_metric(report_a, report_b, "ExactMatch")
     assert isinstance(h.value, float)
+
+
+def test_reports_align_by_sample_id_for_paired_tests():
+    extractor = extractors.IdentityExtractor()
+    metric = metrics.ExactMatch()
+    eval_pipeline = pipeline.EvaluationPipeline(extractor=extractor, metrics=[metric])
+
+    group_a = [
+        make_generation_record("sample-1", "Paris", "Paris"),
+        make_generation_record("sample-2", "Paris", "Paris"),
+    ]
+    group_b = [
+        make_generation_record("sample-2", "Paris", "Paris"),
+        make_generation_record("sample-1", "Lyon", "Paris"),
+    ]
+
+    report_a = eval_pipeline.evaluate(group_a)
+    report_b = eval_pipeline.evaluate(group_b)
+
+    values_a, values_b = reports.aligned_metric_values(
+        report_a, report_b, "ExactMatch"
+    )
+    assert values_a == [1.0, 1.0]
+    assert values_b == [0.0, 1.0]
+
+    paired = reports.paired_permutation_test_for_metric(
+        report_a, report_b, "ExactMatch", n_permutations=200, seed=1
+    )
+    assert 0.0 <= paired.p_value <= 1.0
+
+
+def test_reports_alignment_requires_overlap():
+    extractor = extractors.IdentityExtractor()
+    metric = metrics.ExactMatch()
+    eval_pipeline = pipeline.EvaluationPipeline(extractor=extractor, metrics=[metric])
+
+    report_a = eval_pipeline.evaluate(
+        [make_generation_record("sample-1", "Paris", "Paris")]
+    )
+    report_b = eval_pipeline.evaluate(
+        [make_generation_record("sample-2", "Paris", "Paris")]
+    )
+
+    with pytest.raises(ValueError):
+        reports.aligned_metric_values(report_a, report_b, "ExactMatch")
+
+    with pytest.raises(ValueError):
+        reports.paired_t_test_for_metric(report_a, report_b, "ExactMatch")
