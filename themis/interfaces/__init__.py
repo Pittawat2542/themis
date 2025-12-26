@@ -62,6 +62,7 @@ class Extractor(Protocol):
 
 class Metric(ABC):
     name: str
+    requires_reference: bool = True
 
     @abstractmethod
     def compute(

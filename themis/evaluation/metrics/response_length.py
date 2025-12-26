@@ -13,6 +13,7 @@ class ResponseLength(MetricInterface):
 
     def __post_init__(self) -> None:
         self.name = "ResponseLength"
+        self.requires_reference = False
 
     def compute(
         self,

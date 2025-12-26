@@ -168,12 +168,29 @@ class EvaluationPipeline:
                             continue
 
                         reference = item.reference or self._reference_selector(record)
-                        if reference is None:
-                            continue
-                        references = _normalize_references(reference)
+                        references = (
+                            _normalize_references(reference)
+                            if reference is not None
+                            else []
+                        )
                         metadata = {"sample_id": sample_id}
                         extract_start = time.perf_counter()
+                        item_scores_for_item: list[core_entities.MetricScore] = []
                         for metric in self._metrics:
+                            requires_reference = getattr(
+                                metric, "requires_reference", True
+                            )
+                            if requires_reference and not references:
+                                message = (
+                                    f"Missing reference for metric '{metric.name}'"
+                                )
+                                failures.append(
+                                    EvaluationFailure(
+                                        sample_id=sample_id, message=message
+                                    )
+                                )
+                                record_failures.append(message)
+                                continue
                             metric_start = time.perf_counter()
                             try:
                                 with tracing.span(
@@ -187,8 +204,11 @@ class EvaluationPipeline:
                                 score.metadata["evaluation_time_ms"] = (
                                     time.perf_counter() - metric_start
                                 ) * 1000
+                                item_scores_for_item.append(score)
                             except Exception as exc:  # pragma: no cover - guarded
-                                message = f"Metric '{metric.name}' failed for sample {sample_id}: {exc}"
+                                message = (
+                                    f"Metric '{metric.name}' failed for sample {sample_id}: {exc}"
+                                )
                                 logger.warning(message)
                                 failures.append(
                                     EvaluationFailure(
@@ -196,33 +216,14 @@ class EvaluationPipeline:
                                     )
                                 )
                                 record_failures.append(message)
-                                score = core_entities.MetricScore(
-                                    metric_name=metric.name,
-                                    value=0.0,
-                                    details={"error": str(exc), "skipped": True},
-                                    metadata=dict(metadata),
-                                )
-                                score.metadata["evaluation_time_ms"] = 0.0
-                            item_scores.append(score)
                         extraction_duration = (
                             time.perf_counter() - extract_start
                         ) * 1000
-                        for score in item_scores[-len(self._metrics) :]:
+                        for score in item_scores_for_item:
                             score.metadata.setdefault(
                                 "extraction_time_ms", extraction_duration
                             )
-
-                    if record_failures and not item_scores:
-                        metadata = {"sample_id": sample_id}
-                        for metric in self._metrics:
-                            item_scores.append(
-                                core_entities.MetricScore(
-                                    metric_name=metric.name,
-                                    value=0.0,
-                                    details={"skipped": True},
-                                    metadata=metadata,
-                                )
-                            )
+                        item_scores.extend(item_scores_for_item)
 
                     aggregated_scores = strategy.aggregate(record, item_scores)
                     for score in aggregated_scores:

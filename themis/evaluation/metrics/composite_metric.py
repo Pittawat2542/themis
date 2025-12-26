@@ -13,6 +13,9 @@ class CompositeMetric(MetricInterface):
 
     def __post_init__(self) -> None:
         self.name = "CompositeMetric"
+        self.requires_reference = any(
+            getattr(child, "requires_reference", True) for child in self.children
+        )
 
     def compute(
         self,

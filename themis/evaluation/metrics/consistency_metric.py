@@ -22,6 +22,7 @@ class ConsistencyMetric(MetricInterface):
 
     def __post_init__(self) -> None:
         self.name = "Consistency"
+        self.requires_reference = False
 
     def compute(
         self,

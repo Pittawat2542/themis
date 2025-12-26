@@ -318,7 +318,9 @@ class ExperimentOrchestrator:
                 per_metric.setdefault(score.metric_name, []).append(score)
 
         aggregates: dict[str, evaluation_pipeline.MetricAggregate] = {}
-        for name, scores in per_metric.items():
+        metric_names = set(per_metric.keys()) | set(new_report.metrics.keys())
+        for name in metric_names:
+            scores = per_metric.get(name, [])
             mean = sum(score.value for score in scores) / len(scores) if scores else 0.0
             aggregates[name] = evaluation_pipeline.MetricAggregate(
                 name=name,
@@ -369,4 +371,3 @@ class ExperimentOrchestrator:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with report_path.open("w", encoding="utf-8") as f:
             json.dump(json_data, f, indent=2)
-
