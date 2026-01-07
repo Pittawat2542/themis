@@ -1,0 +1,43 @@
+site_name: Themis
+site_description: A framework for agentic AI comparisons.
+site_url: https://pittawat2542.github.io/themis/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      media: '(prefers-color-scheme: dark)'
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+
+nav:
+  - Home: index.md
+  - Features:
+      - Adding Components: ADDING_COMPONENTS.md
+      - API Generation: API_GENERATION.md
+      - Configuration: CONFIGURATION.md
+      - Cost Tracking: COST_TRACKING.md
+      - Leaderboards: LEADERBOARDS.md
+      - LiteLLM: LITELLM.md
+      - Multi-Experiment Comparison: MULTI_EXPERIMENT_COMPARISON.md
+  - Reference:
+      - Diagrams: DIAGRAM.md
+      - Examples: EXAMPLES.md
