@@ -65,18 +65,21 @@ class CacheManager:
             return {}
         return self._storage.load_cached_records(run_id)
 
-    def load_cached_evaluations(self, run_id: str) -> dict[str, EvaluationRecord]:
+    def load_cached_evaluations(
+        self, run_id: str, evaluation_config: dict | None = None
+    ) -> dict[str, EvaluationRecord]:
         """Load cached evaluation records for resuming.
 
         Args:
             run_id: Unique run identifier
+            evaluation_config: Evaluation configuration (metrics, extractor) for cache matching
 
         Returns:
             Dictionary mapping cache keys to evaluation records
         """
         if not self._enable_resume or self._storage is None:
             return {}
-        return self._storage.load_cached_evaluations(run_id)
+        return self._storage.load_cached_evaluations(run_id, evaluation_config=evaluation_config)
 
     def save_generation_record(
         self,
@@ -99,6 +102,7 @@ class CacheManager:
         run_id: str,
         generation_record: GenerationRecord,
         evaluation_record: EvaluationRecord,
+        evaluation_config: dict | None = None,
     ) -> None:
         """Save a single evaluation record.
 
@@ -106,10 +110,11 @@ class CacheManager:
             run_id: Unique run identifier
             generation_record: Corresponding generation record
             evaluation_record: Evaluation record to save
+            evaluation_config: Evaluation configuration for cache invalidation
         """
         if self._storage is not None and self._enable_cache:
             self._storage.append_evaluation(
-                run_id, generation_record, evaluation_record
+                run_id, generation_record, evaluation_record, evaluation_config=evaluation_config
             )
 
     def get_run_path(self, run_id: str) -> str | None:
