@@ -15,6 +15,7 @@ from themis.cli.commands import (
     demo,
     info,
     leaderboard,
+    results,
     sample_run,
     visualize,
 )
@@ -63,6 +64,10 @@ app.command(name="new-project")(info.new_project)
 app.command(name="compare")(comparison.compare_command)
 app.command(name="diff")(comparison.diff_command)
 app.command(name="pareto")(comparison.pareto_command)
+
+# Register results viewing commands
+app.command(name="results-summary")(results.summary_command)
+app.command(name="results-list")(results.list_command)
 
 # Register cost commands
 app.command(name="estimate-cost")(cost.estimate_cost_command)

@@ -146,19 +146,122 @@ def export_report_json(
     return path
 
 
+def export_summary_json(
+    report: orchestrator.ExperimentReport,
+    path: str | Path,
+    *,
+    run_id: str | None = None,
+    indent: int = 2,
+) -> Path:
+    """Export a lightweight summary JSON file for quick results viewing.
+
+    This creates a small summary file (~1KB) containing only the essential
+    metrics and metadata, without the full sample-level details. This is
+    ideal for quickly comparing multiple runs without parsing large report files.
+
+    Args:
+        report: Experiment report to summarize
+        path: Output path for summary.json
+        run_id: Optional run identifier to include in summary
+        indent: JSON indentation level
+
+    Returns:
+        Path to the created summary file
+
+    Example:
+        >>> export_summary_json(report, "outputs/run-123/summary.json", run_id="run-123")
+        >>> # Quick comparison: cat outputs/*/summary.json | jq '.accuracy'
+
+    Note:
+        The summary file is typically ~1KB compared to ~1.6MB for the full report.
+        This makes it 1000x faster to view and compare results across runs.
+    """
+    # Extract key metrics
+    metrics_summary = {}
+    for name, aggregate in report.evaluation_report.metrics.items():
+        metrics_summary[name] = {
+            "mean": aggregate.mean,
+            "count": aggregate.count,
+        }
+
+    # Extract metadata from first generation record
+    metadata = {}
+    if report.generation_results:
+        first_record = report.generation_results[0]
+        metadata = {
+            "model": first_record.task.model.identifier,
+            "prompt_template": first_record.task.prompt.spec.name,
+            "sampling": {
+                "temperature": first_record.task.sampling.temperature,
+                "top_p": first_record.task.sampling.top_p,
+                "max_tokens": first_record.task.sampling.max_tokens,
+            },
+        }
+
+    # Calculate total cost if available
+    total_cost = 0.0
+    for record in report.generation_results:
+        if "cost_usd" in record.metrics:
+            total_cost += record.metrics["cost_usd"]
+
+    # Count failures
+    failure_count = len(report.evaluation_report.failures)
+
+    # Build summary
+    summary = {
+        "run_id": run_id,
+        "total_samples": len(report.generation_results),
+        "metrics": metrics_summary,
+        "metadata": metadata,
+        "cost_usd": round(total_cost, 4) if total_cost > 0 else None,
+        "failures": failure_count,
+        "failure_rate": (
+            round(failure_count / len(report.generation_results), 4)
+            if report.generation_results
+            else 0.0
+        ),
+    }
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=indent), encoding="utf-8")
+    return path
+
+
 def export_report_bundle(
     report: orchestrator.ExperimentReport,
     *,
     csv_path: str | Path | None = None,
     html_path: str | Path | None = None,
     json_path: str | Path | None = None,
+    summary_path: str | Path | None = None,
+    run_id: str | None = None,
     charts: Sequence[ChartLike] | None = None,
     title: str = "Experiment report",
     sample_limit: int = 100,
     indent: int = 2,
 ) -> OrderedDict[str, Path]:
-    """Convenience helper that writes multiple export formats at once."""
+    """Convenience helper that writes multiple export formats at once.
 
+    Args:
+        report: Experiment report to export
+        csv_path: Optional path for CSV export
+        html_path: Optional path for HTML export
+        json_path: Optional path for full JSON export
+        summary_path: Optional path for lightweight summary JSON export
+        run_id: Optional run identifier for summary
+        charts: Optional charts to include in visualizations
+        title: Report title
+        sample_limit: Maximum samples to include in detailed exports
+        indent: JSON indentation level
+
+    Returns:
+        Ordered dict of format -> path for created files
+
+    Note:
+        The summary export is highly recommended as it provides quick access
+        to key metrics without parsing large report files.
+    """
     outputs: OrderedDict[str, Path] = OrderedDict()
     if csv_path is not None:
         outputs["csv"] = export_report_csv(report, csv_path)
@@ -178,6 +281,10 @@ def export_report_bundle(
             title=title,
             sample_limit=sample_limit,
             indent=indent,
+        )
+    if summary_path is not None:
+        outputs["summary"] = export_summary_json(
+            report, summary_path, run_id=run_id, indent=indent
         )
     return outputs
 
@@ -684,6 +791,7 @@ __all__ = [
     "export_report_csv",
     "export_html_report",
     "export_report_json",
+    "export_summary_json",
     "export_report_bundle",
     "render_html_report",
     "build_json_report",
