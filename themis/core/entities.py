@@ -58,13 +58,33 @@ class Reference(Generic[T]):
     For backward compatibility, it can be used without type parameters
     and will behave like Reference[Any].
 
+    The value field can hold any type including:
+    - Simple types: str, int, float, bool
+    - Collections: list, tuple, set
+    - Dictionaries: dict (for multi-value references)
+    - Custom objects
+
     Examples:
-        # Untyped (backward compatible)
+        # Simple reference
         ref = Reference(kind="answer", value="42")
 
-        # Typed
+        # Multi-value reference using dict
+        ref = Reference(
+            kind="countdown_task",
+            value={"target": 122, "numbers": [25, 50, 75, 100]}
+        )
+
+        # List reference
+        ref = Reference(kind="valid_answers", value=["yes", "no", "maybe"])
+
+        # Typed reference
         ref: Reference[str] = Reference(kind="answer", value="42")
-        ref: Reference[int] = Reference(kind="answer", value=42)
+        ref: Reference[dict] = Reference(kind="task", value={"a": 1, "b": 2})
+
+    Note:
+        When using dict values, metrics can access individual fields directly:
+        >>> target = reference.value["target"]
+        >>> numbers = reference.value["numbers"]
     """
 
     kind: str

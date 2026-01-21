@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+import warnings
 from typing import Callable, Sequence
 
 from themis.core import entities as core_entities
@@ -35,19 +36,49 @@ def _default_reference_selector(record: core_entities.GenerationRecord):
     return reference.value
 
 
-def _normalize_references(reference):
-    """Normalize reference to list format.
+def _normalize_references(reference) -> list:
+    """Normalize reference to list format for metric consumption.
+
+    This function converts various reference formats into a standardized list
+    that metrics can reliably consume. The normalized format is always a list
+    where each element represents one reference value.
 
     Args:
-        reference: Reference value
+        reference: Reference value in various formats:
+            - Reference object: Extracts .value field
+            - dict: Kept as-is in a list (for multi-value references)
+            - list/tuple: Returned as list
+            - scalar: Wrapped in a list
 
     Returns:
-        List of references
+        List of reference values. Each element can be:
+        - A scalar value (str, int, float, bool)
+        - A dict (for multi-value references like {"target": 122, "numbers": [...]})
+        - Any other type from the original reference
+
+    Examples:
+        >>> _normalize_references(Reference(kind="answer", value="42"))
+        ["42"]
+
+        >>> _normalize_references(Reference(kind="task", value={"target": 122, "numbers": [25, 50]}))
+        [{"target": 122, "numbers": [25, 50]}]
+
+        >>> _normalize_references(["yes", "no", "maybe"])
+        ["yes", "no", "maybe"]
+
+        >>> _normalize_references("42")
+        ["42"]
+
+    Note:
+        Metrics receive references in this normalized format and should handle
+        both simple values and dict values appropriately.
     """
     if isinstance(reference, core_entities.Reference):
         reference = reference.value
     if isinstance(reference, list):
         return reference
+    if isinstance(reference, tuple):
+        return list(reference)
     return [reference]
 
 
@@ -89,18 +120,38 @@ class EvaluationPipeline:
         Args:
             extractor: Extractor for parsing model output
             metrics: List of metrics to compute
-            reference_selector: Optional function to extract reference
-            strategy_resolver: Optional function to resolve strategy
+            reference_selector: Optional function to extract reference from record.
+                If provided, this takes precedence over item.reference from strategies.
+            strategy_resolver: Optional function to resolve evaluation strategy.
+                If using a custom reference_selector with DefaultEvaluationStrategy,
+                the selector will take precedence.
+
+        Note:
+            When using DefaultEvaluationStrategy with a custom reference_selector,
+            the reference_selector will override the default behavior. Consider
+            using a custom strategy if you need more control over reference selection.
         """
         self._extractor = extractor
         self._metrics = list(metrics)
-        self._reference_selector = reference_selector or _default_reference_selector
+        self._reference_selector = reference_selector
+        self._has_custom_reference_selector = reference_selector is not None
         self._strategy_resolver = strategy_resolver or (
             lambda record: evaluation_strategies.DefaultEvaluationStrategy()
         )
         self._slices: list[
             tuple[str, Callable[[core_entities.GenerationRecord], bool]]
         ] = []
+
+        # Validation: warn if custom reference_selector is used with default strategy
+        if self._has_custom_reference_selector and strategy_resolver is None:
+            warnings.warn(
+                "Custom reference_selector provided without custom strategy_resolver. "
+                "The reference_selector will take precedence over DefaultEvaluationStrategy's "
+                "reference handling. If you need more control, consider providing a custom "
+                "strategy_resolver that sets reference=None in EvaluationItem.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     def evaluate(
         self, records: Sequence[core_entities.GenerationRecord]
@@ -167,7 +218,16 @@ class EvaluationPipeline:
                             record_failures.append(message)
                             continue
 
-                        reference = item.reference or self._reference_selector(record)
+                        # CRITICAL: Always call reference_selector if provided (takes precedence)
+                        # This fixes the issue where DefaultEvaluationStrategy's reference
+                        # would prevent custom reference_selector from being called
+                        if self._has_custom_reference_selector:
+                            reference = self._reference_selector(record)
+                        elif item.reference is not None:
+                            reference = item.reference
+                        else:
+                            reference = _default_reference_selector(record)
+
                         references = (
                             _normalize_references(reference)
                             if reference is not None
