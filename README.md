@@ -12,7 +12,7 @@ Themis orchestrates prompt templates, LLM providers, generation strategies, eval
 ## Why Themis?
 
 - **🎯 Config-driven**: Define experiments in JSON/YAML, run them with a single command
-- **🔄 Resumable**: Automatic caching and resume—never lose your expensive LLM runs
+- **🔄 Resumable**: Automatic caching and resume—never lose your expensive LLM runs (smart cache invalidation for generation and evaluation)
 - **📊 Systematic**: Grid search over models × prompts × sampling strategies
 - **🔌 Provider-agnostic**: Works with 100+ LLM providers via LiteLLM (OpenAI, Anthropic, Azure, AWS Bedrock, Google AI, local LLMs, and more)
 - **📈 Built-in evaluation**: Exact match, math verification, custom metrics

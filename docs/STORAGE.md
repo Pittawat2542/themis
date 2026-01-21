@@ -566,6 +566,163 @@ for run in runs:
     print(f"{run.run_id}: {run.total_samples} samples")
 ```
 
+## Cache Invalidation
+
+### Evaluation Cache Key
+
+The storage system uses sophisticated cache keys to ensure proper invalidation when experiment configurations change. This prevents stale evaluations when you add metrics or change extractors.
+
+#### How It Works
+
+**Generation Cache Key** (for responses):
+```
+{dataset_id}::{template}::{model}::{temperature}-{top_p}-{max_tokens}::{prompt_hash}
+```
+
+**Evaluation Cache Key** (for evaluations):
+```
+{generation_cache_key}::eval:{evaluation_config_hash}
+```
+
+The evaluation config hash includes:
+- Metric names and types
+- Extractor type and configuration
+- Any evaluation settings that affect results
+
+#### Behavior
+
+| Change | Generation | Evaluation | Result |
+|--------|-----------|------------|--------|
+| Add/remove metric | ✓ Reuses cache | ✓ Re-evaluates | Cache invalidation works |
+| Change extractor | ✓ Reuses cache | ✓ Re-evaluates | Cache invalidation works |
+| Change temperature | ✓ Regenerates | ✓ Re-evaluates | Both invalidated |
+| Change prompt | ✓ Regenerates | ✓ Re-evaluates | Both invalidated |
+| No changes | ✓ Reuses cache | ✓ Reuses cache | Full resume |
+
+#### Example Usage
+
+```python
+from themis.experiment.storage import evaluation_cache_key, task_cache_key
+
+# Create task
+task = GenerationTask(
+    prompt=prompt_render,
+    model=model_spec,
+    sampling=SamplingConfig(temperature=0.7, top_p=1.0, max_tokens=100),
+    metadata={"dataset_id": "sample-1"}
+)
+
+# Generation cache key (includes sampling params)
+gen_key = task_cache_key(task)
+# Result: "sample-1::math::gpt-4::0.700-1.000-100::02409cd1139f"
+
+# Evaluation cache key (includes eval config)
+eval_config = {
+    "metrics": ["exact_match", "f1_score"],
+    "extractor": "json_field_extractor:answer"
+}
+eval_key = evaluation_cache_key(task, eval_config)
+# Result: "sample-1::math::gpt-4::0.700-1.000-100::02409cd1139f::eval:41350460b0e7"
+```
+
+#### Scenario: Adding New Metrics
+
+```python
+# Run 1: Evaluate with exact_match only
+pipeline = EvaluationPipeline(
+    extractor=JsonFieldExtractor("answer"),
+    metrics=[ExactMatch()]
+)
+orchestrator.run(dataset, run_id="exp-1")
+# Evaluations cached with config hash for exact_match only
+
+# Run 2: Add f1_score metric
+pipeline = EvaluationPipeline(
+    extractor=JsonFieldExtractor("answer"),
+    metrics=[ExactMatch(), F1Score()]  # Added new metric
+)
+orchestrator.run(dataset, run_id="exp-1", resume=True)
+# ✓ Reuses cached generations (same temperature, model, prompt)
+# ✓ Re-evaluates all samples (different eval config hash)
+# Both metrics computed on all samples
+```
+
+#### Scenario: Changing Extractor
+
+```python
+# Run 1: Extract from "answer" field
+pipeline = EvaluationPipeline(
+    extractor=JsonFieldExtractor("answer"),
+    metrics=[ExactMatch()]
+)
+
+# Run 2: Change to "solution" field
+pipeline = EvaluationPipeline(
+    extractor=JsonFieldExtractor("solution"),  # Changed field
+    metrics=[ExactMatch()]
+)
+orchestrator.run(dataset, run_id="exp-1", resume=True)
+# ✓ Reuses cached generations
+# ✓ Re-evaluates with new extractor (different eval config hash)
+```
+
+#### Technical Details
+
+The orchestrator automatically builds the evaluation config:
+
+```python
+# From orchestrator.py
+def _build_evaluation_config(self) -> dict:
+    """Build evaluation configuration for cache key generation."""
+    config = {}
+    
+    # Add metric names/types
+    if hasattr(self._evaluation, "_metrics"):
+        config["metrics"] = sorted([
+            f"{metric.__class__.__module__}.{metric.__class__.__name__}:{metric.name}"
+            for metric in self._evaluation._metrics
+        ])
+    
+    # Add extractor type and config
+    if hasattr(self._evaluation, "_extractor"):
+        extractor = self._evaluation._extractor
+        config["extractor"] = f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+        
+        if hasattr(extractor, "field_name"):
+            config["extractor_field"] = extractor.field_name
+    
+    return config
+```
+
+This config is automatically passed to storage operations:
+
+```python
+# Loading cached evaluations
+evaluation_config = self._build_evaluation_config()
+cached_evaluations = storage.load_cached_evaluations(
+    run_id, evaluation_config=evaluation_config
+)
+
+# Saving evaluations
+storage.append_evaluation(
+    run_id, record, evaluation, evaluation_config=evaluation_config
+)
+```
+
+#### Backward Compatibility
+
+Code without evaluation config still works (falls back to generation key only):
+
+```python
+# Old style (no config) - works but less precise
+storage.append_evaluation("run-1", record, evaluation)
+# Uses task_cache_key only
+
+# New style (with config) - proper invalidation
+storage.append_evaluation("run-1", record, evaluation, evaluation_config=config)
+# Uses evaluation_cache_key with config hash
+```
+
 ## Future Enhancements
 
 1. **Distributed storage**
