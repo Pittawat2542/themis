@@ -127,12 +127,15 @@ class ExperimentOrchestrator:
         # Expand dataset into generation tasks
         tasks = list(self._plan.expand(selected_dataset))
 
+        # Build evaluation configuration for cache invalidation
+        evaluation_config = self._build_evaluation_config()
+
         # Load cached results if resuming
         cached_records = (
             self._cache.load_cached_records(run_identifier) if resume else {}
         )
         cached_evaluations = (
-            self._cache.load_cached_evaluations(run_identifier) if resume else {}
+            self._cache.load_cached_evaluations(run_identifier, evaluation_config) if resume else {}
         )
 
         # Process tasks: use cached or run new generations
@@ -144,8 +147,8 @@ class ExperimentOrchestrator:
         cached_eval_records: list[EvaluationRecord] = []
 
         for task in tasks:
-            cache_key = experiment_storage.task_cache_key(task)
-            cached = cached_records.get(cache_key)
+            task_cache_key = experiment_storage.task_cache_key(task)
+            cached = cached_records.get(task_cache_key)
             if cached is not None:
                 generation_results.append(cached)
                 if cached.error:
@@ -155,12 +158,14 @@ class ExperimentOrchestrator:
                             message=cached.error.message,
                         )
                     )
-                evaluation = cached_evaluations.get(cache_key)
+                # Use evaluation_cache_key that includes evaluation config
+                eval_cache_key = experiment_storage.evaluation_cache_key(task, evaluation_config)
+                evaluation = cached_evaluations.get(eval_cache_key)
                 if evaluation is not None:
                     cached_eval_records.append(evaluation)
                 else:
                     pending_records.append(cached)
-                    pending_keys.append(cache_key)
+                    pending_keys.append(eval_cache_key)
                 if on_result:
                     on_result(cached)
             else:
@@ -214,7 +219,9 @@ class ExperimentOrchestrator:
 
         # Cache evaluation results
         for record, evaluation in zip(pending_records, new_evaluation_report.records):
-            self._cache.save_evaluation_record(run_identifier, record, evaluation)
+            self._cache.save_evaluation_record(
+                run_identifier, record, evaluation, evaluation_config
+            )
 
         # Combine cached and new evaluations
         evaluation_report = self._combine_evaluations(
@@ -273,6 +280,36 @@ class ExperimentOrchestrator:
 
     def _default_run_id(self) -> str:
         return datetime.now(timezone.utc).strftime("run-%Y%m%d-%H%M%S")
+
+    def _build_evaluation_config(self) -> dict:
+        """Build evaluation configuration for cache key generation.
+        
+        This configuration includes all evaluation settings that affect results,
+        so changing metrics or extractors will invalidate the cache.
+        
+        Returns:
+            Dictionary with evaluation configuration
+        """
+        config = {}
+        
+        # Add metric names/types
+        if hasattr(self._evaluation, "_metrics"):
+            config["metrics"] = sorted([
+                f"{metric.__class__.__module__}.{metric.__class__.__name__}:{metric.name}"
+                for metric in self._evaluation._metrics
+            ])
+        
+        # Add extractor type
+        if hasattr(self._evaluation, "_extractor"):
+            extractor = self._evaluation._extractor
+            extractor_type = f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+            config["extractor"] = extractor_type
+            
+            # Include extractor-specific configuration if available
+            if hasattr(extractor, "field_name"):
+                config["extractor_field"] = extractor.field_name
+        
+        return config
 
     def _resolve_dataset(
         self,
