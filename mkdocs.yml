@@ -35,9 +35,11 @@ nav:
       - API Generation: API_GENERATION.md
       - Configuration: CONFIGURATION.md
       - Cost Tracking: COST_TRACKING.md
+      - Evaluation: EVALUATION.md
       - Leaderboards: LEADERBOARDS.md
       - LiteLLM: LITELLM.md
       - Multi-Experiment Comparison: MULTI_EXPERIMENT_COMPARISON.md
+      - Storage Architecture: STORAGE.md
   - Reference:
       - Diagrams: DIAGRAM.md
       - Examples: EXAMPLES.md

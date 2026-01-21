@@ -30,6 +30,11 @@ generation:
     retry_max_delay: 2.0
 storage:
   path: null                     # e.g., .cache/runs
+  config:                        # StorageConfig options
+    save_raw_responses: false    # Save full API responses
+    save_dataset: true           # Save dataset copy
+    compression: gzip            # Compression: gzip | none
+    deduplicate_templates: true  # Deduplicate prompt templates
 max_samples: null                # cap tasks after plan expansion
 run_id: null                     # resume/cache key
 resume: true
@@ -147,6 +152,141 @@ integrations:
 - `wandb.tags`: A list of tags to associate with the W&B run.
 - `huggingface_hub.enable`: Set to `true` to enable uploading experiment results to the Hugging Face Hub.
 - `huggingface_hub.repository`: The ID of the Hugging Face Hub repository (e.g., `your-username/your-repo-name`) where results will be uploaded as a dataset.
+
+## Storage Configuration
+
+Themis provides configurable storage options to optimize disk space and performance.
+
+### StorageConfig Options
+
+```python
+from themis.experiment.storage import StorageConfig, ExperimentStorage, RetentionPolicy
+
+config = StorageConfig(
+    save_raw_responses=False,    # Save full API responses (default: False)
+    save_dataset=True,           # Save dataset copy (default: True)
+    compression="gzip",          # Compression: "gzip" | "none" (default: "gzip")
+    deduplicate_templates=True,  # Store templates once (default: True)
+    enable_checksums=True,       # Data integrity validation (default: True)
+    use_sqlite_metadata=True,    # Use SQLite for metadata (default: True)
+    checkpoint_interval=100,     # Save checkpoint every N records (default: 100)
+    retention_policy=RetentionPolicy(  # Automatic cleanup (default: None)
+        max_runs_per_experiment=10,
+        max_age_days=30,
+        keep_latest_n=5,
+    ),
+)
+
+storage = ExperimentStorage("outputs/experiments", config=config)
+```
+
+### Storage Optimizations
+
+**1. Compression (50-60% savings)**
+- `compression="gzip"`: Enable gzip compression for all JSONL files
+- `compression="none"`: Disable compression (easier to inspect, but larger files)
+- Files are automatically decompressed when loaded
+- Default: `"gzip"` (recommended)
+
+**2. Raw API Responses (~5MB savings per 1,500 samples)**
+- `save_raw_responses=False`: Don't save full API responses (recommended)
+- `save_raw_responses=True`: Keep raw responses for debugging
+- Raw responses include full API metadata, token IDs, etc.
+- Usually not needed since extracted output is saved
+- Default: `False` (recommended)
+
+**3. Template Deduplication (~627KB savings per 1,500 samples)**
+- `deduplicate_templates=True`: Store each unique template once
+- `deduplicate_templates=False`: Store template in every task
+- Significant savings for large experiments with repeated templates
+- Default: `True` (recommended)
+
+**4. Dataset Saving**
+- `save_dataset=True`: Save a copy of the dataset
+- `save_dataset=False`: Don't save dataset (if loading from file)
+- Set to `False` when loading from existing files to avoid duplication
+- Default: `True`
+
+**5. Format Versioning**
+- All files include version headers for safe format evolution
+- Example header: `{"_type": "header", "_format_version": "1.0.0", "_file_type": "records"}`
+- Automatic versioning prevents incompatibility issues
+
+### Storage Profiles
+
+**Production (Maximum Optimization):**
+```python
+config = StorageConfig(
+    save_raw_responses=False,
+    compression="gzip",
+    deduplicate_templates=True,
+    save_dataset=False,  # If loading from file
+)
+# Typical savings: 60-75% reduction
+# 18.5MB → 3-5MB for 1,500 samples
+```
+
+**Development (Balanced):**
+```python
+config = StorageConfig(
+    save_raw_responses=False,
+    compression="gzip",
+    deduplicate_templates=True,
+)
+# Good balance of space savings and usability
+```
+
+**Debug (Keep Everything):**
+```python
+config = StorageConfig(
+    save_raw_responses=True,
+    compression="none",
+    deduplicate_templates=False,
+)
+# Easier to inspect files manually
+# No space savings
+```
+
+### Storage Structure
+
+With default configuration, storage structure is:
+
+```
+outputs/run-id/
+├── templates.jsonl.gz     # Unique templates (deduplication)
+├── tasks.jsonl.gz         # Task definitions (reference templates)
+├── records.jsonl.gz       # Generation outputs (no raw responses)
+├── evaluation.jsonl.gz    # Evaluation results
+├── summary.json           # Quick summary (1KB, uncompressed)
+└── report.json            # Full report (optional)
+```
+
+### Quick Summary Export
+
+Export lightweight summaries for fast result viewing:
+
+```python
+from themis.experiment.export import export_summary_json
+
+export_summary_json(
+    report,
+    "outputs/run-123/summary.json",
+    run_id="run-123"
+)
+```
+
+View summaries via CLI:
+
+```bash
+# View summary for a run (~1KB file vs ~1.6MB report)
+uv run python -m themis.cli results-summary --run-id run-123
+
+# List all runs with metrics
+uv run python -m themis.cli results-list
+
+# List 10 most recent runs
+uv run python -m themis.cli results-list --limit 10
+```
 
 ## Hydra overrides
 

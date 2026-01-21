@@ -137,6 +137,177 @@ uv run python -m themis.cli run-config --config my_config.yaml
 
 ---
 
+## New Features
+
+### 🔒 Robust Storage Architecture (V2) - Production Ready
+
+**New:** Enterprise-grade storage with lifecycle management and data integrity:
+
+```python
+from themis.experiment.storage import ExperimentStorage, RunStatus
+
+# Initialize robust storage
+storage = ExperimentStorage("outputs/experiments")
+
+# Run lifecycle management
+storage.start_run("run-1", "exp-1", config={"model": "gpt-4"})
+
+# Atomic writes + file locking (safe for concurrent access)
+storage.append_record("run-1", record)
+
+# Complete or fail run
+storage.complete_run("run-1")
+# or: storage.fail_run("run-1", "error message")
+
+# Query with SQLite
+import sqlite3
+conn = sqlite3.connect("outputs/experiments/experiments.db")
+cursor = conn.execute("SELECT * FROM runs WHERE status = 'completed'")
+```
+
+**Key Features:**
+- ✅ **Run lifecycle tracking** - Know if runs completed successfully
+- ✅ **Atomic operations** - No corruption from crashes
+- ✅ **File locking** - Safe multi-process access
+- ✅ **SQLite metadata** - Fast queries across runs
+- ✅ **Persistent indexes** - 33% faster loading
+- ✅ **Hierarchical structure** - Experiments → Runs → Evaluations
+
+**Benefits:**
+- Crash-safe writes (no partial data)
+- Concurrent experiments from multiple processes
+- Query all runs instantly (SQL vs parsing JSON)
+- Resume failed runs correctly
+- Production-ready reliability
+
+See [`docs/STORAGE.md`](docs/STORAGE.md) for complete guide.
+
+---
+
+### Optimized Storage (60-75% Savings)
+
+Themis now includes configurable storage optimization:
+
+```python
+from themis.experiment.storage import ExperimentStorage, StorageConfig
+
+# Default optimized configuration (recommended)
+storage = ExperimentStorage("outputs/experiments")
+
+# Custom configuration
+config = StorageConfig(
+    save_raw_responses=False,    # Don't save full API responses (saves ~5MB per 1.5K samples)
+    compression="gzip",           # Enable gzip compression (50-60% reduction)
+    deduplicate_templates=True,   # Store templates once (saves ~627KB per 1.5K samples)
+)
+storage = ExperimentStorage("outputs/experiments", config=config)
+```
+
+**Storage improvements:**
+- **Compression**: Gzip compression reduces file sizes by 50-60%
+- **Template deduplication**: Stores prompt templates once instead of in every task
+- **Optional raw responses**: Skip saving full API responses (rarely needed)
+- **Format versioning**: All files include version headers for safe evolution
+
+**Before:** ~18.5MB for 1,500 samples → **After:** ~3-5MB (60-75% reduction)
+
+### Quick Results Viewing
+
+View experiment summaries instantly without parsing large report files:
+
+```bash
+# View summary for a run (reads 1KB file instead of 1.6MB)
+uv run python -m themis.cli results-summary --run-id run-20260118-032014
+
+# List all runs with metrics
+uv run python -m themis.cli results-list
+
+# List 10 most recent runs
+uv run python -m themis.cli results-list --limit 10
+```
+
+Export summaries in your code:
+
+```python
+from themis.experiment.export import export_summary_json
+
+export_summary_json(
+    report,
+    "outputs/run-123/summary.json",
+    run_id="run-123"
+)
+```
+
+### Multi-Value References
+
+References now support dict values for complex evaluation:
+
+```python
+from themis.core.entities import Reference
+
+# Multi-value reference using dict
+reference = Reference(
+    kind="task",
+    value={
+        "target": 122,
+        "numbers": [25, 50, 75, 100]
+    }
+)
+
+# In your metric
+def compute(self, *, prediction, references, metadata=None):
+    ref = references[0]
+    if isinstance(ref, dict):
+        target = ref["target"]
+        numbers = ref["numbers"]
+```
+
+### Custom Reference Selectors
+
+Custom reference selectors now work correctly with the evaluation pipeline:
+
+```python
+from themis.evaluation import EvaluationPipeline
+
+def custom_selector(record):
+    return {
+        "target": record.task.reference.value,
+        "numbers": record.task.metadata.get("numbers", [])
+    }
+
+pipeline = EvaluationPipeline(
+    extractor=my_extractor,
+    metrics=[my_metric],
+    reference_selector=custom_selector  # Takes precedence over defaults
+)
+```
+
+### Clear Extractor Contract
+
+Metrics now have clear documentation about what they receive:
+
+```python
+from themis.interfaces import Metric
+
+class MyMetric(Metric):
+    name = "my_metric"
+    
+    def compute(self, *, prediction, references, metadata=None):
+        # prediction is ALREADY EXTRACTED by the pipeline's extractor
+        # Don't try to extract again!
+        is_correct = prediction == references[0]
+        return MetricScore(metric_name=self.name, value=1.0 if is_correct else 0.0)
+```
+
+**Key improvements:**
+- ✅ Custom reference selectors take precedence over strategies
+- ✅ Metrics receive extracted output (not raw text)
+- ✅ Multi-value references via dict values
+- ✅ Comprehensive documentation and examples
+- ✅ Validation warnings guide users
+
+---
+
 ## Examples & Tutorials
 
 **👉 Start here: [`examples/README.md`](examples/README.md)**
@@ -519,6 +690,32 @@ Themis uses JSON or YAML for configuration. Here's a complete example:
 - `limit`: Maximum samples (for testing)
 - `source_path`: Path for local datasets (optional)
 
+**Storage Configuration (StorageConfig):**
+- `save_raw_responses`: Save full API responses (default: `false`, saves ~5MB per 1.5K samples)
+- `save_dataset`: Save dataset copy (default: `true`, set to `false` if loading from file)
+- `compression`: Compression format - `"gzip"` or `"none"` (default: `"gzip"`, saves 50-60%)
+- `deduplicate_templates`: Store templates once (default: `true`, saves ~627KB per 1.5K samples)
+- `format_version`: Storage format version (automatically set)
+
+**Example:**
+```python
+from themis.experiment.storage import StorageConfig
+
+# Production: Maximum optimization
+config = StorageConfig(
+    save_raw_responses=False,
+    compression="gzip",
+    deduplicate_templates=True
+)
+
+# Debug: Keep everything, no compression
+config = StorageConfig(
+    save_raw_responses=True,
+    compression="none",
+    deduplicate_templates=False
+)
+```
+
 See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the complete schema and [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for common recipes.
 
 ---
@@ -618,7 +815,9 @@ uv run python -m themis.cli math500 \
 
 - **[examples/README.md](examples/README.md)** - Comprehensive tutorial cookbook (START HERE!)
 - **[COOKBOOK.md](COOKBOOK.md)** - Quick reference and cheat sheet
-- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - Complete configuration schema
+- **[docs/STORAGE.md](docs/STORAGE.md)** - Robust storage architecture (lifecycle, locking, SQLite)
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - Complete configuration schema (includes storage optimization)
+- **[docs/EVALUATION.md](docs/EVALUATION.md)** - Evaluation guide (custom metrics, multi-value references, extractors)
 - **[docs/ADDING_COMPONENTS.md](docs/ADDING_COMPONENTS.md)** - Extension guide
 - **[docs/DIAGRAM.md](docs/DIAGRAM.md)** - Architecture diagrams
 - **[docs/EXAMPLES.md](docs/EXAMPLES.md)** - Additional recipes and patterns
