@@ -127,6 +127,9 @@ uv run python -m examples.projects.cli run \
 **For power users who need full control.**
 
 Learn how to customize and extend Themis:
+- **Storage optimization** with StorageConfig (60-75% space savings)
+- **Multi-value references** for complex evaluation tasks
+- **Custom reference selectors** that take precedence
 - Override generation loops with custom runners
 - Create custom evaluation pipelines
 - Implement domain-specific metrics
@@ -135,7 +138,7 @@ Learn how to customize and extend Themis:
 
 **Time to complete:** 60 minutes
 
-**Key concepts:** Custom runners, evaluation pipelines, metrics, agentic workflows, instrumentation
+**Key concepts:** StorageConfig, multi-value references, custom runners, evaluation pipelines, metrics, agentic workflows
 
 **Example commands:**
 ```bash
@@ -455,6 +458,104 @@ examples/
 7. **Export results** - Use `--csv-output` and `--html-output` for analysis.
 
 8. **Read error messages** - They usually tell you exactly what's wrong.
+
+## New Features Quick Reference
+
+### Storage Optimization (See: advanced example)
+
+Optimize storage for large experiments:
+
+```python
+from themis.experiment.storage import StorageConfig
+
+# Production: 60-75% storage reduction
+config = StorageConfig(
+    save_raw_responses=False,    # Saves ~5MB per 1.5K samples
+    compression="gzip",           # 50-60% reduction
+    deduplicate_templates=True,   # Saves ~627KB per 1.5K samples
+)
+
+# Result: 18.5MB → 3-5MB for 1,500 samples
+```
+
+### Quick Results Viewing
+
+View experiment results without parsing large files:
+
+```bash
+# View summary (1KB file vs 1.6MB report)
+uv run python -m themis.cli results-summary --run-id run-20260118-032014
+
+# List all runs
+uv run python -m themis.cli results-list
+
+# List 10 most recent
+uv run python -m themis.cli results-list --limit 10
+```
+
+Export summaries in code:
+
+```python
+from themis.experiment.export import export_summary_json
+
+export_summary_json(report, "outputs/run-123/summary.json", run_id="run-123")
+```
+
+### Multi-Value References (See: advanced example)
+
+Use dict values for complex evaluation:
+
+```python
+from themis.core.entities import Reference
+
+# Multi-value reference
+ref = Reference(
+    kind="task",
+    value={"answer": 42, "steps": [...], "constraints": [...]}
+)
+
+# In metric
+def compute(self, *, prediction, references, metadata=None):
+    ref = references[0]
+    if isinstance(ref, dict):
+        answer = ref["answer"]
+        steps = ref["steps"]
+```
+
+### Custom Reference Selectors (See: advanced example)
+
+Extract custom references that take precedence:
+
+```python
+from themis.evaluation import EvaluationPipeline
+
+def my_selector(record):
+    return {
+        "answer": record.task.reference.value,
+        "extra": record.task.metadata.get("extra_data")
+    }
+
+pipeline = EvaluationPipeline(
+    extractor=extractor,
+    metrics=[metric],
+    reference_selector=my_selector  # Takes precedence
+)
+```
+
+### Clear Extractor Contract
+
+Metrics receive **extracted** output (not raw text):
+
+```python
+from themis.interfaces import Metric
+
+class MyMetric(Metric):
+    def compute(self, *, prediction, references, metadata=None):
+        # ✅ prediction is already extracted
+        # DON'T try to extract again!
+        is_correct = prediction == references[0]
+        return MetricScore(metric_name=self.name, value=1.0 if is_correct else 0.0)
+```
 
 ## Next Steps
 

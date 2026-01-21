@@ -36,8 +36,114 @@ ExperimentOrchestrator
 ├── EvaluationPipeline (customizable)
 │   ├── Extractors (customizable)
 │   └── Metrics (customizable)
-└── Storage (customizable)
+└── Storage (customizable with StorageConfig)
 ```
+
+## Example 0: Optimized Storage Configuration
+
+### Problem
+
+Large experiments can generate substantial storage overhead. By default, Themis saves:
+- Full API responses (~3-5KB each)
+- Duplicate prompt templates in every task
+- Uncompressed JSONL files
+
+For 10,000 samples, this can result in ~120MB of storage.
+
+### Solution: StorageConfig
+
+Configure storage optimization for your needs:
+
+```python
+from themis.experiment.storage import ExperimentStorage, StorageConfig
+from themis.experiment.export import export_summary_json, export_report_bundle
+
+# Production: Maximum optimization (recommended)
+storage_config = StorageConfig(
+    save_raw_responses=False,    # Skip full API responses (saves ~5MB per 1.5K samples)
+    compression="gzip",           # Enable compression (50-60% reduction)
+    deduplicate_templates=True,   # Store templates once (saves ~627KB per 1.5K samples)
+    save_dataset=False,           # Don't duplicate dataset if loading from file
+)
+
+# Development: Balanced approach
+storage_config = StorageConfig(
+    save_raw_responses=False,
+    compression="gzip",
+    deduplicate_templates=True,
+)
+
+# Debug: Keep everything for inspection
+storage_config = StorageConfig(
+    save_raw_responses=True,
+    compression="none",
+    deduplicate_templates=False,
+)
+
+# Use in experiment builder
+storage = ExperimentStorage(".cache/experiments", config=storage_config)
+```
+
+### Quick Summary Export
+
+Export lightweight summaries for fast result viewing:
+
+```python
+from themis.experiment.export import export_summary_json, export_report_bundle
+
+# After running experiment
+report = run_experiment(config)
+
+# Export summary (1KB) for quick viewing
+export_summary_json(
+    report,
+    f"{config.storage_dir}/{config.run_id}/summary.json",
+    run_id=config.run_id
+)
+
+# Or export everything including summary
+export_report_bundle(
+    report,
+    json_path=f"{config.storage_dir}/{config.run_id}/report.json",
+    summary_path=f"{config.storage_dir}/{config.run_id}/summary.json",
+    csv_path=f"{config.storage_dir}/{config.run_id}/results.csv",
+    run_id=config.run_id
+)
+
+# View summaries via CLI
+# uv run python -m themis.cli results-summary --run-id run-123
+# uv run python -m themis.cli results-list
+```
+
+### Storage Savings
+
+**Before optimizations (1,500 samples):**
+```
+outputs/run-id/
+├── dataset.jsonl      604KB
+├── tasks.jsonl        2.5MB  (templates duplicated)
+├── records.jsonl      13MB   (raw responses included)
+├── evaluation.jsonl   772KB
+└── report.json        1.6MB
+Total: 18.5MB
+```
+
+**After optimizations (1,500 samples):**
+```
+outputs/run-id/
+├── templates.jsonl.gz     0.4KB  (deduplicated!)
+├── tasks.jsonl.gz         500KB  (compressed, references templates)
+├── records.jsonl.gz       2MB    (compressed, no raw responses)
+├── evaluation.jsonl.gz    200KB  (compressed)
+├── summary.json           1KB    (quick access!)
+└── report.json            1.6MB  (optional)
+Total: ~4.3MB (77% reduction!)
+```
+
+**For 10,000 samples:**
+- Before: ~120MB
+- After: ~20-30MB
+- Savings: ~90-100MB (75% reduction)
 
 ## Example 1: Custom Generation Runner
 
@@ -123,6 +229,174 @@ report = built.orchestrator.run(dataset=dataset, run_id="prioritized-run")
 - Better cache locality for similar problems
 - More predictable execution order
 - Easier debugging with grouped outputs
+
+## Example 1.5: Multi-Value References and Custom Selectors
+
+### Problem
+
+Some tasks require multiple reference values for evaluation. For example:
+- Countdown task: needs target number AND allowed numbers
+- Math problem: needs answer AND valid solution steps
+- Code generation: needs output AND test cases
+
+The simple single-value Reference doesn't support this directly.
+
+### Solution: Dict-Valued References
+
+Use dict values in References to store multiple related values:
+
+```python
+from themis.core import entities as core_entities
+
+# Create task with multi-value reference
+task = core_entities.GenerationTask(
+    prompt=core_entities.PromptRender(
+        spec=core_entities.PromptSpec(
+            name="countdown",
+            template="Using {numbers_str}, make {target}"
+        ),
+        text="Using 25, 50, 75, 100, make 122",
+        context={"numbers_str": "25, 50, 75, 100", "target": 122}
+    ),
+    model=model_spec,
+    sampling=sampling_config,
+    reference=core_entities.Reference(
+        kind="countdown",
+        value={
+            "target": 122,
+            "numbers": [25, 50, 75, 100]
+        }
+    ),
+    metadata={"numbers": [25, 50, 75, 100]}
+)
+```
+
+### Custom Reference Selector
+
+Extract multi-value references from task metadata:
+
+```python
+from themis.evaluation import EvaluationPipeline
+
+def countdown_reference_selector(record):
+    """Extract both target and numbers from task."""
+    return {
+        "target": record.task.reference.value,
+        "numbers": record.task.metadata.get("numbers", [])
+    }
+
+# Create pipeline with custom selector
+pipeline = EvaluationPipeline(
+    extractor=my_extractor,
+    metrics=[countdown_metric],
+    reference_selector=countdown_reference_selector
+)
+
+# Note: You'll see a warning about using custom selector with DefaultEvaluationStrategy
+# This is normal - the selector will work correctly and take precedence
+```
+
+### Using in Metrics
+
+Access multi-value references in your metric:
+
+```python
+from themis.interfaces import Metric
+from themis.core import entities
+
+class CountdownMetric(Metric):
+    name = "countdown_accuracy"
+    
+    def compute(self, *, prediction, references, metadata=None):
+        # references is always a list (normalized by pipeline)
+        ref = references[0]
+        
+        # Check if it's a dict (multi-value reference)
+        if isinstance(ref, dict):
+            target = ref["target"]
+            numbers = ref["numbers"]
+        else:
+            # Fallback for simple reference
+            target = ref
+            numbers = metadata.get("numbers", [])
+        
+        # Validate prediction uses only allowed numbers to reach target
+        is_valid = self.validate_solution(prediction, numbers, target)
+        
+        return entities.MetricScore(
+            metric_name=self.name,
+            value=1.0 if is_valid else 0.0,
+            details={
+                "target": target,
+                "allowed_numbers": numbers,
+                "prediction": prediction
+            }
+        )
+    
+    def validate_solution(self, prediction, numbers, target):
+        # Your validation logic here
+        # Check if prediction uses only numbers from 'numbers' to reach 'target'
+        pass
+```
+
+### Pattern: Multiple Valid Answers
+
+Return a list from reference selector for multiple valid answers:
+
+```python
+def multiple_answers_selector(record):
+    """Allow multiple valid answers."""
+    primary = record.task.reference.value
+    alternatives = record.task.metadata.get("alternative_answers", [])
+    # Return as list - metric will check against all
+    return [primary] + alternatives
+
+# In metric
+def compute(self, *, prediction, references, metadata=None):
+    # references is list of valid answers
+    is_correct = any(
+        prediction.strip().lower() == str(ref).strip().lower()
+        for ref in references
+    )
+    return entities.MetricScore(
+        metric_name=self.name,
+        value=1.0 if is_correct else 0.0
+    )
+```
+
+### Best Practices
+
+1. **Use dict for related values:**
+   ```python
+   # ✅ Good: Related values together
+   Reference(kind="task", value={"answer": 42, "steps": [...]})
+   
+   # ❌ Avoid: Scattered across metadata
+   Reference(kind="answer", value=42)
+   metadata={"steps": [...]}
+   ```
+
+2. **Handle both formats gracefully:**
+   ```python
+   ref = references[0]
+   if isinstance(ref, dict):
+       # Multi-value reference
+       answer = ref["answer"]
+   else:
+       # Simple reference
+       answer = ref
+   ```
+
+3. **Document expected reference format:**
+   ```python
+   class MyMetric(Metric):
+       """Custom metric.
+       
+       Expected reference format:
+       - Simple: string or int
+       - Complex: dict with keys: "answer", "steps", "constraints"
+       """
+   ```
 
 ## Example 2: Custom Evaluation Pipeline
 
