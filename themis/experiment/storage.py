@@ -742,6 +742,7 @@ class ExperimentStorage:
         evaluation: core_entities.EvaluationRecord,
         *,
         eval_id: str = "default",
+        evaluation_config: dict | None = None,
     ) -> None:
         """Append evaluation result.
         
@@ -750,6 +751,7 @@ class ExperimentStorage:
             record: Generation record being evaluated
             evaluation: Evaluation record
             eval_id: Evaluation identifier (default: "default")
+            evaluation_config: Evaluation configuration (metrics, extractor) for cache invalidation
         """
         with self._acquire_lock(run_id):
             eval_dir = self._get_evaluation_dir(run_id, eval_id)
@@ -760,23 +762,31 @@ class ExperimentStorage:
             if not self._file_exists_any_compression(path):
                 self._write_jsonl_with_header(path, [], file_type="evaluation")
             
+            # Use evaluation_cache_key that includes evaluation config
+            cache_key = evaluation_cache_key(record.task, evaluation_config)
+            
             payload = {
-                "cache_key": self._task_cache_key(record.task),
+                "cache_key": cache_key,
                 "evaluation": core_serialization.serialize_evaluation_record(evaluation),
             }
             self._atomic_append(path, payload)
 
     def load_cached_evaluations(
-        self, run_id: str, eval_id: str = "default"
+        self, run_id: str, eval_id: str = "default", evaluation_config: dict | None = None
     ) -> Dict[str, core_entities.EvaluationRecord]:
         """Load cached evaluation records.
         
         Args:
             run_id: Run identifier
             eval_id: Evaluation identifier
+            evaluation_config: Evaluation configuration for cache key matching
             
         Returns:
             Dict mapping cache_key to EvaluationRecord
+            
+        Note:
+            If evaluation_config is provided, only evaluations matching that config
+            will be loaded. This ensures that changing metrics invalidates the cache.
         """
         eval_dir = self._get_evaluation_dir(run_id, eval_id)
         path = eval_dir / "evaluation.jsonl"
@@ -1373,6 +1383,45 @@ def task_cache_key(task: core_entities.GenerationTask) -> str:
     )
 
 
+def evaluation_cache_key(
+    task: core_entities.GenerationTask,
+    evaluation_config: dict | None = None,
+) -> str:
+    """Derive a stable cache key for an evaluation that includes both task and evaluation configuration.
+    
+    This ensures that changing metrics or evaluation settings will invalidate the cache
+    and trigger re-evaluation, even if the generation is cached.
+    
+    Args:
+        task: Generation task
+        evaluation_config: Dictionary with evaluation configuration:
+            - metrics: List of metric names/types
+            - extractor: Extractor type/configuration
+            - Any other evaluation settings
+    
+    Returns:
+        Cache key string that includes both task and evaluation config
+    
+    Example:
+        >>> config = {
+        ...     "metrics": ["exact_match", "f1_score"],
+        ...     "extractor": "json_field_extractor:answer"
+        ... }
+        >>> key = evaluation_cache_key(task, config)
+    """
+    task_key = task_cache_key(task)
+    
+    if not evaluation_config:
+        # No config provided, use task key only (for backward compatibility)
+        return task_key
+    
+    # Create deterministic hash of evaluation configuration
+    config_str = json.dumps(evaluation_config, sort_keys=True)
+    config_hash = hashlib.sha256(config_str.encode("utf-8")).hexdigest()[:12]
+    
+    return f"{task_key}::eval:{config_hash}"
+
+
 __all__ = [
     "ExperimentStorage",
     "StorageConfig",
@@ -1383,4 +1432,5 @@ __all__ = [
     "DataIntegrityError",
     "ConcurrentAccessError",
     "task_cache_key",
+    "evaluation_cache_key",
 ]
