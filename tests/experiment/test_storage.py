@@ -2,8 +2,6 @@ import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
-import pytest
-
 from themis.core import entities as core_entities
 from themis.experiment import storage as experiment_storage
 from themis.experiment.storage import RetentionPolicy, RunStatus, StorageConfig
@@ -57,21 +55,94 @@ def test_experiment_storage_roundtrip(tmp_path):
     assert key in cached
     assert cached[key].output.text == "2"
 
-    # Append evaluation
+    # Append evaluation without config (backward compatibility)
     score = core_entities.MetricScore(
         metric_name="ExactMatch", value=1.0, details={}, metadata={}
     )
     evaluation = core_entities.EvaluationRecord(sample_id="1", scores=[score])
     storage.append_evaluation("run-1", record, evaluation)
 
+    # Without evaluation_config, should use task key for backward compatibility
     cached_eval = storage.load_cached_evaluations("run-1")
     assert key in cached_eval
     assert cached_eval[key].scores[0].value == 1.0
+    
+    # Append evaluation with config (new behavior)
+    eval_config = {
+        "metrics": ["exact_match", "f1_score"],
+        "extractor": "json_field_extractor:answer"
+    }
+    evaluation2 = core_entities.EvaluationRecord(sample_id="1", scores=[score])
+    storage.append_evaluation("run-1", record, evaluation2, evaluation_config=eval_config)
+    
+    # With evaluation_config, should use evaluation_cache_key
+    eval_key = experiment_storage.evaluation_cache_key(record.task, eval_config)
+    cached_eval_with_config = storage.load_cached_evaluations("run-1", evaluation_config=eval_config)
+    assert eval_key in cached_eval_with_config
+    assert cached_eval_with_config[eval_key].scores[0].value == 1.0
     
     # Complete the run
     storage.complete_run("run-1")
     metadata = storage._load_run_metadata("run-1")
     assert metadata.status == RunStatus.COMPLETED
+
+
+def test_evaluation_cache_invalidation_on_config_change(tmp_path):
+    """Test that changing evaluation config invalidates the cache."""
+    storage = experiment_storage.ExperimentStorage(tmp_path)
+    storage.start_run("run-1", "exp-1", config={})
+    
+    # Create a generation record
+    record = make_record("1", "42")
+    task_key = experiment_storage.task_cache_key(record.task)
+    storage.append_record("run-1", record, cache_key=task_key)
+    
+    # Save evaluation with config A
+    config_a = {
+        "metrics": ["exact_match"],
+        "extractor": "json_field_extractor:answer"
+    }
+    score_a = core_entities.MetricScore(
+        metric_name="exact_match", value=1.0, details={}, metadata={}
+    )
+    eval_a = core_entities.EvaluationRecord(sample_id="1", scores=[score_a])
+    storage.append_evaluation("run-1", record, eval_a, evaluation_config=config_a)
+    
+    # Load with config A - should find it
+    eval_key_a = experiment_storage.evaluation_cache_key(record.task, config_a)
+    cached_a = storage.load_cached_evaluations("run-1", evaluation_config=config_a)
+    assert eval_key_a in cached_a
+    assert cached_a[eval_key_a].scores[0].value == 1.0
+    
+    # Change evaluation config (add new metric)
+    config_b = {
+        "metrics": ["exact_match", "f1_score"],  # Added new metric
+        "extractor": "json_field_extractor:answer"
+    }
+    
+    # Load with config B - should NOT find the cached evaluation
+    eval_key_b = experiment_storage.evaluation_cache_key(record.task, config_b)
+    cached_b = storage.load_cached_evaluations("run-1", evaluation_config=config_b)
+    assert eval_key_b not in cached_b  # Cache miss due to config change
+    
+    # The keys should be different
+    assert eval_key_a != eval_key_b
+    
+    # Save evaluation with config B
+    score_b = core_entities.MetricScore(
+        metric_name="f1_score", value=0.8, details={}, metadata={}
+    )
+    eval_b = core_entities.EvaluationRecord(sample_id="1", scores=[score_a, score_b])
+    storage.append_evaluation("run-1", record, eval_b, evaluation_config=config_b)
+    
+    # Now loading with config B should find it
+    cached_b_after = storage.load_cached_evaluations("run-1", evaluation_config=config_b)
+    assert eval_key_b in cached_b_after
+    assert len(cached_b_after[eval_key_b].scores) == 2
+    
+    # Loading with config A should still find the old evaluation
+    cached_a_still = storage.load_cached_evaluations("run-1", evaluation_config=config_a)
+    assert eval_key_a in cached_a_still
 
 
 def test_storage_config_compression(tmp_path):
