@@ -365,4 +365,4 @@ export GEMINI_API_KEY="..."
 - [LiteLLM Documentation](https://docs.litellm.ai/)
 - [Supported Providers](https://docs.litellm.ai/docs/providers)
 - [Example Configs](../examples/litellm_example/)
-- [Themis Main Documentation](../README.md)
+- [Themis Main Documentation](index.md)

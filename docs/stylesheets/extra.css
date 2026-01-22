@@ -1,0 +1,166 @@
+/* Custom styles for Themis documentation */
+
+/* Better code block styling */
+.md-typeset code {
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+}
+
+/* Improve table styling */
+.md-typeset table:not([class]) {
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 4px;
+}
+
+.md-typeset table:not([class]) th {
+    background-color: var(--md-code-bg-color);
+    font-weight: 600;
+}
+
+/* Better admonition colors */
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+    border-left-color: #00c853;
+}
+
+.md-typeset .admonition.tip > .admonition-title,
+.md-typeset details.tip > .admonition-title {
+    background-color: rgba(0, 200, 83, 0.1);
+}
+
+/* Custom hero section for homepage */
+.hero {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.hero h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.hero p {
+    font-size: 1.25rem;
+    color: var(--md-default-fg-color--light);
+    max-width: 600px;
+    margin: 0 auto 2rem;
+}
+
+/* Feature grid */
+.features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    margin: 3rem 0;
+}
+
+.feature {
+    padding: 1.5rem;
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.feature:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: var(--md-primary-fg-color);
+}
+
+.feature h3 {
+    margin-top: 0;
+    color: var(--md-primary-fg-color);
+}
+
+/* Better inline code in headers */
+.md-typeset h1 code,
+.md-typeset h2 code,
+.md-typeset h3 code {
+    background-color: var(--md-code-bg-color);
+    padding: 0.1em 0.4em;
+    font-size: 0.85em;
+}
+
+/* Command line prompts */
+.md-typeset .language-bash::before {
+    content: "$";
+    color: var(--md-default-fg-color--light);
+    margin-right: 0.5em;
+    user-select: none;
+}
+
+/* Improve navigation */
+.md-nav__link--active {
+    font-weight: 600;
+}
+
+/* Better spacing for lists */
+.md-typeset li {
+    margin-bottom: 0.5em;
+}
+
+/* Improve search results */
+.md-search-result__article {
+    padding: 1rem;
+}
+
+/* Code block title */
+.md-typeset pre > code {
+    display: block;
+    padding: 1em;
+}
+
+/* Better button styling */
+.md-button {
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.md-button:hover {
+    transform: translateY(-2px);
+}
+
+/* Improve tab styling */
+.tabbed-set {
+    margin: 1.5em 0;
+}
+
+/* Footer improvements */
+.md-footer__inner {
+    padding: 0.2rem 0;
+}
+
+/* Dark mode specific adjustments */
+[data-md-color-scheme="slate"] .feature {
+    border-color: var(--md-default-fg-color--lightest);
+    background-color: var(--md-code-bg-color);
+}
+
+[data-md-color-scheme="slate"] .feature:hover {
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.05);
+}
+
+/* Responsive design */
+@media screen and (max-width: 768px) {
+    .hero h1 {
+        font-size: 2rem;
+    }
+    
+    .hero p {
+        font-size: 1rem;
+    }
+    
+    .features {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Print styles */
+@media print {
+    .md-header,
+    .md-sidebar,
+    .md-footer {
+        display: none;
+    }
+}

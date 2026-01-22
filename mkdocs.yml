@@ -1,45 +1,152 @@
 site_name: Themis
-site_description: A framework for agentic AI comparisons.
+site_description: Modern LLM evaluation framework for researchers and practitioners
 site_url: https://pittawat2542.github.io/themis/
+repo_url: https://github.com/pittawat2542/themis
+repo_name: pittawat2542/themis
+edit_uri: edit/main/docs/
 
 theme:
   name: material
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - toc.follow
     - toc.integrate
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
     - content.code.copy
+    - content.code.annotate
   palette:
-    - scheme: default
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
       primary: indigo
-      accent: indigo
-    - scheme: slate
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
       primary: indigo
-      accent: indigo
-      media: '(prefers-color-scheme: dark)'
+      accent: blue
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
 
 plugins:
-  - search
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
   - mkdocstrings:
       handlers:
         python:
           paths: [.]
+          options:
+            docstring_style: google
+            docstring_section_style: spacy
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 80
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/pittawat2542/themis
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/themis-eval/
+  version:
+    provider: mike
+    default: latest
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX  # Replace with your GA4 property ID
 
 nav:
   - Home: index.md
-  - Features:
-      - Adding Components: ADDING_COMPONENTS.md
-      - API Generation: API_GENERATION.md
-      - Configuration: CONFIGURATION.md
-      - Cost Tracking: COST_TRACKING.md
-      - Evaluation: EVALUATION.md
-      - Leaderboards: LEADERBOARDS.md
-      - LiteLLM: LITELLM.md
-      - Multi-Experiment Comparison: MULTI_EXPERIMENT_COMPARISON.md
+  
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Core Concepts: getting-started/concepts.md
+      - Best Practices: BEST_PRACTICES.md
+      - FAQ: FAQ.md
+  
+  - User Guide:
+      - Evaluation: guides/evaluation.md
+      - CLI Reference: guides/cli.md
+      - Comparison: COMPARISON.md
+      - Configuration: guides/configuration.md
+      - Benchmarks: BENCHMARKS.md
+      - Caching: CACHE_INVALIDATION.md
+  
+  - Advanced:
+      - API Server: API_SERVER.md
+      - Extending Backends: EXTENDING_BACKENDS.md
       - Storage Architecture: STORAGE.md
-  - Reference:
-      - Diagrams: DIAGRAM.md
-      - Examples: EXAMPLES.md
+      - LiteLLM Integration: LITELLM.md
+      - Cost Tracking: COST_TRACKING.md
+  
+  - API Reference:
+      - Overview: api/overview.md
+      - evaluate(): api/evaluate.md
+      - Comparison: api/comparison.md
+      - Presets: api/presets.md
+      - Metrics: api/metrics.md
+      - Backends: api/backends.md
+  
+  - Tutorials:
+      - Jupyter Notebooks: tutorials/notebooks.md
+      - Code Examples: tutorials/examples.md
+  
+  - Community:
+      - Contributing: CONTRIBUTING.md
+      - Changelog: CHANGELOG.md
+      - Migration Guide: MIGRATION.md
+      - Architecture: development/architecture.md
+
+extra_css:
+  - stylesheets/extra.css
+
+copyright: Copyright &copy; 2024 Themis Contributors
