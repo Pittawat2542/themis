@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from themis.evaluation import extractors, math_verify_utils, metrics
@@ -14,6 +16,10 @@ def test_math_verify_extractor_grabs_last_boxed():
     assert extractor.extract(text).endswith("3")
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="math-verify multiprocessing issues on Windows (handle duplication error)",
+)
 def test_math_verify_metric_validates_equivalence():
     metric = metrics.MathVerifyAccuracy()
     score = metric.compute(prediction="\\boxed{2+2}", references=["4"])
