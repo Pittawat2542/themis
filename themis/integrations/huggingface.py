@@ -3,8 +3,15 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from huggingface_hub import HfApi
+if TYPE_CHECKING:
+    from huggingface_hub import HfApi
+else:
+    try:
+        from huggingface_hub import HfApi
+    except ImportError:
+        HfApi = None  # type: ignore
 
 from themis.config.schema import HuggingFaceHubConfig
 from themis.core.entities import ExperimentReport
@@ -24,6 +31,10 @@ def to_dict(obj):
 
 class HuggingFaceHubUploader:
     def __init__(self, config: HuggingFaceHubConfig):
+        if HfApi is None:
+            raise ImportError(
+                "huggingface_hub is not installed. Install with: pip install huggingface_hub"
+            )
         self.config = config
         self.api = HfApi()
 

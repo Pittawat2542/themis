@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-import wandb
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import wandb
+else:
+    try:
+        import wandb
+    except ImportError:
+        wandb = None  # type: ignore
 
 from themis.config.schema import WandbConfig
 from themis.core.entities import ExperimentReport
@@ -8,6 +16,10 @@ from themis.core.entities import ExperimentReport
 
 class WandbTracker:
     def __init__(self, config: WandbConfig):
+        if wandb is None:
+            raise ImportError(
+                "wandb is not installed. Install with: pip install wandb"
+            )
         self.config = config
 
     def init(self, experiment_config: dict) -> None:

@@ -120,6 +120,11 @@ class ExperimentOrchestrator:
         )
         run_identifier = run_id or self._default_run_id()
 
+        # Initialize run in storage (if storage exists and run doesn't exist)
+        if self._cache.has_storage:
+            if not resume or not self._cache._storage._run_metadata_exists(run_identifier):
+                self._cache._storage.start_run(run_identifier, experiment_id="default")
+
         # Cache dataset for resumability
         if dataset_list:
             self._cache.cache_dataset(run_identifier, dataset_list)
