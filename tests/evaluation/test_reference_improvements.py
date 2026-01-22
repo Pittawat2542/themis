@@ -20,8 +20,8 @@ class SimpleExtractor:
         return raw_output.strip()
 
 
-class TestMetric(Metric):
-    """Test metric that records what it receives."""
+class DummyMetric(Metric):
+    """Dummy metric for testing that records what it receives."""
 
     name = "test_metric"
 
@@ -107,7 +107,7 @@ def test_reference_selector_precedence():
     def custom_selector(rec):
         return rec.task.metadata["custom_ref"]
     
-    metric = TestMetric()
+    metric = DummyMetric()
     
     # Create pipeline with custom selector (should warn)
     with warnings.catch_warnings(record=True) as w:
@@ -156,7 +156,7 @@ def test_reference_selector_with_dict_return():
             "numbers": rec.task.metadata["numbers"],
         }
     
-    metric = TestMetric()
+    metric = DummyMetric()
     
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -181,7 +181,7 @@ def test_no_warning_without_reference_selector():
     with warnings.catch_warnings(record=True) as w:
         EvaluationPipeline(
             extractor=SimpleExtractor(),
-            metrics=[TestMetric()],
+            metrics=[DummyMetric()],
         )
         # Should not warn
         assert len(w) == 0
@@ -235,7 +235,7 @@ def test_extractor_runs_before_metric():
         error=None,
     )
     
-    metric = TestMetric()
+    metric = DummyMetric()
     
     pipeline = EvaluationPipeline(
         extractor=AnswerExtractor(),
@@ -271,7 +271,7 @@ def test_metadata_passed_to_metric():
         error=None,
     )
     
-    metric = TestMetric()
+    metric = DummyMetric()
     
     pipeline = EvaluationPipeline(
         extractor=SimpleExtractor(),

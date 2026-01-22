@@ -13,12 +13,12 @@ This is a rewrite of the storage layer to address:
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import gzip
 import hashlib
 import json
 import os
 import sqlite3
+import sys
 import tempfile
 from dataclasses import dataclass, field
 import shutil
@@ -26,6 +26,17 @@ from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Iterable, List, Literal
+
+# fcntl is Unix-only, use msvcrt on Windows
+if sys.platform == "win32":
+    import msvcrt
+    FCNTL_AVAILABLE = False
+else:
+    try:
+        import fcntl
+        FCNTL_AVAILABLE = True
+    except ImportError:
+        FCNTL_AVAILABLE = False
 
 from themis.core import entities as core_entities
 from themis.core import serialization as core_serialization
@@ -251,12 +262,23 @@ class ExperimentStorage:
 
         try:
             # Acquire exclusive lock (blocking)
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            if sys.platform == "win32":
+                # Windows file locking
+                msvcrt.locking(lock_fd, msvcrt.LK_LOCK, 1)
+            elif FCNTL_AVAILABLE:
+                # Unix file locking
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            # If neither available, proceed without locking (single-process only)
+            
             self._locks[run_id] = lock_fd
             yield
         finally:
             # Release lock
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            if sys.platform == "win32":
+                msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
+            elif FCNTL_AVAILABLE:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            
             os.close(lock_fd)
             self._locks.pop(run_id, None)
 
