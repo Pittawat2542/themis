@@ -1,0 +1,265 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run ruff (linter)
+        run: uv run ruff check themis/ tests/
+        continue-on-error: true
+
+      - name: Run ruff (formatter check)
+        run: uv run ruff format --check themis/ tests/
+        continue-on-error: true
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run mypy
+        run: uv run mypy themis/
+        continue-on-error: true
+
+  test:
+    name: Test - Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run tests (core)
+        run: uv run pytest tests/comparison tests/backends tests/generation tests/evaluation -v --tb=short
+
+      - name: Run tests (experiment)
+        run: uv run pytest tests/experiment -v --tb=short
+
+      - name: Run tests (CLI)
+        run: uv run pytest tests/cli -v --tb=short
+        continue-on-error: true
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -v --tb=short --timeout=60
+        continue-on-error: true
+
+  test-server:
+    name: Test API Server
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run server tests
+        run: uv run pytest tests/integration/test_api_server.py -v --tb=short
+        continue-on-error: true
+
+  docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Build documentation
+        run: uv run mkdocs build --strict
+
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Build package
+        run: uv build
+
+      - name: Check package
+        run: |
+          uv run pip install twine
+          uv run twine check dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+          uv pip install pytest-cov
+
+      - name: Run tests with coverage
+        run: uv run pytest tests/ --cov=themis --cov-report=xml --cov-report=term -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run safety check
+        run: |
+          uv pip install safety
+          uv run safety check --json
+        continue-on-error: true
+
+      - name: Run bandit
+        run: |
+          uv pip install bandit
+          uv run bandit -r themis/ -f json
+        continue-on-error: true
