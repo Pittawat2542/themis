@@ -7,9 +7,9 @@ from importlib import metadata
 
 def _detect_version() -> str:
     try:
-        return metadata.version("themis")
+        return metadata.version("themis-eval")
     except metadata.PackageNotFoundError:  # pragma: no cover - local dev only
-        return "0.0.0"
+        return "0.2.0"  # Fallback for development
 
 
 __version__ = _detect_version()
