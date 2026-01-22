@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Themis Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: #2563eb;
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+        
+        .header p {
+            margin-top: 0.25rem;
+            opacity: 0.9;
+            font-size: 0.875rem;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .card h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2563eb;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+        }
+        
+        .run-list {
+            list-style: none;
+        }
+        
+        .run-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .run-item:hover {
+            border-color: #2563eb;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+        }
+        
+        .run-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .run-id {
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .run-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background: #10b981;
+            color: white;
+        }
+        
+        .run-metrics {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+        
+        .metric {
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .metric-name {
+            font-weight: 500;
+        }
+        
+        .metric-value {
+            color: #2563eb;
+            font-weight: 600;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+        
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+        
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #1d4ed8;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 Themis Dashboard</h1>
+        <p>View and compare experiment runs</p>
+    </div>
+    
+    <div class="container">
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-runs">-</div>
+                <div class="stat-label">Total Runs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-samples">-</div>
+                <div class="stat-label">Total Samples</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-accuracy">-</div>
+                <div class="stat-label">Avg Accuracy</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Experiment Runs</h2>
+            <div id="runs-container">
+                <div class="loading">Loading runs...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // API Base URL
+        const API_BASE = window.location.origin;
+        
+        // Fetch and display runs
+        async function loadRuns() {
+            try {
+                const response = await fetch(`${API_BASE}/api/runs`);
+                if (!response.ok) throw new Error('Failed to fetch runs');
+                
+                const runs = await response.json();
+                displayRuns(runs);
+                updateStats(runs);
+            } catch (error) {
+                document.getElementById('runs-container').innerHTML = `
+                    <div class="error">
+                        Failed to load runs: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function displayRuns(runs) {
+            const container = document.getElementById('runs-container');
+            
+            if (runs.length === 0) {
+                container.innerHTML = '<p style="color: #6b7280;">No runs found. Create your first run with <code>themis eval</code>.</p>';
+                return;
+            }
+            
+            const runsList = document.createElement('ul');
+            runsList.className = 'run-list';
+            
+            runs.forEach(run => {
+                const li = document.createElement('li');
+                li.className = 'run-item';
+                li.onclick = () => viewRunDetails(run.run_id);
+                
+                const metrics = Object.entries(run.metrics)
+                    .map(([name, value]) => `
+                        <div class="metric">
+                            <span class="metric-name">${name}:</span>
+                            <span class="metric-value">${value.toFixed(3)}</span>
+                        </div>
+                    `)
+                    .join('');
+                
+                li.innerHTML = `
+                    <div class="run-header">
+                        <span class="run-id">${run.run_id}</span>
+                        <span class="run-status">${run.status}</span>
+                    </div>
+                    <div class="run-metrics">
+                        <div class="metric">
+                            <span class="metric-name">Samples:</span>
+                            <span class="metric-value">${run.num_samples}</span>
+                        </div>
+                        ${metrics}
+                    </div>
+                `;
+                
+                runsList.appendChild(li);
+            });
+            
+            container.innerHTML = '';
+            container.appendChild(runsList);
+        }
+        
+        function updateStats(runs) {
+            document.getElementById('total-runs').textContent = runs.length;
+            
+            const totalSamples = runs.reduce((sum, run) => sum + run.num_samples, 0);
+            document.getElementById('total-samples').textContent = totalSamples.toLocaleString();
+            
+            // Calculate average of first metric across runs
+            if (runs.length > 0 && Object.keys(runs[0].metrics).length > 0) {
+                const firstMetric = Object.keys(runs[0].metrics)[0];
+                const avgValue = runs.reduce((sum, run) => sum + (run.metrics[firstMetric] || 0), 0) / runs.length;
+                document.getElementById('avg-accuracy').textContent = avgValue.toFixed(3);
+            } else {
+                document.getElementById('avg-accuracy').textContent = 'N/A';
+            }
+        }
+        
+        async function viewRunDetails(runId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/runs/${runId}`);
+                if (!response.ok) throw new Error('Failed to fetch run details');
+                
+                const details = await response.json();
+                alert(`Run: ${details.run_id}\nSamples: ${details.num_samples}\nMetrics: ${JSON.stringify(details.metrics, null, 2)}`);
+                // In a real app, this would open a modal or navigate to a detail page
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Load runs on page load
+        loadRuns();
+        
+        // Refresh every 10 seconds
+        setInterval(loadRuns, 10000);
+    </script>
+</body>
+</html>
