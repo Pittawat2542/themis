@@ -19,6 +19,8 @@ Welcome to the Themis documentation! This guide will help you get the most out o
 
 ### Advanced Topics
 
+- **[Extending Themis](EXTENDING_THEMIS.md)** - 🆕 Complete guide to custom components
+- **[Extension Quick Reference](EXTENSION_QUICK_REFERENCE.md)** - 🆕 One-page extension cheat sheet
 - **[Extending Backends](customization/backends.md)** - Custom storage and execution
 - **[Storage Architecture](guides/storage.md)** - Understanding Storage V2
 - **[Cache Invalidation](guides/manual_verification_cache.md)** - Smart caching behavior
@@ -458,75 +460,77 @@ See [LiteLLM Integration](LITELLM.md) for full provider list and configuration.
 
 ## Extending Themis
 
-### Custom Metrics
+Themis is designed to be extended with custom components. All extension points have clear APIs and comprehensive documentation.
+
+### Extension Points
+
+**✅ With Registration APIs:**
+- **[Custom Metrics](EXTENDING_THEMIS.md#1-custom-metrics)** - Define how to score model outputs
+- **[Custom Datasets](EXTENDING_THEMIS.md#2-custom-datasets)** - Load your own evaluation datasets
+- **[Custom Providers](EXTENDING_THEMIS.md#3-custom-model-providers)** - Connect to custom LLM APIs
+- **[Custom Benchmarks](EXTENDING_THEMIS.md#4-custom-benchmark-presets)** - Bundle dataset + prompt + metrics
+
+**📦 Direct Usage (no registration):**
+- **[Custom Extractors](EXTENDING_THEMIS.md#5-custom-extractors)** - Parse/extract answers from outputs
+- **[Custom Templates](EXTENDING_THEMIS.md#6-custom-prompt-templates)** - Reusable prompt formats
+
+### Quick Example
 
 ```python
-from themis.evaluation.metrics import Metric, MetricScore
+import themis
+from dataclasses import dataclass
+from themis.interfaces import Metric
+from themis.core.entities import MetricScore
 
-class MyMetric(Metric):
-    """Custom metric implementation."""
+# 1. Define custom metric
+@dataclass
+class WordCountMetric(Metric):
+    min_words: int = 10
     
-    @property
-    def name(self) -> str:
-        return "MyMetric"
+    def __post_init__(self):
+        self.name = "word_count"
     
-    def evaluate(self, response: str, reference: str) -> MetricScore:
-        # Your evaluation logic
-        score = my_evaluation_function(response, reference)
-        return MetricScore(value=score, metadata={})
+    def compute(self, *, prediction, references=None, metadata=None):
+        word_count = len(str(prediction).split())
+        return MetricScore(
+            metric_name=self.name,
+            value=1.0 if word_count >= self.min_words else 0.0,
+            details={"word_count": word_count},
+            metadata=metadata or {},
+        )
 
-# Use in evaluation
-result = evaluate(
-    dataset=my_dataset,
+# 2. Register it
+themis.register_metric("word_count", WordCountMetric)
+
+# 3. Use it
+report = themis.evaluate(
+    "gsm8k",
     model="gpt-4",
-    metrics=[MyMetric()],
+    metrics=["word_count", "exact_match"],
+    limit=100,
 )
 ```
 
-### Custom Storage Backend
+### Available Registration APIs
 
 ```python
-from themis.backends import StorageBackend
+import themis
 
-class S3StorageBackend(StorageBackend):
-    """Store results in AWS S3."""
-    
-    def save_generation_record(self, run_id, record):
-        # Upload to S3
-        pass
-    
-    # Implement other methods...
+# Register custom components
+themis.register_metric("my_metric", MyMetric)
+themis.register_dataset("my_dataset", create_dataset_fn)
+themis.register_provider("my_provider", create_provider_fn)
+themis.register_benchmark(BenchmarkPreset(...))
 
-# Use custom backend
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    storage_backend=S3StorageBackend(bucket="my-bucket"),
-)
+# Query registered components
+themis.get_registered_metrics()
+themis.list_datasets()
+themis.list_benchmarks()
 ```
 
-See [Extending Backends](EXTENDING_BACKENDS.md) for complete guide.
-
-### Custom Execution Backend
-
-```python
-from themis.backends import ExecutionBackend
-
-class RayExecutionBackend(ExecutionBackend):
-    """Distributed execution with Ray."""
-    
-    def map(self, func, items, **kwargs):
-        # Distribute with Ray
-        pass
-    
-    # Implement other methods...
-
-result = evaluate(
-    benchmark="math500",
-    model="gpt-4",
-    execution_backend=RayExecutionBackend(num_cpus=32),
-)
-```
+**📚 Full Documentation:**
+- **[Complete Extension Guide](EXTENDING_THEMIS.md)** - Detailed guide with interfaces and examples
+- **[Quick Reference](EXTENSION_QUICK_REFERENCE.md)** - One-page cheat sheet for all extension points
 
 ---
 
