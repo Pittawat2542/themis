@@ -513,8 +513,8 @@ report = themis.evaluate(
 
 1. **[Read the complete guide](EXTENDING_THEMIS.md)** - Detailed interfaces and examples
 2. **[Check the quick reference](EXTENSION_QUICK_REFERENCE.md)** - One-page cheat sheet
-3. **[Look at built-in examples](../themis/)** - Reference implementations
-4. **[Try the example](../examples-simple/06_custom_metrics.py)** - Working custom metric example
+3. **Look at built-in examples** in the `themis/` directory - Reference implementations
+4. **Try the examples** in `examples-simple/` directory - Working custom metric examples
 
 ---
 

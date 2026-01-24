@@ -125,6 +125,9 @@ nav:
       - Overview: examples/index.md
 
   - Customization:
+      - Extending Themis: EXTENDING_THEMIS.md
+      - Quick Reference: EXTENSION_QUICK_REFERENCE.md
+      - Architecture: EXTENSION_ARCHITECTURE.md
       - Extending Backends: customization/backends.md
 
   - Reference:

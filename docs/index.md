@@ -178,7 +178,7 @@ result = evaluate(
 - Hierarchical organization
 - Smart cache invalidation
 
-See [Storage Architecture](STORAGE.md) for details.
+See [Storage Architecture](guides/storage.md) for details.
 
 ### 5. Comparison Engine
 
@@ -229,7 +229,7 @@ Then open:
 - `POST /api/compare` - Compare runs
 - `WS /ws` - WebSocket for real-time updates
 
-See [API Server Guide](API_SERVER.md) for details.
+See [API Server Guide](reference/api-server.md) for details.
 
 ---
 
@@ -416,7 +416,7 @@ result = evaluate(
 
 ## Provider Support
 
-Themis works with 100+ providers via [LiteLLM](LITELLM.md):
+Themis works with 100+ providers via [LiteLLM](guides/providers.md):
 
 ### OpenAI
 
@@ -454,7 +454,7 @@ evaluate(benchmark="gsm8k", model="ollama/llama3")
 evaluate(benchmark="gsm8k", model="openai/meta-llama/Llama-3-8b")
 ```
 
-See [LiteLLM Integration](LITELLM.md) for full provider list and configuration.
+See [LiteLLM Integration](guides/providers.md) for full provider list and configuration.
 
 ---
 
@@ -583,7 +583,7 @@ result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
 print(f"Total cost: ${result.cost:.2f}")
 ```
 
-See [Cost Tracking](COST_TRACKING.md) for details.
+See [Cost Tracking](guides/cost-tracking.md) for details.
 
 ### 5. Compare Systematically
 
@@ -641,10 +641,10 @@ themis serve --port 8081
 
 ## Need Help?
 
-- **Examples**: Check [examples-simple/](../examples-simple/) for working code
+- **Examples**: Check the [Examples](examples/index.md) section for working code
 - **API Reference**: See individual doc files above
-- **Issues**: [GitHub Issues](https://github.com/yourusername/themis/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/themis/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Pittawat2542/themis/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Pittawat2542/themis/discussions)
 
 ---
 
