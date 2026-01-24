@@ -1,6 +1,29 @@
-# LiteLLM Provider
+# LLM Providers (LiteLLM Integration)
 
-Themis uses LiteLLM to support 100+ LLM providers through a unified interface.
+Themis uses [LiteLLM](https://github.com/BerriAI/litellm) to support 100+ LLM providers, including OpenAI, Anthropic, Azure, AWS Bedrock, and local models.
+
+## Standard "Local LLM" Configuration
+
+To use a local model (e.g., via LM Studio, vLLM, or Ollama) with an OpenAI-compatible endpoint:
+
+```json
+{
+  "models": [
+    {
+      "name": "qwen/qwen3-1.7b",  // Your local model name
+      "provider": "litellm",
+      "provider_options": {
+        "api_base": "http://localhost:1234/v1",  // Your local server URL
+        "api_key": "dummy",                      // Required non-empty string
+        "custom_llm_provider": "openai"          // Forces OpenAI protocol
+      }
+    }
+  ]
+}
+```
+
+> [!TIP]
+> Always set `custom_llm_provider="openai"` for generic local endpoints to ensure maximum compatibility.
 
 ## Supported Providers
 
@@ -49,7 +72,7 @@ export GEMINI_API_KEY="..."
 ### 3. Run Experiment
 
 ```bash
-uv run python -m experiments.litellm_example.cli run --config config.json
+uv run python -m examples.litellm_example.cli run --config config.json
 ```
 
 ## Configuration Options
@@ -177,6 +200,19 @@ ollama pull llama2
   "provider_options": {
     "api_base": "http://localhost:1234/v1",
     "timeout": 120
+  }
+}
+```
+
+Example for user's local Qwen3 model:
+```json
+{
+  "name": "qwen/qwen3-1.7b",
+  "provider": "openai",
+  "provider_options": {
+    "api_base": "http://localhost:1234/v1",
+    "api_key": "dummy",
+    "custom_llm_provider": "openai"
   }
 }
 ```

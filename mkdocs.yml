@@ -26,7 +26,7 @@ theme:
     - content.code.annotate
   palette:
     # Light mode
-    - media: "(prefers-color-scheme: light)"
+    - media: '(prefers-color-scheme: light)'
       scheme: default
       primary: indigo
       accent: blue
@@ -34,7 +34,7 @@ theme:
         icon: material/brightness-7
         name: Switch to dark mode
     # Dark mode
-    - media: "(prefers-color-scheme: dark)"
+    - media: '(prefers-color-scheme: dark)'
       scheme: slate
       primary: indigo
       accent: blue
@@ -101,45 +101,49 @@ extra:
     default: latest
   analytics:
     provider: google
-    property: G-XXXXXXXXXX  # Replace with your GA4 property ID
+    property: G-XXXXXXXXXX # Replace with your GA4 property ID
 
 nav:
   - Home: index.md
-  
+
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
       - Core Concepts: getting-started/concepts.md
-      - Best Practices: BEST_PRACTICES.md
-      - FAQ: FAQ.md
-  
-  - User Guide:
+
+  - Guides:
       - Evaluation: guides/evaluation.md
-      - CLI Reference: guides/cli.md
-      - Comparison: COMPARISON.md
+      - Comparison: guides/comparison.md
+      - Providers (LiteLLM): guides/providers.md
+      - Storage: guides/storage.md
+      - Cost Tracking: guides/cost-tracking.md
+      - Caching: guides/manual_verification_cache.md
+      - Best Practices: guides/best-practices.md
+      - FAQ: guides/faq.md
+
+  - Examples:
+      - Overview: examples/index.md
+
+  - Customization:
+      - Extending Backends: customization/backends.md
+
+  - Reference:
       - Configuration: guides/configuration.md
-      - Benchmarks: BENCHMARKS.md
-      - Caching: CACHE_INVALIDATION.md
-  
-  - Advanced:
-      - API Server: API_SERVER.md
-      - Extending Backends: EXTENDING_BACKENDS.md
-      - Storage Architecture: STORAGE.md
-      - LiteLLM Integration: LITELLM.md
-      - Cost Tracking: COST_TRACKING.md
-  
-  - API Reference:
-      - Overview: api/overview.md
-      - evaluate(): api/evaluate.md
-      - Comparison: api/comparison.md
-      - Presets: api/presets.md
-      - Metrics: api/metrics.md
-      - Backends: api/backends.md
-  
+      - CLI Reference: guides/cli.md
+      - Benchmarks: reference/benchmarks.md
+      - API Server: reference/api-server.md
+      - Python API:
+          - Overview: api/overview.md
+          - evaluate(): api/evaluate.md
+          - Comparison: api/comparison.md
+          - Presets: api/presets.md
+          - Metrics: api/metrics.md
+          - Backends: api/backends.md
+
   - Tutorials:
       - Jupyter Notebooks: tutorials/notebooks.md
       - Code Examples: tutorials/examples.md
-  
+
   - Community:
       - Contributing: CONTRIBUTING.md
       - Changelog: CHANGELOG.md

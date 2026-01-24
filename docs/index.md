@@ -12,22 +12,22 @@ Welcome to the Themis documentation! This guide will help you get the most out o
 
 ### User Guides
 
-- **[Evaluation Guide](EVALUATION.md)** - Run evaluations with built-in metrics
-- **[API Server Guide](API_SERVER.md)** - Use the REST API and web dashboard
+- **[Evaluation Guide](guides/evaluation.md)** - Run evaluations with built-in metrics
+- **[API Server Guide](reference/api-server.md)** - Use the REST API and web dashboard
 - **[Comparison Guide](#comparison-guide)** - Statistical comparison of runs
-- **[LiteLLM Integration](LITELLM.md)** - Use 100+ LLM providers
+- **[LiteLLM / Providers](guides/providers.md)** - Use 100+ LLM providers
 
 ### Advanced Topics
 
-- **[Extending Backends](EXTENDING_BACKENDS.md)** - Custom storage and execution
-- **[Storage Architecture](STORAGE.md)** - Understanding Storage V2
-- **[Cache Invalidation](CACHE_INVALIDATION.md)** - Smart caching behavior
-- **[Cost Tracking](COST_TRACKING.md)** - Monitor API costs
+- **[Extending Backends](customization/backends.md)** - Custom storage and execution
+- **[Storage Architecture](guides/storage.md)** - Understanding Storage V2
+- **[Cache Invalidation](guides/manual_verification_cache.md)** - Smart caching behavior
+- **[Cost Tracking](guides/cost-tracking.md)** - Monitor API costs
 
 ### Reference
 
 - **[Configuration Reference](guides/configuration.md)** - All configuration options
-- **[Code Examples](tutorials/examples.md)** - Working code examples
+- **[Code Examples](examples/index.md)** - Detailed walkthroughs
 
 ---
 

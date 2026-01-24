@@ -1,499 +1,326 @@
 # Configuration Guide
 
-Complete guide to configuring Themis evaluations.
+Themis uses Hydra/OmegaConf so you can describe experiments declaratively. This
+guide explains the schema and shows common overrides.
 
-## Overview
-
-Themis configuration is done through function parameters—no config files required for simple use cases!
-
-```python
-from themis import evaluate
-
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    temperature=0.7,    # ← Configuration via parameters
-    workers=8,
-)
-```
-
----
-
-## Configuration Parameters
-
-### Dataset Configuration
-
-**`benchmark_or_dataset`**
-
-Either a benchmark name or custom dataset:
-
-```python
-# Built-in benchmark
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-
-# Custom dataset
-dataset = [{"prompt": "...", "answer": "..."}]
-result = evaluate(dataset, model="gpt-4")
-```
-
-**`limit`** - Number of samples to evaluate:
-
-```python
-# Evaluate first 100 samples
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
-
-# Evaluate all samples
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-```
-
-**`prompt`** - Custom prompt template:
-
-```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    prompt="Question: {prompt}\nThink step by step.\nAnswer:",
-)
-```
-
----
-
-### Model Configuration
-
-**`model`** - Model identifier:
-
-```python
-# OpenAI
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-result = evaluate(benchmark="gsm8k", model="gpt-3.5-turbo")
-
-# Anthropic
-result = evaluate(benchmark="gsm8k", model="claude-3-opus-20240229")
-
-# Azure
-result = evaluate(benchmark="gsm8k", model="azure/gpt-4")
-
-# Local
-result = evaluate(benchmark="gsm8k", model="ollama/llama3")
-```
-
-**`temperature`** - Sampling temperature (0.0-2.0):
-
-```python
-# Deterministic (recommended for evaluation)
-result = evaluate(benchmark="gsm8k", model="gpt-4", temperature=0.0)
-
-# Creative
-result = evaluate(benchmark="gsm8k", model="gpt-4", temperature=1.0)
-```
-
-**`max_tokens`** - Maximum response length:
-
-```python
-# Short responses
-result = evaluate(benchmark="gsm8k", model="gpt-4", max_tokens=256)
-
-# Long responses
-result = evaluate(benchmark="gsm8k", model="gpt-4", max_tokens=2048)
-```
-
-**`top_p`** - Nucleus sampling:
-
-```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    top_p=0.95,  # Consider top 95% probability mass
-)
-```
-
-**Provider-specific parameters:**
-
-```python
-# OpenAI-specific
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    frequency_penalty=0.2,
-    presence_penalty=0.0,
-    seed=42,
-    response_format={"type": "json_object"},
-)
-
-# Anthropic-specific
-result = evaluate(
-    benchmark="gsm8k",
-    model="claude-3-opus",
-    max_tokens_to_sample=2048,
-)
-```
-
----
-
-### Execution Configuration
-
-**`num_samples`** - Responses per prompt:
-
-```python
-# Single response (default)
-result = evaluate(benchmark="gsm8k", model="gpt-4", num_samples=1)
-
-# Multiple samples (for Pass@K, ensembling)
-result = evaluate(benchmark="gsm8k", model="gpt-4", num_samples=10)
-```
-
-**`workers`** - Parallel workers:
-
-```python
-# Few workers (safer for rate limits)
-result = evaluate(benchmark="gsm8k", model="gpt-4", workers=4)
-
-# Many workers (faster)
-result = evaluate(benchmark="gsm8k", model="gpt-4", workers=16)
-```
-
-**`distributed`** - Distributed execution (future):
-
-```python
-# Single machine (default)
-result = evaluate(benchmark="gsm8k", model="gpt-4", distributed=False)
-
-# Distributed (when implemented)
-result = evaluate(benchmark="gsm8k", model="gpt-4", distributed=True)
-```
-
----
-
-### Storage Configuration
-
-**`storage`** - Storage directory path:
-
-```python
-# Default location
-result = evaluate(benchmark="gsm8k", model="gpt-4")  # Uses .cache/experiments
-
-# Custom location
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    storage="~/my-experiments",
-)
-```
-
-**`run_id`** - Unique run identifier:
-
-```python
-# Auto-generated (timestamp)
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-
-# Custom run ID
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    run_id="gpt4-baseline-2024-01-15",
-)
-```
-
-**`resume`** - Resume from cache:
-
-```python
-# Resume from cache (default)
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    run_id="my-experiment",
-    resume=True,
-)
-
-# Force re-evaluation
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    run_id="my-experiment",
-    resume=False,
-)
-```
-
----
-
-### Metrics Configuration
-
-**`metrics`** - List of metrics to compute:
-
-```python
-# Use benchmark defaults
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-
-# Custom metrics
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    metrics=["ExactMatch", "BLEU", "MathVerify"],
-)
-```
-
----
-
-### Output Configuration
-
-**`output`** - Export results:
-
-```python
-# JSON export
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    output="results.json",
-)
-
-# CSV export
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    output="results.csv",
-)
-
-# HTML export
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    output="results.html",
-)
-```
-
-**`on_result`** - Result callback:
-
-```python
-def log_result(record):
-    print(f"✓ {record.id}: {record.response[:50]}...")
-
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    on_result=log_result,
-)
-```
-
----
-
-## Environment Variables
-
-### API Keys
-
-Set provider API keys:
-
-```bash
-# OpenAI
-export OPENAI_API_KEY="sk-..."
-
-# Anthropic
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Azure OpenAI
-export AZURE_API_KEY="..."
-export AZURE_API_BASE="https://..."
-export AZURE_API_VERSION="2023-05-15"
-
-# AWS Bedrock
-export AWS_ACCESS_KEY_ID="..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_REGION_NAME="us-east-1"
-```
-
-### Themis Settings
-
-```bash
-# Default storage location
-export THEMIS_STORAGE="~/.themis/experiments"
-
-# Log level
-export THEMIS_LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
-
-# Disable caching
-export THEMIS_DISABLE_CACHE="false"
-```
-
----
-
-## Configuration Files (Optional)
-
-For complex experiments, you can use configuration files:
-
-### JSON Configuration
-
-```json
-{
-  "benchmark": "gsm8k",
-  "model": "gpt-4",
-  "temperature": 0.7,
-  "max_tokens": 512,
-  "workers": 8,
-  "metrics": ["ExactMatch", "MathVerify"],
-  "storage": ".cache/experiments",
-  "run_id": "my-experiment"
-}
-```
-
-Load and use:
-
-```python
-import json
-from themis import evaluate
-
-with open("config.json") as f:
-    config = json.load(f)
-
-result = evaluate(**config)
-```
-
-### YAML Configuration
+## Schema overview
 
 ```yaml
-benchmark: gsm8k
-model: gpt-4
-temperature: 0.7
-max_tokens: 512
-workers: 8
-metrics:
-  - ExactMatch
-  - MathVerify
+name: math500_zero_shot          # experiment type (currently math500 helper)
+dataset:
+  source: huggingface            # huggingface | local | inline
+  data_dir: null                 # required when source=local
+  limit: null                    # sample cap
+  subjects: []                   # subject filter for math500
+  inline_samples: []             # list of dicts when source=inline
+generation:
+  model_identifier: fake-math-llm
+  provider:
+    name: fake                   # registry name from themis.providers
+    options: {}                  # kwargs passed to provider factory
+  sampling:
+    temperature: 0.0
+    top_p: 0.95
+    max_tokens: 512
+  runner:
+    max_parallel: 1
+    max_retries: 3
+    retry_initial_delay: 0.5
+    retry_backoff_multiplier: 2.0
+    retry_max_delay: 2.0
+storage:
+  path: null                     # e.g., .cache/runs
+  config:                        # StorageConfig options
+    save_raw_responses: false    # Save full API responses
+    save_dataset: true           # Save dataset copy
+    compression: gzip            # Compression: gzip | none
+    deduplicate_templates: true  # Deduplicate prompt templates
+max_samples: null                # cap tasks after plan expansion
+run_id: null                     # resume/cache key
+resume: true
+integrations:
+  wandb:
+    enable: false
+    project: null
+    entity: null
+    tags: []
+  huggingface_hub:
+    enable: false
+    repository: null
 ```
 
-Load with PyYAML:
+Every field is optional; unspecified values fall back to sensible defaults.
 
-```python
-import yaml
-from themis import evaluate
+## Inline datasets
 
-with open("config.yaml") as f:
-    config = yaml.safe_load(f)
+Use inline data for smoke tests or synthetic tasks:
 
-result = evaluate(**config)
+```yaml
+dataset:
+  source: inline
+  inline_samples:
+    - unique_id: inline-1
+      problem: "What is 4 + 4?"
+      answer: "8"
 ```
 
----
+Fields become part of the prompt context and metadata automatically.
 
-## Best Practices
+## Local or HF datasets
 
-### 1. Deterministic by Default
+```yaml
+dataset:
+  source: local
+  data_dir: /path/to/MATH-500
+  limit: 100
+  subjects: ["algebra", "number theory"]
+```
 
-Use `temperature=0` for reproducible results:
+Switch to `source: huggingface` and drop `data_dir` for remote loads.
+
+## Provider options
+
+Registered providers accept arbitrary keyword arguments:
+
+```yaml
+generation:
+  provider:
+    name: fake
+    options:
+      seed: 1337
+```
+
+Swap `name` for custom providers you registered via
+`themis.providers.register_provider`.
+
+## Sampling and retries
+
+Tune sampling and the retry/backoff policy:
+
+```yaml
+generation:
+  sampling:
+    temperature: 0.2
+    top_p: 0.9
+    max_tokens: 256
+  runner:
+    max_parallel: 4
+    max_retries: 5
+    retry_initial_delay: 0.2
+    retry_backoff_multiplier: 1.5
+```
+
+The runner records attempt metadata and the CLI logs each retry.
+
+## Storage & caching
+
+```yaml
+storage:
+  path: .cache/themis      # Specific storage path (takes precedence)
+  default_path: .cache/runs # Default storage path when path is not specified
+run_id: math500-smoke
+resume: true
+```
+
+Generations and evaluation scores are cached per `run_id`. Reruns reuse any task
+already in storage, so you can interrupt long runs safely.
+
+If `path` is specified, it will be used for storage. If `path` is null/empty but 
+`default_path` is specified, then `default_path` will be used as the storage location.
+This allows you to set a default storage location for all experiments while still
+being able to override it for specific runs.
+
+## Integrations
+
+Configure external integrations like Weights & Biases (W&B) and Hugging Face Hub.
+
+```yaml
+integrations:
+  wandb:
+    enable: true             # Enable W&B logging
+    project: my-themis-project # W&B project name
+    entity: my-wandb-entity  # W&B entity (username or team)
+    tags: ["llm-eval", "math"]
+  huggingface_hub:
+    enable: true             # Enable Hugging Face Hub uploads
+    repository: my-username/my-themis-results # Hugging Face Hub repository ID
+```
+
+- `wandb.enable`: Set to `true` to enable Weights & Biases logging for experiment metrics and results.
+- `wandb.project`: The name of the W&B project to log to.
+- `wandb.entity`: Your W&B username or team name.
+- `wandb.tags`: A list of tags to associate with the W&B run.
+- `huggingface_hub.enable`: Set to `true` to enable uploading experiment results to the Hugging Face Hub.
+- `huggingface_hub.repository`: The ID of the Hugging Face Hub repository (e.g., `your-username/your-repo-name`) where results will be uploaded as a dataset.
+
+## Storage Configuration
+
+Themis provides configurable storage options to optimize disk space and performance.
+
+### StorageConfig Options
 
 ```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    temperature=0.0,  # Deterministic
-    seed=42,          # Additional determinism (provider-specific)
+from themis.experiment.storage import StorageConfig, ExperimentStorage, RetentionPolicy
+
+config = StorageConfig(
+    save_raw_responses=False,    # Save full API responses (default: False)
+    save_dataset=True,           # Save dataset copy (default: True)
+    compression="gzip",          # Compression: "gzip" | "none" (default: "gzip")
+    deduplicate_templates=True,  # Store templates once (default: True)
+    enable_checksums=True,       # Data integrity validation (default: True)
+    use_sqlite_metadata=True,    # Use SQLite for metadata (default: True)
+    checkpoint_interval=100,     # Save checkpoint every N records (default: 100)
+    retention_policy=RetentionPolicy(  # Automatic cleanup (default: None)
+        max_runs_per_experiment=10,
+        max_age_days=30,
+        keep_latest_n=5,
+    ),
+)
+
+storage = ExperimentStorage("outputs/experiments", config=config)
+```
+
+### Storage Optimizations
+
+**1. Compression (50-60% savings)**
+- `compression="gzip"`: Enable gzip compression for all JSONL files
+- `compression="none"`: Disable compression (easier to inspect, but larger files)
+- Files are automatically decompressed when loaded
+- Default: `"gzip"` (recommended)
+
+**2. Raw API Responses (~5MB savings per 1,500 samples)**
+- `save_raw_responses=False`: Don't save full API responses (recommended)
+- `save_raw_responses=True`: Keep raw responses for debugging
+- Raw responses include full API metadata, token IDs, etc.
+- Usually not needed since extracted output is saved
+- Default: `False` (recommended)
+
+**3. Template Deduplication (~627KB savings per 1,500 samples)**
+- `deduplicate_templates=True`: Store each unique template once
+- `deduplicate_templates=False`: Store template in every task
+- Significant savings for large experiments with repeated templates
+- Default: `True` (recommended)
+
+**4. Dataset Saving**
+- `save_dataset=True`: Save a copy of the dataset
+- `save_dataset=False`: Don't save dataset (if loading from file)
+- Set to `False` when loading from existing files to avoid duplication
+- Default: `True`
+
+**5. Format Versioning**
+- All files include version headers for safe format evolution
+- Example header: `{"_type": "header", "_format_version": "1.0.0", "_file_type": "records"}`
+- Automatic versioning prevents incompatibility issues
+
+### Storage Profiles
+
+**Production (Maximum Optimization):**
+```python
+config = StorageConfig(
+    save_raw_responses=False,
+    compression="gzip",
+    deduplicate_templates=True,
+    save_dataset=False,  # If loading from file
+)
+# Typical savings: 60-75% reduction
+# 18.5MB → 3-5MB for 1,500 samples
+```
+
+**Development (Balanced):**
+```python
+config = StorageConfig(
+    save_raw_responses=False,
+    compression="gzip",
+    deduplicate_templates=True,
+)
+# Good balance of space savings and usability
+```
+
+**Debug (Keep Everything):**
+```python
+config = StorageConfig(
+    save_raw_responses=True,
+    compression="none",
+    deduplicate_templates=False,
+)
+# Easier to inspect files manually
+# No space savings
+```
+
+### Storage Structure
+
+With default configuration, storage structure is:
+
+```
+outputs/run-id/
+├── templates.jsonl.gz     # Unique templates (deduplication)
+├── tasks.jsonl.gz         # Task definitions (reference templates)
+├── records.jsonl.gz       # Generation outputs (no raw responses)
+├── evaluation.jsonl.gz    # Evaluation results
+├── summary.json           # Quick summary (1KB, uncompressed)
+└── report.json            # Full report (optional)
+```
+
+### Quick Summary Export
+
+Export lightweight summaries for fast result viewing:
+
+```python
+from themis.experiment.export import export_summary_json
+
+export_summary_json(
+    report,
+    "outputs/run-123/summary.json",
+    run_id="run-123"
 )
 ```
 
-### 2. Meaningful Run IDs
+View summaries via CLI:
 
-Use descriptive run IDs:
+```bash
+# View summary for a run (~1KB file vs ~1.6MB report)
+uv run python -m themis.cli results-summary --run-id run-123
 
-```python
-# Good
-run_id = "gsm8k-gpt4-temp07-cot-2024-01-15"
+# List all runs with metrics
+uv run python -m themis.cli results-list
 
-# Bad
-run_id = "run123"
+# List 10 most recent runs
+uv run python -m themis.cli results-list --limit 10
 ```
 
-Pattern: `{benchmark}-{model}-{variant}-{date}`
+## Hydra overrides
 
-### 3. Start Small, Scale Up
+All CLI commands accept `--overrides` arguments interpreted by Hydra:
 
-```python
-# 1. Test with 10 samples
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=10)
+```bash
+# First generate a config file
+uv run python -m themis.cli init --output my_config.yaml
 
-# 2. Verify it works, then scale
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
-
-# 3. Full evaluation
-result = evaluate(benchmark="gsm8k", model="gpt-4")
+# Then run with overrides
+uv run python -m themis.cli run-config \
+  --config my_config.yaml \
+  --overrides generation.provider.options.seed=99 max_samples=5
 ```
 
-### 4. Monitor Costs
+Use dotted paths to tweak nested fields; multiple overrides can be specified as
+separate arguments.
+
+## Programmatic usage
 
 ```python
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
+from pathlib import Path
+from themis.config import load_experiment_config, run_experiment_from_config
 
-# Check cost before scaling up
-print(f"Cost for 100 samples: ${result.cost:.2f}")
-print(f"Estimated full cost: ${result.cost * 85:.2f}")  # GSM8K has 8500 samples
+# Load your config file (create with: uv run python -m themis.cli init)
+cfg = load_experiment_config(Path("my_config.yaml"), overrides=["max_samples=3"])
+report = run_experiment_from_config(cfg)
+print(report.metadata["successful_generations"])
 ```
 
-### 5. Use Appropriate Workers
-
-```python
-# Conservative (respects rate limits)
-result = evaluate(benchmark="gsm8k", model="gpt-4", workers=4)
-
-# Aggressive (faster but may hit limits)
-result = evaluate(benchmark="gsm8k", model="gpt-4", workers=32)
-```
+Pass `dataset=` and `on_result=` kwargs to `run_experiment_from_config` when you
+need tighter control (custom progress bar, streaming logs, etc.).
 
 ---
 
-## Presets vs Custom
-
-### When to Use Presets
-
-Use built-in benchmarks when:
-- ✅ Evaluating on standard benchmarks
-- ✅ Comparing to existing work
-- ✅ You want sensible defaults
-
-```python
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-```
-
-### When to Use Custom
-
-Use custom datasets when:
-- ✅ Evaluating on proprietary data
-- ✅ Testing domain-specific tasks
-- ✅ Experimenting with new formats
-
-```python
-result = evaluate(my_dataset, model="gpt-4", prompt="...")
-```
-
----
-
-## Advanced Configuration
-
-### Custom Backends
-
-```python
-from themis.backends import StorageBackend, ExecutionBackend
-
-# Custom storage
-class S3Storage(StorageBackend):
-    # Implementation
-    pass
-
-# Custom execution
-class RayExecution(ExecutionBackend):
-    # Implementation
-    pass
-
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    storage_backend=S3Storage(bucket="my-bucket"),
-    execution_backend=RayExecution(num_cpus=32),
-)
-```
-
-See [Extending Backends](../EXTENDING_BACKENDS.md) for details.
-
----
-
-## Next Steps
-
-- [Evaluation Guide](evaluation.md) - Detailed evaluation guide
-- [API Reference](../api/evaluate.md) - Complete parameter reference
-- [Examples](../tutorials/examples.md) - Working code examples
+See `docs/EXAMPLES.md` for concrete end-to-end scenarios and
+`docs/ADDING_COMPONENTS.md` to extend the schema with new experiment types.

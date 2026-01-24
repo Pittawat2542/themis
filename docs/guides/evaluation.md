@@ -1,518 +1,489 @@
 # Evaluation Guide
 
-Complete guide to running evaluations with Themis.
+This guide covers advanced evaluation features in Themis, including custom metrics, reference handling, and extractors.
 
 ## Table of Contents
 
-- [Basic Evaluation](#basic-evaluation)
-- [Built-in Benchmarks](#built-in-benchmarks)
-- [Custom Datasets](#custom-datasets)
-- [Model Configuration](#model-configuration)
-- [Metrics Selection](#metrics-selection)
-- [Caching and Resume](#caching-and-resume)
-- [Parallel Execution](#parallel-execution)
-- [Export Results](#export-results)
+1. [Multi-Value References](#multi-value-references)
+2. [Custom Reference Selectors](#custom-reference-selectors)
+3. [Extractor Contract](#extractor-contract)
+4. [Custom Metrics](#custom-metrics)
+5. [Best Practices](#best-practices)
 
 ---
 
-## Basic Evaluation
+## Multi-Value References
 
-The simplest evaluation:
+References can now hold complex data structures using dict values, perfect for tasks requiring multiple reference values.
 
-```python
-from themis import evaluate
-
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-)
-
-print(f"Accuracy: {result.metrics['ExactMatch']:.2%}")
-```
-
-This evaluates the entire GSM8K benchmark using GPT-4 with default settings.
-
----
-
-## Built-in Benchmarks
-
-Themis includes 6 benchmarks:
-
-### Math Benchmarks
-
-**GSM8K** - Grade School Math (8.5K problems)
-```python
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-```
-
-**MATH500** - Advanced Math (500 problems)
-```python
-result = evaluate(benchmark="math500", model="gpt-4")
-```
-
-**AIME24** - Math Competition (30 problems)
-```python
-result = evaluate(benchmark="aime24", model="gpt-4")
-```
-
-### Knowledge Benchmarks
-
-**MMLU-Pro** - General Knowledge
-```python
-result = evaluate(benchmark="mmlu_pro", model="gpt-4", limit=1000)
-```
-
-**SuperGPQA** - Advanced Reasoning
-```python
-result = evaluate(benchmark="supergpqa", model="gpt-4")
-```
-
-### Testing
-
-**Demo** - Quick Testing (10 samples, fake model)
-```python
-result = evaluate(benchmark="demo", model="fake-math-llm")
-```
-
-### List All Benchmarks
+### Basic Example
 
 ```python
-from themis.presets import list_benchmarks
+from themis.core.entities import Reference
 
-benchmarks = list_benchmarks()
-for name in benchmarks:
-    print(name)
-```
+# Simple reference
+ref = Reference(kind="answer", value="42")
 
-Or via CLI:
-```bash
-themis list benchmarks
-```
-
----
-
-## Custom Datasets
-
-### Basic Custom Dataset
-
-```python
-dataset = [
-    {"prompt": "What is 2+2?", "answer": "4"},
-    {"prompt": "What is 5-3?", "answer": "2"},
-]
-
-result = evaluate(
-    dataset,
-    model="gpt-4",
-    prompt="Question: {prompt}\nAnswer:",
-)
-```
-
-### Required Fields
-
-Each dataset item must have:
-- **Input**: `prompt` or `question` - The input to the model
-- **Output**: `answer` or `reference` - The expected output
-- **Optional**: `id` - Unique identifier (auto-generated if missing)
-
-### Custom Prompt Templates
-
-Use format strings to customize prompts:
-
-```python
-dataset = [
-    {"question": "What is the capital of France?", "answer": "Paris"},
-]
-
-result = evaluate(
-    dataset,
-    model="gpt-4",
-    prompt="Answer this question:\n\nQ: {question}\nA:",
-)
-```
-
-### With Additional Fields
-
-Include extra fields for complex prompts:
-
-```python
-dataset = [
-    {
-        "question": "What is 2+2?",
-        "context": "Basic arithmetic",
-        "answer": "4",
+# Multi-value reference using dict
+ref = Reference(
+    kind="countdown_task",
+    value={
+        "target": 122,
+        "numbers": [25, 50, 75, 100]
     }
-]
+)
 
-result = evaluate(
-    dataset,
-    model="gpt-4",
-    prompt="Context: {context}\nQuestion: {question}\nAnswer:",
+# List reference
+ref = Reference(
+    kind="valid_answers",
+    value=["yes", "no", "maybe"]
 )
 ```
 
----
-
-## Model Configuration
-
-### Sampling Parameters
-
-Control how the model generates responses:
+### Using in Tasks
 
 ```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
+from themis.core.entities import GenerationTask, PromptRender, PromptSpec, Reference
+
+task = GenerationTask(
+    prompt=PromptRender(
+        spec=PromptSpec(
+            name="countdown",
+            template="Using {numbers_str}, make {target}"
+        ),
+        text="Using 25, 50, 75, 100, make 122",
+        context={"numbers_str": "25, 50, 75, 100", "target": 122}
+    ),
+    model=model_spec,
+    sampling=sampling_config,
+    reference=Reference(
+        kind="countdown",
+        value={"target": 122, "numbers": [25, 50, 75, 100]}
+    ),
+    metadata={"numbers": [25, 50, 75, 100]}  # Also in metadata for reference selector
+)
+```
+
+### Accessing in Metrics
+
+```python
+from themis.interfaces import Metric
+from themis.core import entities
+
+class CountdownAccuracy(Metric):
+    name = "countdown_accuracy"
     
-    temperature=0.7,         # Randomness (0=deterministic, 1+=creative)
-    max_tokens=1024,         # Maximum response length
-    top_p=0.95,              # Nucleus sampling
-    frequency_penalty=0.2,   # Reduce repetition
-    presence_penalty=0.0,    # Encourage new topics
+    def compute(self, *, prediction, references, metadata=None):
+        # references is a list (normalized by pipeline)
+        ref = references[0]
+        
+        if isinstance(ref, dict):
+            # Multi-value reference
+            target = ref["target"]
+            numbers = ref["numbers"]
+        else:
+            # Fallback to metadata
+            target = ref
+            numbers = metadata.get("numbers", [])
+        
+        # Validate prediction uses only allowed numbers
+        is_valid = self.validate_expression(prediction, numbers, target)
+        
+        return entities.MetricScore(
+            metric_name=self.name,
+            value=1.0 if is_valid else 0.0,
+            details={"target": target, "numbers": numbers}
+        )
+```
+
+---
+
+## Custom Reference Selectors
+
+Custom reference selectors allow you to extract and transform reference data before metrics receive it.
+
+### Basic Usage
+
+```python
+from themis.evaluation import EvaluationPipeline
+
+def my_reference_selector(record):
+    """Extract reference from task metadata."""
+    return {
+        "target": record.task.reference.value,
+        "numbers": record.task.metadata.get("numbers", [])
+    }
+
+pipeline = EvaluationPipeline(
+    extractor=my_extractor,
+    metrics=[my_metric],
+    reference_selector=my_reference_selector
 )
 ```
 
-### Multiple Samples
+**Important:** Custom reference selectors take precedence over the default behavior. You'll see a warning if using with `DefaultEvaluationStrategy` - this is normal and the selector will work correctly.
 
-Generate several responses per prompt:
+### Reference Selector Patterns
 
+**Pattern 1: Multi-Field Extraction**
 ```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    num_samples=5,  # Generate 5 responses per question
-)
+def extract_multi_field_reference(record):
+    """Combine multiple metadata fields into reference dict."""
+    return {
+        "answer": record.task.reference.value,
+        "explanation": record.task.metadata.get("explanation"),
+        "difficulty": record.task.metadata.get("difficulty")
+    }
 ```
 
-Useful for:
-- Pass@K metrics (code generation)
-- Measuring consistency
-- Majority voting
+**Pattern 2: Conditional References**
+```python
+def conditional_reference(record):
+    """Select reference based on task type."""
+    task_type = record.task.metadata.get("type")
+    
+    if task_type == "multiple_choice":
+        return record.task.metadata.get("correct_option")
+    elif task_type == "math":
+        return {
+            "answer": record.task.reference.value,
+            "steps": record.task.metadata.get("steps")
+        }
+    else:
+        return record.task.reference.value
+```
 
-### Provider-Specific Options
+**Pattern 3: Multiple Valid Answers**
+```python
+def multiple_answers_reference(record):
+    """Return list of valid answers."""
+    primary = record.task.reference.value
+    alternatives = record.task.metadata.get("alternative_answers", [])
+    return [primary] + alternatives
+```
 
-Pass provider-specific parameters:
+### Precedence Rules
+
+The evaluation pipeline uses this precedence order:
+
+1. **Custom reference_selector** (if provided) - Always takes precedence
+2. **item.reference** (from evaluation strategy)
+3. **Default reference selector** (extracts from task.reference)
 
 ```python
-# OpenAI-specific
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    response_format={"type": "json_object"},
-    seed=42,
-)
-
-# Anthropic-specific
-result = evaluate(
-    benchmark="gsm8k",
-    model="claude-3-opus",
-    max_tokens_to_sample=2048,
+# Custom selector ALWAYS takes precedence
+pipeline = EvaluationPipeline(
+    extractor=extractor,
+    metrics=[metric],
+    reference_selector=my_custom_selector  # Will be used
 )
 ```
 
 ---
 
-## Metrics Selection
+## Extractor Contract
 
-### Using Built-in Metrics
+Understanding the extractor contract prevents common bugs and ensures metrics work correctly.
 
-Specify metrics explicitly:
+### What Extractors Do
+
+Extractors parse raw model output and extract the relevant answer:
+
+```
+Raw Output (from model):
+"<think>Let me solve this... 2+2=4</think><answer>4</answer>"
+
+↓ Extractor processes ↓
+
+Extracted Output (to metric):
+"4"
+```
+
+### Metric Receives Extracted Output
+
+**Critical: Metrics receive EXTRACTED output, not raw text!**
 
 ```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    metrics=["ExactMatch", "MathVerify", "BLEU"],
-)
-```
-
-### Available Metrics
-
-List available metrics:
-
-```bash
-themis list metrics
-```
-
-Output:
-```
-Math:
-  - ExactMatch
-  - MathVerify
-NLP:
-  - BLEU
-  - ROUGE
-  - BERTScore
-  - METEOR
-Code:
-  - PassAtK
-  - CodeBLEU
-  - ExecutionAccuracy
-```
-
-### Custom Metrics
-
-Implement your own metric:
-
-```python
-from themis.evaluation.metrics import Metric, MetricScore
+from themis.interfaces import Metric
 
 class MyMetric(Metric):
-    @property
-    def name(self) -> str:
-        return "MyMetric"
+    name = "my_metric"
     
-    def evaluate(self, response: str, reference: str) -> MetricScore:
-        score = len(response) / len(reference)  # Example: length ratio
-        return MetricScore(value=score, metadata={})
+    def compute(self, *, prediction, references, metadata=None):
+        # ✅ CORRECT: prediction is already extracted
+        # prediction = "4" (not "<think>...</think><answer>4</answer>")
+        is_correct = prediction == references[0]
+        
+        # ❌ WRONG: Don't try to extract again!
+        # answer = self.extract_answer(prediction)  # DON'T DO THIS
+        
+        return MetricScore(
+            metric_name=self.name,
+            value=1.0 if is_correct else 0.0
+        )
+```
 
-# Use in evaluation
-result = evaluate(
-    dataset=my_dataset,
-    model="gpt-4",
-    metrics=[MyMetric()],
+### Pipeline Flow
+
+```
+1. Model generates: "<think>reasoning</think><answer>42</answer>"
+2. Extractor extracts: "42"
+3. Metric receives: prediction="42" (ALREADY EXTRACTED)
+```
+
+### Common Extractor Types
+
+**JSON Field Extractor:**
+```python
+from themis.evaluation.extractors import JsonFieldExtractor
+
+extractor = JsonFieldExtractor("answer")
+# Input: '{"answer": "42", "explanation": "..."}'
+# Output: "42"
+```
+
+**Regex Extractor:**
+```python
+from themis.evaluation.extractors import RegexExtractor
+
+extractor = RegexExtractor(r"<answer>(.*?)</answer>")
+# Input: "<think>...</think><answer>42</answer>"
+# Output: "42"
+```
+
+**Identity Extractor:**
+```python
+from themis.evaluation.extractors import IdentityExtractor
+
+extractor = IdentityExtractor()
+# Input: "42"
+# Output: "42" (no transformation)
+```
+
+### Creating Custom Extractors
+
+```python
+from themis.evaluation.extractors import FieldExtractionError
+
+class MyExtractor:
+    def extract(self, raw_output: str):
+        """Extract answer from custom format."""
+        if "ANSWER:" in raw_output:
+            parts = raw_output.split("ANSWER:")
+            return parts[-1].strip()
+        raise FieldExtractionError("No ANSWER: marker found")
+
+# Use in pipeline
+pipeline = EvaluationPipeline(
+    extractor=MyExtractor(),
+    metrics=[my_metric]
 )
 ```
 
 ---
 
-## Caching and Resume
+## Custom Metrics
 
-### Enable Caching
-
-Caching is enabled by default:
+### Basic Metric Template
 
 ```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    run_id="my-experiment",
-    resume=True,  # Default: True
-)
+from themis.interfaces import Metric
+from themis.core import entities
+
+class MyMetric(Metric):
+    name = "my_metric"
+    requires_reference = True  # Set False if no reference needed
+    
+    def compute(self, *, prediction, references, metadata=None):
+        """Compute metric score.
+        
+        Args:
+            prediction: Extracted answer (str, int, dict, etc.)
+            references: List of reference values (always a list)
+            metadata: Dict with sample_id and task metadata
+            
+        Returns:
+            MetricScore with value and optional details
+        """
+        # Your logic here
+        score_value = self._calculate_score(prediction, references)
+        
+        return entities.MetricScore(
+            metric_name=self.name,
+            value=score_value,
+            details={"debug_info": "..."},
+            metadata={"processing_time_ms": 10}
+        )
 ```
 
-### Disable Caching
-
-Force re-evaluation:
+### Example: Exact Match with Multiple Valid Answers
 
 ```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    run_id="my-experiment",
-    resume=False,  # Ignore cache
-)
+class MultiAnswerExactMatch(Metric):
+    name = "multi_answer_exact_match"
+    
+    def compute(self, *, prediction, references, metadata=None):
+        # Check if prediction matches any reference
+        prediction_clean = prediction.strip().lower()
+        
+        is_correct = any(
+            prediction_clean == str(ref).strip().lower()
+            for ref in references
+        )
+        
+        return entities.MetricScore(
+            metric_name=self.name,
+            value=1.0 if is_correct else 0.0,
+            details={
+                "prediction": prediction,
+                "valid_answers": references,
+                "matched": is_correct
+            }
+        )
 ```
 
-### Cache Behavior
-
-Cache is invalidated when you change:
-- Model name or version
-- Sampling parameters (temperature, max_tokens, etc.)
-- Prompt template
-- Evaluation metrics
-
-### Storage Location
-
-Specify where results are stored:
+### Example: Math Evaluation with Steps
 
 ```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    storage="~/my-experiments",  # Custom location
-)
-```
-
-Default storage: `.cache/experiments`
-
----
-
-## Parallel Execution
-
-### Multi-threaded Execution
-
-Use multiple workers for faster evaluation:
-
-```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    workers=16,  # Use 16 parallel threads
-)
-```
-
-**Recommendations:**
-- CPU-bound: `workers = num_cpus`
-- I/O-bound (API calls): `workers = 8-32`
-- Rate limits: Reduce workers to avoid throttling
-
-### Sequential Execution
-
-For debugging, use single-threaded execution:
-
-```python
-from themis.backends import SequentialExecutionBackend
-
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    execution_backend=SequentialExecutionBackend(),
-)
-```
-
----
-
-## Export Results
-
-### Export Formats
-
-Export results to various formats:
-
-```python
-# JSON
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    output="results.json",
-)
-
-# CSV
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    output="results.csv",
-)
-
-# HTML
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    output="results.html",
-)
-```
-
-### Programmatic Export
-
-```python
-from themis.experiment.export import export_json, export_csv, export_html
-from pathlib import Path
-
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-
-# Export manually
-export_json(result, Path("results.json"))
-export_csv(result, Path("results.csv"))
-export_html(result, Path("results.html"))
+class MathWithSteps(Metric):
+    name = "math_with_steps"
+    
+    def compute(self, *, prediction, references, metadata=None):
+        ref = references[0]
+        
+        if isinstance(ref, dict):
+            expected_answer = ref["answer"]
+            expected_steps = ref.get("steps", [])
+        else:
+            expected_answer = ref
+            expected_steps = []
+        
+        # Check answer correctness
+        answer_correct = self._check_answer(prediction, expected_answer)
+        
+        # Check if solution includes expected steps
+        steps_correct = all(
+            step in prediction for step in expected_steps
+        )
+        
+        return entities.MetricScore(
+            metric_name=self.name,
+            value=1.0 if (answer_correct and steps_correct) else 0.0,
+            details={
+                "answer_correct": answer_correct,
+                "steps_correct": steps_correct,
+                "expected_steps": expected_steps
+            }
+        )
 ```
 
 ---
 
 ## Best Practices
 
-### 1. Start Small
-
-Always test with small limits first:
+### 1. Use Multi-Value References for Complex Tasks
 
 ```python
-# Test run
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=10)
-
-# Full run once working
-result = evaluate(benchmark="gsm8k", model="gpt-4")
-```
-
-### 2. Use Run IDs
-
-Always specify meaningful run IDs:
-
-```python
-# Good
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    run_id="gsm8k-gpt4-baseline-2024-01-15",
+# ✅ GOOD: All data in reference
+reference = Reference(
+    kind="task",
+    value={
+        "answer": 42,
+        "constraints": [1, 2, 3],
+        "format": "integer"
+    }
 )
 
-# Bad (auto-generated, hard to track)
-result = evaluate(benchmark="gsm8k", model="gpt-4")
+# ❌ AVOID: Scattered across metadata
+reference = Reference(kind="answer", value=42)
+metadata = {"constraints": [1, 2, 3], "format": "integer"}
 ```
 
-### 3. Monitor Costs
-
-Check costs after evaluation:
+### 2. Don't Re-Extract in Metrics
 
 ```python
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
-print(f"Cost: ${result.cost:.2f}")
+# ✅ CORRECT: Use prediction directly
+def compute(self, *, prediction, references, metadata=None):
+    return MetricScore(
+        metric_name=self.name,
+        value=1.0 if prediction == references[0] else 0.0
+    )
+
+# ❌ WRONG: Trying to extract again
+def compute(self, *, prediction, references, metadata=None):
+    # DON'T DO THIS - prediction is already extracted!
+    answer = extract_from_tags(prediction)  
+    return MetricScore(...)
 ```
 
-### 4. Use Appropriate Workers
-
-Balance speed vs API limits:
+### 3. Handle Multiple Reference Formats Gracefully
 
 ```python
-# Fast but may hit rate limits
-result = evaluate(benchmark="gsm8k", model="gpt-4", workers=32)
-
-# Safer for rate limits
-result = evaluate(benchmark="gsm8k", model="gpt-4", workers=8)
+def compute(self, *, prediction, references, metadata=None):
+    ref = references[0]
+    
+    # Handle both dict and scalar references
+    if isinstance(ref, dict):
+        answer = ref["answer"]
+        extra_data = ref.get("extra", None)
+    else:
+        answer = ref
+        extra_data = None
+    
+    # Use answer and extra_data...
 ```
 
-### 5. Test with Fake Model
-
-Use `fake-math-llm` for testing (no API key needed):
+### 4. Provide Detailed Error Information
 
 ```python
-result = evaluate(
-    benchmark="demo",
-    model="fake-math-llm",
-    limit=10,
-)
+def compute(self, *, prediction, references, metadata=None):
+    try:
+        result = self._complex_validation(prediction)
+        return MetricScore(
+            metric_name=self.name,
+            value=result.score,
+            details={
+                "validation_details": result.details,
+                "sample_id": metadata.get("sample_id")
+            }
+        )
+    except Exception as e:
+        # Return score with error details
+        return MetricScore(
+            metric_name=self.name,
+            value=0.0,
+            details={
+                "error": str(e),
+                "prediction": prediction[:100]  # First 100 chars
+            }
+        )
+```
+
+### 5. Test with Edge Cases
+
+```python
+# Test your metrics with:
+# - Empty predictions
+# - Missing references
+# - Malformed data
+# - Multiple valid answers
+# - Edge cases in your domain
+
+def test_metric_with_edge_cases():
+    metric = MyMetric()
+    
+    # Empty prediction
+    score = metric.compute(prediction="", references=["42"])
+    assert score.value == 0.0
+    
+    # Multiple valid answers
+    score = metric.compute(prediction="yes", references=["yes", "y", "true"])
+    assert score.value == 1.0
 ```
 
 ---
 
-## Troubleshooting
-
-### Evaluation Hangs
-
-If evaluation hangs:
-1. Reduce `workers` parameter
-2. Check API key is set
-3. Verify model name is correct
-4. Try with `fake-math-llm` to isolate issue
-
-### Cache Issues
-
-If cache seems stale:
-```python
-# Force re-evaluation
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    resume=False,
-)
-```
-
-Or clear cache:
-```bash
-rm -rf .cache/experiments
-```
-
-### Memory Issues
-
-For large datasets:
-1. Use `limit` parameter
-2. Reduce `workers`
-3. Increase system memory
-4. Use streaming (custom backend)
-
----
-
-## Next Steps
-
-- [Comparison Guide](../COMPARISON.md) - Compare multiple runs
-- [API Reference](../api/evaluate.md) - Complete API documentation
-- [Examples](../tutorials/examples.md) - Working code examples
-- [Custom Metrics](../EVALUATION.md) - Implement custom metrics
+For more examples, see:
+- [`examples/advanced/`](../examples/advanced/) - Custom metrics and evaluation strategies
+- [`tests/evaluation/`](../tests/evaluation/) - Comprehensive test suite
+- [`themis/evaluation/metrics/`](../themis/evaluation/metrics/) - Built-in metric implementations
