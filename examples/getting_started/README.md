@@ -121,13 +121,13 @@ For a more convenient workflow, use the CLI:
 
 ```bash
 # Run with default configuration (uses fake model)
-uv run python -m experiments.01_getting_started.cli run
+uv run python -m examples.getting_started.cli run
 
 # Dry run to preview the configuration
-uv run python -m experiments.01_getting_started.cli run --dry-run
+uv run python -m examples.getting_started.cli run --dry-run
 
 # Run with custom storage and run ID
-uv run python -m experiments.01_getting_started.cli run \
+uv run python -m examples.getting_started.cli run \
   --storage-dir .cache/my-first-run \
   --run-id my-first-run
 
@@ -144,13 +144,13 @@ Instead of command-line arguments, you can use a JSON configuration file:
 
 ```bash
 # Use the provided sample config
-uv run python -m experiments.01_getting_started.cli run \
-  --config-path experiments/01_getting_started/config.sample.json
+uv run python -m examples.getting_started.cli run \
+  --config-path examples/getting_started/config.sample.json
 
 # Create your own config by copying the sample
-cp experiments/01_getting_started/config.sample.json my_config.json
+cp examples/getting_started/config.sample.json my_config.json
 # Edit my_config.json with your settings
-uv run python -m experiments.01_getting_started.cli run --config-path my_config.json
+uv run python -m examples.getting_started.cli run --config-path my_config.json
 ```
 
 ## Configuration File Structure

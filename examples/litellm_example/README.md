@@ -66,7 +66,7 @@ ollama pull llama2
 First, verify the setup works:
 
 ```bash
-uv run python -m themis.cli demo
+uv run python -m examples.getting_started.cli run
 ```
 
 ### 2. Run with OpenAI
@@ -119,7 +119,7 @@ Create `config.json`:
 Run it:
 
 ```bash
-uv run python -m experiments.litellm_example.cli run --config config.json
+uv run python -m examples.litellm_example.cli run --config-path config.json
 ```
 
 ### 3. Run with Multiple Providers
@@ -225,12 +225,12 @@ The example includes MATH-500, a subset of the MATH dataset:
 
 ```bash
 # Run with sample config
-uv run python -m experiments.litellm_example.cli run \
-  --config config.sample.json
+uv run python -m examples.litellm_example.cli run \
+  --config-path config.sample.json
 
 # Run with comprehensive config (multiple models and strategies)
-uv run python -m experiments.litellm_example.cli run \
-  --config config.comprehensive.json
+uv run python -m examples.litellm_example.cli run \
+  --config-path config.comprehensive.json
 ```
 
 ### Custom Dataset
@@ -261,24 +261,24 @@ Use inline datasets for quick tests:
 
 ```bash
 # Run experiment
-uv run python -m experiments.litellm_example.cli run \
-  --config config.json \
+uv run python -m examples.litellm_example.cli run \
+  --config-path config.json \
   --storage-dir .cache/my_exp \
   --run-id run-1
 
 # Resume interrupted run
-uv run python -m experiments.litellm_example.cli run \
-  --config config.json \
+uv run python -m examples.litellm_example.cli run \
+  --config-path config.json \
   --run-id run-1 \
   --resume
 
 # Limit records for testing
-uv run python -m experiments.litellm_example.cli run \
-  --config config.json \
+uv run python -m examples.litellm_example.cli run \
+  --config-path config.json \
   --n-records 10
 
 # Show results
-uv run python -m experiments.litellm_example.cli show \
+uv run python -m examples.litellm_example.cli show \
   --storage-dir .cache/my_exp \
   --run-id run-1
 ```

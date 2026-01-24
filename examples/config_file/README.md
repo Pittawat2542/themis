@@ -59,7 +59,7 @@ The simplest config file (`config.sample.json`):
 Run it:
 
 ```bash
-uv run python -m experiments.02_config_file.cli run --config-path experiments/02_config_file/config.sample.json
+uv run python -m examples.config_file.cli run --config-path examples/config_file/config.sample.json
 ```
 
 ## Configuration Fields Explained
@@ -162,22 +162,22 @@ You can override any config value from the command line:
 
 ```bash
 # Override run_id
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path config.sample.json \
   --run-id my-custom-run
 
 # Override storage directory
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path config.sample.json \
   --storage-dir .cache/custom-storage
 
 # Override resume behavior
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path config.sample.json \
   --resume false
 
 # Combine multiple overrides
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path config.sample.json \
   --run-id experiment-1 \
   --storage-dir .cache/exp1 \
@@ -334,19 +334,19 @@ This creates a 2×2 grid: 2 models × 2 sampling strategies = 4 total configurat
 
 ```bash
 # Run sampling comparison
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path compare_sampling.json
 
 # Run model comparison
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path compare_models.json
 
 # Run grid search
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path grid_search.json
 
 # Export results
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path grid_search.json \
   --csv-output results.csv \
   --html-output results.html
@@ -358,15 +358,15 @@ One of the most powerful features is automatic resumability:
 
 ```bash
 # First run: processes all samples
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path grid_search.json
 
 # Second run: skips already-completed samples (because resume=true)
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path grid_search.json
 
 # Force re-run everything (disable resume)
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path grid_search.json \
   --resume false
 ```
@@ -399,7 +399,7 @@ configs/
 Preview what will run without actually executing:
 
 ```bash
-uv run python -m experiments.02_config_file.cli run \
+uv run python -m examples.config_file.cli run \
   --config-path grid_search.json \
   --dry-run
 ```

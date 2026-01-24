@@ -111,8 +111,7 @@ export_report_bundle(
 )
 
 # View summaries via CLI
-# uv run python -m themis.cli results-summary --run-id run-123
-# uv run python -m themis.cli results-list
+
 ```
 
 ### Storage Savings

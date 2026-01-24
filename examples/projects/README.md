@@ -218,9 +218,9 @@ models = [
         spec=core_entities.ModelSpec(identifier="local-llm", provider="openai-compatible"),
         provider_name="openai-compatible",
         provider_options={
-            "base_url": "http://localhost:1234/v1",
-            "api_key": "not-needed",
-            "model_mapping": {"local-llm": "qwen2.5-7b-instruct"},
+            "api_base": "http://localhost:1234/v1",
+            "api_key": "dummy",
+            "custom_llm_provider": "openai",
         },
     ),
 ]
@@ -384,13 +384,13 @@ Usage:
 
 ```bash
 # List all experiments
-uv run python -m experiments.04_projects.cli list-experiments
+uv run python -m examples.projects.cli list-experiments
 
 # Run a specific experiment
-uv run python -m experiments.04_projects.cli run --experiment math500-full
+uv run python -m examples.projects.cli run --experiment math500-full
 
 # Run with custom settings
-uv run python -m experiments.04_projects.cli run \
+uv run python -m examples.projects.cli run \
   --experiment math500-quick \
   --storage-dir .cache/my-run \
   --run-id test-2024-01-15 \
