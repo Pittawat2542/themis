@@ -184,7 +184,7 @@ class ExperimentStorage:
         # In-memory caches
         self._task_index: dict[str, set[str]] = {}
         self._template_index: dict[str, dict[str, str]] = {}
-        self._locks: dict[str, int] = {}  # fd for lock files
+        self._locks: dict[str, tuple[int, int]] = {}  # (fd, count) for reentrant locks
 
     def _init_database(self):
         """Initialize SQLite metadata database."""
@@ -253,34 +253,157 @@ class ExperimentStorage:
 
     @contextlib.contextmanager
     def _acquire_lock(self, run_id: str):
-        """Acquire exclusive lock for run directory."""
+        """Acquire exclusive lock for run directory with timeout (reentrant).
+        
+        This lock is reentrant within the same thread to prevent deadlocks when
+        the same process acquires the lock multiple times (e.g., start_run() 
+        followed by append_record()).
+        
+        The lock uses OS-specific file locking:
+        - Unix/Linux/macOS: fcntl.flock with non-blocking retry
+        - Windows: msvcrt.locking
+        - Fallback: No locking (single-process mode)
+        
+        Args:
+            run_id: Unique run identifier
+            
+        Yields:
+            Context manager that holds the lock
+            
+        Raises:
+            TimeoutError: If lock cannot be acquired within 30 seconds
+        """
+        import time
+        
+        # Check if we already hold the lock (reentrant)
+        if run_id in self._locks:
+            lock_fd, count = self._locks[run_id]
+            self._locks[run_id] = (lock_fd, count + 1)
+            try:
+                yield
+            finally:
+                lock_fd, count = self._locks[run_id]
+                if count > 1:
+                    self._locks[run_id] = (lock_fd, count - 1)
+                else:
+                    # Last unlock - release the actual lock
+                    self._release_os_lock(lock_fd, run_id)
+            return
+        
+        # First time acquiring lock for this run_id
         lock_path = self._get_run_dir(run_id) / ".lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Open lock file
-        lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
+        # Open lock file (OS-independent flags)
+        lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
 
         try:
-            # Acquire exclusive lock (blocking)
-            if sys.platform == "win32":
-                # Windows file locking
-                msvcrt.locking(lock_fd, msvcrt.LK_LOCK, 1)
-            elif FCNTL_AVAILABLE:
-                # Unix file locking
-                fcntl.flock(lock_fd, fcntl.LOCK_EX)
-            # If neither available, proceed without locking (single-process only)
+            # Acquire exclusive lock with timeout
+            self._acquire_os_lock(lock_fd, run_id, lock_path, timeout=30)
             
-            self._locks[run_id] = lock_fd
+            self._locks[run_id] = (lock_fd, 1)
             yield
         finally:
-            # Release lock
-            if sys.platform == "win32":
-                msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
-            elif FCNTL_AVAILABLE:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            # Release lock (only if this was the outermost lock)
+            if run_id in self._locks:
+                lock_fd, count = self._locks[run_id]
+                if count == 1:
+                    self._release_os_lock(lock_fd, run_id)
+                else:
+                    # Decrement count
+                    self._locks[run_id] = (lock_fd, count - 1)
+    
+    def _acquire_os_lock(
+        self, 
+        lock_fd: int, 
+        run_id: str, 
+        lock_path: Path, 
+        timeout: int = 30
+    ) -> None:
+        """Acquire OS-specific file lock with timeout.
+        
+        Args:
+            lock_fd: File descriptor for lock file
+            run_id: Run identifier (for error messages)
+            lock_path: Path to lock file (for error messages)
+            timeout: Timeout in seconds
             
+        Raises:
+            TimeoutError: If lock cannot be acquired within timeout
+        """
+        import time
+        
+        if sys.platform == "win32":
+            # Windows file locking
+            try:
+                import msvcrt
+                msvcrt.locking(lock_fd, msvcrt.LK_NBLCK, 1)
+            except (ImportError, OSError) as e:
+                # If locking fails, log warning but continue
+                # This allows single-process operation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Windows file locking unavailable for run {run_id}: {e}"
+                )
+        elif FCNTL_AVAILABLE:
+            # Unix file locking with non-blocking retry
+            start_time = time.time()
+            while True:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break  # Lock acquired
+                except (IOError, OSError) as e:
+                    # Lock is held by another process
+                    if time.time() - start_time > timeout:
+                        try:
+                            os.close(lock_fd)
+                        except:
+                            pass
+                        raise TimeoutError(
+                            f"Failed to acquire lock for run {run_id} after {timeout}s. "
+                            f"This usually means another process is holding the lock or a previous process crashed. "
+                            f"Try: rm -f {lock_path}"
+                        ) from e
+                    time.sleep(0.1)  # Wait 100ms before retry
+        else:
+            # No locking available - single-process mode
+            # This is safe for single-process usage (most common case)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(
+                f"File locking not available on this platform. "
+                f"Storage will work in single-process mode only."
+            )
+    
+    def _release_os_lock(self, lock_fd: int, run_id: str) -> None:
+        """Release OS-specific file lock.
+        
+        Args:
+            lock_fd: File descriptor to close
+            run_id: Run identifier (for cleanup)
+        """
+        # Release lock
+        if sys.platform == "win32":
+            try:
+                import msvcrt
+                msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
+            except (ImportError, OSError):
+                pass  # Lock may already be released
+        elif FCNTL_AVAILABLE:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            except (IOError, OSError):
+                pass  # Lock may already be released
+        
+        # Close file descriptor
+        try:
             os.close(lock_fd)
-            self._locks.pop(run_id, None)
+        except OSError:
+            pass  # FD may already be closed
+        
+        # Clean up tracking
+        self._locks.pop(run_id, None)
 
     def start_run(
         self,

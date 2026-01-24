@@ -49,16 +49,32 @@ class GenerationRunner:
     ) -> Iterator[core_entities.GenerationRecord]:
         task_list = list(tasks)
         if not task_list:
+            logger.info("Runner: No tasks to execute")
             return
+        
+        logger.info(f"Runner: Starting execution of {len(task_list)} tasks with {self._max_parallel} workers")
+        
         if self._max_parallel <= 1:
-            for task in task_list:
+            logger.info("Runner: Using sequential execution (1 worker)")
+            for i, task in enumerate(task_list, 1):
+                logger.debug(f"Runner: Processing task {i}/{len(task_list)}")
                 yield self._execute_task(task)
             return
 
+        logger.info(f"Runner: Using parallel execution ({self._max_parallel} workers)")
         with ThreadPoolExecutor(max_workers=self._max_parallel) as executor:
             futures = [executor.submit(self._execute_task, task) for task in task_list]
+            completed = 0
             for future in futures:
-                yield future.result()
+                try:
+                    result = future.result()
+                    completed += 1
+                    if completed % max(1, len(task_list) // 10) == 0 or completed == len(task_list):
+                        logger.debug(f"Runner: Completed {completed}/{len(task_list)} tasks")
+                    yield result
+                except Exception as e:
+                    logger.error(f"Runner: Task execution failed: {e}")
+                    raise
 
     def _run_single_attempt(
         self, task: core_entities.GenerationTask
@@ -70,7 +86,7 @@ class GenerationRunner:
         for attempt in range(1, self._max_retries + 1):
             try:
                 logger.debug(
-                    "Starting generation for %s attempt %s/%s",
+                    "Runner: Starting generation for %s (attempt %s/%s)",
                     task_label,
                     attempt,
                     self._max_retries,
@@ -79,16 +95,16 @@ class GenerationRunner:
                 record.metrics["generation_attempts"] = attempt
                 if attempt_errors:
                     record.metrics.setdefault("retry_errors", attempt_errors)
-                logger.debug("Completed %s in %s attempt(s)", task_label, attempt)
+                logger.debug("Runner: ✅ Completed %s in %s attempt(s)", task_label, attempt)
                 return record
             except Exception as exc:  # pragma: no cover - defensive path
                 last_error = exc
                 logger.warning(
-                    "Attempt %s/%s for %s failed: %s",
+                    "Runner: ⚠️  Attempt %s/%s for %s failed: %s",
                     attempt,
                     self._max_retries,
                     task_label,
-                    exc,
+                    str(exc)[:100],  # Truncate long error messages
                 )
                 attempt_errors.append(
                     {

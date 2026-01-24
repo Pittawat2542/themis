@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from dataclasses import dataclass
 from typing import Any, Dict
@@ -9,6 +10,8 @@ from typing import Any, Dict
 from themis.core import entities as core_entities
 from themis.interfaces import ModelProvider
 from themis.providers import register_provider
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -57,7 +60,22 @@ class LiteLLMProvider(ModelProvider):
             litellm.drop_params = self.drop_params
             if self.max_retries > 0:
                 litellm.num_retries = self.max_retries
+            
+            logger.debug(f"LiteLLMProvider initialized:")
+            logger.debug(f"  api_base: {self.api_base or 'default'}")
+            logger.debug(f"  timeout: {self.timeout}s")
+            logger.debug(f"  max_retries: {self.max_retries}")
+            logger.debug(f"  n_parallel: {self.n_parallel}")
+            
+            # Warn if api_base is set but no api_key
+            if self.api_base and not self.api_key:
+                logger.warning(
+                    "⚠️  LiteLLMProvider: api_base is set but api_key is not. "
+                    "This may cause authentication errors. "
+                    "Set api_key='dummy' for local servers."
+                )
         except ImportError as exc:
+            logger.error("❌ LiteLLM is not installed")
             raise RuntimeError(
                 "LiteLLM is not installed. Install via `pip install litellm` or "
                 "`uv add litellm` to use LiteLLMProvider."
@@ -70,6 +88,10 @@ class LiteLLMProvider(ModelProvider):
 
         messages = self._build_messages(task)
         completion_kwargs = self._build_completion_kwargs(task, messages)
+        
+        logger.debug(f"LiteLLMProvider: Calling model={completion_kwargs.get('model')}")
+        if self.api_base:
+            logger.debug(f"LiteLLMProvider: Using custom api_base={self.api_base}")
 
         try:
             with self._semaphore:
@@ -131,6 +153,30 @@ class LiteLLMProvider(ModelProvider):
                 details["status_code"] = exc.status_code  # type: ignore
             if hasattr(exc, "llm_provider"):
                 details["llm_provider"] = exc.llm_provider  # type: ignore
+            
+            # Log with helpful context
+            if "AuthenticationError" in error_type or "api_key" in error_message.lower():
+                logger.error(
+                    f"LiteLLMProvider: ❌ Authentication error for model {task.model.identifier}"
+                )
+                logger.error(
+                    f"  Error: {error_message[:200]}"
+                )
+                logger.error(
+                    f"  Hint: If using a custom api_base, ensure you also pass api_key='dummy'"
+                )
+            elif "Connection" in error_type or "timeout" in error_message.lower():
+                logger.error(
+                    f"LiteLLMProvider: ❌ Connection error for model {task.model.identifier}"
+                )
+                logger.error(f"  Error: {error_message[:200]}")
+                if self.api_base:
+                    logger.error(f"  Check that the server at {self.api_base} is running")
+            else:
+                logger.error(
+                    f"LiteLLMProvider: ❌ Generation failed for {task.model.identifier}: "
+                    f"{error_type}: {error_message[:200]}"
+                )
 
             return core_entities.GenerationRecord(
                 task=task,

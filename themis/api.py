@@ -33,6 +33,7 @@ Example:
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Sequence
@@ -51,6 +52,18 @@ from themis.generation.router import ProviderRouter
 from themis.generation.runner import GenerationRunner
 from themis.generation.templates import PromptTemplate
 from themis.providers import create_provider
+
+# Import provider modules to ensure they register themselves
+try:
+    from themis.generation import clients  # noqa: F401 - registers fake provider
+    from themis.generation.providers import (
+        litellm_provider,  # noqa: F401
+        vllm_provider,  # noqa: F401
+    )
+except ImportError:
+    pass
+
+logger = logging.getLogger(__name__)
 
 
 def evaluate(
@@ -123,6 +136,19 @@ def evaluate(
         >>> print(f"Accuracy: {report.evaluation_report.metrics['accuracy']:.2%}")
         Accuracy: 85.00%
     """
+    logger.info("=" * 60)
+    logger.info("Starting Themis evaluation")
+    logger.info(f"Model: {model}")
+    logger.info(f"Workers: {workers}")
+    logger.info(f"Temperature: {temperature}, Max tokens: {max_tokens}")
+    if "api_base" in kwargs:
+        logger.info(f"Custom API base: {kwargs['api_base']}")
+    if "api_key" in kwargs:
+        logger.info("API key: <provided>")
+    else:
+        logger.warning("⚠️  No api_key provided - may fail for custom API endpoints")
+    logger.info("=" * 60)
+    
     # Import presets system (lazy import to avoid circular dependencies)
     from themis.presets import get_benchmark_preset, parse_model_name
     
@@ -131,11 +157,23 @@ def evaluate(
     
     if is_benchmark:
         benchmark_name = benchmark_or_dataset
+        logger.info(f"Loading benchmark: {benchmark_name}")
+        
         # Get preset configuration
-        preset = get_benchmark_preset(benchmark_name)
+        try:
+            preset = get_benchmark_preset(benchmark_name)
+        except Exception as e:
+            logger.error(f"❌ Failed to get benchmark preset '{benchmark_name}': {e}")
+            raise
         
         # Load dataset using preset loader
-        dataset = preset.load_dataset(limit=limit)
+        logger.info(f"Loading dataset (limit={limit})...")
+        try:
+            dataset = preset.load_dataset(limit=limit)
+            logger.info(f"✅ Loaded {len(dataset)} samples from {benchmark_name}")
+        except Exception as e:
+            logger.error(f"❌ Failed to load dataset: {e}")
+            raise
         
         # Use preset prompt if not overridden
         if prompt is None:
@@ -158,11 +196,14 @@ def evaluate(
         dataset_id_field = preset.dataset_id_field
     else:
         # Custom dataset
+        logger.info("Using custom dataset")
         dataset = list(benchmark_or_dataset)
+        logger.info(f"Custom dataset has {len(dataset)} samples")
         
         # Limit dataset if requested
         if limit is not None:
             dataset = dataset[:limit]
+            logger.info(f"Limited to {len(dataset)} samples")
         
         # Use provided prompt or default
         if prompt is None:
@@ -188,7 +229,15 @@ def evaluate(
         dataset_id_field = "id"
     
     # Parse model name to get provider and options
-    provider_name, model_id, provider_options = parse_model_name(model, **kwargs)
+    logger.info(f"Parsing model configuration...")
+    try:
+        provider_name, model_id, provider_options = parse_model_name(model, **kwargs)
+        logger.info(f"Provider: {provider_name}")
+        logger.info(f"Model ID: {model_id}")
+        logger.debug(f"Provider options: {provider_options}")
+    except Exception as e:
+        logger.error(f"❌ Failed to parse model name '{model}': {e}")
+        raise
     
     # Create model spec
     model_spec = ModelSpec(
@@ -214,17 +263,31 @@ def evaluate(
     )
     
     # Create provider and router
-    provider = create_provider(provider_name, **provider_options)
+    logger.info(f"Creating provider '{provider_name}'...")
+    try:
+        provider = create_provider(provider_name, **provider_options)
+        logger.info(f"✅ Provider created successfully")
+    except KeyError as e:
+        logger.error(f"❌ Provider '{provider_name}' not registered. Available providers: fake, litellm, openai, anthropic, azure, bedrock, gemini, cohere, vllm")
+        logger.error(f"   This usually means the provider module wasn't imported.")
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to create provider: {e}")
+        raise
+    
     router = ProviderRouter({model_id: provider})
+    logger.debug(f"Router configured for model: {model_id}")
     
     # Create runner
-    runner = GenerationRunner(provider=router)
+    runner = GenerationRunner(provider=router, max_parallel=workers)
+    logger.info(f"Runner configured with {workers} parallel workers")
     
     # Create evaluation pipeline
     pipeline = EvaluationPipeline(
         extractor=extractor,
         metrics=metrics_list,
     )
+    logger.info(f"Evaluation metrics: {[m.name for m in metrics_list]}")
     
     # Determine storage location
     if storage is None:
@@ -235,11 +298,15 @@ def evaluate(
     # Generate run ID if not provided
     if run_id is None:
         run_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    logger.info(f"Run ID: {run_id}")
+    logger.info(f"Storage: {storage_dir}")
+    logger.info(f"Resume: {resume}")
     
     # Create storage backend
     if isinstance(storage_dir, Path):
         from themis.experiment.storage import ExperimentStorage
         storage_backend = ExperimentStorage(storage_dir)
+        logger.debug(f"Storage backend created at {storage_dir}")
     else:
         # Cloud storage (to be implemented in Phase 3)
         raise NotImplementedError(
@@ -264,15 +331,34 @@ def evaluate(
         )
     
     # Run locally
-    report = orchestrator.run(
-        dataset=dataset,
-        max_samples=limit,
-        run_id=run_id,
-        resume=resume,
-        on_result=on_result,
-    )
+    logger.info("=" * 60)
+    logger.info("🚀 Starting experiment execution...")
+    logger.info("=" * 60)
     
-    return report
+    try:
+        report = orchestrator.run(
+            dataset=dataset,
+            max_samples=limit,
+            run_id=run_id,
+            resume=resume,
+            on_result=on_result,
+        )
+        
+        logger.info("=" * 60)
+        logger.info("✅ Evaluation completed successfully!")
+        logger.info(f"   Total samples: {len(report.generation_results)}")
+        logger.info(f"   Successful: {report.metadata.get('successful_generations', 0)}")
+        logger.info(f"   Failed: {report.metadata.get('failed_generations', 0)}")
+        if report.evaluation_report.metrics:
+            logger.info(f"   Metrics: {list(report.evaluation_report.metrics.keys())}")
+        logger.info("=" * 60)
+        
+        return report
+    except Exception as e:
+        logger.error("=" * 60)
+        logger.error(f"❌ Evaluation failed: {e}")
+        logger.error("=" * 60)
+        raise
 
 
 def _resolve_metrics(metric_names: list[str]) -> list:

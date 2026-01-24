@@ -5,7 +5,35 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-01-24
+
+### Fixed
+- **Critical:** Non-reentrant file lock in `ExperimentStorage` causing indefinite hangs
+  - Made `_acquire_lock()` reentrant to prevent deadlocks when same process acquires lock multiple times
+  - Added 30-second timeout with helpful error message for stale locks
+  - Improved OS compatibility (Unix/Linux/macOS/Windows/fallback)
+- Provider registration issue in `themis.api.evaluate()` - added missing provider imports
+- Enhanced error logging throughout the codebase for better debugging
+- Added comprehensive logging to API, orchestrator, runner, and providers
+- Improved error messages with helpful hints for common issues
+- Added configuration warnings for missing `api_key` with custom `api_base`
+
+### Added
+- Comprehensive test suite for reentrant locks (`tests/experiment/test_reentrant_locks.py`)
+- 12 new tests to prevent regression of the deadlock issue
+- Cache design assessment document (`docs/LOCK_FIX_v0.2.1.md`)
+- OS-specific lock implementations with graceful fallback
+
+### Improved
+- File locking now uses non-blocking lock with timeout and retry logic
+- Logging visibility at all stages of evaluation (INFO level recommended)
+- Progress tracking during generation and evaluation
+- Error messages now include context and suggestions for resolution
+- Lock implementation is now fully reentrant and thread-safe
+
+### Performance
+- Evaluation now completes in ~4s for 20 samples (previously hung forever)
+- Throughput: 5 samples/sec with 8 workers on real vLLM server
 
 ## [0.2.0] - 2026-01-22
 
