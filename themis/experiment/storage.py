@@ -579,16 +579,19 @@ class ExperimentStorage:
 
         try:
             if self._config.compression == "gzip":
+                # Close the fd first since gzip.open will open by path
+                os.close(temp_fd)
                 with gzip.open(temp_path, "wt", encoding="utf-8") as f:
                     f.write(json_line)
                     f.flush()
                     os.fsync(f.fileno())
             else:
+                # Use the fd directly
                 with open(temp_fd, "w", encoding="utf-8") as f:
                     f.write(json_line)
                     f.flush()
                     os.fsync(f.fileno())
-            os.close(temp_fd)
+                # fd is closed by context manager, don't close again
 
             # Get target path with compression
             target_path = (
