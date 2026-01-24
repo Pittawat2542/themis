@@ -5,6 +5,61 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-01-24
+
+### Added
+- **Custom Metric Registration API** - Public API for registering custom metrics
+  - `themis.register_metric(name, metric_class)` - Register custom metrics
+  - `themis.get_registered_metrics()` - Query registered custom metrics
+  - Custom metrics work exactly like built-in metrics
+  - Full validation with type checking and interface verification
+  - Comprehensive test suite with 7 test cases
+- **Exposed All Registration APIs at Top Level** - All extension points now discoverable
+  - `themis.register_dataset(name, factory)` - Register custom datasets
+  - `themis.list_datasets()` - List all registered datasets
+  - `themis.is_dataset_registered(name)` - Check if dataset is registered
+  - `themis.register_provider(name, factory)` - Register custom model providers
+  - `themis.register_benchmark(preset)` - Register benchmark presets
+  - `themis.list_benchmarks()` - List all registered benchmarks
+  - `themis.get_benchmark_preset(name)` - Get benchmark configuration
+- **Comprehensive Extension Documentation** (1,900+ lines)
+  - `docs/EXTENDING_THEMIS.md` - Complete guide with interfaces, examples, and best practices
+    - Custom Metrics with registration
+    - Custom Datasets with registration
+    - Custom Providers with registration
+    - Custom Benchmarks with registration
+    - Custom Extractors (direct usage)
+    - Custom Templates (direct usage)
+  - `docs/EXTENSION_QUICK_REFERENCE.md` - One-page cheat sheet for all extension points
+  - `docs/EXTENSION_ARCHITECTURE.md` - Visual diagrams showing architecture and data flow
+- **Working Examples**
+  - `examples-simple/06_custom_metrics.py` - Complete working example of custom metrics
+  - Example metrics: WordCountMetric, ContainsKeywordMetric
+
+### Improved
+- **Extension System Design**
+  - Consistent registration patterns across all component types
+  - Clear distinction between registered (by-name) and direct usage components
+  - All APIs follow same pattern: register → query → use by name
+  - Module-level registries for metrics, datasets, providers, benchmarks
+- **Documentation Quality**
+  - Updated `docs/index.md` with links to new extension guides
+  - Clear examples for each extension point
+  - Migration guides for existing workarounds
+  - Best practices and testing guidelines
+
+### Changed
+- Custom metrics can now override built-in metrics if needed
+- `themis/__init__.py` now exports all registration APIs at top level
+- `themis/presets/__init__.py` now exports `BenchmarkPreset` and `register_benchmark`
+
+### Developer Experience
+- Makes it obvious WHERE to add components (clear extension points)
+- Makes it obvious HOW to add components (consistent APIs)
+- All extension APIs discoverable with autocomplete
+- Comprehensive examples for every component type
+- Type-safe with validation built-in
+
 ## [0.2.1] - 2026-01-24
 
 ### Fixed
