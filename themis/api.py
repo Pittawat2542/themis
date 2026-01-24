@@ -66,6 +66,55 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# Module-level metrics registry for custom metrics
+_METRICS_REGISTRY: dict[str, type] = {}
+
+
+def register_metric(name: str, metric_cls: type) -> None:
+    """Register a custom metric for use in evaluate().
+    
+    This allows users to add their own metrics to Themis without modifying
+    the source code. Registered metrics can be used by passing their names
+    to the `metrics` parameter in evaluate().
+    
+    Args:
+        name: Metric name (used in evaluate(metrics=[name]))
+        metric_cls: Metric class implementing the Metric interface.
+            Must have a compute() method that takes prediction, references,
+            and metadata parameters.
+    
+    Raises:
+        TypeError: If metric_cls is not a class
+        ValueError: If metric_cls doesn't implement the required interface
+    
+    Example:
+        >>> from themis.evaluation.metrics import MyCustomMetric
+        >>> themis.register_metric("my_metric", MyCustomMetric)
+        >>> report = themis.evaluate("math500", model="gpt-4", metrics=["my_metric"])
+    """
+    if not isinstance(metric_cls, type):
+        raise TypeError(f"metric_cls must be a class, got {type(metric_cls)}")
+    
+    # Validate that it implements the Metric interface
+    if not hasattr(metric_cls, "compute"):
+        raise ValueError(
+            f"{metric_cls.__name__} must implement compute() method. "
+            f"See themis.evaluation.metrics for examples."
+        )
+    
+    _METRICS_REGISTRY[name] = metric_cls
+    logger.info(f"Registered custom metric: {name} -> {metric_cls.__name__}")
+
+
+def get_registered_metrics() -> dict[str, type]:
+    """Get all currently registered custom metrics.
+    
+    Returns:
+        Dictionary mapping metric names to their classes
+    """
+    return _METRICS_REGISTRY.copy()
+
+
 def evaluate(
     benchmark_or_dataset: str | Sequence[dict[str, Any]],
     *,
@@ -384,8 +433,8 @@ def _resolve_metrics(metric_names: list[str]) -> list:
     except ImportError:
         nlp_available = False
     
-    # Metric registry
-    METRICS_REGISTRY = {
+    # Built-in metrics registry
+    BUILTIN_METRICS = {
         # Core metrics
         "exact_match": ExactMatch,
         "math_verify": MathVerifyAccuracy,
@@ -394,7 +443,7 @@ def _resolve_metrics(metric_names: list[str]) -> list:
     
     # Add NLP metrics if available
     if nlp_available:
-        METRICS_REGISTRY.update({
+        BUILTIN_METRICS.update({
             "bleu": BLEU,
             "rouge1": lambda: ROUGE(variant=ROUGEVariant.ROUGE_1),
             "rouge2": lambda: ROUGE(variant=ROUGEVariant.ROUGE_2),
@@ -406,6 +455,10 @@ def _resolve_metrics(metric_names: list[str]) -> list:
     # Code metrics (to be added later in Phase 2)
     # "pass_at_k": PassAtK,
     # "codebleu": CodeBLEU,
+    
+    # Merge built-in and custom metrics
+    # Custom metrics can override built-in metrics
+    METRICS_REGISTRY = {**BUILTIN_METRICS, **_METRICS_REGISTRY}
     
     metrics = []
     for name in metric_names:
@@ -426,4 +479,4 @@ def _resolve_metrics(metric_names: list[str]) -> list:
     return metrics
 
 
-__all__ = ["evaluate"]
+__all__ = ["evaluate", "register_metric", "get_registered_metrics"]

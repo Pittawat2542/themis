@@ -42,6 +42,29 @@ report = themis.evaluate(
 )
 ```
 
+### 06_custom_metrics.py
+Define and register custom evaluation metrics. Shows how to create your own metrics beyond the built-in ones.
+
+```python
+# Define a custom metric
+@dataclass
+class WordCountMetric(Metric):
+    min_words: int = 10
+    
+    def compute(self, *, prediction, references=None, metadata=None):
+        word_count = len(str(prediction).split())
+        return MetricScore(
+            metric_name=self.name,
+            value=1.0 if word_count >= self.min_words else 0.0,
+            details={"word_count": word_count},
+            metadata=metadata or {},
+        )
+
+# Register and use it
+themis.register_metric("word_count", WordCountMetric)
+report = themis.evaluate(dataset, model="gpt-4", metrics=["word_count"])
+```
+
 ## Running with Real Models
 
 To use real LLM providers (not the fake model), set your API keys:

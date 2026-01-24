@@ -8,11 +8,13 @@ The primary interface is the `evaluate()` function:
 
 from themis import config, core, evaluation, experiment, generation, project
 from themis._version import __version__
-from themis.api import evaluate
+from themis.api import evaluate, register_metric, get_registered_metrics
 
 __all__ = [
     # Main API
     "evaluate",
+    "register_metric",
+    "get_registered_metrics",
     # Submodules
     "config",
     "core",
