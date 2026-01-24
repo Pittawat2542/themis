@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Made `_acquire_lock()` reentrant to prevent deadlocks when same process acquires lock multiple times
   - Added 30-second timeout with helpful error message for stale locks
   - Improved OS compatibility (Unix/Linux/macOS/Windows/fallback)
+- **Windows-specific fixes:**
+  - Fixed KeyError in concurrent lock access when locks are cleaned up by other threads
+  - Improved Windows file locking with retry logic (previously failed with Permission denied)
+  - Skip math-verify tests on Windows due to multiprocessing handle duplication issues
 - **File descriptor bug:** Fixed double-close in `_atomic_append()` causing `OSError` with uncompressed storage
 - **Test warnings:** Suppressed expected UserWarnings and registered pytest.mark.slow to eliminate all test warnings
 - Provider registration issue in `themis.api.evaluate()` - added missing provider imports

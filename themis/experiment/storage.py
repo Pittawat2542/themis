@@ -282,12 +282,14 @@ class ExperimentStorage:
             try:
                 yield
             finally:
-                lock_fd, count = self._locks[run_id]
-                if count > 1:
-                    self._locks[run_id] = (lock_fd, count - 1)
-                else:
-                    # Last unlock - release the actual lock
-                    self._release_os_lock(lock_fd, run_id)
+                # Check if lock still exists (might have been cleaned up by another thread)
+                if run_id in self._locks:
+                    lock_fd, count = self._locks[run_id]
+                    if count > 1:
+                        self._locks[run_id] = (lock_fd, count - 1)
+                    else:
+                        # Last unlock - release the actual lock
+                        self._release_os_lock(lock_fd, run_id)
             return
         
         # First time acquiring lock for this run_id
@@ -334,18 +336,34 @@ class ExperimentStorage:
         import time
         
         if sys.platform == "win32":
-            # Windows file locking
+            # Windows file locking with retry
             try:
                 import msvcrt
-                msvcrt.locking(lock_fd, msvcrt.LK_NBLCK, 1)
-            except (ImportError, OSError) as e:
-                # If locking fails, log warning but continue
-                # This allows single-process operation
+            except ImportError:
+                # msvcrt not available - single-process mode
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.warning(
-                    f"Windows file locking unavailable for run {run_id}: {e}"
-                )
+                logger.debug("msvcrt not available. Single-process mode only.")
+                return
+            
+            start_time = time.time()
+            while True:
+                try:
+                    msvcrt.locking(lock_fd, msvcrt.LK_NBLCK, 1)
+                    break  # Lock acquired
+                except OSError as e:
+                    # Lock is held by another thread/process (errno 13 Permission denied)
+                    if time.time() - start_time > timeout:
+                        try:
+                            os.close(lock_fd)
+                        except:
+                            pass
+                        raise TimeoutError(
+                            f"Failed to acquire lock for run {run_id} after {timeout}s on Windows. "
+                            f"This usually means another process is holding the lock or a previous process crashed. "
+                            f"Try deleting: {lock_path}"
+                        ) from e
+                    time.sleep(0.1)  # Wait 100ms before retry
         elif FCNTL_AVAILABLE:
             # Unix file locking with non-blocking retry
             start_time = time.time()

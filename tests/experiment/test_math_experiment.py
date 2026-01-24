@@ -1,3 +1,7 @@
+import sys
+
+import pytest
+
 from themis.evaluation import math_verify_utils
 from themis.experiment import math as math_experiment
 from themis.generation import clients
@@ -27,6 +31,10 @@ def test_math_zero_shot_experiment_runs_end_to_end():
         assert report.evaluation_report.metrics["MathVerifyAccuracy"].count == 1
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="math-verify has multiprocessing issues on Windows",
+)
 def test_run_math500_zero_shot_helper():
     dataset = [
         {
