@@ -85,3 +85,6 @@ all = [
 [tool.pytest.ini_options]
 addopts = "-q"
 pythonpath = ["."]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

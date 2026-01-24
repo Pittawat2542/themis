@@ -220,11 +220,15 @@ def test_compare_experiments_specific_metrics(mock_report_dir: Path):
 
 def test_compare_experiments_missing_run(mock_report_dir: Path):
     """Test handling missing run IDs."""
-    with pytest.raises(ValueError, match="No valid experiments found"):
-        compare_experiments(
-            run_ids=["missing-run"],
-            storage_dir=mock_report_dir,
-        )
+    import warnings
+    # Suppress expected warning about missing run
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        with pytest.raises(ValueError, match="No valid experiments found"):
+            compare_experiments(
+                run_ids=["missing-run"],
+                storage_dir=mock_report_dir,
+            )
 
 
 def test_config_diff(mock_report_dir: Path):

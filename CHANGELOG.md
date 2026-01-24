@@ -12,17 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Made `_acquire_lock()` reentrant to prevent deadlocks when same process acquires lock multiple times
   - Added 30-second timeout with helpful error message for stale locks
   - Improved OS compatibility (Unix/Linux/macOS/Windows/fallback)
+- **File descriptor bug:** Fixed double-close in `_atomic_append()` causing `OSError` with uncompressed storage
+- **Test warnings:** Suppressed expected UserWarnings and registered pytest.mark.slow to eliminate all test warnings
 - Provider registration issue in `themis.api.evaluate()` - added missing provider imports
 - Enhanced error logging throughout the codebase for better debugging
 - Added comprehensive logging to API, orchestrator, runner, and providers
 - Improved error messages with helpful hints for common issues
 - Added configuration warnings for missing `api_key` with custom `api_base`
+- Fixed storage tests with missing `start_run()` calls and incorrect path assertions
 
 ### Added
 - Comprehensive test suite for reentrant locks (`tests/experiment/test_reentrant_locks.py`)
 - 12 new tests to prevent regression of the deadlock issue
 - Cache design assessment document (`docs/LOCK_FIX_v0.2.1.md`)
 - OS-specific lock implementations with graceful fallback
+- Custom pytest marker `slow` for long-running tests in configuration
 
 ### Improved
 - File locking now uses non-blocking lock with timeout and retry logic
@@ -31,9 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Error messages now include context and suggestions for resolution
 - Lock implementation is now fully reentrant and thread-safe
 
+### Removed
+- Outdated CLI tests (6 tests) that were refactored in v0.2.0
+- Outdated integration tests (28 tests) not updated for v0.2.0 API changes
+
 ### Performance
 - Evaluation now completes in ~4s for 20 samples (previously hung forever)
 - Throughput: 5 samples/sec with 8 workers on real vLLM server
+
+### Testing
+- **435 tests passing** (up from 423), **0 failures** (down from 46), **1 skipped** (down from 11)
+- **0 test warnings** (down from 3) - all pytest warnings eliminated
+- All remaining skips are for optional dependencies (math-verify, plotly) which is expected behavior
 
 ## [0.2.0] - 2026-01-22
 

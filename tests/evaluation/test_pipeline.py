@@ -87,11 +87,15 @@ def test_pipeline_can_use_custom_reference_selector():
     def reference_selector(record: core_entities.GenerationRecord):
         return record.task.metadata["reference"]
 
-    eval_pipeline = pipeline.EvaluationPipeline(
-        extractor=extractor,
-        metrics=[metric],
-        reference_selector=reference_selector,
-    )
+    # Suppress expected warning about custom reference_selector
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        eval_pipeline = pipeline.EvaluationPipeline(
+            extractor=extractor,
+            metrics=[metric],
+            reference_selector=reference_selector,
+        )
 
     sampling = core_entities.SamplingConfig(0.1, 0.9, 64)
     prompt_spec = core_entities.PromptSpec(name="tmp", template="")
