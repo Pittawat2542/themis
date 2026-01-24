@@ -37,13 +37,16 @@ class AttemptAwareEvaluationStrategy:
             grouped.setdefault(score.metric_name, []).append(score)
         for metric_name, group in grouped.items():
             value = sum(item.value for item in group) / len(group)
+            # Preserve original metadata from first score
+            base_metadata = group[0].metadata.copy() if group[0].metadata else {}
             aggregated.append(
                 core_entities.MetricScore(
                     metric_name=metric_name,
                     value=value,
                     metadata={
-                        "attempts": len(group),
-                        "sample_id": group[0].metadata.get("sample_id"),
+                        **base_metadata,  # Preserve all original metadata
+                        "attempts": len(group),  # Add aggregation-specific field
+                        "sample_id": base_metadata.get("sample_id"),
                     },
                     details={},
                 )

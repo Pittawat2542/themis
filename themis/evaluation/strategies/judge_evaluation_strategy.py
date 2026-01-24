@@ -49,6 +49,8 @@ class JudgeEvaluationStrategy:
                 counts = Counter(labels)
                 agreement = max(counts.values()) / max(1, len(labels))
 
+            # Preserve original metadata from first score
+            base_metadata = group[0].metadata.copy() if group[0].metadata else {}
             aggregated.append(
                 core_entities.MetricScore(
                     metric_name=metric_name,
@@ -58,7 +60,10 @@ class JudgeEvaluationStrategy:
                         "agreement": agreement,
                         "labels": labels,
                     },
-                    metadata={"sample_id": group[0].metadata.get("sample_id")},
+                    metadata={
+                        **base_metadata,  # Preserve all original metadata
+                        "sample_id": base_metadata.get("sample_id"),
+                    },
                 )
             )
         return aggregated
