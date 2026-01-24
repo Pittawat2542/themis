@@ -88,9 +88,20 @@ class GenerationPlan:
         }
         if dataset_id is not None:
             metadata["dataset_id"] = dataset_id
-        for field_name in self.metadata_fields:
-            if field_name in row:
-                metadata[field_name] = row[field_name]
+        
+        # If metadata_fields is explicitly specified, use it as a filter (existing behavior)
+        # Otherwise, include all fields by default (new behavior for custom metrics)
+        if self.metadata_fields:
+            # Explicit filter - only include specified fields
+            for field_name in self.metadata_fields:
+                if field_name in row:
+                    metadata[field_name] = row[field_name]
+        else:
+            # No filter - include all fields except those used for other purposes
+            for field_name, field_value in row.items():
+                if field_name not in (self.dataset_id_field, self.reference_field):
+                    metadata[field_name] = field_value
+        
         return metadata
 
     def _build_reference(
@@ -209,9 +220,20 @@ class CartesianExpansionStrategy:
         }
         if dataset_id is not None:
             metadata["dataset_id"] = dataset_id
-        for field_name in context.metadata_fields:
-            if field_name in row:
-                metadata[field_name] = row[field_name]
+        
+        # If metadata_fields is explicitly specified, use it as a filter (existing behavior)
+        # Otherwise, include all fields by default (new behavior for custom metrics)
+        if context.metadata_fields:
+            # Explicit filter - only include specified fields
+            for field_name in context.metadata_fields:
+                if field_name in row:
+                    metadata[field_name] = row[field_name]
+        else:
+            # No filter - include all fields except those used for other purposes
+            for field_name, field_value in row.items():
+                if field_name not in (context.dataset_id_field, context.reference_field):
+                    metadata[field_name] = field_value
+        
         return metadata
 
     def _build_reference(

@@ -233,7 +233,8 @@ class EvaluationPipeline:
                             if reference is not None
                             else []
                         )
-                        metadata = {"sample_id": sample_id}
+                        # Preserve all task metadata for metrics, add sample_id
+                        metadata = {**record.task.metadata, "sample_id": sample_id}
                         extract_start = time.perf_counter()
                         item_scores_for_item: list[core_entities.MetricScore] = []
                         for metric in self._metrics:
