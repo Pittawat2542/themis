@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Mapping
 
+from rich.logging import RichHandler
+from rich.traceback import install as install_rich_traceback
+
 TRACE_LEVEL = 5
 logging.addLevelName(TRACE_LEVEL, "TRACE")
 
@@ -28,12 +31,14 @@ _LEVELS: Mapping[str, int] = {
 
 def configure_logging(level: str = "info") -> None:
     """Configure root logging with human-friendly formatting."""
-
+    install_rich_traceback()
     numeric_level = _LEVELS.get(level.lower(), logging.INFO)
+    
     logging.basicConfig(
         level=numeric_level,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        datefmt="%H:%M:%S",
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler(rich_tracebacks=True, markup=True)],
         force=True,
     )
 

@@ -32,6 +32,7 @@ dependencies = [
     "tenacity>=9.1.2",
     "plotly>=6.5.0",
     "math-verify>=0.8.0",
+    "rich>=14.2.0",
 ]
 
 [tool.setuptools.packages.find]

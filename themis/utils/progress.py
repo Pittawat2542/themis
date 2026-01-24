@@ -5,7 +5,16 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from typing import Any, Callable
 
-from tqdm import tqdm
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 
 class ProgressReporter(AbstractContextManager["ProgressReporter"]):
@@ -21,7 +30,8 @@ class ProgressReporter(AbstractContextManager["ProgressReporter"]):
         self._description = description
         self._unit = unit
         self._leave = leave
-        self._pbar: tqdm | None = None
+        self._progress: Progress | None = None
+        self._task_id = None
 
     def __enter__(self) -> "ProgressReporter":
         self.start()
@@ -31,22 +41,31 @@ class ProgressReporter(AbstractContextManager["ProgressReporter"]):
         self.close()
 
     def start(self) -> None:
-        if self._pbar is None:
-            self._pbar = tqdm(
-                total=self._total,
-                desc=self._description,
-                unit=self._unit,
-                leave=self._leave,
+        if self._progress is None:
+            self._progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                transient=not self._leave,
+            )
+            self._progress.start()
+            self._task_id = self._progress.add_task(
+                self._description, total=self._total
             )
 
     def close(self) -> None:
-        if self._pbar is not None:
-            self._pbar.close()
-            self._pbar = None
+        if self._progress is not None:
+            self._progress.stop()
+            self._progress = None
+            self._task_id = None
 
     def increment(self, step: int = 1) -> None:
-        if self._pbar is not None:
-            self._pbar.update(step)
+        if self._progress is not None and self._task_id is not None:
+            self._progress.update(self._task_id, advance=step)
 
     def on_result(self, _record: Any) -> None:
         self.increment()
