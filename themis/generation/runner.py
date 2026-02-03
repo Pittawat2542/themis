@@ -26,6 +26,7 @@ class GenerationRunner:
             [core_entities.GenerationTask], strategies.GenerationStrategy
         ]
         | None = None,
+        execution_backend: object | None = None,
         max_parallel: int = 1,
         max_retries: int = 3,
         retry_initial_delay: float = 0.5,
@@ -36,6 +37,7 @@ class GenerationRunner:
         self._strategy_resolver = strategy_resolver or (
             lambda task: strategies.SingleAttemptStrategy()
         )
+        self._execution_backend = execution_backend
         self._max_parallel = max(1, max_parallel)
         self._max_retries = max(1, int(max_retries))
         self._retry_initial_delay = max(0.0, retry_initial_delay)
@@ -53,7 +55,20 @@ class GenerationRunner:
             return
         
         logger.info(f"Runner: Starting execution of {len(task_list)} tasks with {self._max_parallel} workers")
-        
+
+        if self._execution_backend is not None:
+            logger.info("Runner: Using custom execution backend")
+            backend = self._execution_backend
+            try:
+                for result in backend.map(
+                    self._execute_task, task_list, max_workers=self._max_parallel
+                ):
+                    yield result
+            except Exception as e:
+                logger.error(f"Runner: Execution backend failed: {e}")
+                raise
+            return
+
         if self._max_parallel <= 1:
             logger.info("Runner: Using sequential execution (1 worker)")
             for i, task in enumerate(task_list, 1):

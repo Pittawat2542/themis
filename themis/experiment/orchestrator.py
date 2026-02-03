@@ -137,8 +137,8 @@ class ExperimentOrchestrator:
 
         # Initialize run in storage (if storage exists and run doesn't exist)
         if self._cache.has_storage:
-            if not resume or not self._cache._storage._run_metadata_exists(run_identifier):
-                self._cache._storage.start_run(run_identifier, experiment_id="default")
+            if not resume or not self._cache.run_metadata_exists(run_identifier):
+                self._cache.start_run(run_identifier, experiment_id="default")
 
         # Cache dataset for resumability
         if dataset_list:
@@ -351,25 +351,35 @@ class ExperimentOrchestrator:
         Returns:
             Dictionary with evaluation configuration
         """
+        if hasattr(self._evaluation, "evaluation_fingerprint"):
+            try:
+                return dict(self._evaluation.evaluation_fingerprint())
+            except Exception:
+                pass
+
         config = {}
-        
+
         # Add metric names/types
         if hasattr(self._evaluation, "_metrics"):
-            config["metrics"] = sorted([
-                f"{metric.__class__.__module__}.{metric.__class__.__name__}:{metric.name}"
-                for metric in self._evaluation._metrics
-            ])
-        
+            config["metrics"] = sorted(
+                [
+                    f"{metric.__class__.__module__}.{metric.__class__.__name__}:{metric.name}"
+                    for metric in self._evaluation._metrics
+                ]
+            )
+
         # Add extractor type
         if hasattr(self._evaluation, "_extractor"):
             extractor = self._evaluation._extractor
-            extractor_type = f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+            extractor_type = (
+                f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+            )
             config["extractor"] = extractor_type
-            
+
             # Include extractor-specific configuration if available
             if hasattr(extractor, "field_name"):
                 config["extractor_field"] = extractor.field_name
-        
+
         return config
 
     def _resolve_dataset(

@@ -9,6 +9,9 @@ from themis.backends.execution import (
     LocalExecutionBackend,
     SequentialExecutionBackend,
 )
+from themis.core import entities as core_entities
+from themis.generation.runner import GenerationRunner
+from themis.interfaces import ModelProvider
 
 
 class TestLocalExecutionBackend:
@@ -167,3 +170,52 @@ class TestExecutionBackendInterface:
         
         with backend as b:
             assert b is backend
+
+
+class RecordingExecutionBackend(ExecutionBackend):
+    def __init__(self):
+        self.called = False
+        self.max_workers = None
+
+    def map(self, func, items, *, max_workers=None, timeout=None, **kwargs):
+        self.called = True
+        self.max_workers = max_workers
+        for item in items:
+            yield func(item)
+
+    def shutdown(self) -> None:
+        pass
+
+
+class FakeProvider(ModelProvider):
+    def generate(self, task: core_entities.GenerationTask) -> core_entities.GenerationRecord:
+        return core_entities.GenerationRecord(
+            task=task,
+            output=core_entities.ModelOutput(text="ok"),
+            error=None,
+        )
+
+
+def _make_task(sample_id: str) -> core_entities.GenerationTask:
+    prompt_spec = core_entities.PromptSpec(name="t", template="Q")
+    prompt = core_entities.PromptRender(spec=prompt_spec, text="Q")
+    model = core_entities.ModelSpec(identifier="model-x", provider="fake")
+    sampling = core_entities.SamplingConfig(temperature=0.0, top_p=1.0, max_tokens=8)
+    return core_entities.GenerationTask(
+        prompt=prompt,
+        model=model,
+        sampling=sampling,
+        metadata={"dataset_id": sample_id},
+    )
+
+
+def test_generation_runner_uses_execution_backend():
+    backend = RecordingExecutionBackend()
+    runner = GenerationRunner(provider=FakeProvider(), execution_backend=backend, max_parallel=2)
+    tasks = [_make_task("a"), _make_task("b")]
+
+    results = list(runner.run(tasks))
+
+    assert backend.called is True
+    assert backend.max_workers == 2
+    assert len(results) == 2

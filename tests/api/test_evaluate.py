@@ -27,6 +27,13 @@ class TestResolveMetrics:
         with pytest.raises(ValueError, match="Unknown metric"):
             _resolve_metrics(["nonexistent_metric"])
 
+    def test_resolve_metric_aliases(self):
+        """Test resolving CamelCase metric names."""
+        metrics = _resolve_metrics(["ExactMatch", "ResponseLength"])
+        assert len(metrics) == 2
+        assert any(m.name == "ExactMatch" for m in metrics)
+        assert any(m.name == "ResponseLength" for m in metrics)
+
 
 class TestModelParsing:
     """Test model name parsing."""
@@ -125,6 +132,26 @@ class TestEvaluateAPI:
         """Test that invalid benchmark raises ValueError."""
         # Would need to actually call evaluate() with mocked components
         pass  # TODO: Implement with mocked components
+
+    def test_evaluate_num_samples_generates_attempts(self, tmp_path):
+        """Test that num_samples triggers repeated sampling."""
+        dataset = [
+            {"id": "1", "question": "2+2", "answer": "4"},
+        ]
+
+        report = evaluate(
+            dataset,
+            model="fake-math-llm",
+            prompt="What is {question}?",
+            num_samples=3,
+            storage=tmp_path,
+            run_id="num-samples-test",
+            resume=False,
+        )
+
+        record = report.generation_results[0]
+        assert len(record.attempts) == 3
+        assert record.metrics.get("attempt_count") == 3
 
 
 # Run simple import test to verify module loads

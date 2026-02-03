@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "themis-eval"
-version = "0.2.3"
+version = "0.3.0"
 description = "Lightweight evaluation platform for LLM experiments"
 readme = "README.md"
 requires-python = ">=3.12"

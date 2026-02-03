@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Generic, Sequence, TypeVar
 
 from themis.core import entities as core_entities
+from themis.evaluation.reports import EvaluationFailure, EvaluationReport, MetricAggregate
 from themis.interfaces import Metric as MetricInterface
 from themis.utils import tracing
 
@@ -355,3 +356,57 @@ class ComposableEvaluationPipeline:
         """
         self._steps.clear()
         return self
+
+    def evaluation_fingerprint(self) -> dict:
+        """Return a fingerprint based on the configured steps."""
+        return {"steps": self.get_step_names()}
+
+
+class ComposableEvaluationReportPipeline:
+    """Adapter that makes a ComposableEvaluationPipeline compatible with EvaluationPipeline."""
+
+    def __init__(self, pipeline: ComposableEvaluationPipeline):
+        self._pipeline = pipeline
+
+    def evaluate(
+        self, records: Sequence[core_entities.GenerationRecord]
+    ) -> EvaluationReport:
+        per_metric: dict[str, list[core_entities.MetricScore]] = {}
+        failures: list[EvaluationFailure] = []
+        per_record: list[core_entities.EvaluationRecord] = []
+
+        for record in records:
+            result = self._pipeline.evaluate(record)
+            sample_id = record.task.metadata.get("dataset_id") or record.task.metadata.get(
+                "sample_id"
+            )
+
+            if result.errors:
+                for error in result.errors:
+                    failures.append(EvaluationFailure(sample_id=sample_id, message=error))
+
+            for score in result.scores:
+                per_metric.setdefault(score.metric_name, []).append(score)
+
+            per_record.append(
+                core_entities.EvaluationRecord(
+                    sample_id=sample_id,
+                    scores=result.scores,
+                    failures=list(result.errors),
+                )
+            )
+
+        aggregates = {
+            name: MetricAggregate.from_scores(name, scores)
+            for name, scores in per_metric.items()
+        }
+
+        return EvaluationReport(
+            metrics=aggregates,
+            failures=failures,
+            records=per_record,
+            slices={},
+        )
+
+    def evaluation_fingerprint(self) -> dict:
+        return self._pipeline.evaluation_fingerprint()

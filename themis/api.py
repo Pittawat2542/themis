@@ -128,6 +128,8 @@ def evaluate(
     distributed: bool = False,
     workers: int = 4,
     storage: str | Path | None = None,
+    storage_backend: object | None = None,
+    execution_backend: object | None = None,
     run_id: str | None = None,
     resume: bool = True,
     on_result: Callable[[GenerationRecord], None] | None = None,
@@ -166,6 +168,10 @@ def evaluate(
             hit rate limits. Recommended: 4-16 for APIs, 32+ for local models.
         storage: Storage location for results and cache. Defaults to ".cache/experiments".
             Can be a local path or (future) cloud storage URI.
+        storage_backend: Optional storage backend instance. Currently supports
+            LocalFileStorageBackend; custom storage backends are not yet
+            integrated with the evaluate() API.
+        execution_backend: Optional execution backend for custom parallelism.
         run_id: Unique identifier for this run. If None, auto-generated from timestamp
             (e.g., "run-2024-01-15-123456"). Use meaningful IDs for tracking experiments.
         resume: Whether to resume from cached results.
@@ -190,6 +196,8 @@ def evaluate(
     logger.info(f"Model: {model}")
     logger.info(f"Workers: {workers}")
     logger.info(f"Temperature: {temperature}, Max tokens: {max_tokens}")
+    if num_samples > 1:
+        logger.info(f"Num samples per prompt: {num_samples}")
     if "api_base" in kwargs:
         logger.info(f"Custom API base: {kwargs['api_base']}")
     if "api_key" in kwargs:
@@ -324,11 +332,22 @@ def evaluate(
         logger.error(f"❌ Failed to create provider: {e}")
         raise
     
-    router = ProviderRouter({model_id: provider})
+    router = ProviderRouter({(provider_name, model_id): provider})
     logger.debug(f"Router configured for model: {model_id}")
     
     # Create runner
-    runner = GenerationRunner(provider=router, max_parallel=workers)
+    strategy_resolver = None
+    if num_samples > 1:
+        from themis.generation.strategies import RepeatedSamplingStrategy
+
+        strategy_resolver = lambda task: RepeatedSamplingStrategy(attempts=num_samples)
+
+    runner = GenerationRunner(
+        provider=router,
+        max_parallel=workers,
+        strategy_resolver=strategy_resolver,
+        execution_backend=execution_backend,
+    )
     logger.info(f"Runner configured with {workers} parallel workers")
     
     # Create evaluation pipeline
@@ -339,10 +358,28 @@ def evaluate(
     logger.info(f"Evaluation metrics: {[m.name for m in metrics_list]}")
     
     # Determine storage location
-    if storage is None:
+    if storage_backend is not None:
+        from themis.backends.storage import LocalFileStorageBackend, StorageBackend
+
+        if isinstance(storage_backend, LocalFileStorageBackend):
+            storage_dir = storage_backend.experiment_storage
+        elif isinstance(storage_backend, StorageBackend):
+            raise NotImplementedError(
+                "Custom StorageBackend integration is not yet supported via themis.evaluate(). "
+                "Use ExperimentStorage directly or LocalFileStorageBackend."
+            )
+        else:
+            raise TypeError(
+                "storage_backend must be a StorageBackend implementation or None."
+            )
+    elif storage is None:
         storage_dir = Path.home() / ".themis" / "runs"
     else:
-        storage_dir = Path(storage) if not str(storage).startswith(("s3://", "gs://", "azure://")) else storage
+        storage_dir = (
+            Path(storage)
+            if not str(storage).startswith(("s3://", "gs://", "azure://"))
+            else storage
+        )
     
     # Generate run ID if not provided
     if run_id is None:
@@ -356,6 +393,8 @@ def evaluate(
         from themis.experiment.storage import ExperimentStorage
         storage_backend = ExperimentStorage(storage_dir)
         logger.debug(f"Storage backend created at {storage_dir}")
+    elif hasattr(storage_dir, "start_run"):
+        storage_backend = storage_dir
     else:
         # Cloud storage (to be implemented in Phase 3)
         raise NotImplementedError(
@@ -432,6 +471,22 @@ def _resolve_metrics(metric_names: list[str]) -> list:
         nlp_available = True
     except ImportError:
         nlp_available = False
+
+    # Code metrics (some optional dependencies)
+    try:
+        from themis.evaluation.metrics.code.execution import ExecutionAccuracy
+        from themis.evaluation.metrics.code.pass_at_k import PassAtK
+        code_metrics: dict[str, Any] = {
+            "pass_at_k": PassAtK,
+            "execution_accuracy": ExecutionAccuracy,
+        }
+        try:
+            from themis.evaluation.metrics.code.codebleu import CodeBLEU
+            code_metrics["codebleu"] = CodeBLEU
+        except ImportError:
+            pass
+    except ImportError:
+        code_metrics = {}
     
     # Built-in metrics registry
     BUILTIN_METRICS = {
@@ -451,25 +506,42 @@ def _resolve_metrics(metric_names: list[str]) -> list:
             "bertscore": BERTScore,
             "meteor": METEOR,
         })
-    
-    # Code metrics (to be added later in Phase 2)
-    # "pass_at_k": PassAtK,
-    # "codebleu": CodeBLEU,
+
+    BUILTIN_METRICS.update(code_metrics)
     
     # Merge built-in and custom metrics
     # Custom metrics can override built-in metrics
     METRICS_REGISTRY = {**BUILTIN_METRICS, **_METRICS_REGISTRY}
     
+    def _normalize_metric_name(name: str) -> str | None:
+        raw = name.strip()
+        if raw in METRICS_REGISTRY:
+            return raw
+        lowered = raw.lower()
+        if lowered in METRICS_REGISTRY:
+            return lowered
+        for key in METRICS_REGISTRY.keys():
+            if key.lower() == lowered:
+                return key
+        # Convert CamelCase / PascalCase to snake_case
+        import re
+
+        snake = re.sub(r"(?<!^)(?=[A-Z])", "_", raw).lower()
+        if snake in METRICS_REGISTRY:
+            return snake
+        return None
+
     metrics = []
     for name in metric_names:
-        if name not in METRICS_REGISTRY:
+        resolved = _normalize_metric_name(name)
+        if resolved is None:
             available = ", ".join(sorted(METRICS_REGISTRY.keys()))
             raise ValueError(
                 f"Unknown metric: {name}. "
                 f"Available metrics: {available}"
             )
         
-        metric_cls = METRICS_REGISTRY[name]
+        metric_cls = METRICS_REGISTRY[resolved]
         # Handle both class and lambda factory
         if callable(metric_cls) and not isinstance(metric_cls, type):
             metrics.append(metric_cls())

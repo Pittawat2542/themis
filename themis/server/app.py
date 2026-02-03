@@ -123,7 +123,10 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     @app.get("/api/runs", response_model=List[RunSummary], tags=["runs"])
     async def list_runs():
         """List all experiment runs."""
-        run_ids = storage.list_runs()
+        run_entries = storage.list_runs()
+        run_ids = [
+            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
+        ]
         
         summaries = []
         for run_id in run_ids:
@@ -133,15 +136,12 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
             # Calculate average metrics
             metrics_dict: Dict[str, List[float]] = {}
             for record in eval_records.values():
-                for metric_name, score_obj in record.scores.items():
+                for score_obj in record.scores:
+                    metric_name = score_obj.metric_name
                     if metric_name not in metrics_dict:
                         metrics_dict[metric_name] = []
-                    
-                    # Extract numeric score
-                    if hasattr(score_obj, 'value'):
-                        metrics_dict[metric_name].append(score_obj.value)
-                    elif isinstance(score_obj, (int, float)):
-                        metrics_dict[metric_name].append(float(score_obj))
+
+                    metrics_dict[metric_name].append(score_obj.value)
             
             # Average metrics
             avg_metrics = {
@@ -162,7 +162,11 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     @app.get("/api/runs/{run_id}", response_model=RunDetail, tags=["runs"])
     async def get_run(run_id: str):
         """Get detailed information about a run."""
-        if run_id not in storage.list_runs():
+        run_entries = storage.list_runs()
+        run_ids = [
+            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
+        ]
+        if run_id not in run_ids:
             raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
         
         # Load records
@@ -179,25 +183,25 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
             
             # Extract scores
             scores = {}
-            for metric_name, score_obj in eval_record.scores.items():
-                if hasattr(score_obj, 'value'):
-                    value = score_obj.value
-                elif isinstance(score_obj, (int, float)):
-                    value = float(score_obj)
-                else:
-                    continue
-                
+            for score_obj in eval_record.scores:
+                metric_name = score_obj.metric_name
+                value = score_obj.value
+
                 scores[metric_name] = value
-                
+
                 if metric_name not in metrics_dict:
                     metrics_dict[metric_name] = []
                 metrics_dict[metric_name].append(value)
             
             # Build sample
+            sample_id = eval_record.sample_id
+            if sample_id is None and gen_record is not None:
+                sample_id = gen_record.task.metadata.get("dataset_id")
+
             sample = {
-                "id": gen_record.id if gen_record else cache_key,
-                "prompt": gen_record.prompt if gen_record else "",
-                "response": gen_record.response if gen_record else "",
+                "id": sample_id or cache_key,
+                "prompt": gen_record.task.prompt.text if gen_record else "",
+                "response": gen_record.output.text if gen_record and gen_record.output else "",
                 "scores": scores,
             }
             samples.append(sample)
@@ -220,7 +224,11 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     @app.delete("/api/runs/{run_id}", tags=["runs"])
     async def delete_run(run_id: str):
         """Delete a run."""
-        if run_id not in storage.list_runs():
+        run_entries = storage.list_runs()
+        run_ids = [
+            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
+        ]
+        if run_id not in run_ids:
             raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
         
         # Note: Current storage doesn't implement delete
@@ -234,7 +242,10 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     async def compare_runs_api(request: ComparisonRequest):
         """Compare multiple runs."""
         # Validate runs exist
-        existing_runs = set(storage.list_runs())
+        run_entries = storage.list_runs()
+        existing_runs = set(
+            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
+        )
         for run_id in request.run_ids:
             if run_id not in existing_runs:
                 raise HTTPException(

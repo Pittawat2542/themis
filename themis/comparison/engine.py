@@ -161,18 +161,12 @@ class ComparisonEngine:
         
         # eval_dict is a dict, so iterate over values
         for record in eval_dict.values():
-            for metric_name, score_obj in record.scores.items():
+            for score_obj in record.scores:
+                metric_name = score_obj.metric_name
                 if metric_name not in metric_scores:
                     metric_scores[metric_name] = []
-                
-                # Get numeric score
-                if hasattr(score_obj, 'value'):
-                    score = score_obj.value
-                elif isinstance(score_obj, (int, float)):
-                    score = float(score_obj)
-                else:
-                    continue  # Skip non-numeric scores
-                
+
+                score = score_obj.value
                 metric_scores[metric_name].append(score)
         
         return metric_scores

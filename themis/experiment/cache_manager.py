@@ -81,6 +81,17 @@ class CacheManager:
             return {}
         return self._storage.load_cached_evaluations(run_id, evaluation_config=evaluation_config)
 
+    def run_metadata_exists(self, run_id: str) -> bool:
+        """Check if run metadata exists in storage."""
+        if self._storage is None:
+            return False
+        return self._storage.run_metadata_exists(run_id)
+
+    def start_run(self, run_id: str, *, experiment_id: str = "default") -> None:
+        """Start a run in storage."""
+        if self._storage is not None:
+            self._storage.start_run(run_id, experiment_id=experiment_id)
+
     def save_generation_record(
         self,
         run_id: str,

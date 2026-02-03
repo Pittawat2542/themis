@@ -24,20 +24,16 @@ result = evaluate(
 )
 ```
 
-### Custom Storage Backend
+### Custom Storage Backend (Experimental)
 
 ```python
 from themis import evaluate
 from my_backends import S3StorageBackend
 
-# Store results in S3
+# Store results in S3 (custom storage backends are not yet wired into evaluate)
 storage = S3StorageBackend(bucket="my-experiments")
 
-result = evaluate(
-    benchmark="math500",
-    model="gpt-4",
-    storage_backend=storage,  # Custom storage
-)
+# TODO: Use ExperimentStorage directly until custom storage backends are integrated
 ```
 
 ### Custom Execution Backend

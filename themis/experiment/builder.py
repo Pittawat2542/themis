@@ -34,6 +34,7 @@ class ExperimentBuilder:
         *,
         extractor,
         metrics,
+        pipeline_factory: Callable[[object, Sequence[object]], object] | None = None,
         runner_cls: Type[
             generation_runner.GenerationRunner
         ] = generation_runner.GenerationRunner,
@@ -55,6 +56,7 @@ class ExperimentBuilder:
     ) -> None:
         self._extractor = extractor
         self._metrics = list(metrics)
+        self._pipeline_factory = pipeline_factory
         self._runner_cls = runner_cls
         self._runner_kwargs = dict(runner_kwargs or {})
         self._pipeline_cls = pipeline_cls
@@ -81,11 +83,14 @@ class ExperimentBuilder:
             pipeline_kwargs.setdefault(
                 "strategy_resolver", self._evaluation_strategy_resolver
             )
-        pipeline = self._pipeline_cls(
-            extractor=self._extractor,
-            metrics=self._metrics,
-            **pipeline_kwargs,
-        )
+        if self._pipeline_factory is not None:
+            pipeline = self._pipeline_factory(self._extractor, self._metrics)
+        else:
+            pipeline = self._pipeline_cls(
+                extractor=self._extractor,
+                metrics=self._metrics,
+                **pipeline_kwargs,
+            )
 
         # Create storage backend
         storage = (
@@ -136,7 +141,7 @@ class ExperimentBuilder:
     def _build_router(self, bindings: Sequence[ModelBinding]) -> ModelProvider:
         providers: dict[str, ModelProvider] = {}
         for binding in bindings:
-            providers[binding.spec.identifier] = create_provider(
+            providers[(binding.spec.provider, binding.spec.identifier)] = create_provider(
                 binding.provider_name,
                 **binding.provider_options,
             )

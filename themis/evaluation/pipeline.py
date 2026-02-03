@@ -28,6 +28,7 @@ from __future__ import annotations
 # Re-export pipeline implementations for backward compatibility
 from themis.evaluation.pipelines.composable_pipeline import (
     ComposableEvaluationPipeline,
+    ComposableEvaluationReportPipeline,
     EvaluationResult,
     EvaluationStep,
 )
@@ -41,6 +42,7 @@ from themis.evaluation.reports import (
 __all__ = [
     "EvaluationPipeline",
     "ComposableEvaluationPipeline",
+    "ComposableEvaluationReportPipeline",
     "EvaluationStep",
     "EvaluationResult",
     "MetricAggregate",

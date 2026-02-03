@@ -5,6 +5,25 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-03
+
+### Added
+- **Execution Backend Integration** - `GenerationRunner` now supports custom `ExecutionBackend` instances via `execution_backend` injection, with `themis.evaluate()` exposing the parameter for advanced parallel execution.
+- **Composable Pipeline Adapter** - `ComposableEvaluationReportPipeline` bridges `ComposableEvaluationPipeline` into the standard `EvaluationPipeline` interface for orchestration compatibility.
+- **Pipeline Factory Hook** - `ExperimentBuilder` now accepts a `pipeline_factory` for constructing custom pipelines with non-standard initialization.
+- **Evaluation Fingerprints** - `EvaluationPipeline.evaluation_fingerprint()` provides a stable cache key basis, with orchestrator preferring it when available.
+
+### Fixed
+- **Comparison Engine Metric Parsing** - `compare_runs()` now handles `EvaluationRecord.scores` as a list of `MetricScore` entries, fixing metric aggregation.
+- **Server API Entity Mapping** - server endpoints now correctly extract prompt/response from core entity fields and handle run metadata listing.
+- **`num_samples` Behavior** - repeated sampling is now wired to `themis.evaluate()` via `RepeatedSamplingStrategy`.
+- **Metric Name Aliases** - `_resolve_metrics` now accepts CamelCase and case-insensitive metric names.
+- **CacheManager Encapsulation** - orchestrator no longer reaches into private cache storage internals.
+- **Provider Routing** - router now dispatches by `(provider, model)` when available, avoiding identifier collisions.
+
+### Improved
+- **Docs Clarification** - backend README now notes custom storage backends are experimental and not yet wired into `themis.evaluate()`.
+
 ## [0.2.3] - 2026-01-24
 
 ### Fixed
@@ -171,7 +190,7 @@ The root cause was two-fold:
 
 ### Added
 - Simple `themis.evaluate()` one-liner API for quick evaluations
-- 6 built-in benchmark presets (demo, gsm8k, math500, aime24, mmlu_pro, supergpqa)
+- 6 built-in benchmark presets (demo, gsm8k, math500, aime24, mmlu-pro, supergpqa)
 - Comprehensive NLP metrics (BLEU, ROUGE, BERTScore, METEOR)
 - Code generation metrics (Pass@K, CodeBLEU, ExecutionAccuracy)
 - Statistical comparison engine with t-test, bootstrap, and permutation tests

@@ -203,6 +203,11 @@ class LocalFileStorageBackend(StorageBackend):
         """
         from themis.experiment.storage import ExperimentStorage
         self._storage = ExperimentStorage(storage_path)
+
+    @property
+    def experiment_storage(self):
+        """Expose underlying ExperimentStorage for compatibility."""
+        return self._storage
     
     def save_run_metadata(self, run_id: str, metadata: Dict[str, Any]) -> None:
         """Save run metadata."""

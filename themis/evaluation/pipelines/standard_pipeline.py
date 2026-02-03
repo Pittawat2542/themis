@@ -309,6 +309,22 @@ class EvaluationPipeline:
                 slices=self._compute_slice_aggregates(per_metric, slice_members),
             )
 
+    def evaluation_fingerprint(self) -> dict:
+        """Return a deterministic fingerprint for cache invalidation."""
+        config: dict[str, object] = {}
+        config["metrics"] = sorted(
+            [
+                f"{metric.__class__.__module__}.{metric.__class__.__name__}:{metric.name}"
+                for metric in self._metrics
+            ]
+        )
+        extractor = self._extractor
+        extractor_type = f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+        config["extractor"] = extractor_type
+        if hasattr(extractor, "field_name"):
+            config["extractor_field"] = extractor.field_name
+        return config
+
     def register_slice(
         self, name: str, fn: Callable[[core_entities.GenerationRecord], bool]
     ) -> None:

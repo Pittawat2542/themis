@@ -744,6 +744,10 @@ class ExperimentStorage:
         metadata_path = self._get_run_dir(run_id) / "metadata.json"
         return metadata_path.exists()
 
+    def run_metadata_exists(self, run_id: str) -> bool:
+        """Check if run metadata exists (public API)."""
+        return self._run_metadata_exists(run_id)
+
     def _get_run_dir(self, run_id: str) -> Path:
         """Get run directory path.
 
