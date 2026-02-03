@@ -20,23 +20,13 @@ class ProviderRouter(ModelProvider):
 
     def __init__(self, providers: Mapping[ProviderKey, ModelProvider]):
         normalized: dict[str, ModelProvider] = {}
-        identifier_counts: dict[str, int] = {}
 
         for key, provider in providers.items():
             if isinstance(key, tuple):
                 provider_name, model_id = key
                 normalized[_model_key(provider_name, model_id)] = provider
-                identifier_counts[model_id] = identifier_counts.get(model_id, 0) + 1
             else:
                 normalized[str(key)] = provider
-                identifier_counts[str(key)] = identifier_counts.get(str(key), 0) + 1
-
-        # Add identifier-only aliases when they are unambiguous
-        for key, provider in list(normalized.items()):
-            if ":" in key:
-                _, model_id = key.split(":", 1)
-                if identifier_counts.get(model_id, 0) == 1 and model_id not in normalized:
-                    normalized[model_id] = provider
 
         self._providers = normalized
 

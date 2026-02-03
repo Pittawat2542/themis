@@ -26,6 +26,10 @@ class ModelSpec:
     default_sampling: SamplingConfig | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def model_key(self) -> str:
+        return f"{self.provider}:{self.identifier}"
+
 
 @dataclass(frozen=True)
 class PromptSpec:
