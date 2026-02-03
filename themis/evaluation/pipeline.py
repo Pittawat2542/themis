@@ -36,6 +36,7 @@ from themis.evaluation.pipelines.composable_pipeline import (
     EvaluationStep,
 )
 from themis.evaluation.pipelines.standard_pipeline import EvaluationPipeline
+from themis.evaluation.metric_pipeline import MetricPipeline
 from themis.evaluation.reports import (
     EvaluationFailure,
     EvaluationReport,
@@ -59,6 +60,7 @@ class EvaluationPipelineContract(Protocol):
 __all__ = [
     "EvaluationPipeline",
     "EvaluationPipelineContract",
+    "MetricPipeline",
     "ComposableEvaluationPipeline",
     "ComposableEvaluationReportPipeline",
     "EvaluationStep",
