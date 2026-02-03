@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from themis.comparison import compare_runs
 from themis.comparison.statistics import StatisticalTest
-from themis.experiment.storage import ExperimentStorage
+from themis.storage import ExperimentStorage
 
 
 class RunSummary(BaseModel):

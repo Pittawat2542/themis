@@ -11,7 +11,7 @@ from typing import Sequence
 
 from themis.comparison import reports, statistics
 from themis.comparison.statistics import StatisticalTest
-from themis.experiment import storage as experiment_storage
+from themis.storage import ExperimentStorage
 
 
 class ComparisonEngine:
@@ -24,7 +24,7 @@ class ComparisonEngine:
     def __init__(
         self,
         *,
-        storage: experiment_storage.ExperimentStorage | None = None,
+        storage: ExperimentStorage | None = None,
         storage_path: str | Path | None = None,
         statistical_test: StatisticalTest = StatisticalTest.BOOTSTRAP,
         alpha: float = 0.05,
@@ -44,7 +44,7 @@ class ComparisonEngine:
         if storage is None and storage_path is None:
             raise ValueError("Either storage or storage_path must be provided")
         
-        self._storage = storage or experiment_storage.ExperimentStorage(storage_path)
+        self._storage = storage or ExperimentStorage(storage_path)
         self._statistical_test = statistical_test
         self._alpha = alpha
         self._n_bootstrap = n_bootstrap
