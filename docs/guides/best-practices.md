@@ -73,7 +73,8 @@ Check costs before scaling:
 
 ```python
 result = evaluate(benchmark="gsm8k", model="gpt-4", limit=10)
-estimated_full = result.cost * 850  # GSM8K ≈ 8500 samples
+cost = result.metadata.get("cost", {}).get("total_cost", 0.0)
+estimated_full = cost * 850  # GSM8K ≈ 8500 samples
 print(f"Estimated full cost: ${estimated_full:.2f}")
 
 if estimated_full < 100:  # Budget check
@@ -491,10 +492,13 @@ result = evaluate(**config)
 
 # Save config with results
 import json
+metrics = {
+    name: agg.mean for name, agg in result.evaluation_report.metrics.items()
+}
 output = {
     "config": config,
-    "results": result.metrics,
-    "num_samples": result.num_samples,
+    "results": metrics,
+    "num_samples": len(result.generation_results),
 }
 
 with open("experiment_report.json", "w") as f:
@@ -583,7 +587,7 @@ Test with cheaper models:
 result = evaluate(benchmark="gsm8k", model="gpt-3.5-turbo")
 
 # Step 2: Confirm with GPT-4 ($0.03/1K tokens)
-if result.metrics["ExactMatch"] > 0.5:
+if result.evaluation_report.metrics['ExactMatch'].mean > 0.5:
     result = evaluate(benchmark="gsm8k", model="gpt-4")
 ```
 

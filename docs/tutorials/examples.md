@@ -19,7 +19,7 @@ result = evaluate(
     limit=5,
 )
 
-print(f"Accuracy: {result.metrics['ExactMatch']:.2%}")
+print(f"Accuracy: {result.evaluation_report.metrics['ExactMatch'].mean:.2%}")
 ```
 
 **What it demonstrates:**
@@ -216,7 +216,7 @@ for i, prompt in enumerate(prompts):
         prompt=prompt,
         run_id=f"prompt-{i}",
     )
-    print(f"Prompt {i}: {result.metrics['ExactMatch']:.2%}")
+    print(f"Prompt {i}: {result.evaluation_report.metrics['ExactMatch'].mean:.2%}")
 ```
 
 ---
@@ -247,7 +247,7 @@ result = evaluate(
     model="fake-math-llm",
 )
 
-print(result.metrics)
+print(result.evaluation_report.metrics)
 ```
 
 ---
@@ -269,7 +269,7 @@ for temp in temperatures:
         limit=100,
         run_id=f"gsm8k-temp-{temp}",
     )
-    print(f"Temp {temp}: {result.metrics['ExactMatch']:.2%}")
+    print(f"Temp {temp}: {result.evaluation_report.metrics['ExactMatch'].mean:.2%}")
 ```
 
 ### Pattern 2: Model Comparison
@@ -288,7 +288,7 @@ for name, model in models.items():
         limit=100,
         run_id=f"gsm8k-{name}",
     )
-    print(f"{name}: {result.metrics['ExactMatch']:.2%}")
+    print(f"{name}: {result.evaluation_report.metrics['ExactMatch'].mean:.2%}")
 
 # Compare
 from themis.comparison import compare_runs
@@ -312,12 +312,14 @@ for limit in [10, 50, 100, 500, 1000]:
         limit=limit,
         run_id=f"gsm8k-n{limit}",
     )
-    
-    print(f"n={limit}: {result.metrics['ExactMatch']:.2%} "
-          f"(cost: ${result.cost:.2f})")
+    cost = result.metadata.get("cost", {}).get("total_cost", 0.0)
+    print(
+        f"n={limit}: {result.evaluation_report.metrics['ExactMatch'].mean:.2%} "
+        f"(cost: ${cost:.2f})"
+    )
     
     # Stop if accuracy plateaus
-    if limit >= 100 and result.metrics['ExactMatch'] < 0.5:
+    if limit >= 100 and result.evaluation_report.metrics['ExactMatch'].mean < 0.5:
         print("Accuracy too low, stopping")
         break
 ```

@@ -4,10 +4,39 @@ Complete reference for all built-in benchmarks in Themis.
 
 ## Overview
 
-Themis includes 6 carefully selected benchmarks covering:
-- **Math Reasoning**: GSM8K, MATH500, AIME24
-- **General Knowledge**: MMLU-Pro, SuperGPQA
+Themis includes 19 built-in benchmarks covering:
+- **Math Reasoning**: GSM8K, MATH500, GSM-Symbolic, AIME24, AIME25, AMC23, OlympiadBench, BeyondAIME
+- **Knowledge & Science**: MMLU-Pro, SuperGPQA, GPQA, SciQ
+- **Medicine**: MedMCQA, MedQA
+- **Commonsense**: CommonsenseQA, PIQA, Social IQA
+- **Conversational QA**: CoQA
 - **Quick Testing**: Demo
+
+---
+
+## Benchmark Catalog (Summary)
+
+| Benchmark | Domain | Format | Notes |
+| --- | --- | --- | --- |
+| demo | Quick testing | Short QA | Built-in tiny dataset |
+| gsm8k | Math | Free-form | Grade school math word problems |
+| math500 | Math | Free-form | Competition math (MATH) |
+| gsm-symbolic | Math | Free-form | Symbolic math variations |
+| aime24 | Math | Free-form | AIME 2024 |
+| aime25 | Math | Free-form | AIME 2025 |
+| amc23 | Math | Free-form | AMC 2023 |
+| olympiadbench | Math | Free-form | Olympiad-style problems |
+| beyondaime | Math | Free-form | Advanced contest problems |
+| mmlu-pro | Knowledge | MCQ (letter) | Professional-level subjects |
+| supergpqa | Science | MCQ (letter) | Graduate-level science |
+| gpqa | Science | MCQ (letter) | Graduate-level QA |
+| sciq | Science | MCQ (letter) | Science questions |
+| medmcqa | Medicine | MCQ (letter) | Medical exams |
+| med_qa | Medicine | MCQ (letter) | Medical QA |
+| commonsense_qa | Commonsense | MCQ (letter) | Commonsense reasoning |
+| piqa | Commonsense | MCQ (letter) | Physical commonsense |
+| social_i_qa | Commonsense | MCQ (letter) | Social reasoning |
+| coqa | Conversational | Free-form | Multi-turn QA |
 
 ---
 
@@ -21,7 +50,7 @@ Themis includes 6 carefully selected benchmarks covering:
 - **Domain**: Elementary arithmetic
 - **Difficulty**: Easy
 - **Source**: Subset of GSM8K
-- **Metrics**: ExactMatch, MathVerify
+- **Metrics**: ExactMatch, MathVerifyAccuracy
 - **License**: MIT
 
 **Usage:**
@@ -54,7 +83,7 @@ result = evaluate(benchmark="demo", model="gpt-4")
 - **Domain**: Grade school mathematics (K-8)
 - **Difficulty**: Elementary to middle school
 - **Source**: [GSM8K Paper](https://arxiv.org/abs/2110.14168)
-- **Metrics**: ExactMatch, MathVerify
+- **Metrics**: ExactMatch, MathVerifyAccuracy
 - **License**: MIT
 
 **Usage:**
@@ -92,7 +121,7 @@ Solution:
 - **Domain**: High school to competition math
 - **Difficulty**: Advanced (AIME, AMC, IMO level)
 - **Source**: [MATH Dataset](https://arxiv.org/abs/2103.03874)
-- **Metrics**: ExactMatch, MathVerify
+- **Metrics**: ExactMatch, MathVerifyAccuracy
 - **License**: MIT
 
 **Usage:**
@@ -125,7 +154,7 @@ Solve this problem: {problem}
 - **Domain**: Competition mathematics
 - **Difficulty**: Very challenging (top high school level)
 - **Source**: 2024 AIME exam
-- **Metrics**: ExactMatch, MathVerify
+- **Metrics**: ExactMatch, MathVerifyAccuracy
 - **License**: Public domain (exam questions)
 
 **Usage:**
@@ -156,7 +185,7 @@ Solution:
 
 ## Knowledge Benchmarks
 
-### mmlu_pro
+### mmlu-pro
 
 **MMLU-Pro - Massive Multitask Language Understanding (Professional)**
 
@@ -169,7 +198,7 @@ Solution:
 
 **Usage:**
 ```python
-result = evaluate(benchmark="mmlu_pro", model="gpt-4", limit=1000)
+result = evaluate(benchmark="mmlu-pro", model="gpt-4", limit=1000)
 ```
 
 **Subjects:**
@@ -215,7 +244,214 @@ result = evaluate(benchmark="supergpqa", model="gpt-4")
 
 ---
 
-## Benchmark Comparison
+## Science & Medical Benchmarks
+
+### gpqa
+
+**GPQA - Graduate-level science questions**
+
+- **Domain**: Science
+- **Format**: Multiple choice (letter)
+- **Metrics**: ExactMatch
+
+**Usage:**
+```python
+result = evaluate(benchmark="gpqa", model="gpt-4")
+```
+
+---
+
+### sciq
+
+**SciQ - Science question answering**
+
+- **Domain**: Science
+- **Format**: Multiple choice (letter)
+- **Metrics**: ExactMatch
+
+**Usage:**
+```python
+result = evaluate(benchmark="sciq", model="gpt-4", limit=100)
+```
+
+---
+
+### medmcqa
+
+**MedMCQA - Medical entrance exam questions**
+
+- **Domain**: Medicine
+- **Format**: Multiple choice (letter)
+- **Metrics**: ExactMatch
+
+**Usage:**
+```python
+result = evaluate(benchmark="medmcqa", model="gpt-4", limit=200)
+```
+
+---
+
+### med_qa
+
+**MedQA - Medical QA benchmark**
+
+- **Domain**: Medicine
+- **Format**: Multiple choice (letter)
+- **Metrics**: ExactMatch
+
+**Usage:**
+```python
+result = evaluate(benchmark="med_qa", model="gpt-4", limit=200)
+```
+
+---
+
+## Commonsense Benchmarks
+
+### commonsense_qa
+
+**CommonsenseQA - Commonsense reasoning**
+
+- **Domain**: Commonsense
+- **Format**: Multiple choice (letter)
+- **Metrics**: ExactMatch
+- **Note**: Uses the validation split because test labels are not public.
+
+**Usage:**
+```python
+result = evaluate(benchmark="commonsense_qa", model="gpt-4", limit=200)
+```
+
+---
+
+### piqa
+
+**PIQA - Physical commonsense reasoning**
+
+- **Domain**: Commonsense
+- **Format**: Multiple choice (letter)
+- **Metrics**: ExactMatch
+- **Note**: Uses the validation split because test labels are not public.
+
+**Usage:**
+```python
+result = evaluate(benchmark="piqa", model="gpt-4", limit=200)
+```
+
+---
+
+### social_i_qa
+
+**Social IQA - Social reasoning**
+
+- **Domain**: Commonsense
+- **Format**: Multiple choice (letter)
+- **Metrics**: ExactMatch
+- **Note**: Uses the validation split because test labels are not public.
+
+**Usage:**
+```python
+result = evaluate(benchmark="social_i_qa", model="gpt-4", limit=200)
+```
+
+---
+
+## Conversational QA Benchmarks
+
+### coqa
+
+**CoQA - Conversational question answering**
+
+- **Domain**: Conversational QA
+- **Format**: Free-form
+- **Metrics**: ExactMatch
+- **Note**: Uses the validation split because test labels are not public.
+
+**Usage:**
+```python
+result = evaluate(benchmark="coqa", model="gpt-4", limit=200)
+```
+
+---
+
+## Additional Math Benchmarks
+
+### gsm-symbolic
+
+**GSM-Symbolic - Symbolic variants of GSM8K**
+
+- **Domain**: Math
+- **Format**: Free-form
+- **Metrics**: MathVerifyAccuracy
+
+**Usage:**
+```python
+result = evaluate(benchmark="gsm-symbolic", model="gpt-4", limit=200)
+```
+
+---
+
+### aime25
+
+**AIME 2025 - Competition math**
+
+- **Domain**: Math
+- **Format**: Free-form
+- **Metrics**: MathVerifyAccuracy
+
+**Usage:**
+```python
+result = evaluate(benchmark="aime25", model="gpt-4")
+```
+
+---
+
+### amc23
+
+**AMC 2023 - Competition math**
+
+- **Domain**: Math
+- **Format**: Free-form
+- **Metrics**: MathVerifyAccuracy
+
+**Usage:**
+```python
+result = evaluate(benchmark="amc23", model="gpt-4")
+```
+
+---
+
+### olympiadbench
+
+**OlympiadBench - Olympiad-style problems**
+
+- **Domain**: Math
+- **Format**: Free-form
+- **Metrics**: MathVerifyAccuracy
+
+**Usage:**
+```python
+result = evaluate(benchmark="olympiadbench", model="gpt-4")
+```
+
+---
+
+### beyondaime
+
+**BeyondAIME - Advanced contest math**
+
+- **Domain**: Math
+- **Format**: Free-form
+- **Metrics**: MathVerifyAccuracy
+
+**Usage:**
+```python
+result = evaluate(benchmark="beyondaime", model="gpt-4")
+```
+
+---
+
+## Benchmark Comparison (Core Set)
 
 | Benchmark | Size | Difficulty | Domain | Typical Time |
 |-----------|------|------------|--------|--------------|
@@ -223,12 +459,21 @@ result = evaluate(benchmark="supergpqa", model="gpt-4")
 | gsm8k | 8,500 | Medium | Math | 30-60 min |
 | math500 | 500 | Hard | Math | 5-10 min |
 | aime24 | 30 | Very Hard | Math | 1-2 min |
-| mmlu_pro | Large | Medium-Hard | Knowledge | 20-40 min |
+| mmlu-pro | Large | Medium-Hard | Knowledge | 20-40 min |
 | supergpqa | Medium | Very Hard | Knowledge | 10-20 min |
 
 *Times are estimates with GPT-4 and 8 workers*
 
 ---
+
+## Coverage Gaps by Domain
+
+- **Multimodal**: No built-in image/audio/video benchmarks.
+- **Tool-use / agentic**: No built-in tool-use or multi-step tool benchmarks.
+- **Long-context**: No dedicated long-context datasets (100K+ tokens).
+- **Safety/alignment**: No built-in safety or red-teaming benchmarks.
+
+If these domains are critical, integrate external benchmarks via custom datasets.
 
 ## Usage Recommendations
 
@@ -238,11 +483,22 @@ result = evaluate(benchmark="supergpqa", model="gpt-4")
 ### For Math Evaluation
 → Start with `gsm8k` (most widely used)
 → Then try `math500` for harder problems
-→ Use `aime24` for extreme difficulty
+→ Use `aime24`/`aime25`/`amc23`/`olympiadbench` for competition difficulty
+→ Use `gsm-symbolic` to test symbolic variants
 
 ### For General Knowledge
-→ Use `mmlu_pro` for broad coverage
+→ Use `mmlu-pro` for broad coverage
 → Use `supergpqa` for expert-level questions
+
+### For Science & Medical
+→ Use `gpqa` or `sciq` for science MCQ
+→ Use `medmcqa` or `med_qa` for medical QA
+
+### For Commonsense Reasoning
+→ Use `commonsense_qa`, `piqa`, and `social_i_qa` for diverse commonsense tasks
+
+### For Conversational QA
+→ Use `coqa` for multi-turn question answering
 
 ### For Research Papers
 → Use `gsm8k` and `math500` (widely reported)
@@ -331,7 +587,7 @@ result = evaluate(benchmark="gsm8k", model="gpt-4")
 Match benchmark to your use case:
 - Testing math ability → gsm8k or math500
 - Competition performance → aime24
-- General knowledge → mmlu_pro
+- General knowledge → mmlu-pro
 - Expert reasoning → supergpqa
 
 ### 4. Report Multiple Benchmarks

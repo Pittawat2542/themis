@@ -108,7 +108,14 @@ def _resolve_dataset(dataset: object) -> list[dict]:
 
 def _resolve_storage(storage: StorageSpec):
     if storage.backend is not None:
-        return storage.backend
+        backend = storage.backend
+        if hasattr(backend, "experiment_storage"):
+            return backend.experiment_storage
+        if not hasattr(backend, "start_run"):
+            raise TypeError(
+                "storage.backend must be ExperimentStorage-compatible."
+            )
+        return backend
     root = Path(storage.path) if storage.path is not None else Path(".cache/experiments")
     from themis.storage import ExperimentStorage
 

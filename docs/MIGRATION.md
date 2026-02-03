@@ -145,11 +145,11 @@ metrics = [ExactMatch(), MathVerify()]
 **After:**
 ```python
 # Use string names
-metrics = ["ExactMatch", "MathVerify"]
+metrics = ["exact_match", "math_verify"]
 
 # Or use instances (still supported)
-from themis.evaluation.metrics.math import ExactMatch
-metrics = [ExactMatch()]
+from themis.evaluation.metrics import ExactMatch, MathVerifyAccuracy
+metrics = [ExactMatch(), MathVerifyAccuracy()]
 ```
 
 ### 5. Comparison
@@ -359,7 +359,7 @@ for model in ["gpt-4", "claude-3"]:
         model=model,
         run_id=f"gsm8k-{model}",
     )
-    print(f"{model}: {result.metrics}")
+    print(f"{model}: {result.evaluation_report.metrics}")
 
 # Then compare
 from themis.comparison import compare_runs

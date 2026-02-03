@@ -1370,6 +1370,20 @@ class ExperimentStorage:
         # Remove directory
         shutil.rmtree(run_dir, ignore_errors=True)
 
+    def delete_run(self, run_id: str) -> None:
+        """Delete a run and its stored artifacts.
+
+        Args:
+            run_id: Run identifier to delete
+
+        Raises:
+            FileNotFoundError: If the run does not exist
+        """
+        run_dir = self._get_run_dir(run_id)
+        if not run_dir.exists():
+            raise FileNotFoundError(f"Run not found: {run_id}")
+        self._delete_run_dir(run_dir)
+
     def get_storage_size(self, experiment_id: str | None = None) -> int:
         """Get total storage size in bytes.
         

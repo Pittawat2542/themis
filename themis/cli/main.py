@@ -1,12 +1,14 @@
-"""Simplified CLI for Themis - Five core commands only.
+"""Simplified CLI for Themis - seven focused commands.
 
-This is the new unified CLI that leverages the themis.evaluate() API.
-It replaces 20+ commands with 5 essential ones.
+This is the unified CLI that leverages the themis.evaluate() API.
+It replaces 20+ commands with a smaller, task-oriented set.
 """
 
 from __future__ import annotations
 
+import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Sequence
 
@@ -121,10 +123,11 @@ def eval(
             run_id=run_id,
         )
 
+        storage_root = _resolve_storage_root(storage)
         report = ExperimentSession().run(
             spec,
             execution=ExecutionSpec(workers=workers),
-            storage=StorageSpec(path=storage, cache=resume),
+            storage=StorageSpec(path=storage_root, cache=resume),
         )
         
         # Print results
@@ -159,13 +162,13 @@ def eval(
             suffix = output_path.suffix.lower()
             
             if suffix == ".csv":
-                experiment_export.export_csv(report, output_path)
+                experiment_export.export_report_csv(report, output_path)
                 print(f"\nExported to CSV: {output_path}")
             elif suffix == ".json":
-                experiment_export.export_json(report, output_path)
+                experiment_export.export_report_json(report, output_path)
                 print(f"\nExported to JSON: {output_path}")
             elif suffix in [".html", ".htm"]:
-                experiment_export.export_html(report, output_path)
+                experiment_export.export_html_report(report, output_path)
                 print(f"\nExported to HTML: {output_path}")
             else:
                 print(f"\nWarning: Unknown output format: {suffix}")
@@ -184,6 +187,7 @@ def compare(
     run_ids: Annotated[list[str], Parameter(name="RUN_IDS", show_default=False)],
     *,
     metric: Annotated[str | None, Parameter(help="Metric to compare")] = None,
+    storage: Annotated[str | None, Parameter(help="Storage location (local path or s3://...)")] = None,
     output: Annotated[str | None, Parameter(help="Output file (HTML or Markdown)")] = None,
     show_diff: Annotated[bool, Parameter(help="Show examples where results differ")] = False,
 ) -> int:
@@ -208,7 +212,7 @@ def compare(
             return 1
         
         # Determine storage path (default to .cache/experiments)
-        storage_path = Path(".cache/experiments")
+        storage_path = _resolve_storage_root(storage)
         
         if not storage_path.exists():
             print(f"Error: Storage path not found: {storage_path}", file=sys.stderr)
@@ -356,8 +360,8 @@ def serve(
         print("           or: uv pip install themis[server]", file=sys.stderr)
         return 1
     
-    # Determine storage path
-    storage_path = Path(storage) if storage else Path(".cache/experiments")
+        # Determine storage path
+        storage_path = _resolve_storage_root(storage)
     
     print(f"Starting Themis API server...")
     print(f"  URL:     http://{host}:{port}")
@@ -444,9 +448,30 @@ def list(
         return 0
         
     elif what == "runs":
-        print("Listing runs...")
-        print("Note: Run listing not yet fully implemented")
-        return 1
+        from themis.storage import ExperimentStorage
+
+        storage_root = _resolve_storage_root(storage)
+        if not storage_root.exists():
+            print(f"No storage found at {storage_root}")
+            return 1
+
+        storage_backend = ExperimentStorage(storage_root)
+        runs = storage_backend.list_runs(limit=limit)
+        if not runs:
+            print("No runs found.")
+            return 0
+
+        print("Runs:")
+        for run in runs:
+            status = run.status.value if hasattr(run.status, "value") else str(run.status)
+            if verbose:
+                print(
+                    f"  - {run.run_id} [{status}] samples={run.total_samples} "
+                    f"created={run.created_at}"
+                )
+            else:
+                print(f"  - {run.run_id}")
+        return 0
     
     return 0
 
@@ -467,10 +492,56 @@ def clean(
         # Remove runs older than 30 days
         themis clean --older-than 30
     """
-    print("Cleaning storage...")
-    print("Note: Storage cleanup not yet implemented")
-    print("This will be implemented in Phase 6")
-    return 1
+    from themis.storage import ExperimentStorage
+
+    storage_root = _resolve_storage_root(storage)
+    if not storage_root.exists():
+        print(f"No storage found at {storage_root}")
+        return 1
+
+    if older_than is None:
+        print("Error: --older-than is required to clean runs")
+        return 1
+
+    storage_backend = ExperimentStorage(storage_root)
+    runs = storage_backend.list_runs()
+    cutoff = datetime.now() - timedelta(days=older_than)
+
+    candidates = []
+    for run in runs:
+        try:
+            created_at = datetime.fromisoformat(run.created_at)
+        except ValueError:
+            continue
+        if created_at < cutoff:
+            candidates.append(run)
+
+    if not candidates:
+        print("No runs matched the cleanup criteria.")
+        return 0
+
+    if dry_run:
+        print("Runs to delete:")
+        for run in candidates:
+            print(f"  - {run.run_id} (created {run.created_at})")
+        return 0
+
+    deleted = 0
+    for run in candidates:
+        storage_backend.delete_run(run.run_id)
+        deleted += 1
+
+    print(f"Deleted {deleted} run(s).")
+    return 0
+
+
+def _resolve_storage_root(storage: str | None) -> Path:
+    if storage:
+        return Path(storage).expanduser()
+    env_storage = os.getenv("THEMIS_STORAGE")
+    if env_storage:
+        return Path(env_storage).expanduser()
+    return Path(".cache/experiments")
 
 
 def _generate_comparison_html(report) -> str:

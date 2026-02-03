@@ -41,13 +41,14 @@ pip install themis-eval[math,nlp,code,server]
 from themis import evaluate
 
 # Evaluate any model on any benchmark
-result = evaluate(
+report = evaluate(
     benchmark="gsm8k",
     model="gpt-4",
     limit=100
 )
 
-print(f"Accuracy: {result.metrics['exact_match']:.2%}")
+accuracy = report.evaluation_report.metrics["ExactMatch"].mean
+print(f"Accuracy: {accuracy:.2%}")
 ```
 
 ### CLI Usage
@@ -63,6 +64,9 @@ themis compare gpt4-run claude-run
 
 # Start web dashboard
 themis serve
+
+# Share a run
+themis share gpt4-run --output-dir share
 ```
 
 ---
@@ -71,7 +75,7 @@ themis serve
 
 ### 🎯 Built-in Benchmarks
 
-Themis includes 6 popular benchmarks out-of-the-box:
+Themis includes 19 built-in benchmarks out-of-the-box:
 
 ```python
 # Math reasoning
@@ -80,8 +84,16 @@ evaluate(benchmark="math500", model="gpt-4", limit=50)
 evaluate(benchmark="aime24", model="gpt-4")
 
 # General knowledge
-evaluate(benchmark="mmlu_pro", model="gpt-4", limit=1000)
+evaluate(benchmark="mmlu-pro", model="gpt-4", limit=1000)
 evaluate(benchmark="supergpqa", model="gpt-4")
+
+# Science & medical
+evaluate(benchmark="gpqa", model="gpt-4", limit=200)
+evaluate(benchmark="medmcqa", model="gpt-4", limit=200)
+
+# Commonsense & conversational
+evaluate(benchmark="commonsense_qa", model="gpt-4", limit=200)
+evaluate(benchmark="coqa", model="gpt-4", limit=200)
 
 # Quick testing
 evaluate(benchmark="demo", model="fake-math-llm", limit=10)
@@ -276,7 +288,7 @@ Themis is built on a clean, modular architecture:
          │                 │
     ┌────▼─────┐     ┌────▼─────┐
     │Benchmarks│     │Evaluation│
-    │(6 built- │     │ Pipeline │
+    │(19 built-│     │ Pipeline │
     │   in)    │     └────┬─────┘
     └──────────┘          │
                      ┌────▼─────┐

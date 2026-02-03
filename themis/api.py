@@ -34,7 +34,6 @@ Example:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -159,9 +158,9 @@ def evaluate(
             hit rate limits. Recommended: 4-16 for APIs, 32+ for local models.
         storage: Storage location for results and cache. Defaults to ".cache/experiments".
             Can be a local path or (future) cloud storage URI.
-        storage_backend: Optional storage backend instance. Currently supports
-            LocalFileStorageBackend; custom storage backends are not yet
-            integrated with the evaluate() API.
+        storage_backend: Optional storage backend instance. Typically an
+            ExperimentStorage or LocalFileStorageBackend (adapter). Custom
+            storage backends are not yet integrated with the evaluate() API.
         execution_backend: Optional execution backend for custom parallelism.
         run_id: Unique identifier for this run. If None, auto-generated from timestamp
             (e.g., "run-2024-01-15-123456"). Use meaningful IDs for tracking experiments.

@@ -355,3 +355,18 @@ def test_round_trip_with_all_optimizations(tmp_path, sample_task):
     # Verify storage efficiency
     templates = storage._load_templates(run_id)
     assert len(templates) == 1  # Only one template despite 5 tasks
+
+
+def test_delete_run_removes_artifacts(tmp_path):
+    """Ensure delete_run removes the run directory and metadata."""
+    storage = ExperimentStorage(tmp_path)
+    run_id = "run-delete"
+
+    storage.start_run(run_id, "test-exp", config={})
+    run_dir = storage._get_run_dir(run_id)
+    assert run_dir.exists()
+
+    storage.delete_run(run_id)
+
+    assert not run_dir.exists()
+    assert run_id not in {run.run_id for run in storage.list_runs()}

@@ -1,6 +1,6 @@
 # evaluate() API
 
-The main entry point for running LLM evaluations.
+Primary entry point for running LLM evaluations.
 
 ## Signature
 
@@ -18,9 +18,10 @@ def evaluate(
     distributed: bool = False,
     workers: int = 4,
     storage: str | Path | None = None,
+    storage_backend: object | None = None,
+    execution_backend: object | None = None,
     run_id: str | None = None,
     resume: bool = True,
-    output: str | Path | None = None,
     on_result: Callable[[GenerationRecord], None] | None = None,
     **kwargs: Any,
 ) -> ExperimentReport:
@@ -28,231 +29,170 @@ def evaluate(
 
 ## Parameters
 
-### Required Parameters
+### Required
 
 **`benchmark_or_dataset`** : `str | Sequence[dict[str, Any]]`
 
-Either:
-- Name of a built-in benchmark (e.g., `"gsm8k"`, `"math500"`)
-- Custom dataset as list of dictionaries
+- Benchmark name (e.g., `"gsm8k"`, `"math500"`)
+- Or custom dataset as a list of dictionaries
 
-For custom datasets, each dict should have:
-- `prompt` or `question` - The input prompt
-- `answer` or `reference` - The expected output  
-- Optional: `id`, additional fields for prompt template
+For custom datasets, each dict should include:
+- `prompt` / `question` (input)
+- `answer` / `reference` (expected output)
+- Optional `id` / `unique_id`
 
 **`model`** : `str`
 
-Model identifier for LiteLLM. Examples:
-- `"gpt-4"` - OpenAI GPT-4
-- `"claude-3-opus-20240229"` - Anthropic Claude
-- `"azure/gpt-4"` - Azure OpenAI
-- `"ollama/llama3"` - Local Ollama model
+Model identifier for provider routing. Examples:
+- `"gpt-4"`
+- `"claude-3-opus-20240229"`
+- `"azure/gpt-4"`
+- `"ollama/llama3"`
 
-See [LiteLLM providers](https://docs.litellm.ai/docs/providers) for all options.
-
-### Optional Parameters
+### Optional
 
 **`limit`** : `int | None = None`
 
-Maximum number of samples to evaluate. Useful for:
-- Testing with small sample (`limit=10`)
-- Quick experiments
-- Budget constraints
-
-If `None`, evaluates entire dataset.
+Maximum number of samples to evaluate.
 
 **`prompt`** : `str | None = None`
 
-Custom prompt template. Uses Python format strings:
-- `"{prompt}"` - Insert prompt
-- `"{question}"` - Insert question
-- `"{context}"` - Insert context
-
-Example: `"Question: {prompt}\nAnswer:"`
-
-If `None`, uses benchmark's default prompt.
+Custom prompt template using Python format fields (e.g. `"Q: {question}\nA:"`).
+If `None`, uses the benchmark preset template.
 
 **`metrics`** : `list[str] | None = None`
 
-List of metrics to compute. If `None`, uses benchmark's default metrics.
+Metric names to compute. If `None`, uses preset defaults. Example names:
+- `"exact_match"`
+- `"math_verify"`
+- `"bleu"`, `"rouge1"`, `"bertscore"`, `"meteor"`
+- `"pass_at_k"`, `"execution_accuracy"`, `"codebleu"`
 
-Available metrics:
-- Math: `"ExactMatch"`, `"MathVerify"`
-- NLP: `"BLEU"`, `"ROUGE"`, `"BERTScore"`, `"METEOR"`
-- Code: `"PassAtK"`, `"CodeBLEU"`, `"ExecutionAccuracy"`
+Metric names are normalized (case-insensitive; `ExactMatch` and `exact_match` both work).
 
 **`temperature`** : `float = 0.0`
 
-Sampling temperature (0.0 = deterministic, 1.0+ = creative).
+Sampling temperature.
 
 **`max_tokens`** : `int = 512`
 
-Maximum tokens in model response.
+Maximum tokens generated per response.
 
 **`num_samples`** : `int = 1`
 
-Number of responses to generate per prompt. Useful for:
-- Pass@K evaluation (`num_samples=10`)
-- Ensembling
-- Measuring variance
+Number of samples per prompt. This is currently only partially wired in vNext.
+
+**`distributed`** : `bool = False`
+
+Reserved for future distributed execution. Currently ignored.
 
 **`workers`** : `int = 4`
 
-Number of parallel workers for generation. Higher values = faster execution but more API load.
+Parallel worker count for generation.
 
 **`storage`** : `str | Path | None = None`
 
-Path to storage directory. Defaults to `.cache/experiments`.
+Storage location for runs and cache. Defaults to `.cache/experiments`.
+
+**`storage_backend`** : `object | None = None`
+
+Optional storage backend instance (typically `ExperimentStorage` or
+`LocalFileStorageBackend`). Custom storage backends are not yet wired into
+`ExperimentSession`.
+
+**`execution_backend`** : `object | None = None`
+
+Optional execution backend for custom parallelism.
 
 **`run_id`** : `str | None = None`
 
-Unique identifier for the run. If `None`, auto-generated from timestamp.
+Explicit run identifier. If `None`, one is generated automatically.
 
 **`resume`** : `bool = True`
 
-Whether to resume from cached results. Set to `False` to force re-evaluation.
-
-**`output`** : `str | Path | None = None`
-
-Export results to file. Supported formats:
-- `.json` - JSON format
-- `.csv` - CSV format
-- `.html` - HTML report
+If `True`, reuse cached results when available.
 
 **`on_result`** : `Callable[[GenerationRecord], None] | None = None`
 
-Callback function called after each sample is generated. Useful for:
-- Progress tracking
-- Real-time monitoring
-- Custom logging
+Callback invoked per generation record.
 
 **`**kwargs`** : `Any`
 
-Additional keyword arguments passed to the model provider (e.g., `top_p`, `frequency_penalty`).
+Currently used for `top_p` in sampling. Other provider-specific kwargs are
+reserved for future wiring.
 
 ## Return Value
 
-**`ExperimentReport`**
+**`ExperimentReport`** containing:
+- `generation_results`: list of `GenerationRecord`
+- `evaluation_report`: `EvaluationReport` with aggregates and per-sample scores
+- `failures`: generation failures
+- `metadata`: run metadata
 
-Object containing:
-- `run_id` : `str` - Unique run identifier
-- `metrics` : `dict[str, float]` - Metric scores
-- `num_samples` : `int` - Number of samples evaluated
-- `cost` : `float` - Estimated API cost
-- `report` : `str` - Formatted text report
-- Additional metadata
+Access aggregate metrics via:
+
+```python
+report.evaluation_report.metrics["ExactMatch"].mean
+```
 
 ## Examples
 
-### Basic Usage
+### Basic benchmark
 
 ```python
 from themis import evaluate
 
-result = evaluate(
-    benchmark="gsm8k",
+report = evaluate(
+    "gsm8k",
     model="gpt-4",
     limit=100,
 )
 
-print(f"Accuracy: {result.metrics['ExactMatch']:.2%}")
-print(f"Cost: ${result.cost:.2f}")
+accuracy = report.evaluation_report.metrics["ExactMatch"].mean
+print(f"Accuracy: {accuracy:.2%}")
 ```
 
-### Custom Dataset
+### Custom dataset
 
 ```python
 dataset = [
-    {"prompt": "What is 2+2?", "answer": "4"},
-    {"prompt": "What is 5-3?", "answer": "2"},
+    {"id": "1", "question": "2+2", "answer": "4"},
+    {"id": "2", "question": "3+3", "answer": "6"},
 ]
 
-result = evaluate(
+report = evaluate(
     dataset,
     model="gpt-4",
-    prompt="Solve: {prompt}",
-    metrics=["ExactMatch"],
+    prompt="Q: {question}\nA:",
+    metrics=["exact_match"],
 )
 ```
 
-### Advanced Configuration
-
-```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    
-    # Sampling
-    temperature=0.7,
-    max_tokens=1024,
-    top_p=0.95,
-    frequency_penalty=0.2,
-    
-    # Execution
-    num_samples=3,
-    workers=16,
-    
-    # Storage
-    storage="~/experiments",
-    run_id="gsm8k-gpt4-temp07",
-    resume=True,
-    
-    # Output
-    output="results.html",
-)
-```
-
-### With Callback
-
-```python
-def log_progress(record):
-    print(f"Completed: {record.id}")
-
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    limit=100,
-    on_result=log_progress,
-)
-```
-
-### Multiple Samples
-
-```python
-# Generate 10 responses per prompt
-result = evaluate(
-    benchmark="code-problems",
-    model="gpt-4",
-    num_samples=10,
-    metrics=["PassAtK"],  # Evaluate Pass@K
-)
-
-print(f"Pass@1: {result.metrics['Pass@1']:.2%}")
-print(f"Pass@10: {result.metrics['Pass@10']:.2%}")
-```
-
-## Error Handling
+### Advanced storage + execution
 
 ```python
 from themis import evaluate
+from themis.backends.execution import LocalExecutionBackend
+from themis.backends.storage import LocalFileStorageBackend
 
-try:
-    result = evaluate(
-        benchmark="invalid-benchmark",
-        model="gpt-4",
-    )
-except ValueError as e:
-    print(f"Invalid input: {e}")
-except FileNotFoundError as e:
-    print(f"Storage error: {e}")
-except Exception as e:
-    print(f"Unexpected error: {e}")
+report = evaluate(
+    "math500",
+    model="gpt-4",
+    storage_backend=LocalFileStorageBackend(".cache/experiments"),
+    execution_backend=LocalExecutionBackend(max_workers=8),
+)
 ```
 
-## See Also
+### Exporting results
 
-- [User Guide - Evaluation](../guides/evaluation.md) - Detailed usage guide
-- [Comparison API](comparison.md) - Compare multiple runs
-- [Presets API](presets.md) - Built-in benchmarks
-- [Examples](../tutorials/examples.md) - Working code examples
+`evaluate()` does not export files directly. Use export helpers:
+
+```python
+from pathlib import Path
+from themis.experiment import export
+
+report = evaluate("gsm8k", model="gpt-4", limit=50)
+export.export_report_json(report, Path("report.json"))
+export.export_report_csv(report, Path("report.csv"))
+export.export_html_report(report, Path("report.html"))
+```

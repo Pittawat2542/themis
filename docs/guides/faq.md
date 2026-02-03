@@ -68,7 +68,7 @@ pipenv install themis-eval
 from themis import evaluate
 
 result = evaluate(benchmark="demo", model="fake-math-llm")
-print(result.metrics)
+print(result.evaluation_report.metrics)
 ```
 
 ### Do I need API keys?
@@ -252,7 +252,7 @@ Then access via your machine's IP address.
 
 ### Is there authentication?
 
-Not by default. For production, add authentication (see [API Server docs](API_SERVER.md#authentication)).
+Not by default. For production, add authentication (see [API Server docs](../reference/api-server.md#authentication)).
 
 ---
 
@@ -271,7 +271,8 @@ Example: GSM8K (8.5K samples) with GPT-4 ≈ $50-100
 
 ```python
 result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
-print(f"Cost: ${result.cost:.2f}")
+cost = result.metadata.get("cost", {}).get("total_cost", 0.0)
+print(f"Cost: ${cost:.2f}")
 ```
 
 ### Can I set a budget limit?
@@ -280,7 +281,8 @@ Not directly, but you can:
 ```python
 # Estimate first
 result = evaluate(benchmark="gsm8k", model="gpt-4", limit=10)
-estimated_full = result.cost * 850  # GSM8K has 8500 samples
+cost = result.metadata.get("cost", {}).get("total_cost", 0.0)
+estimated_full = cost * 850  # GSM8K has 8500 samples
 
 if estimated_full < 100:  # Budget check
     result = evaluate(benchmark="gsm8k", model="gpt-4")

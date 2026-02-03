@@ -3,6 +3,7 @@ from __future__ import annotations
 from themis.core import entities as core_entities
 from themis.generation.router import ProviderRouter
 from themis.interfaces import ModelProvider
+from tests.factories import make_task
 
 
 class ProviderA(ModelProvider):
@@ -23,17 +24,8 @@ class ProviderB(ModelProvider):
         )
 
 
-def _make_task(provider: str) -> core_entities.GenerationTask:
-    prompt_spec = core_entities.PromptSpec(name="t", template="Q")
-    prompt = core_entities.PromptRender(spec=prompt_spec, text="Q")
-    model = core_entities.ModelSpec(identifier="model-x", provider=provider)
-    sampling = core_entities.SamplingConfig(temperature=0.0, top_p=1.0, max_tokens=8)
-    return core_entities.GenerationTask(
-        prompt=prompt,
-        model=model,
-        sampling=sampling,
-        metadata={"dataset_id": provider},
-    )
+def _make_task(provider: str):
+    return make_task(sample_id=provider, provider=provider, model_id="model-x")
 
 
 def test_provider_router_dispatches_by_provider_and_model():

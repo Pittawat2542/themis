@@ -429,7 +429,7 @@ tests/
 ```python
 def test_exact_match():
     metric = ExactMatch()
-    score = metric.evaluate("4", "4")
+    score = metric.compute(prediction="4", references=["4"])
     assert score.value == 1.0
 ```
 
@@ -441,7 +441,7 @@ def test_full_evaluation():
         model="fake-math-llm",
         limit=5,
     )
-    assert result.num_samples == 5
+    assert len(result.generation_results) == 5
 ```
 
 ## Performance Considerations

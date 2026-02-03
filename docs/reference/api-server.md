@@ -122,6 +122,17 @@ Response:
 }
 ```
 
+### Delete Run
+
+**DELETE** `/api/runs/{run_id}`
+
+Delete a run. This endpoint currently returns `501 Not Implemented` because
+the storage adapter does not expose a public delete API yet.
+
+```bash
+curl -X DELETE http://localhost:8080/api/runs/my-run-id
+```
+
 ### Compare Runs
 
 **POST** `/api/compare`
@@ -187,9 +198,15 @@ Response:
     "demo",
     "math500",
     "gsm8k",
+    "gsm-symbolic",
     "aime24",
-    "mmlu_pro",
-    "supergpqa"
+    "aime25",
+    "mmlu-pro",
+    "supergpqa",
+    "gpqa",
+    "medmcqa",
+    "commonsense_qa",
+    "coqa"
   ]
 }
 ```

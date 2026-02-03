@@ -451,7 +451,7 @@ def test_full_evaluation_with_custom_backend():
         storage_backend=backend,  # Use custom backend
     )
     
-    assert result.metrics["ExactMatch"] > 0
+    assert result.evaluation_report.metrics['ExactMatch'].mean > 0
     
     # Verify data in S3
     assert backend.run_exists(result.run_id)

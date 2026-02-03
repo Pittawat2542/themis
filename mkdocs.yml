@@ -114,6 +114,7 @@ nav:
   - Guides:
       - Evaluation: guides/evaluation.md
       - Comparison: guides/comparison.md
+      - Interoperability: guides/interoperability.md
       - Providers (LiteLLM): guides/providers.md
       - Storage: guides/storage.md
       - Cost Tracking: guides/cost-tracking.md
@@ -135,6 +136,8 @@ nav:
       - CLI Reference: guides/cli.md
       - Benchmarks: reference/benchmarks.md
       - API Server: reference/api-server.md
+      - Session: reference/session.md
+      - Specs: reference/specs.md
       - Python API:
           - Overview: api/overview.md
           - evaluate(): api/evaluate.md
@@ -152,6 +155,7 @@ nav:
       - Changelog: CHANGELOG.md
       - Migration Guide: MIGRATION.md
       - Architecture: development/architecture.md
+      - Architecture (vNext): ARCHITECTURE_VNEXT.md
 
 extra_css:
   - stylesheets/extra.css

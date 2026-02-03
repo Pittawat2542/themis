@@ -5,69 +5,89 @@ Evaluation metrics for different domains.
 ## Overview
 
 Themis includes metrics for:
-- **Math**: ExactMatch, MathVerify
-- **NLP**: BLEU, ROUGE, BERTScore, METEOR
-- **Code**: PassAtK, CodeBLEU, ExecutionAccuracy
+- **Core**: `ExactMatch`, `ResponseLength`
+- **Math**: `MathVerifyAccuracy`
+- **NLP**: `BLEU`, `ROUGE`, `BERTScore`, `METEOR`
+- **Code**: `PassAtK`, `ExecutionAccuracy`, `CodeBLEU`
+
+Metric names used in reports are taken from each metric's `name` attribute (e.g., `"ExactMatch"`).
+
+## Dependencies and optional extras
+
+- **MathVerifyAccuracy** requires `themis-eval[math]` (package: `math-verify`).
+- **NLP metrics** require `themis-eval[nlp]` (`sacrebleu`, `rouge-score`, `bert-score`, `nltk`).
+- **CodeBLEU** requires `themis-eval[code]` (package: `codebleu`).
+
+Install extras:
+```bash
+pip install themis-eval[math,nlp,code]
+```
 
 ## Base Interface
 
 ### Metric
 
-All metrics inherit from this abstract base:
+All metrics implement `themis.interfaces.Metric`:
 
 ```python
-from themis.evaluation.metrics import Metric, MetricScore
+from themis.core.entities import MetricScore
+from themis.interfaces import Metric
 
 class CustomMetric(Metric):
-    @property
-    def name(self) -> str:
-        return "MyMetric"
-    
-    def evaluate(self, response: str, reference: str) -> MetricScore:
-        # Your evaluation logic
-        score = compute_score(response, reference)
-        return MetricScore(value=score, metadata={})
+    name = "MyMetric"
+
+    def compute(self, *, prediction, references, metadata=None) -> MetricScore:
+        score = 1.0 if prediction in references else 0.0
+        return MetricScore(metric_name=self.name, value=score)
 ```
+
+Notes:
+- `prediction` is already extracted by the pipeline's extractor.
+- `references` is a list of normalized reference values.
 
 ---
 
-## Math Metrics
+## Core Metrics
 
 ### ExactMatch
 
 Exact string matching after normalization.
 
 ```python
-from themis.evaluation.metrics.math import ExactMatch
+from themis.evaluation.metrics import ExactMatch
 
 metric = ExactMatch()
-score = metric.evaluate("4", "4")
+score = metric.compute(prediction="4", references=["4"])
 print(score.value)  # 1.0
 ```
 
-**Normalization:**
-- Strip whitespace
-- Lowercase
-- Remove punctuation
+### ResponseLength
+
+Length-based metric useful for detecting verbosity or truncation.
+
+```python
+from themis.evaluation.metrics import ResponseLength
+
+metric = ResponseLength()
+score = metric.compute(prediction="short answer", references=[""])
+print(score.value)
+```
 
 ---
 
-### MathVerify
+## Math Metrics
+
+### MathVerifyAccuracy
 
 Symbolic and numeric math verification.
 
 ```python
-from themis.evaluation.metrics.math import MathVerify
+from themis.evaluation.metrics import MathVerifyAccuracy
 
-metric = MathVerify()
-score = metric.evaluate("2.0", "2")  # Numerically equal
+metric = MathVerifyAccuracy()
+score = metric.compute(prediction="2.0", references=["2"])
 print(score.value)  # 1.0
 ```
-
-**Features:**
-- Symbolic equivalence
-- Numeric tolerance
-- LaTeX parsing
 
 ---
 
@@ -77,61 +97,41 @@ Requires: `pip install themis-eval[nlp]`
 
 ### BLEU
 
-N-gram precision metric.
-
 ```python
 from themis.evaluation.metrics.nlp import BLEU
 
 metric = BLEU()
-score = metric.evaluate(
-    response="The cat is on the mat",
-    reference="The cat is on the mat",
-)
-print(score.value)  # High score (similar)
+score = metric.compute(prediction="The cat is on the mat", references=["The cat is on the mat"])
+print(score.value)
 ```
-
----
 
 ### ROUGE
 
-Recall-oriented metric.
-
 ```python
-from themis.evaluation.metrics.nlp import ROUGE
+from themis.evaluation.metrics.nlp import ROUGE, ROUGEVariant
 
-metric = ROUGE()
-score = metric.evaluate(response, reference)
-print(score.metadata)  # Contains ROUGE-1, ROUGE-2, ROUGE-L
+metric = ROUGE(variant=ROUGEVariant.ROUGE_L)
+score = metric.compute(prediction="A", references=["A"])
+print(score.value)
 ```
 
----
-
 ### BERTScore
-
-Semantic similarity using BERT embeddings.
 
 ```python
 from themis.evaluation.metrics.nlp import BERTScore
 
 metric = BERTScore()
-score = metric.evaluate(
-    response="The cat sits on the mat",
-    reference="A feline rests on the rug",
-)
-print(score.value)  # Semantic similarity
+score = metric.compute(prediction="The cat sits on the mat", references=["A feline rests on the rug"])
+print(score.value)
 ```
 
----
-
 ### METEOR
-
-Alignment-based metric with synonyms.
 
 ```python
 from themis.evaluation.metrics.nlp import METEOR
 
 metric = METEOR()
-score = metric.evaluate(response, reference)
+score = metric.compute(prediction="A", references=["A"])
 ```
 
 ---
@@ -142,227 +142,41 @@ Requires: `pip install themis-eval[code]`
 
 ### PassAtK
 
-Pass rate for K samples.
-
 ```python
-from themis.evaluation.metrics.code import PassAtK
+from themis.evaluation.metrics.code.pass_at_k import PassAtK
 
 metric = PassAtK(k=10)
-
-# Evaluate multiple samples
-scores = []
-for sample in samples:
-    score = metric.evaluate(sample, reference)
-    scores.append(score.value)
-
-pass_rate = sum(scores) / len(scores)
+score = metric.compute(prediction="code", references=["expected"])
 ```
-
-**Use with:**
-```python
-result = evaluate(
-    benchmark="humaneval",
-    model="gpt-4",
-    num_samples=10,  # Generate 10 samples
-    metrics=["PassAtK"],
-)
-```
-
----
-
-### CodeBLEU
-
-BLEU adapted for code with syntax awareness.
-
-```python
-from themis.evaluation.metrics.code import CodeBLEU
-
-metric = CodeBLEU(lang="python")
-score = metric.evaluate(response_code, reference_code)
-```
-
----
 
 ### ExecutionAccuracy
 
-Functional correctness through execution.
-
 ```python
-from themis.evaluation.metrics.code import ExecutionAccuracy
+from themis.evaluation.metrics.code.execution import ExecutionAccuracy
 
 metric = ExecutionAccuracy()
-score = metric.evaluate(
-    response=code_solution,
-    reference=test_cases,
-)
+score = metric.compute(prediction="code", references=["expected"])
+```
+
+### CodeBLEU
+
+```python
+from themis.evaluation.metrics.code.codebleu import CodeBLEU
+
+metric = CodeBLEU()
+score = metric.compute(prediction="code", references=["expected"])
 ```
 
 ---
 
-## Custom Metrics
-
-Implement your own metric:
-
-```python
-from themis.evaluation.metrics import Metric, MetricScore
-
-class LengthRatio(Metric):
-    """Metric that compares response length to reference."""
-    
-    @property
-    def name(self) -> str:
-        return "LengthRatio"
-    
-    def evaluate(self, response: str, reference: str) -> MetricScore:
-        if not reference:
-            return MetricScore(value=0.0)
-        
-        ratio = len(response) / len(reference)
-        
-        # Score: 1.0 if within 20% of reference length
-        if 0.8 <= ratio <= 1.2:
-            score = 1.0
-        else:
-            score = max(0.0, 1.0 - abs(ratio - 1.0))
-        
-        return MetricScore(
-            value=score,
-            metadata={"response_len": len(response), "reference_len": len(reference)}
-        )
-
-# Use in evaluation
-result = evaluate(
-    dataset=my_dataset,
-    model="gpt-4",
-    metrics=[LengthRatio(), "ExactMatch"],
-)
-```
-
----
-
-## MetricScore
-
-Result of a metric evaluation.
-
-```python
-@dataclass
-class MetricScore:
-    value: float              # Numeric score (0.0 to 1.0 typically)
-    metadata: dict = {}       # Additional information
-```
-
-**Example:**
-```python
-score = MetricScore(
-    value=0.85,
-    metadata={
-        "precision": 0.9,
-        "recall": 0.8,
-        "f1": 0.85
-    }
-)
-```
-
----
-
-## Using Metrics
-
-### In evaluate()
+## Using metrics in `evaluate()`
 
 ```python
 from themis import evaluate
 
-result = evaluate(
-    benchmark="gsm8k",
+report = evaluate(
+    "gsm8k",
     model="gpt-4",
-    metrics=["ExactMatch", "MathVerify", "BLEU"],
-)
-
-print(result.metrics)
-# {'ExactMatch': 0.85, 'MathVerify': 0.87, 'BLEU': 0.72}
-```
-
-### Standalone
-
-```python
-from themis.evaluation.metrics.math import ExactMatch
-
-metric = ExactMatch()
-
-responses = ["4", "7", "12"]
-references = ["4", "8", "12"]
-
-for resp, ref in zip(responses, references):
-    score = metric.evaluate(resp, ref)
-    print(f"{resp} vs {ref}: {score.value}")
-```
-
----
-
-## Best Practices
-
-### 1. Choose Appropriate Metrics
-
-- **Exact tasks**: Use `ExactMatch`
-- **Math**: Use `MathVerify`
-- **Text generation**: Use `BLEU`, `ROUGE`, `BERTScore`
-- **Code**: Use `PassAtK`, `CodeBLEU`
-
-### 2. Combine Multiple Metrics
-
-Don't rely on a single metric:
-
-```python
-result = evaluate(
-    benchmark="gsm8k",
-    model="gpt-4",
-    metrics=["ExactMatch", "MathVerify", "BLEU"],
+    metrics=["exact_match", "math_verify"],
 )
 ```
-
-### 3. Understand Metric Limitations
-
-- `ExactMatch`: Sensitive to formatting
-- `BLEU`: Only measures n-gram overlap
-- `BERTScore`: Requires model download (slow first time)
-- `PassAtK`: Needs multiple samples
-
-### 4. Test Metrics First
-
-```python
-# Test your metric
-metric = CustomMetric()
-score = metric.evaluate("test response", "test reference")
-print(f"Score: {score.value}")
-print(f"Metadata: {score.metadata}")
-```
-
----
-
-## Metric Properties
-
-### Score Range
-
-Most metrics return scores in [0.0, 1.0]:
-- 0.0 = Completely incorrect
-- 1.0 = Perfect match
-
-Some metrics (BLEU, ROUGE) may use different ranges—check documentation.
-
-### Metadata
-
-Metrics can include additional information:
-
-```python
-score = metric.evaluate(response, reference)
-print(score.value)     # Main score
-print(score.metadata)  # Additional details
-```
-
----
-
-## See Also
-
-- [Evaluation Guide](../guides/evaluation.md) - Using metrics in practice
-- [Custom Metrics Tutorial](../EVALUATION.md) - Implement your own
-- [Comparison Guide](../COMPARISON.md) - Compare across metrics
