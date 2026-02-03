@@ -71,7 +71,6 @@ def eval(
         # Distributed execution
         themis eval gsm8k --model gpt-4 --distributed --workers 8
     """
-    import themis
     from themis.experiment import export as experiment_export
     
     print(f"Running evaluation: {benchmark_or_dataset}")
@@ -88,19 +87,44 @@ def eval(
         return 1
 
     try:
-        # Run evaluation using unified API
-        report = themis.evaluate(
-            benchmark_or_dataset,
+        if distributed:
+            print("Error: distributed execution is not supported in vNext CLI yet")
+            return 1
+
+        from themis.evaluation.pipeline import EvaluationPipeline
+        from themis.generation.templates import PromptTemplate
+        from themis.presets import get_benchmark_preset
+        from themis.session import ExperimentSession
+        from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
+
+        # Resolve benchmark preset
+        preset = get_benchmark_preset(benchmark_or_dataset)
+
+        dataset = preset.load_dataset(limit=limit)
+
+        if prompt is None:
+            prompt_template = preset.prompt_template
+        else:
+            prompt_template = PromptTemplate(name="custom", template=prompt)
+
+        pipeline = EvaluationPipeline(
+            extractor=preset.extractor,
+            metrics=preset.metrics,
+        )
+
+        spec = ExperimentSpec(
+            dataset=dataset,
+            prompt=prompt_template.template,
             model=model,
-            limit=limit,
-            prompt=prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            storage=storage,
+            sampling={"temperature": temperature, "max_tokens": max_tokens},
+            pipeline=pipeline,
             run_id=run_id,
-            resume=resume,
-            distributed=distributed,
-            workers=workers,
+        )
+
+        report = ExperimentSession().run(
+            spec,
+            execution=ExecutionSpec(workers=workers),
+            storage=StorageSpec(path=storage, cache=resume),
         )
         
         # Print results
