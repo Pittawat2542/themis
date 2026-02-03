@@ -110,7 +110,7 @@ def _resolve_storage(storage: StorageSpec):
     if storage.backend is not None:
         return storage.backend
     root = Path(storage.path) if storage.path is not None else Path(".cache/experiments")
-    from themis.experiment.storage import ExperimentStorage
+    from themis.storage import ExperimentStorage
 
     return ExperimentStorage(root)
 
