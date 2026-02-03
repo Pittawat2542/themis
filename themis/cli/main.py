@@ -30,6 +30,20 @@ app = App(
 
 
 @app.command
+def demo(
+    *,
+    model: Annotated[str, Parameter(help="Model identifier")] = "fake-math-llm",
+    limit: Annotated[int, Parameter(help="Maximum number of samples")] = 10,
+) -> int:
+    """Run the built-in demo benchmark."""
+    return eval(
+        "demo",
+        model=model,
+        limit=limit,
+    )
+
+
+@app.command
 def eval(
     benchmark_or_dataset: Annotated[str, Parameter(name="BENCHMARK_OR_DATASET", show_default=False)],
     *,
@@ -72,7 +86,7 @@ def eval(
         # TODO: Load dataset from file
         print("Error: Custom dataset files not yet implemented")
         return 1
-    
+
     try:
         # Run evaluation using unified API
         report = themis.evaluate(
@@ -96,10 +110,18 @@ def eval(
         
         # Print metrics
         eval_report = report.evaluation_report
-        if eval_report and eval_report.aggregates:
+        if eval_report:
             print("\nMetrics:")
-            for agg in eval_report.aggregates:
-                print(f"  {agg.metric_name}: {agg.mean:.4f} (±{agg.std:.4f})")
+            if getattr(eval_report, "aggregates", None):
+                for agg in eval_report.aggregates:
+                    std = getattr(agg, "std", None)
+                    if std is None:
+                        print(f"  {agg.metric_name}: {agg.mean:.4f}")
+                    else:
+                        print(f"  {agg.metric_name}: {agg.mean:.4f} (±{std:.4f})")
+            elif getattr(eval_report, "metrics", None):
+                for name, agg in sorted(eval_report.metrics.items()):
+                    print(f"  {name}: {agg.mean:.4f} (n={agg.count})")
         
         # Print sample counts
         total = len(report.generation_results)
@@ -220,6 +242,62 @@ def compare(
 
 
 @app.command
+def share(
+    run_id: Annotated[str, Parameter(name="RUN_ID", show_default=False)],
+    *,
+    storage: Annotated[str | None, Parameter(help="Storage location (defaults to .cache/experiments)")] = None,
+    metric: Annotated[str | None, Parameter(help="Metric to highlight (default: first available)")] = None,
+    output_dir: Annotated[Path, Parameter(help="Directory to write share assets")] = Path("."),
+) -> int:
+    """Generate a shareable results badge + Markdown snippet for a run.
+
+    Examples:
+        # Create share assets in current directory
+        themis share run-20260118-032014
+
+        # Highlight a specific metric
+        themis share run-20260118-032014 --metric accuracy
+
+        # Write to a dedicated folder
+        themis share run-20260118-032014 --output-dir share
+    """
+    from themis.experiment.share import create_share_pack
+
+    storage_root = Path(storage) if storage else Path(".cache/experiments")
+    if not storage_root.exists():
+        print(f"Error: Storage path not found: {storage_root}", file=sys.stderr)
+        return 1
+
+    try:
+        share_pack = create_share_pack(
+            run_id=run_id,
+            storage_root=storage_root,
+            output_dir=output_dir,
+            metric=metric,
+        )
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 1
+
+    print("✓ Share assets created")
+    print(f"  SVG: {share_pack.svg_path}")
+    print(f"  Markdown: {share_pack.markdown_path}")
+    print("\nSnippet:")
+    print(share_pack.markdown_snippet)
+    if share_pack.event_log_path:
+        print(f"\nEvent logged to: {share_pack.event_log_path}")
+    return 0
+
+
+@app.command
 def serve(
     *,
     port: Annotated[int, Parameter(help="Port to run server on")] = 8080,
@@ -284,6 +362,7 @@ def list(
     *,
     storage: Annotated[str | None, Parameter(help="Storage path for runs")] = None,
     limit: Annotated[int | None, Parameter(help="Limit number of results")] = None,
+    verbose: Annotated[bool, Parameter(help="Show detailed information")] = False,
 ) -> int:
     """List runs, benchmarks, or available metrics.
     
@@ -306,22 +385,38 @@ def list(
         return 1
     
     if what == "benchmarks":
-        from themis.presets import list_benchmarks
+        from themis.presets import get_benchmark_preset, list_benchmarks
         
         benchmarks = list_benchmarks()
+        if limit is not None:
+            benchmarks = benchmarks[:limit]
         print("Available benchmarks:")
         for benchmark in benchmarks:
-            print(f"  - {benchmark}")
+            if verbose:
+                preset = get_benchmark_preset(benchmark)
+                description = preset.description or "No description"
+                print(f"  - {benchmark}: {description}")
+            else:
+                print(f"  - {benchmark}")
         return 0
         
     elif what == "metrics":
         print("Available metrics:")
+        print("  Core:")
+        print("    - exact_match (no extra dependencies)")
+        print("    - response_length (no extra dependencies)")
         print("  Math:")
-        print("    - exact_match")
-        print("    - math_verify")
-        print("  General:")
-        print("    - response_length")
-        print("\n  Note: NLP and code metrics will be added in Phase 2")
+        print("    - math_verify (requires: themis-eval[math], math-verify)")
+        print("  NLP (requires: themis-eval[nlp]):")
+        print("    - bleu (sacrebleu)")
+        print("    - rouge1 / rouge2 / rougeL (rouge-score)")
+        print("    - bertscore (bert-score)")
+        print("    - meteor (nltk)")
+        print("  Code:")
+        print("    - pass_at_k (no extra dependencies)")
+        print("    - execution_accuracy (no extra dependencies)")
+        print("    - codebleu (requires: themis-eval[code], codebleu)")
+        print("\nInstall extras: pip install themis-eval[math,nlp,code]")
         return 0
         
     elif what == "runs":
