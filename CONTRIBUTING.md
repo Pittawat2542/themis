@@ -26,7 +26,7 @@ This guide covers:
    ```
 3. **Install dependencies** using `uv`:
    ```bash
-   uv sync
+   uv sync --all-extras --dev
    ```
    This will create a virtual environment and install all necessary dependencies, including development tools.
 
@@ -59,6 +59,20 @@ uv run pytest --cov=themis --cov-report=html
 - **Type Hinting**: All code should be fully type-hinted and pass static analysis.
 - **Docstrings**: Please include docstrings for all public modules, classes, and functions.
 
+Run local quality checks before opening a PR:
+
+```bash
+# Formatting and linting for files you changed
+uv run ruff format --check <changed_python_files>
+uv run ruff check <changed_python_files>
+
+# Baseline syntax/runtime lint used by CI
+uv run ruff check --select E9,F63,F7 themis tests
+
+# Docs build must stay strict-clean
+uv run mkdocs build --strict
+```
+
 ### Project Structure
 
 - `themis/`: Source code
@@ -81,6 +95,19 @@ uv run pytest --cov=themis --cov-report=html
 5. **Open a Pull Request** against the `main` branch of the original repository.
    - Provide a clear title and description of your changes.
    - Link to any relevant issues.
+
+## Versioning & Releases
+
+- The project follows SemVer and tags releases as `vX.Y.Z`.
+- Keep version metadata in sync across:
+  - `pyproject.toml`
+  - `CHANGELOG.md`
+  - `docs/CHANGELOG.md`
+  - `CITATION.cff`
+- Validate release metadata locally:
+  ```bash
+  uv run python scripts/ci/validate_release.py --tag vX.Y.Z
+  ```
 
 ## Reporting Issues
 

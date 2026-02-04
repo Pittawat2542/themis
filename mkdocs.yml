@@ -121,6 +121,7 @@ nav:
       - Interoperability: guides/interoperability.md
       - Providers (LiteLLM): guides/providers.md
       - Storage: guides/storage.md
+      - CI/CD: guides/ci-cd.md
 
   - Reference:
       - CLI Reference: guides/cli.md
