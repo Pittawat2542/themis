@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Sequence
 
+from themis.evaluation.statistics.distributions import t_critical_value, t_to_p_value
+
 
 class StatisticalTest(str, Enum):
     """Available statistical tests."""
@@ -135,15 +137,13 @@ def t_test(
         # Effect size (Cohen's d)
         effect_size = (mean_a - mean_b) / pooled_sd if pooled_sd > 0 else 0.0
     
-    # Approximate p-value using t-distribution
-    # For simplicity, we use a conservative approximation
-    # In practice, you'd use scipy.stats.t.sf for accurate p-values
+    # Two-tailed p-value using t-distribution helper (SciPy-backed when available).
     p_value = _approximate_t_test_p_value(abs(t_stat), df)
     
-    # Confidence interval (approximate)
-    # t_critical ≈ 2.0 for 95% CI and reasonable df
-    t_critical = 2.0  # Conservative estimate
-    margin = t_critical * (se_diff if paired else se)
+    # Confidence interval with t critical value helper (SciPy-backed when available).
+    confidence_level = 1 - alpha
+    t_crit = t_critical_value(df=max(1, df), confidence_level=confidence_level)
+    margin = t_crit * (se_diff if paired else se)
     ci = (mean_a - mean_b - margin, mean_a - mean_b + margin)
     
     return StatisticalTestResult(
@@ -151,37 +151,22 @@ def t_test(
         statistic=t_stat,
         p_value=p_value,
         significant=p_value < alpha,
-        confidence_level=1 - alpha,
+        confidence_level=confidence_level,
         effect_size=effect_size,
         confidence_interval=ci,
     )
 
 
 def _approximate_t_test_p_value(t_stat: float, df: int) -> float:
-    """Approximate p-value for t-test.
-    
-    This is a rough approximation. For accurate p-values, use scipy.stats.
+    """Compute two-tailed p-value for t-statistic.
+
+    Uses themis.evaluation.statistics.distributions.t_to_p_value which
+    delegates to SciPy when available and otherwise uses a deterministic
+    mathematical fallback.
     """
-    # Very rough approximation based on standard normal
-    # This gets less accurate for small df
     if df < 1:
         return 1.0
-    
-    # Convert to z-score approximation for large df
-    if df > 30:
-        z = t_stat
-        # Approximate p-value for two-tailed test
-        # P(|Z| > z) ≈ 2 * (1 - Φ(z))
-        if z > 6:
-            return 0.0
-        elif z < 0.5:
-            return 1.0
-        else:
-            # Rough approximation
-            return min(1.0, 2 * math.exp(-0.5 * z * z) / math.sqrt(2 * math.pi))
-    
-    # For small df, be conservative
-    return min(1.0, 0.5 if t_stat < 2 else 0.1 if t_stat < 3 else 0.01)
+    return float(t_to_p_value(t_stat, df))
 
 
 def bootstrap_confidence_interval(

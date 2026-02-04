@@ -4,6 +4,7 @@ import random
 
 import pytest
 
+from themis.comparison import statistics as comparison_statistics
 from themis.comparison.statistics import (
     StatisticalTest,
     StatisticalTestResult,
@@ -58,6 +59,12 @@ class TestTTest:
         """Test that mismatched lengths raise for paired test."""
         with pytest.raises(ValueError, match="equal sample sizes"):
             t_test([1.0, 2.0], [1.0, 2.0, 3.0], paired=True)
+
+    def test_t_test_p_value_monotonic_for_small_df(self):
+        """Test p-values are monotonic with larger t-statistics for same df."""
+        p_low = comparison_statistics._approximate_t_test_p_value(2.1, 10)
+        p_high = comparison_statistics._approximate_t_test_p_value(2.9, 10)
+        assert p_high < p_low
 
 
 class TestBootstrap:
