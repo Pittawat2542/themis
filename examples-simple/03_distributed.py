@@ -1,29 +1,29 @@
-"""Distributed execution example - Scale with Ray.
+"""Execution tuning example (workers + retries) with vNext specs.
 
-This example shows how to use distributed execution for faster evaluations.
-Note: This requires Ray to be installed and will be fully implemented in Phase 3.
+This replaces the old distributed placeholder.
 """
 
-import themis
+from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.presets import get_benchmark_preset
+from themis.session import ExperimentSession
+from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
-# Run evaluation with distributed execution
-# (This will fail for now since distributed execution is not yet implemented)
-print("Distributed execution example")
-print("Note: This feature will be implemented in Phase 3")
-print()
+preset = get_benchmark_preset("demo")
+pipeline = MetricPipeline(extractor=preset.extractor, metrics=preset.metrics)
 
-# For now, run with local execution
-report = themis.evaluate(
-    "demo",
-    model="fake-math-llm",
-    limit=3,
-    # distributed=True,  # Uncomment when Phase 3 is complete
-    # workers=8,         # Number of parallel workers
-    # storage="s3://my-bucket/runs",  # Cloud storage for distributed runs
+spec = ExperimentSpec(
+    dataset=preset.load_dataset(limit=10),
+    prompt=preset.prompt_template.template,
+    model="fake:fake-math-llm",
+    sampling={"temperature": 0.0, "max_tokens": 128},
+    pipeline=pipeline,
 )
 
-print(f"Completed {len(report.generation_results)} samples")
-print("\nTo enable distributed execution (Phase 3):")
-print("  1. Install Ray: pip install ray[default]")
-print("  2. Set distributed=True")
-print("  3. Configure cloud storage (S3, GCS, or Azure)")
+report = ExperimentSession().run(
+    spec,
+    execution=ExecutionSpec(workers=4, max_retries=2),
+    storage=StorageSpec(path=".cache/experiments", cache=True),
+)
+
+print("Completed", len(report.generation_results), "samples")
+print("Failures:", len(report.failures))

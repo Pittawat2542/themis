@@ -44,21 +44,12 @@ def show_info() -> int:
         print(f"  ✓ {bench}")
 
     print("\n📁 Example Locations:")
-    examples_dir = Path(themis.__file__).parent.parent / "examples"
+    examples_dir = Path(themis.__file__).parent.parent / "examples-simple"
     if examples_dir.exists():
         print(f"  {examples_dir}")
-        example_dirs = sorted(
-            [
-                d.name
-                for d in examples_dir.iterdir()
-                if d.is_dir() and not d.name.startswith("_")
-            ]
-        )
-        for ex in example_dirs:
-            print(f"    • {ex}/")
 
     print("\n📚 Documentation:")
-    print("  examples/README.md - Comprehensive tutorial cookbook")
+    print("  examples-simple/README.md - vNext example scripts")
     print("  COOKBOOK.md - Quick reference guide")
     print("  docs/ - Detailed documentation")
 

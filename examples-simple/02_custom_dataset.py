@@ -1,38 +1,35 @@
-"""Custom dataset example - Evaluate on your own data.
+"""Custom dataset example using ExperimentSpec + ExperimentSession."""
 
-This example shows how to run evaluations on custom datasets
-with your own prompts and metrics.
-"""
+from themis.evaluation import extractors, metrics
+from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.session import ExperimentSession
+from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
-import themis
-
-# Define custom dataset
-my_dataset = [
+DATASET = [
     {"id": "q1", "question": "What is 10 + 5?", "answer": "15"},
     {"id": "q2", "question": "What is 20 - 8?", "answer": "12"},
     {"id": "q3", "question": "What is 6 * 7?", "answer": "42"},
 ]
 
-# Run evaluation with custom prompt
-report = themis.evaluate(
-    dataset=my_dataset,
-    model="fake-math-llm",
-    prompt="Q: {question}\nA:",
-    metrics=["exact_match"],
+pipeline = MetricPipeline(
+    extractor=extractors.IdentityExtractor(),
+    metrics=[metrics.ExactMatch(), metrics.ResponseLength()],
 )
 
-# Print results
-print("\nCustom Dataset Evaluation:")
-print(f"Total samples: {len(report.generation_results)}")
-print(f"Successful: {len([r for r in report.generation_results if r.error is None])}")
+spec = ExperimentSpec(
+    dataset=DATASET,
+    prompt="Q: {question}\nA:",
+    model="fake:fake-math-llm",
+    sampling={"temperature": 0.0, "max_tokens": 128},
+    pipeline=pipeline,
+)
 
-if report.evaluation_report.aggregates:
-    for aggregate in report.evaluation_report.aggregates:
-        print(f"{aggregate.metric_name}: {aggregate.mean:.2%}")
+report = ExperimentSession().run(
+    spec,
+    execution=ExecutionSpec(workers=2),
+    storage=StorageSpec(path=".cache/experiments", cache=False),
+)
 
-# Show individual results
-print("\nIndividual Results:")
-for record in report.generation_results:
-    sample_id = record.task.metadata.get("dataset_id")
-    output_text = record.output.text if record.output else "ERROR"
-    print(f"  {sample_id}: {output_text}")
+print("Samples:", len(report.generation_results))
+for name, aggregate in sorted(report.evaluation_report.metrics.items()):
+    print(f"{name}: mean={aggregate.mean:.4f} (n={aggregate.count})")

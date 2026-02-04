@@ -42,7 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ExperimentBuilder replaced with `themis.evaluate()`
 - Configuration files no longer needed for simple use cases
 - CLI commands simplified and renamed
-- See [Migration Guide](MIGRATION.md) for details
 
 ## [1.x] - Previous Versions
 

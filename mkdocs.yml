@@ -117,22 +117,8 @@ nav:
       - Interoperability: guides/interoperability.md
       - Providers (LiteLLM): guides/providers.md
       - Storage: guides/storage.md
-      - Cost Tracking: guides/cost-tracking.md
-      - Caching: guides/manual_verification_cache.md
-      - Best Practices: guides/best-practices.md
-      - FAQ: guides/faq.md
-
-  - Examples:
-      - Overview: examples/index.md
-
-  - Customization:
-      - Extending Themis: EXTENDING_THEMIS.md
-      - Quick Reference: EXTENSION_QUICK_REFERENCE.md
-      - Architecture: EXTENSION_ARCHITECTURE.md
-      - Extending Backends: customization/backends.md
 
   - Reference:
-      - Configuration: guides/configuration.md
       - CLI Reference: guides/cli.md
       - Benchmarks: reference/benchmarks.md
       - API Server: reference/api-server.md
@@ -146,16 +132,12 @@ nav:
           - Metrics: api/metrics.md
           - Backends: api/backends.md
 
-  - Tutorials:
-      - Jupyter Notebooks: tutorials/notebooks.md
-      - Code Examples: tutorials/examples.md
+  - Architecture:
+      - vNext Architecture: ARCHITECTURE_VNEXT.md
 
-  - Community:
-      - Contributing: CONTRIBUTING.md
+  - Project:
       - Changelog: CHANGELOG.md
-      - Migration Guide: MIGRATION.md
-      - Architecture: development/architecture.md
-      - Architecture (vNext): ARCHITECTURE_VNEXT.md
+      - Contributing: CONTRIBUTING.md
 
 extra_css:
   - stylesheets/extra.css

@@ -1,22 +1,27 @@
-"""Quick start example - Run your first evaluation in 10 lines.
+"""Quick start with vNext specs + session."""
 
-This example shows how to run a benchmark evaluation with Themis
-using the new unified API. No boilerplate, just results.
-"""
+from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.presets import get_benchmark_preset
+from themis.session import ExperimentSession
+from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
-import themis
+preset = get_benchmark_preset("demo")
+pipeline = MetricPipeline(extractor=preset.extractor, metrics=preset.metrics)
 
-# Run evaluation with one line
-report = themis.evaluate(
-    "demo",  # Use the demo benchmark for testing
-    model="fake-math-llm",  # Use fake model for testing (no API key needed)
-    limit=3,  # Evaluate only 3 samples
+spec = ExperimentSpec(
+    dataset=preset.load_dataset(limit=5),
+    prompt=preset.prompt_template.template,
+    model="fake:fake-math-llm",
+    sampling={"temperature": 0.0, "max_tokens": 128},
+    pipeline=pipeline,
 )
 
-# Print results
-print("\nEvaluation Results:")
-print(f"Samples evaluated: {len(report.generation_results)}")
+report = ExperimentSession().run(
+    spec,
+    execution=ExecutionSpec(workers=2),
+    storage=StorageSpec(path=".cache/experiments", cache=True),
+)
 
-if report.evaluation_report.aggregates:
-    for aggregate in report.evaluation_report.aggregates:
-        print(f"{aggregate.metric_name}: {aggregate.mean:.2%}")
+print("Run:", report.metadata.get("run_id"))
+for name, aggregate in sorted(report.evaluation_report.metrics.items()):
+    print(f"{name}: mean={aggregate.mean:.4f} (n={aggregate.count})")

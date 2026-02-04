@@ -312,7 +312,7 @@ Themis is built on a clean, modular architecture:
 
 - **[API Reference](docs/index.md)** - Detailed API documentation
 - **[Examples](examples-simple/)** - Runnable code examples
-- **[Extending Backends](docs/customization/backends.md)** - Custom storage and execution
+- **[Backends API](docs/api/backends.md)** - Custom storage and execution
 - **[API Server](docs/reference/api-server.md)** - Web dashboard and REST API
 - **[Comparison Engine](docs/guides/comparison.md)** - Statistical testing guide
 
@@ -342,7 +342,7 @@ result = evaluate(
 )
 ```
 
-See [docs/customization/backends.md](docs/customization/backends.md) for details.
+See [docs/api/backends.md](docs/api/backends.md) for details.
 
 ### Distributed Execution
 
@@ -492,6 +492,12 @@ uv run python examples-simple/04_comparison.py
 
 # API server example
 uv run python examples-simple/05_api_server.py
+
+# Resume/cache example
+uv run python examples-simple/08_resume_cache.py
+
+# End-to-end research loop example
+uv run python examples-simple/09_research_loop.py
 ```
 
 ---

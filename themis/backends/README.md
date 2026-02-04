@@ -70,7 +70,7 @@ result = evaluate(
 
 ## Creating Custom Backends
 
-See [EXTENDING_BACKENDS.md](../../docs/EXTENDING_BACKENDS.md) for detailed documentation on implementing custom backends.
+See [docs/api/backends.md](../../docs/api/backends.md) for backend API documentation.
 
 ### Example: S3 Storage
 

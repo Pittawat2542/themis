@@ -63,7 +63,7 @@ uv run pytest --cov=themis --cov-report=html
 
 - `themis/`: Source code
 - `tests/`: Test suite
-- `examples/`: Example scripts and cookbooks
+- `examples-simple/`: Runnable vNext example scripts
 - `docs/`: Documentation
 
 ## Submitting Changes
