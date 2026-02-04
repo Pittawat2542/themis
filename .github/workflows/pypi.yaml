@@ -27,10 +27,10 @@ jobs:
     outputs:
       tag: ${{ steps.resolve-tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -58,16 +58,16 @@ jobs:
     needs: validate-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -78,13 +78,13 @@ jobs:
         run: uvx --from twine twine check dist/*
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-dist
           path: dist/
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: "dist/*"
 
@@ -96,7 +96,7 @@ jobs:
       name: pypi
     steps:
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-dist
           path: dist/
