@@ -13,7 +13,10 @@ Example implementations:
 
 from __future__ import annotations
 
+import json
+import pickle
 from abc import ABC, abstractmethod
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -97,11 +100,17 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    def save_evaluation_record(self, run_id: str, record: EvaluationRecord) -> None:
+    def save_evaluation_record(
+        self,
+        run_id: str,
+        generation_record: GenerationRecord,
+        record: EvaluationRecord,
+    ) -> None:
         """Save an evaluation record.
         
         Args:
             run_id: Unique identifier for the run
+            generation_record: Generation record corresponding to this evaluation
             record: Evaluation record to save
             
         Note:
@@ -212,16 +221,30 @@ class LocalFileStorageBackend(StorageBackend):
     def save_run_metadata(self, run_id: str, metadata: Dict[str, Any]) -> None:
         """Save run metadata."""
         experiment_id = metadata.get("experiment_id", "default")
-        self._storage.start_run(run_id, experiment_id=experiment_id)
+        if not self._storage.run_metadata_exists(run_id):
+            self._storage.start_run(
+                run_id,
+                experiment_id=experiment_id,
+                config=metadata,
+            )
+            return
+
+        run_metadata = self._storage._load_run_metadata(run_id)
+        run_metadata.experiment_id = experiment_id
+        run_metadata.config_snapshot = dict(metadata)
+        run_metadata.updated_at = metadata.get("updated_at", run_metadata.updated_at)
+        self._storage._save_run_metadata(run_metadata)
     
     def load_run_metadata(self, run_id: str) -> Dict[str, Any]:
         """Load run metadata."""
-        # Note: Current storage doesn't have a direct method for this
-        # This is a limitation of the adapter pattern
-        raise NotImplementedError("Use ExperimentStorage directly for now")
+        metadata = self._storage._load_run_metadata(run_id)
+        payload = asdict(metadata)
+        payload["status"] = metadata.status.value
+        return payload
     
     def save_generation_record(self, run_id: str, record: GenerationRecord) -> None:
         """Save generation record."""
+        self._ensure_run_exists(run_id)
         self._storage.append_record(run_id, record)
     
     def load_generation_records(self, run_id: str) -> List[GenerationRecord]:
@@ -229,9 +252,15 @@ class LocalFileStorageBackend(StorageBackend):
         cached = self._storage.load_cached_records(run_id)
         return list(cached.values())
     
-    def save_evaluation_record(self, run_id: str, record: EvaluationRecord) -> None:
+    def save_evaluation_record(
+        self,
+        run_id: str,
+        generation_record: GenerationRecord,
+        record: EvaluationRecord,
+    ) -> None:
         """Save evaluation record."""
-        self._storage.append_evaluation(run_id, record)
+        self._ensure_run_exists(run_id)
+        self._storage.append_evaluation(run_id, generation_record, record)
     
     def load_evaluation_records(self, run_id: str) -> Dict[str, EvaluationRecord]:
         """Load evaluation records."""
@@ -239,24 +268,47 @@ class LocalFileStorageBackend(StorageBackend):
     
     def save_report(self, run_id: str, report: ExperimentReport) -> None:
         """Save report."""
-        self._storage.save_report(run_id, report)
+        self._ensure_run_exists(run_id)
+        report_path = self._storage.get_run_path(run_id) / "report.pkl"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with report_path.open("wb") as handle:
+            pickle.dump(report, handle)
+
+        metadata_path = self._storage.get_run_path(run_id) / "report_metadata.json"
+        metadata = {
+            "run_id": run_id,
+            "generation_results": len(report.generation_results),
+            "failures": len(report.failures),
+            "report_metadata": report.metadata,
+        }
+        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     
     def load_report(self, run_id: str) -> ExperimentReport:
         """Load report."""
-        return self._storage.load_report(run_id)
+        report_path = self._storage.get_run_path(run_id) / "report.pkl"
+        if not report_path.exists():
+            raise FileNotFoundError(f"Report not found for run {run_id}")
+        with report_path.open("rb") as handle:
+            report = pickle.load(handle)
+        if not isinstance(report, ExperimentReport):
+            raise TypeError(f"Invalid report payload for run {run_id}")
+        return report
     
     def list_runs(self) -> List[str]:
         """List runs."""
-        return self._storage.list_runs()
+        return [run.run_id for run in self._storage.list_runs()]
     
     def run_exists(self, run_id: str) -> bool:
         """Check if run exists."""
-        return run_id in self._storage.list_runs()
+        return self._storage.run_metadata_exists(run_id)
     
     def delete_run(self, run_id: str) -> None:
         """Delete run."""
-        # Note: Current storage doesn't have delete functionality
-        raise NotImplementedError("Delete not implemented in current storage")
+        self._storage.delete_run(run_id)
+
+    def _ensure_run_exists(self, run_id: str) -> None:
+        if not self._storage.run_metadata_exists(run_id):
+            self._storage.start_run(run_id, experiment_id="default")
 
 
 __all__ = [
