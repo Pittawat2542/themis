@@ -15,7 +15,12 @@ class FakeStorage:
     def run_metadata_exists(self, run_id: str) -> bool:
         return False
 
-    def start_run(self, run_id: str, experiment_id: str = "default") -> None:
+    def start_run(
+        self,
+        run_id: str,
+        experiment_id: str = "default",
+        config: dict | None = None,
+    ) -> None:
         self.start_called = True
 
     def cache_dataset(self, run_id: str, dataset):

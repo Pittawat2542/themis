@@ -149,6 +149,29 @@ def test_task_cache_key_format():
     assert "0.700-1.000-100" in parts[3], "Fourth part should be sampling"
 
 
+def test_task_cache_key_includes_manifest_hash():
+    """Test that task cache key includes manifest hash when provided."""
+    task = make_test_task()
+    task.metadata["manifest_hash"] = "deadbeef"
+
+    key = task_cache_key(task)
+
+    assert key.endswith("deadbeef"), "Task key should include manifest hash suffix"
+
+
+def test_task_cache_key_invalidates_on_manifest_hash_change():
+    """Test that different manifest hashes produce different task cache keys."""
+    task_a = make_test_task()
+    task_b = make_test_task()
+    task_a.metadata["manifest_hash"] = "aaa"
+    task_b.metadata["manifest_hash"] = "bbb"
+
+    key_a = task_cache_key(task_a)
+    key_b = task_cache_key(task_b)
+
+    assert key_a != key_b
+
+
 def test_evaluation_cache_key_format():
     """Test evaluation cache key format."""
     task = make_test_task()

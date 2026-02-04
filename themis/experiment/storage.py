@@ -1257,6 +1257,8 @@ class ExperimentStorage:
         """Generate cache key for task."""
         dataset_raw = task.metadata.get("dataset_id") or task.metadata.get("sample_id")
         dataset_id = str(dataset_raw) if dataset_raw is not None else ""
+        manifest_hash = task.metadata.get("manifest_hash")
+        manifest_id = str(manifest_hash) if manifest_hash is not None else ""
         prompt_hash = hashlib.sha256(task.prompt.text.encode("utf-8")).hexdigest()[:12]
         sampling = task.sampling
         sampling_key = (
@@ -1265,7 +1267,9 @@ class ExperimentStorage:
         template = task.prompt.spec.name
         model = task.model.identifier
         return "::".join(
-            filter(None, [dataset_id, template, model, sampling_key, prompt_hash])
+            filter(
+                None, [dataset_id, template, model, sampling_key, prompt_hash, manifest_id]
+            )
         )
 
     # ===== Phase 3 Features =====
@@ -1584,6 +1588,8 @@ def task_cache_key(task: core_entities.GenerationTask) -> str:
     """Derive a stable cache key for a generation task (module-level function for backward compatibility)."""
     dataset_raw = task.metadata.get("dataset_id") or task.metadata.get("sample_id")
     dataset_id = str(dataset_raw) if dataset_raw is not None else ""
+    manifest_hash = task.metadata.get("manifest_hash")
+    manifest_id = str(manifest_hash) if manifest_hash is not None else ""
     prompt_hash = hashlib.sha256(task.prompt.text.encode("utf-8")).hexdigest()[:12]
     sampling = task.sampling
     sampling_key = (
@@ -1592,7 +1598,7 @@ def task_cache_key(task: core_entities.GenerationTask) -> str:
     template = task.prompt.spec.name
     model = task.model.identifier
     return "::".join(
-        filter(None, [dataset_id, template, model, sampling_key, prompt_hash])
+        filter(None, [dataset_id, template, model, sampling_key, prompt_hash, manifest_id])
     )
 
 

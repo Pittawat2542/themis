@@ -22,7 +22,13 @@ class DummyCacheManager:
     def run_metadata_exists(self, run_id: str) -> bool:
         return False
 
-    def start_run(self, run_id: str, *, experiment_id: str = "default") -> None:
+    def start_run(
+        self,
+        run_id: str,
+        *,
+        experiment_id: str = "default",
+        config: dict | None = None,
+    ) -> None:
         self.start_called = True
 
     def cache_dataset(self, run_id: str, dataset: Sequence[dict[str, object]]) -> None:
@@ -93,6 +99,19 @@ def test_orchestrator_uses_cache_manager_api():
         dataset=[{"id": "1", "question": "2+2"}],
         run_id="orchestrator-test",
         resume=False,
+        run_manifest={
+            "schema_version": "1",
+            "model": {"identifier": "model-x", "provider": "fake", "provider_options": {}},
+            "sampling": {"temperature": 0.0, "top_p": 1.0, "max_tokens": 8},
+            "num_samples": 1,
+            "evaluation": {
+                "metrics": ["themis.evaluation.metrics.response_length.ResponseLength:ResponseLength"],
+                "extractor": "themis.evaluation.extractors.IdentityExtractor",
+            },
+            "seeds": {"sampling_seed": None},
+            "package_versions": {"themis-eval": "1.0.0"},
+            "git_commit_hash": "abc123",
+        },
     )
 
     assert cache_manager.start_called is True

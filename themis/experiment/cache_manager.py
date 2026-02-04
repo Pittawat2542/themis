@@ -87,10 +87,18 @@ class CacheManager:
             return False
         return self._storage.run_metadata_exists(run_id)
 
-    def start_run(self, run_id: str, *, experiment_id: str = "default") -> None:
-        """Start a run in storage."""
+    def start_run(
+        self,
+        run_id: str,
+        *,
+        experiment_id: str = "default",
+        config: dict | None = None,
+    ) -> None:
+        """Start a run in storage with required run configuration."""
         if self._storage is not None:
-            self._storage.start_run(run_id, experiment_id=experiment_id)
+            if config is None:
+                raise ValueError("Run config is required when starting a cached run.")
+            self._storage.start_run(run_id, experiment_id=experiment_id, config=config)
 
     def save_generation_record(
         self,

@@ -67,14 +67,14 @@ TDD:
 
 ### 5) Reproducibility manifest as first-class artifact
 
-- [ ] Persist run manifest with: model/provider options, seeds, metric configs, extractor config, package versions, git commit hash.
-- [ ] Hash manifest and include in report metadata and cache keys.
-- [ ] Require manifest for run start; fail if incomplete.
+- [x] Persist run manifest with: model/provider options, seeds, metric configs, extractor config, package versions, git commit hash.
+- [x] Hash manifest and include in report metadata and cache keys.
+- [x] Require manifest for run start; fail if incomplete.
 
 TDD:
-- [ ] Add tests asserting manifest presence and required fields.
-- [ ] Add tests asserting cache invalidation when manifest-critical fields change.
-- [ ] Add tests asserting deterministic manifest hash generation.
+- [x] Add tests asserting manifest presence and required fields.
+- [x] Add tests asserting cache invalidation when manifest-critical fields change.
+- [x] Add tests asserting deterministic manifest hash generation.
 
 ## P2 - Performance and Scalability
 
@@ -118,4 +118,3 @@ TDD:
 - [ ] Sprint 2: P0.3, P1.4
 - [ ] Sprint 3: P1.5, P2.6
 - [ ] Sprint 4: P3.7, P3.8
-

@@ -8,6 +8,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from themis.core.entities import ExperimentReport, GenerationRecord, ModelSpec, SamplingConfig
 from themis.evaluation.pipeline import EvaluationPipelineContract
+from themis.experiment.manifest import build_reproducibility_manifest
 from themis.experiment.orchestrator import ExperimentOrchestrator
 from themis.generation.plan import GenerationPlan
 from themis.generation.router import ProviderRouter
@@ -79,6 +80,14 @@ class ExperimentSession:
         )
 
         storage_backend = _resolve_storage(storage)
+        manifest = build_reproducibility_manifest(
+            model=model_id,
+            provider=provider_name,
+            provider_options=provider_options,
+            sampling=dict(spec.sampling),
+            num_samples=spec.num_samples,
+            evaluation_config=_build_evaluation_config(pipeline),
+        )
 
         orchestrator = ExperimentOrchestrator(
             generation_plan=plan,
@@ -93,6 +102,7 @@ class ExperimentSession:
             resume=storage.cache,
             cache_results=storage.cache,
             on_result=on_result,
+            run_manifest=manifest,
         )
 
 
@@ -138,6 +148,35 @@ def _resolve_storage(storage: StorageSpec):
     from themis.storage import ExperimentStorage
 
     return ExperimentStorage(root)
+
+
+def _build_evaluation_config(pipeline: EvaluationPipelineContract) -> dict[str, Any]:
+    if hasattr(pipeline, "evaluation_fingerprint"):
+        try:
+            fingerprint = dict(pipeline.evaluation_fingerprint())
+        except Exception:
+            fingerprint = {}
+    else:
+        fingerprint = {}
+
+    if "metrics" not in fingerprint and hasattr(pipeline, "_metrics"):
+        fingerprint["metrics"] = sorted(
+            [
+                f"{metric.__class__.__module__}.{metric.__class__.__name__}:{metric.name}"
+                for metric in pipeline._metrics
+            ]
+        )
+    if "extractor" not in fingerprint and hasattr(pipeline, "_extractor"):
+        extractor = pipeline._extractor
+        fingerprint["extractor"] = (
+            f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+        )
+        if "extractor_field" not in fingerprint and hasattr(extractor, "field_name"):
+            fingerprint["extractor_field"] = extractor.field_name
+    fingerprint.setdefault("metrics", [])
+    fingerprint.setdefault("extractor", "unknown")
+
+    return fingerprint
 
 
 __all__ = ["ExperimentSession"]

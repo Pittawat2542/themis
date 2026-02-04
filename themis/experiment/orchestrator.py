@@ -19,6 +19,11 @@ from themis.core.entities import (
 )
 from themis.evaluation import pipeline as evaluation_pipeline
 from themis.evaluation.reports import EvaluationFailure
+from themis.experiment.manifest import (
+    build_reproducibility_manifest,
+    manifest_hash,
+    validate_reproducibility_manifest,
+)
 from themis.experiment import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
 from themis.experiment.cost import CostTracker
@@ -90,6 +95,7 @@ class ExperimentOrchestrator:
         resume: bool = True,
         cache_results: bool = True,
         on_result: Callable[[GenerationRecord], None] | None = None,
+        run_manifest: dict[str, object] | None = None,
     ) -> ExperimentReport:
         """Run experiment: generate responses, evaluate, and report results.
 
@@ -101,6 +107,7 @@ class ExperimentOrchestrator:
             resume: Whether to resume from cached results
             cache_results: Whether to cache new results
             on_result: Optional callback for each generation result
+            run_manifest: Required reproducibility manifest for this run
 
         Returns:
             ExperimentReport with generation results, evaluation, and metadata
@@ -131,6 +138,13 @@ class ExperimentOrchestrator:
             dataset_list[:max_samples] if max_samples is not None else dataset_list
         )
         run_identifier = run_id or self._default_run_id()
+        manifest_payload = dict(run_manifest or {})
+        run_manifest_hash: str | None = None
+        if self._cache.has_storage:
+            if not manifest_payload:
+                manifest_payload = self._default_run_manifest()
+            validate_reproducibility_manifest(manifest_payload)
+            run_manifest_hash = manifest_hash(manifest_payload)
         
         logger.info(f"Orchestrator: Processing {len(selected_dataset)} samples")
         logger.info(f"Orchestrator: Run ID = {run_identifier}")
@@ -138,7 +152,14 @@ class ExperimentOrchestrator:
         # Initialize run in storage (if storage exists and run doesn't exist)
         if self._cache.has_storage:
             if not resume or not self._cache.run_metadata_exists(run_identifier):
-                self._cache.start_run(run_identifier, experiment_id="default")
+                self._cache.start_run(
+                    run_identifier,
+                    experiment_id="default",
+                    config={
+                        "reproducibility_manifest": manifest_payload,
+                        "manifest_hash": run_manifest_hash,
+                    },
+                )
 
         # Cache dataset for resumability
         if dataset_list:
@@ -152,6 +173,9 @@ class ExperimentOrchestrator:
         except Exception as e:
             logger.error(f"Orchestrator: ❌ Failed to expand dataset: {e}")
             raise
+        if run_manifest_hash is not None:
+            for task in tasks:
+                task.metadata["manifest_hash"] = run_manifest_hash
 
         # Build evaluation configuration for cache invalidation
         evaluation_config = self._build_evaluation_config()
@@ -306,6 +330,8 @@ class ExperimentOrchestrator:
                 1 for record in evaluation_report.records if record.failures
             )
             + len(evaluation_report.failures),
+            "manifest_hash": run_manifest_hash,
+            "reproducibility_manifest": manifest_payload,
             # Cost tracking
             "cost": {
                 "total_cost": cost_breakdown.total_cost,
@@ -338,6 +364,29 @@ class ExperimentOrchestrator:
             self._save_report_json(report, run_identifier)
 
         return report
+
+    def _default_run_manifest(self) -> dict[str, object]:
+        model = self._plan.models[0] if self._plan.models else None
+        sampling = self._plan.sampling_parameters[0] if self._plan.sampling_parameters else None
+        sampling_config = {
+            "temperature": sampling.temperature if sampling else 0.0,
+            "top_p": sampling.top_p if sampling else 0.95,
+            "max_tokens": sampling.max_tokens if sampling else 512,
+        }
+        evaluation_config = self._build_evaluation_config()
+        if "metrics" not in evaluation_config:
+            evaluation_config["metrics"] = []
+        if "extractor" not in evaluation_config:
+            evaluation_config["extractor"] = "unknown"
+
+        return build_reproducibility_manifest(
+            model=model.identifier if model else "unknown",
+            provider=model.provider if model else "unknown",
+            provider_options={},
+            sampling=sampling_config,
+            num_samples=1,
+            evaluation_config=evaluation_config,
+        )
 
     def _default_run_id(self) -> str:
         return datetime.now(timezone.utc).strftime("run-%Y%m%d-%H%M%S")
