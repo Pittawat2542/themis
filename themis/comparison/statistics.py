@@ -10,9 +10,15 @@ import math
 import random
 from dataclasses import dataclass
 from enum import Enum
+from statistics import mean
 from typing import Sequence
 
 from themis.evaluation.statistics.distributions import t_critical_value, t_to_p_value
+from themis.evaluation.statistics import (
+    bootstrap_ci as evaluation_bootstrap_ci,
+    paired_t_test as evaluation_paired_t_test,
+    permutation_test as evaluation_permutation_test,
+)
 
 
 class StatisticalTest(str, Enum):
@@ -99,21 +105,20 @@ def t_test(
     mean_b = sum(samples_b) / n_b
     
     if paired:
-        # Paired t-test: test on differences
+        # Delegate core paired test inference to evaluation statistics.
+        paired_result = evaluation_paired_t_test(
+            samples_b, samples_a, significance_level=alpha
+        )
+        t_stat = paired_result.t_statistic
+        p_value = paired_result.p_value
+
+        # Paired t-test effect size/CI on (a-b) differences.
         diffs = [a - b for a, b in zip(samples_a, samples_b)]
         mean_diff = sum(diffs) / len(diffs)
         
         # Standard deviation of differences
         var_diff = sum((d - mean_diff) ** 2 for d in diffs) / (len(diffs) - 1) if len(diffs) > 1 else 0
         se_diff = math.sqrt(var_diff / len(diffs))
-        
-        # T-statistic
-        if se_diff > 1e-10:  # Non-zero standard error
-            t_stat = mean_diff / se_diff
-        elif abs(mean_diff) > 1e-10:  # Perfect consistency with non-zero difference
-            t_stat = float('inf') if mean_diff > 0 else float('-inf')
-        else:  # No difference at all
-            t_stat = 0.0
         
         df = len(diffs) - 1
         
@@ -137,8 +142,9 @@ def t_test(
         # Effect size (Cohen's d)
         effect_size = (mean_a - mean_b) / pooled_sd if pooled_sd > 0 else 0.0
     
-    # Two-tailed p-value using t-distribution helper (SciPy-backed when available).
-    p_value = _approximate_t_test_p_value(abs(t_stat), df)
+    # Two-tailed p-value for independent test path.
+    if not paired:
+        p_value = _approximate_t_test_p_value(abs(t_stat), df)
     
     # Confidence interval with t critical value helper (SciPy-backed when available).
     confidence_level = 1 - alpha
@@ -197,9 +203,29 @@ def bootstrap_confidence_interval(
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform bootstrap on empty samples")
     
+    # Default statistic: difference in means (delegate to evaluation stack for paired samples)
+    if statistic_fn is None and len(samples_a) == len(samples_b):
+        diffs = [a - b for a, b in zip(samples_a, samples_b)]
+        boot = evaluation_bootstrap_ci(
+            diffs,
+            statistic=mean,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            seed=seed,
+        )
+        ci = (boot.ci_lower, boot.ci_upper)
+        significant = not (ci[0] <= 0 <= ci[1])
+        p_value = (1 / n_bootstrap) if significant else 1.0
+        return StatisticalTestResult(
+            test_name=f"bootstrap (n={n_bootstrap})",
+            statistic=boot.statistic,
+            p_value=p_value,
+            significant=significant,
+            confidence_level=confidence_level,
+            confidence_interval=ci,
+        )
+
     rng = random.Random(seed)
-    
-    # Default statistic: difference in means
     if statistic_fn is None:
         def statistic_fn(a, b):
             return sum(a) / len(a) - sum(b) / len(b)
@@ -273,12 +299,25 @@ def permutation_test(
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform permutation test on empty samples")
     
-    rng = random.Random(seed)
-    
-    # Default statistic: absolute difference in means
     if statistic_fn is None:
-        def statistic_fn(a, b):
-            return abs(sum(a) / len(a) - sum(b) / len(b))
+        perm = evaluation_permutation_test(
+            samples_a,
+            samples_b,
+            statistic="mean_diff",
+            n_permutations=n_permutations,
+            seed=seed,
+        )
+        observed_stat = abs(perm.observed_statistic)
+        p_value = perm.p_value
+        return StatisticalTestResult(
+            test_name=f"permutation (n={n_permutations})",
+            statistic=observed_stat,
+            p_value=p_value,
+            significant=p_value < alpha,
+            confidence_level=1 - alpha,
+        )
+
+    rng = random.Random(seed)
     
     # Observed statistic
     observed_stat = statistic_fn(samples_a, samples_b)
@@ -286,8 +325,6 @@ def permutation_test(
     # Combine all samples
     combined = list(samples_a) + list(samples_b)
     n_a = len(samples_a)
-    n_total = len(combined)
-    
     # Permutation testing
     more_extreme = 0
     for _ in range(n_permutations):

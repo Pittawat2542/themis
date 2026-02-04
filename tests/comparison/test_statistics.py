@@ -1,6 +1,7 @@
 """Tests for comparison statistics module."""
 
 import random
+from types import SimpleNamespace
 
 import pytest
 
@@ -65,6 +66,32 @@ class TestTTest:
         p_low = comparison_statistics._approximate_t_test_p_value(2.1, 10)
         p_high = comparison_statistics._approximate_t_test_p_value(2.9, 10)
         assert p_high < p_low
+
+    def test_t_test_paired_uses_evaluation_stack(self, monkeypatch):
+        """Test paired t-test delegates to evaluation.statistics implementation."""
+        calls = {"count": 0}
+
+        def _fake_paired_t_test(group_a, group_b, significance_level=0.05):
+            calls["count"] += 1
+            return SimpleNamespace(
+                baseline_mean=0.2,
+                treatment_mean=0.8,
+                difference=0.6,
+                relative_change=300.0,
+                t_statistic=3.5,
+                p_value=0.0125,
+                is_significant=True,
+            )
+
+        monkeypatch.setattr(
+            comparison_statistics, "evaluation_paired_t_test", _fake_paired_t_test
+        )
+
+        result = t_test([0.8, 0.9, 1.0], [0.2, 0.1, 0.0], paired=True, alpha=0.05)
+        assert calls["count"] == 1
+        assert result.statistic == pytest.approx(3.5)
+        assert result.p_value == pytest.approx(0.0125)
+        assert result.significant is True
 
 
 class TestBootstrap:
@@ -131,6 +158,33 @@ class TestBootstrap:
 
         assert observed_next == expected_next
 
+    def test_bootstrap_uses_evaluation_stack_for_default_statistic(self, monkeypatch):
+        """Test bootstrap delegates to evaluation bootstrap for default statistic."""
+        calls = {"count": 0}
+
+        def _fake_bootstrap_ci(values, statistic, n_bootstrap, confidence_level, seed):
+            calls["count"] += 1
+            assert list(values) == [2.0, 2.0, 2.0]  # differences a-b
+            return SimpleNamespace(
+                statistic=2.0,
+                ci_lower=1.9,
+                ci_upper=2.1,
+                confidence_level=confidence_level,
+                n_bootstrap=n_bootstrap,
+            )
+
+        monkeypatch.setattr(comparison_statistics, "evaluation_bootstrap_ci", _fake_bootstrap_ci)
+
+        result = bootstrap_confidence_interval(
+            [3.0, 4.0, 5.0],
+            [1.0, 2.0, 3.0],
+            n_bootstrap=100,
+            seed=42,
+        )
+        assert calls["count"] == 1
+        assert result.statistic == pytest.approx(2.0)
+        assert result.confidence_interval == pytest.approx((1.9, 2.1))
+
 
 class TestPermutation:
     """Tests for permutation test."""
@@ -192,6 +246,35 @@ class TestPermutation:
         observed_next = random.random()
 
         assert observed_next == expected_next
+
+    def test_permutation_uses_evaluation_stack_for_default_statistic(self, monkeypatch):
+        """Test permutation delegates to evaluation permutation for default statistic."""
+        calls = {"count": 0}
+
+        def _fake_permutation_test(group_a, group_b, statistic, n_permutations, seed):
+            calls["count"] += 1
+            assert statistic == "mean_diff"
+            return SimpleNamespace(
+                observed_statistic=-0.4,
+                p_value=0.03,
+                n_permutations=n_permutations,
+                is_significant=True,
+            )
+
+        monkeypatch.setattr(
+            comparison_statistics, "evaluation_permutation_test", _fake_permutation_test
+        )
+
+        result = permutation_test(
+            [1.0, 2.0, 3.0],
+            [2.0, 3.0, 4.0],
+            n_permutations=250,
+            seed=123,
+        )
+        assert calls["count"] == 1
+        # Comparison module reports absolute statistic for readability.
+        assert result.statistic == pytest.approx(0.4)
+        assert result.p_value == pytest.approx(0.03)
 
 
 class TestMcNemar:
