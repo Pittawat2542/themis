@@ -20,6 +20,8 @@ import os
 import sqlite3
 import sys
 import tempfile
+import threading
+import time
 from dataclasses import dataclass, field
 import shutil
 from datetime import datetime, timedelta
@@ -30,10 +32,12 @@ from typing import Dict, Iterable, List, Literal
 # fcntl is Unix-only, use msvcrt on Windows
 if sys.platform == "win32":
     import msvcrt
+
     FCNTL_AVAILABLE = False
 else:
     try:
         import fcntl
+
         FCNTL_AVAILABLE = True
     except ImportError:
         FCNTL_AVAILABLE = False
@@ -56,7 +60,7 @@ class RunStatus(str, Enum):
 @dataclass
 class RetentionPolicy:
     """Retention policy for automatic cleanup.
-    
+
     Attributes:
         max_runs_per_experiment: Maximum runs to keep per experiment
         max_age_days: Maximum age in days for runs
@@ -64,7 +68,7 @@ class RetentionPolicy:
         keep_completed_only: Only keep completed runs
         keep_latest_n: Always keep N most recent runs
     """
-    
+
     max_runs_per_experiment: int | None = None
     max_age_days: int | None = None
     max_storage_gb: float | None = None
@@ -155,20 +159,18 @@ class ExperimentStorage:
     Example:
         >>> config = StorageConfig()
         >>> storage = ExperimentStorage("outputs/experiments", config=config)
-        >>> 
+        >>>
         >>> # Start a run
         >>> metadata = storage.start_run("run-1", "experiment-1", config={})
-        >>> 
+        >>>
         >>> # Append records with locking
         >>> storage.append_record("run-1", record)
-        >>> 
+        >>>
         >>> # Complete the run
         >>> storage.complete_run("run-1")
     """
 
-    def __init__(
-        self, root: str | Path, config: StorageConfig | None = None
-    ) -> None:
+    def __init__(self, root: str | Path, config: StorageConfig | None = None) -> None:
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
         self._config = config or StorageConfig()
@@ -178,6 +180,7 @@ class ExperimentStorage:
         self._experiments_dir.mkdir(exist_ok=True)
 
         # Initialize SQLite database
+        self._db_write_lock = threading.RLock()
         if self._config.use_sqlite_metadata:
             self._init_database()
 
@@ -188,93 +191,100 @@ class ExperimentStorage:
 
     def _init_database(self):
         """Initialize SQLite metadata database."""
+        with self._db_write_lock:
+            with self._connect_db() as conn:
+                # WAL allows concurrent readers with a single writer and
+                # significantly reduces lock contention in threaded CI runs.
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS experiments (
+                        experiment_id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        description TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        config TEXT,
+                        tags TEXT
+                    )
+                """)
+
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS runs (
+                        run_id TEXT PRIMARY KEY,
+                        experiment_id TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        completed_at TEXT,
+                        total_samples INTEGER DEFAULT 0,
+                        successful_generations INTEGER DEFAULT 0,
+                        failed_generations INTEGER DEFAULT 0,
+                        config_snapshot TEXT,
+                        error_message TEXT,
+                        FOREIGN KEY (experiment_id) REFERENCES experiments(experiment_id)
+                    )
+                """)
+
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS evaluations (
+                        eval_id TEXT PRIMARY KEY,
+                        run_id TEXT NOT NULL,
+                        eval_name TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        metrics_config TEXT,
+                        total_evaluated INTEGER DEFAULT 0,
+                        total_failures INTEGER DEFAULT 0,
+                        FOREIGN KEY (run_id) REFERENCES runs(run_id)
+                    )
+                """)
+
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_runs_experiment
+                    ON runs(experiment_id)
+                """)
+
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_runs_status
+                    ON runs(status)
+                """)
+
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_evaluations_run
+                    ON evaluations(run_id)
+                """)
+                conn.commit()
+
+    def _connect_db(self) -> sqlite3.Connection:
+        """Create a SQLite connection configured for concurrent access."""
         db_path = self._root / "experiments.db"
-        conn = sqlite3.connect(db_path)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS experiments (
-                experiment_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                config TEXT,
-                tags TEXT
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS runs (
-                run_id TEXT PRIMARY KEY,
-                experiment_id TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                completed_at TEXT,
-                total_samples INTEGER DEFAULT 0,
-                successful_generations INTEGER DEFAULT 0,
-                failed_generations INTEGER DEFAULT 0,
-                config_snapshot TEXT,
-                error_message TEXT,
-                FOREIGN KEY (experiment_id) REFERENCES experiments(experiment_id)
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS evaluations (
-                eval_id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                eval_name TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                metrics_config TEXT,
-                total_evaluated INTEGER DEFAULT 0,
-                total_failures INTEGER DEFAULT 0,
-                FOREIGN KEY (run_id) REFERENCES runs(run_id)
-            )
-        """)
-
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_runs_experiment 
-            ON runs(experiment_id)
-        """)
-
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_runs_status 
-            ON runs(status)
-        """)
-
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_evaluations_run 
-            ON evaluations(run_id)
-        """)
-
-        conn.commit()
-        conn.close()
+        conn = sqlite3.connect(db_path, timeout=30.0)
+        conn.execute("PRAGMA busy_timeout=30000")
+        return conn
 
     @contextlib.contextmanager
     def _acquire_lock(self, run_id: str):
         """Acquire exclusive lock for run directory with timeout (reentrant).
-        
+
         This lock is reentrant within the same thread to prevent deadlocks when
-        the same process acquires the lock multiple times (e.g., start_run() 
+        the same process acquires the lock multiple times (e.g., start_run()
         followed by append_record()).
-        
+
         The lock uses OS-specific file locking:
         - Unix/Linux/macOS: fcntl.flock with non-blocking retry
         - Windows: msvcrt.locking
         - Fallback: No locking (single-process mode)
-        
+
         Args:
             run_id: Unique run identifier
-            
+
         Yields:
             Context manager that holds the lock
-            
+
         Raises:
             TimeoutError: If lock cannot be acquired within 30 seconds
         """
         import time
-        
+
         # Check if we already hold the lock (reentrant)
         if run_id in self._locks:
             lock_fd, count = self._locks[run_id]
@@ -291,7 +301,7 @@ class ExperimentStorage:
                         # Last unlock - release the actual lock
                         self._release_os_lock(lock_fd, run_id)
             return
-        
+
         # First time acquiring lock for this run_id
         lock_path = self._get_run_dir(run_id) / ".lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,7 +312,7 @@ class ExperimentStorage:
         try:
             # Acquire exclusive lock with timeout
             self._acquire_os_lock(lock_fd, run_id, lock_path, timeout=30)
-            
+
             self._locks[run_id] = (lock_fd, 1)
             yield
         finally:
@@ -314,27 +324,23 @@ class ExperimentStorage:
                 else:
                     # Decrement count
                     self._locks[run_id] = (lock_fd, count - 1)
-    
+
     def _acquire_os_lock(
-        self, 
-        lock_fd: int, 
-        run_id: str, 
-        lock_path: Path, 
-        timeout: int = 30
+        self, lock_fd: int, run_id: str, lock_path: Path, timeout: int = 30
     ) -> None:
         """Acquire OS-specific file lock with timeout.
-        
+
         Args:
             lock_fd: File descriptor for lock file
             run_id: Run identifier (for error messages)
             lock_path: Path to lock file (for error messages)
             timeout: Timeout in seconds
-            
+
         Raises:
             TimeoutError: If lock cannot be acquired within timeout
         """
         import time
-        
+
         if sys.platform == "win32":
             # Windows file locking with retry
             try:
@@ -342,10 +348,11 @@ class ExperimentStorage:
             except ImportError:
                 # msvcrt not available - single-process mode
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.debug("msvcrt not available. Single-process mode only.")
                 return
-            
+
             start_time = time.time()
             while True:
                 try:
@@ -388,15 +395,16 @@ class ExperimentStorage:
             # No locking available - single-process mode
             # This is safe for single-process usage (most common case)
             import logging
+
             logger = logging.getLogger(__name__)
             logger.debug(
                 f"File locking not available on this platform. "
                 f"Storage will work in single-process mode only."
             )
-    
+
     def _release_os_lock(self, lock_fd: int, run_id: str) -> None:
         """Release OS-specific file lock.
-        
+
         Args:
             lock_fd: File descriptor to close
             run_id: Run identifier (for cleanup)
@@ -405,6 +413,7 @@ class ExperimentStorage:
         if sys.platform == "win32":
             try:
                 import msvcrt
+
                 msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
             except (ImportError, OSError):
                 pass  # Lock may already be released
@@ -413,13 +422,13 @@ class ExperimentStorage:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
             except (IOError, OSError):
                 pass  # Lock may already be released
-        
+
         # Close file descriptor
         try:
             os.close(lock_fd)
         except OSError:
             pass  # FD may already be closed
-        
+
         # Clean up tracking
         self._locks.pop(run_id, None)
 
@@ -558,9 +567,11 @@ class ExperimentStorage:
 
             # Update progress
             metadata = self._load_run_metadata(run_id)
-            new_successful = metadata.successful_generations + (1 if record.output else 0)
+            new_successful = metadata.successful_generations + (
+                1 if record.output else 0
+            )
             new_failed = metadata.failed_generations + (1 if record.error else 0)
-            
+
             self.update_run_progress(
                 run_id,
                 total_samples=metadata.total_samples + 1,
@@ -664,49 +675,57 @@ class ExperimentStorage:
 
     def _save_run_metadata_to_db(self, metadata: RunMetadata):
         """Save run metadata to SQLite database."""
-        db_path = self._root / "experiments.db"
-        conn = sqlite3.connect(db_path)
+        # Serialise process-local writers to avoid lock thrash on Windows CI.
+        with self._db_write_lock:
+            retry_delay = 0.05
+            max_attempts = 5
+            for attempt in range(max_attempts):
+                try:
+                    with self._connect_db() as conn:
+                        # Ensure experiment exists
+                        conn.execute(
+                            """
+                            INSERT OR IGNORE INTO experiments (experiment_id, name, created_at, updated_at)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (
+                                metadata.experiment_id,
+                                metadata.experiment_id,
+                                metadata.created_at,
+                                metadata.updated_at,
+                            ),
+                        )
 
-        # Ensure experiment exists
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO experiments (experiment_id, name, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                metadata.experiment_id,
-                metadata.experiment_id,
-                metadata.created_at,
-                metadata.updated_at,
-            ),
-        )
-
-        # Upsert run
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO runs (
-                run_id, experiment_id, status, created_at, updated_at, completed_at,
-                total_samples, successful_generations, failed_generations,
-                config_snapshot, error_message
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                metadata.run_id,
-                metadata.experiment_id,
-                metadata.status.value,
-                metadata.created_at,
-                metadata.updated_at,
-                metadata.completed_at,
-                metadata.total_samples,
-                metadata.successful_generations,
-                metadata.failed_generations,
-                json.dumps(metadata.config_snapshot),
-                metadata.error_message,
-            ),
-        )
-
-        conn.commit()
-        conn.close()
+                        # Upsert run
+                        conn.execute(
+                            """
+                            INSERT OR REPLACE INTO runs (
+                                run_id, experiment_id, status, created_at, updated_at, completed_at,
+                                total_samples, successful_generations, failed_generations,
+                                config_snapshot, error_message
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                metadata.run_id,
+                                metadata.experiment_id,
+                                metadata.status.value,
+                                metadata.created_at,
+                                metadata.updated_at,
+                                metadata.completed_at,
+                                metadata.total_samples,
+                                metadata.successful_generations,
+                                metadata.failed_generations,
+                                json.dumps(metadata.config_snapshot),
+                                metadata.error_message,
+                            ),
+                        )
+                        conn.commit()
+                        return
+                except sqlite3.OperationalError as exc:
+                    if "locked" not in str(exc).lower() or attempt == max_attempts - 1:
+                        raise
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
 
     def _load_run_metadata(self, run_id: str) -> RunMetadata:
         """Load run metadata from JSON file.
@@ -782,10 +801,10 @@ class ExperimentStorage:
 
     def _open_for_read(self, path: Path):
         """Open file for reading with automatic compression detection.
-        
+
         Args:
             path: File path
-            
+
         Returns:
             File handle (text mode)
         """
@@ -845,16 +864,16 @@ class ExperimentStorage:
 
     def load_dataset(self, run_id: str) -> List[dict[str, object]]:
         """Load cached dataset.
-        
+
         Args:
             run_id: Run identifier
-            
+
         Returns:
             List of dataset samples
         """
         gen_dir = self._get_generation_dir(run_id)
         path = gen_dir / "dataset.jsonl"
-        
+
         rows: list[dict[str, object]] = []
         with self._open_for_read(path) as handle:
             for line in handle:
@@ -870,16 +889,16 @@ class ExperimentStorage:
         self, run_id: str
     ) -> Dict[str, core_entities.GenerationRecord]:
         """Load cached generation records.
-        
+
         Args:
             run_id: Run identifier
-            
+
         Returns:
             Dict mapping cache_key to GenerationRecord
         """
         gen_dir = self._get_generation_dir(run_id)
         path = gen_dir / "records.jsonl"
-        
+
         try:
             handle = self._open_for_read(path)
         except FileNotFoundError:
@@ -887,7 +906,7 @@ class ExperimentStorage:
 
         tasks = self._load_tasks(run_id)
         records: dict[str, core_entities.GenerationRecord] = {}
-        
+
         with handle:
             for line in handle:
                 if not line.strip():
@@ -895,14 +914,14 @@ class ExperimentStorage:
                 data = json.loads(line)
                 if data.get("_type") == "header":
                     continue
-                
+
                 key = data.get("cache_key")
                 if not key:
                     continue
-                
+
                 record = self._deserialize_record(data, tasks)
                 records[key] = record
-        
+
         return records
 
     def append_evaluation(
@@ -915,7 +934,7 @@ class ExperimentStorage:
         evaluation_config: dict | None = None,
     ) -> None:
         """Append evaluation result.
-        
+
         Args:
             run_id: Run identifier
             record: Generation record being evaluated
@@ -926,48 +945,53 @@ class ExperimentStorage:
         with self._acquire_lock(run_id):
             eval_dir = self._get_evaluation_dir(run_id, eval_id)
             eval_dir.mkdir(parents=True, exist_ok=True)
-            
+
             path = eval_dir / "evaluation.jsonl"
-            
+
             if not self._file_exists_any_compression(path):
                 self._write_jsonl_with_header(path, [], file_type="evaluation")
-            
+
             # Use evaluation_cache_key that includes evaluation config
             cache_key = evaluation_cache_key(record.task, evaluation_config)
-            
+
             payload = {
                 "cache_key": cache_key,
-                "evaluation": core_serialization.serialize_evaluation_record(evaluation),
+                "evaluation": core_serialization.serialize_evaluation_record(
+                    evaluation
+                ),
             }
             self._atomic_append(path, payload)
 
     def load_cached_evaluations(
-        self, run_id: str, eval_id: str = "default", evaluation_config: dict | None = None
+        self,
+        run_id: str,
+        eval_id: str = "default",
+        evaluation_config: dict | None = None,
     ) -> Dict[str, core_entities.EvaluationRecord]:
         """Load cached evaluation records.
-        
+
         Args:
             run_id: Run identifier
             eval_id: Evaluation identifier
             evaluation_config: Evaluation configuration for cache key matching
-            
+
         Returns:
             Dict mapping cache_key to EvaluationRecord
-            
+
         Note:
             If evaluation_config is provided, only evaluations matching that config
             will be loaded. This ensures that changing metrics invalidates the cache.
         """
         eval_dir = self._get_evaluation_dir(run_id, eval_id)
         path = eval_dir / "evaluation.jsonl"
-        
+
         try:
             handle = self._open_for_read(path)
         except FileNotFoundError:
             return {}
-        
+
         evaluations: dict[str, core_entities.EvaluationRecord] = {}
-        
+
         with handle:
             for line in handle:
                 if not line.strip():
@@ -975,15 +999,15 @@ class ExperimentStorage:
                 data = json.loads(line)
                 if data.get("_type") == "header":
                     continue
-                
+
                 key = data.get("cache_key")
                 if not key:
                     continue
-                
+
                 evaluations[key] = core_serialization.deserialize_evaluation_record(
                     data["evaluation"]
                 )
-        
+
         return evaluations
 
     def get_run_path(self, run_id: str) -> Path:
@@ -1034,12 +1058,11 @@ class ExperimentStorage:
         task = tasks[task_key]
         output_data = payload.get("output")
         error_data = payload.get("error")
-        
+
         record = core_entities.GenerationRecord(
             task=task,
             output=core_entities.ModelOutput(
-                text=output_data["text"],
-                raw=output_data.get("raw")
+                text=output_data["text"], raw=output_data.get("raw")
             )
             if output_data
             else None,
@@ -1052,12 +1075,12 @@ class ExperimentStorage:
             else None,
             metrics=payload.get("metrics", {}),
         )
-        
+
         record.attempts = [
             self._deserialize_record(attempt, tasks)
             for attempt in payload.get("attempts", [])
         ]
-        
+
         return record
 
     def _persist_task(self, run_id: str, task: core_entities.GenerationTask) -> str:
@@ -1094,9 +1117,7 @@ class ExperimentStorage:
 
         return key
 
-    def _persist_template(
-        self, run_id: str, spec: core_entities.PromptSpec
-    ) -> str:
+    def _persist_template(self, run_id: str, spec: core_entities.PromptSpec) -> str:
         """Persist prompt template."""
         template_content = f"{spec.name}:{spec.template}"
         template_id = hashlib.sha256(template_content.encode("utf-8")).hexdigest()[:16]
@@ -1151,22 +1172,22 @@ class ExperimentStorage:
 
     def _load_templates(self, run_id: str) -> dict[str, core_entities.PromptSpec]:
         """Load templates from disk.
-        
+
         Args:
             run_id: Run identifier
-            
+
         Returns:
             Dict mapping template_id to PromptSpec
         """
         gen_dir = self._get_generation_dir(run_id)
         path = gen_dir / "templates.jsonl"
-        
+
         templates: dict[str, core_entities.PromptSpec] = {}
         try:
             handle = self._open_for_read(path)
         except FileNotFoundError:
             return templates
-        
+
         with handle:
             for line in handle:
                 if not line.strip():
@@ -1174,35 +1195,37 @@ class ExperimentStorage:
                 data = json.loads(line)
                 if data.get("_type") == "header":
                     continue
-                
+
                 template_id = data["template_id"]
                 templates[template_id] = core_serialization.deserialize_prompt_spec(
                     data["spec"]
                 )
-        
+
         return templates
 
     def _load_tasks(self, run_id: str) -> dict[str, core_entities.GenerationTask]:
         """Load tasks from disk.
-        
+
         Args:
             run_id: Run identifier
-            
+
         Returns:
             Dict mapping task_key to GenerationTask
         """
         gen_dir = self._get_generation_dir(run_id)
         path = gen_dir / "tasks.jsonl"
-        
+
         tasks: dict[str, core_entities.GenerationTask] = {}
         try:
             handle = self._open_for_read(path)
         except FileNotFoundError:
             return tasks
-        
+
         # Load templates if deduplication enabled
-        templates = self._load_templates(run_id) if self._config.deduplicate_templates else {}
-        
+        templates = (
+            self._load_templates(run_id) if self._config.deduplicate_templates else {}
+        )
+
         with handle:
             for line in handle:
                 if not line.strip():
@@ -1210,10 +1233,10 @@ class ExperimentStorage:
                 data = json.loads(line)
                 if data.get("_type") == "header":
                     continue
-                
+
                 task_key = data["task_key"]
                 task_data = data["task"]
-                
+
                 # Restore template from reference if needed
                 if (
                     self._config.deduplicate_templates
@@ -1221,12 +1244,16 @@ class ExperimentStorage:
                 ):
                     template_id = task_data["prompt"]["spec"]["_template_ref"]
                     if template_id in templates:
-                        task_data["prompt"]["spec"] = core_serialization.serialize_prompt_spec(
-                            templates[template_id]
+                        task_data["prompt"]["spec"] = (
+                            core_serialization.serialize_prompt_spec(
+                                templates[template_id]
+                            )
                         )
-                
-                tasks[task_key] = core_serialization.deserialize_generation_task(task_data)
-        
+
+                tasks[task_key] = core_serialization.deserialize_generation_task(
+                    task_data
+                )
+
         self._task_index[run_id] = set(tasks.keys())
         return tasks
 
@@ -1249,7 +1276,7 @@ class ExperimentStorage:
 
     def save_checkpoint(self, run_id: str, checkpoint_data: dict):
         """Save checkpoint for resumability.
-        
+
         Args:
             run_id: Run identifier
             checkpoint_data: Checkpoint data to save
@@ -1257,52 +1284,52 @@ class ExperimentStorage:
         with self._acquire_lock(run_id):
             checkpoint_dir = self._get_run_dir(run_id) / "checkpoints"
             checkpoint_dir.mkdir(exist_ok=True)
-            
+
             # Use timestamp for checkpoint filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             checkpoint_path = checkpoint_dir / f"checkpoint_{timestamp}.json"
-            
+
             checkpoint_path.write_text(json.dumps(checkpoint_data, indent=2))
 
     def load_latest_checkpoint(self, run_id: str) -> dict | None:
         """Load most recent checkpoint.
-        
+
         Args:
             run_id: Run identifier
-            
+
         Returns:
             Checkpoint data or None if no checkpoints exist
         """
         checkpoint_dir = self._get_run_dir(run_id) / "checkpoints"
         if not checkpoint_dir.exists():
             return None
-        
+
         # Find latest checkpoint
         checkpoints = sorted(checkpoint_dir.glob("checkpoint_*.json"), reverse=True)
         if not checkpoints:
             return None
-        
+
         return json.loads(checkpoints[0].read_text())
 
     def apply_retention_policy(self, policy: RetentionPolicy | None = None):
         """Apply retention policy to clean up old runs.
-        
+
         Args:
             policy: Retention policy (uses config if not provided)
         """
         policy = policy or self._config.retention_policy
         if not policy:
             return
-        
+
         # Get all experiments
         for exp_dir in self._experiments_dir.iterdir():
             if not exp_dir.is_dir():
                 continue
-            
+
             runs_dir = exp_dir / "runs"
             if not runs_dir.exists():
                 continue
-            
+
             # Load all run metadata
             runs = []
             for run_dir in runs_dir.iterdir():
@@ -1311,29 +1338,32 @@ class ExperimentStorage:
                 metadata_path = run_dir / "metadata.json"
                 if not metadata_path.exists():
                     continue
-                
+
                 try:
                     metadata = self._load_run_metadata(run_dir.name)
                     runs.append((run_dir, metadata))
                 except Exception:
                     continue
-            
+
             # Sort by creation time (newest first)
             runs.sort(key=lambda x: x[1].created_at, reverse=True)
-            
+
             # Apply policies
             runs_to_delete = []
-            
+
             for i, (run_dir, metadata) in enumerate(runs):
                 # Always keep latest N runs
                 if i < policy.keep_latest_n:
                     continue
-                
+
                 # Check if should keep based on status
-                if policy.keep_completed_only and metadata.status != RunStatus.COMPLETED:
+                if (
+                    policy.keep_completed_only
+                    and metadata.status != RunStatus.COMPLETED
+                ):
                     runs_to_delete.append(run_dir)
                     continue
-                
+
                 # Check age policy
                 if policy.max_age_days:
                     created = datetime.fromisoformat(metadata.created_at)
@@ -1341,32 +1371,31 @@ class ExperimentStorage:
                     if age > timedelta(days=policy.max_age_days):
                         runs_to_delete.append(run_dir)
                         continue
-                
+
                 # Check max runs policy
                 if policy.max_runs_per_experiment:
                     if i >= policy.max_runs_per_experiment:
                         runs_to_delete.append(run_dir)
-            
+
             # Delete runs
             for run_dir in runs_to_delete:
                 self._delete_run_dir(run_dir)
 
     def _delete_run_dir(self, run_dir: Path):
         """Delete run directory and update database.
-        
+
         Args:
             run_dir: Run directory to delete
         """
         run_id = run_dir.name
-        
+
         # Remove from SQLite
         if self._config.use_sqlite_metadata:
-            db_path = self._root / "experiments.db"
-            conn = sqlite3.connect(db_path)
-            conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
-            conn.commit()
-            conn.close()
-        
+            with self._db_write_lock:
+                with self._connect_db() as conn:
+                    conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+                    conn.commit()
+
         # Remove directory
         shutil.rmtree(run_dir, ignore_errors=True)
 
@@ -1386,10 +1415,10 @@ class ExperimentStorage:
 
     def get_storage_size(self, experiment_id: str | None = None) -> int:
         """Get total storage size in bytes.
-        
+
         Args:
             experiment_id: Optional experiment to check (all if None)
-            
+
         Returns:
             Total size in bytes
         """
@@ -1399,96 +1428,100 @@ class ExperimentStorage:
                 return 0
             return sum(f.stat().st_size for f in exp_dir.rglob("*") if f.is_file())
         else:
-            return sum(f.stat().st_size for f in self._experiments_dir.rglob("*") if f.is_file())
+            return sum(
+                f.stat().st_size
+                for f in self._experiments_dir.rglob("*")
+                if f.is_file()
+            )
 
     def list_runs(
         self,
         experiment_id: str | None = None,
         status: RunStatus | None = None,
-        limit: int | None = None
+        limit: int | None = None,
     ) -> list[RunMetadata]:
         """List runs with optional filtering.
-        
+
         Args:
             experiment_id: Filter by experiment
             status: Filter by status
             limit: Maximum number of runs to return
-            
+
         Returns:
             List of run metadata
         """
         if not self._config.use_sqlite_metadata:
             # Fallback to file-based listing
             return self._list_runs_from_files(experiment_id, status, limit)
-        
+
         # Query SQLite
-        db_path = self._root / "experiments.db"
-        conn = sqlite3.connect(db_path)
-        
-        query = "SELECT * FROM runs WHERE 1=1"
-        params = []
-        
-        if experiment_id:
-            query += " AND experiment_id = ?"
-            params.append(experiment_id)
-        
-        if status:
-            query += " AND status = ?"
-            params.append(status.value)
-        
-        query += " ORDER BY created_at DESC"
-        
-        if limit:
-            query += " LIMIT ?"
-            params.append(limit)
-        
-        cursor = conn.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
+        with self._connect_db() as conn:
+            query = "SELECT * FROM runs WHERE 1=1"
+            params = []
+
+            if experiment_id:
+                query += " AND experiment_id = ?"
+                params.append(experiment_id)
+
+            if status:
+                query += " AND status = ?"
+                params.append(status.value)
+
+            query += " ORDER BY created_at DESC"
+
+            if limit:
+                query += " LIMIT ?"
+                params.append(limit)
+
+            cursor = conn.execute(query, params)
+            rows = cursor.fetchall()
+
         # Convert to RunMetadata
         runs = []
         for row in rows:
-            runs.append(RunMetadata(
-                run_id=row[0],
-                experiment_id=row[1],
-                status=RunStatus(row[2]),
-                created_at=row[3],
-                updated_at=row[4],
-                completed_at=row[5],
-                total_samples=row[6] or 0,
-                successful_generations=row[7] or 0,
-                failed_generations=row[8] or 0,
-                config_snapshot=json.loads(row[9]) if row[9] else {},
-                error_message=row[10],
-            ))
-        
+            runs.append(
+                RunMetadata(
+                    run_id=row[0],
+                    experiment_id=row[1],
+                    status=RunStatus(row[2]),
+                    created_at=row[3],
+                    updated_at=row[4],
+                    completed_at=row[5],
+                    total_samples=row[6] or 0,
+                    successful_generations=row[7] or 0,
+                    failed_generations=row[8] or 0,
+                    config_snapshot=json.loads(row[9]) if row[9] else {},
+                    error_message=row[10],
+                )
+            )
+
         return runs
 
     def _list_runs_from_files(
-        self,
-        experiment_id: str | None,
-        status: RunStatus | None,
-        limit: int | None
+        self, experiment_id: str | None, status: RunStatus | None, limit: int | None
     ) -> list[RunMetadata]:
         """List runs by scanning files (fallback)."""
         runs = []
-        
+
         # Scan experiment directories
-        exp_dirs = [self._experiments_dir / experiment_id] if experiment_id else list(self._experiments_dir.iterdir())
-        
+        exp_dirs = (
+            [self._experiments_dir / experiment_id]
+            if experiment_id
+            else list(self._experiments_dir.iterdir())
+        )
+
         for exp_dir in exp_dirs:
             if not exp_dir.is_dir():
                 continue
-            
+
             runs_dir = exp_dir / "runs"
             if not runs_dir.exists():
                 continue
-            
+
             for run_dir in runs_dir.iterdir():
                 if not run_dir.is_dir():
                     continue
-                
+
                 try:
                     metadata = self._load_run_metadata(run_dir.name)
                     if status and metadata.status != status:
@@ -1496,21 +1529,21 @@ class ExperimentStorage:
                     runs.append(metadata)
                 except Exception:
                     continue
-        
+
         # Sort by creation time
         runs.sort(key=lambda r: r.created_at, reverse=True)
-        
+
         if limit:
             runs = runs[:limit]
-        
+
         return runs
 
     def validate_integrity(self, run_id: str) -> dict:
         """Validate data integrity for a run.
-        
+
         Args:
             run_id: Run identifier
-            
+
         Returns:
             Dict with validation results
         """
@@ -1520,19 +1553,19 @@ class ExperimentStorage:
             "errors": [],
             "warnings": [],
         }
-        
+
         run_dir = self._get_run_dir(run_id)
         if not run_dir.exists():
             results["valid"] = False
             results["errors"].append(f"Run directory not found: {run_dir}")
             return results
-        
+
         # Check metadata
         metadata_path = run_dir / "metadata.json"
         if not metadata_path.exists():
             results["valid"] = False
             results["errors"].append("Missing metadata.json")
-        
+
         # Check generation directory
         gen_dir = run_dir / "generation"
         if not gen_dir.exists():
@@ -1542,12 +1575,12 @@ class ExperimentStorage:
             for filename in ["records.jsonl", "tasks.jsonl"]:
                 if not self._file_exists_any_compression(gen_dir / filename):
                     results["warnings"].append(f"Missing {filename}")
-        
+
         # Check lock file
         lock_path = run_dir / ".lock"
         if not lock_path.exists():
             results["warnings"].append("No lock file (may not have been used)")
-        
+
         return results
 
 
@@ -1572,20 +1605,20 @@ def evaluation_cache_key(
     evaluation_config: dict | None = None,
 ) -> str:
     """Derive a stable cache key for an evaluation that includes both task and evaluation configuration.
-    
+
     This ensures that changing metrics or evaluation settings will invalidate the cache
     and trigger re-evaluation, even if the generation is cached.
-    
+
     Args:
         task: Generation task
         evaluation_config: Dictionary with evaluation configuration:
             - metrics: List of metric names/types
             - extractor: Extractor type/configuration
             - Any other evaluation settings
-    
+
     Returns:
         Cache key string that includes both task and evaluation config
-    
+
     Example:
         >>> config = {
         ...     "metrics": ["exact_match", "f1_score"],
@@ -1594,15 +1627,15 @@ def evaluation_cache_key(
         >>> key = evaluation_cache_key(task, config)
     """
     task_key = task_cache_key(task)
-    
+
     if not evaluation_config:
         # No config provided, use task key only (for backward compatibility)
         return task_key
-    
+
     # Create deterministic hash of evaluation configuration
     config_str = json.dumps(evaluation_config, sort_keys=True)
     config_hash = hashlib.sha256(config_str.encode("utf-8")).hexdigest()[:12]
-    
+
     return f"{task_key}::eval:{config_hash}"
 
 
