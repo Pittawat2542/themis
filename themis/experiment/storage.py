@@ -29,10 +29,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Iterable, List, Literal
 
-# fcntl is Unix-only, use msvcrt on Windows
+# fcntl is Unix-only
 if sys.platform == "win32":
-    import msvcrt
-
     FCNTL_AVAILABLE = False
 else:
     try:
@@ -283,8 +281,6 @@ class ExperimentStorage:
         Raises:
             TimeoutError: If lock cannot be acquired within 30 seconds
         """
-        import time
-
         # Check if we already hold the lock (reentrant)
         if run_id in self._locks:
             lock_fd, count = self._locks[run_id]
@@ -363,7 +359,7 @@ class ExperimentStorage:
                     if time.time() - start_time > timeout:
                         try:
                             os.close(lock_fd)
-                        except:
+                        except OSError:
                             pass
                         raise TimeoutError(
                             f"Failed to acquire lock for run {run_id} after {timeout}s on Windows. "
@@ -383,7 +379,7 @@ class ExperimentStorage:
                     if time.time() - start_time > timeout:
                         try:
                             os.close(lock_fd)
-                        except:
+                        except OSError:
                             pass
                         raise TimeoutError(
                             f"Failed to acquire lock for run {run_id} after {timeout}s. "
@@ -398,8 +394,8 @@ class ExperimentStorage:
 
             logger = logging.getLogger(__name__)
             logger.debug(
-                f"File locking not available on this platform. "
-                f"Storage will work in single-process mode only."
+                "File locking not available on this platform. "
+                "Storage will work in single-process mode only."
             )
 
     def _release_os_lock(self, lock_fd: int, run_id: str) -> None:
