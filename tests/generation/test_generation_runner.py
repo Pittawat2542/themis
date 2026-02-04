@@ -172,3 +172,25 @@ def test_runner_parallel_execution():
 
     assert provider.max_active >= 2
     assert provider.max_active <= 3
+
+
+def test_runner_parallel_yields_completion_order():
+    class VariableLatencyProvider(FakeModelProvider):
+        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+            if task.prompt.text == "slow":
+                time.sleep(0.08)
+            else:
+                time.sleep(0.01)
+            return super().generate(task)
+
+    provider = VariableLatencyProvider()
+    sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.9, max_tokens=32)
+    requests = [
+        build_task("slow", "gpt-4o", sampling),
+        build_task("fast", "gpt-4o", sampling),
+    ]
+
+    runner = generation_runner.GenerationRunner(provider=provider, max_parallel=2)
+    results = list(runner.run(requests))
+
+    assert [record.task.prompt.text for record in results] == ["fast", "slow"]

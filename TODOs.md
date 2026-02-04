@@ -80,13 +80,13 @@ TDD:
 
 ### 6) Improve execution throughput and memory behavior
 
-- [ ] Use completion-order result handling (`as_completed`) in threaded generation path.
+- [x] Use completion-order result handling (`as_completed`) in threaded generation path.
 - [ ] Stream records/evaluations in chunks instead of full in-memory materialization.
 - [ ] Replace directory scanning for run lookup with indexed lookup in storage metadata DB.
 - [ ] Add bounded-memory mode for large runs.
 
 TDD:
-- [ ] Add performance regression tests for head-of-line blocking scenarios.
+- [x] Add performance regression tests for head-of-line blocking scenarios.
 - [ ] Add large-run tests asserting memory does not scale linearly with total samples.
 - [ ] Add tests validating indexed run lookup behavior under many runs.
 

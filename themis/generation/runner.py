@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Iterable, Iterator, List
 
 from themis.core import entities as core_entities
@@ -80,7 +80,7 @@ class GenerationRunner:
         with ThreadPoolExecutor(max_workers=self._max_parallel) as executor:
             futures = [executor.submit(self._execute_task, task) for task in task_list]
             completed = 0
-            for future in futures:
+            for future in as_completed(futures):
                 try:
                     result = future.result()
                     completed += 1
