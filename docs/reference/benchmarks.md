@@ -58,10 +58,10 @@ Themis includes 19 built-in benchmarks covering:
 from themis import evaluate
 
 # Test without API key
-result = evaluate(benchmark="demo", model="fake-math-llm")
+result = evaluate("demo", model="fake-math-llm")
 
 # Test with real model
-result = evaluate(benchmark="demo", model="gpt-4")
+result = evaluate("demo", model="gpt-4")
 ```
 
 **Example Problems:**
@@ -88,7 +88,7 @@ result = evaluate(benchmark="demo", model="gpt-4")
 
 **Usage:**
 ```python
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
+result = evaluate("gsm8k", model="gpt-4", limit=100)
 ```
 
 **Example Problems:**
@@ -126,7 +126,7 @@ Solution:
 
 **Usage:**
 ```python
-result = evaluate(benchmark="math500", model="gpt-4")
+result = evaluate("math500", model="gpt-4")
 ```
 
 **Example Problems:**
@@ -159,7 +159,7 @@ Solve this problem: {problem}
 
 **Usage:**
 ```python
-result = evaluate(benchmark="aime24", model="gpt-4")
+result = evaluate("aime24", model="gpt-4")
 ```
 
 **Example Problems:**
@@ -198,7 +198,7 @@ Solution:
 
 **Usage:**
 ```python
-result = evaluate(benchmark="mmlu-pro", model="gpt-4", limit=1000)
+result = evaluate("mmlu-pro", model="gpt-4", limit=1000)
 ```
 
 **Subjects:**
@@ -229,7 +229,7 @@ result = evaluate(benchmark="mmlu-pro", model="gpt-4", limit=1000)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="supergpqa", model="gpt-4")
+result = evaluate("supergpqa", model="gpt-4")
 ```
 
 **Characteristics:**
@@ -256,7 +256,7 @@ result = evaluate(benchmark="supergpqa", model="gpt-4")
 
 **Usage:**
 ```python
-result = evaluate(benchmark="gpqa", model="gpt-4")
+result = evaluate("gpqa", model="gpt-4")
 ```
 
 ---
@@ -271,7 +271,7 @@ result = evaluate(benchmark="gpqa", model="gpt-4")
 
 **Usage:**
 ```python
-result = evaluate(benchmark="sciq", model="gpt-4", limit=100)
+result = evaluate("sciq", model="gpt-4", limit=100)
 ```
 
 ---
@@ -286,7 +286,7 @@ result = evaluate(benchmark="sciq", model="gpt-4", limit=100)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="medmcqa", model="gpt-4", limit=200)
+result = evaluate("medmcqa", model="gpt-4", limit=200)
 ```
 
 ---
@@ -301,7 +301,7 @@ result = evaluate(benchmark="medmcqa", model="gpt-4", limit=200)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="med_qa", model="gpt-4", limit=200)
+result = evaluate("med_qa", model="gpt-4", limit=200)
 ```
 
 ---
@@ -319,7 +319,7 @@ result = evaluate(benchmark="med_qa", model="gpt-4", limit=200)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="commonsense_qa", model="gpt-4", limit=200)
+result = evaluate("commonsense_qa", model="gpt-4", limit=200)
 ```
 
 ---
@@ -335,7 +335,7 @@ result = evaluate(benchmark="commonsense_qa", model="gpt-4", limit=200)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="piqa", model="gpt-4", limit=200)
+result = evaluate("piqa", model="gpt-4", limit=200)
 ```
 
 ---
@@ -351,7 +351,7 @@ result = evaluate(benchmark="piqa", model="gpt-4", limit=200)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="social_i_qa", model="gpt-4", limit=200)
+result = evaluate("social_i_qa", model="gpt-4", limit=200)
 ```
 
 ---
@@ -369,7 +369,7 @@ result = evaluate(benchmark="social_i_qa", model="gpt-4", limit=200)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="coqa", model="gpt-4", limit=200)
+result = evaluate("coqa", model="gpt-4", limit=200)
 ```
 
 ---
@@ -386,7 +386,7 @@ result = evaluate(benchmark="coqa", model="gpt-4", limit=200)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="gsm-symbolic", model="gpt-4", limit=200)
+result = evaluate("gsm-symbolic", model="gpt-4", limit=200)
 ```
 
 ---
@@ -401,7 +401,7 @@ result = evaluate(benchmark="gsm-symbolic", model="gpt-4", limit=200)
 
 **Usage:**
 ```python
-result = evaluate(benchmark="aime25", model="gpt-4")
+result = evaluate("aime25", model="gpt-4")
 ```
 
 ---
@@ -416,7 +416,7 @@ result = evaluate(benchmark="aime25", model="gpt-4")
 
 **Usage:**
 ```python
-result = evaluate(benchmark="amc23", model="gpt-4")
+result = evaluate("amc23", model="gpt-4")
 ```
 
 ---
@@ -431,7 +431,7 @@ result = evaluate(benchmark="amc23", model="gpt-4")
 
 **Usage:**
 ```python
-result = evaluate(benchmark="olympiadbench", model="gpt-4")
+result = evaluate("olympiadbench", model="gpt-4")
 ```
 
 ---
@@ -446,7 +446,7 @@ result = evaluate(benchmark="olympiadbench", model="gpt-4")
 
 **Usage:**
 ```python
-result = evaluate(benchmark="beyondaime", model="gpt-4")
+result = evaluate("beyondaime", model="gpt-4")
 ```
 
 ---
@@ -513,8 +513,7 @@ You can register your own benchmarks:
 ```python
 from themis.presets.benchmarks import BenchmarkPreset, register_benchmark
 from themis.generation.templates import PromptTemplate
-from themis.evaluation.metrics.math import ExactMatch
-from themis.evaluation.extractors import LastLineExtractor
+from themis.evaluation import extractors, metrics
 
 def my_dataset_loader(limit=None):
     data = load_my_data()
@@ -522,9 +521,9 @@ def my_dataset_loader(limit=None):
 
 preset = BenchmarkPreset(
     name="my-benchmark",
-    prompt_template=PromptTemplate(template="Q: {question}\nA:"),
-    metrics=[ExactMatch()],
-    extractor=LastLineExtractor(),
+    prompt_template=PromptTemplate(name="custom", template="Q: {question}\nA:"),
+    metrics=[metrics.ExactMatch()],
+    extractor=extractors.IdentityExtractor(),
     dataset_loader=my_dataset_loader,
     description="My custom benchmark",
 )
@@ -532,7 +531,7 @@ preset = BenchmarkPreset(
 register_benchmark(preset)
 
 # Use it
-result = evaluate(benchmark="my-benchmark", model="gpt-4")
+result = evaluate("my-benchmark", model="gpt-4")
 ```
 
 ---
@@ -568,7 +567,7 @@ result = evaluate(benchmark="my-benchmark", model="gpt-4")
 
 Always test with `demo` first:
 ```python
-result = evaluate(benchmark="demo", model="fake-math-llm")
+result = evaluate("demo", model="fake-math-llm")
 ```
 
 ### 2. Use Appropriate Limits
@@ -576,10 +575,10 @@ result = evaluate(benchmark="demo", model="fake-math-llm")
 For expensive models:
 ```python
 # Test with small sample
-result = evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
+result = evaluate("gsm8k", model="gpt-4", limit=100)
 
 # Full evaluation once validated
-result = evaluate(benchmark="gsm8k", model="gpt-4")
+result = evaluate("gsm8k", model="gpt-4")
 ```
 
 ### 3. Choose Right Benchmark
@@ -597,8 +596,7 @@ For research, evaluate on multiple benchmarks:
 benchmarks = ["gsm8k", "math500", "aime24"]
 
 for benchmark in benchmarks:
-    result = evaluate(
-        benchmark=benchmark,
+    result = evaluate(benchmark,
         model="gpt-4",
         run_id=f"{benchmark}-gpt4",
     )
@@ -608,6 +606,6 @@ for benchmark in benchmarks:
 
 ## See Also
 
-- [Presets API](api/presets.md) - Benchmark API reference
-- [Evaluation Guide](guides/evaluation.md) - Using benchmarks
-- [Custom Datasets](guides/evaluation.md#custom-datasets) - Create your own
+- [Presets API](../api/presets.md) - Benchmark API reference
+- [Evaluation Guide](../guides/evaluation.md) - Using benchmarks
+- [Custom Datasets](../guides/evaluation.md#custom-dataset) - Create your own

@@ -1,35 +1,87 @@
-# Themis Documentation
+<div class="landing-hero">
+  <p class="hero-kicker">Themis Documentation</p>
+  <h1 class="hero-title">Evaluate LLMs with confidence.</h1>
+  <p class="hero-subtitle">
+    Themis gives research teams a clean workflow for running benchmarks,
+    tracking experiments, and comparing models with statistical rigor.
+  </p>
+  <div class="hero-actions">
+    <a class="md-button md-button--primary" href="getting-started/quickstart/">Start Quickstart</a>
+    <a class="md-button" href="guides/cli/">View CLI Guide</a>
+  </div>
+</div>
 
-This documentation is focused on the current architecture (`ExperimentSpec` + `ExperimentSession`).
+## Choose Your Path
 
-## Start Here
+<div class="path-grid">
+  <a class="path-card" href="getting-started/installation/">
+    <h3>Install</h3>
+    <p>Set up Themis and verify your environment.</p>
+  </a>
+  <a class="path-card" href="getting-started/quickstart/">
+    <h3>Run First Eval</h3>
+    <p>Use `evaluate(...)` and get your first metrics quickly.</p>
+  </a>
+  <a class="path-card" href="guides/evaluation/">
+    <h3>Design Experiments</h3>
+    <p>Move from one-liners to spec/session-driven workflows.</p>
+  </a>
+  <a class="path-card" href="guides/comparison/">
+    <h3>Compare Runs</h3>
+    <p>Analyze run deltas with statistical tests.</p>
+  </a>
+  <a class="path-card" href="reference/benchmarks/">
+    <h3>Explore Benchmarks</h3>
+    <p>Browse built-in benchmarks and expected formats.</p>
+  </a>
+  <a class="path-card" href="api/overview/">
+    <h3>Dive Into API</h3>
+    <p>Use the full Python API and extension points.</p>
+  </a>
+</div>
 
-- [Installation](getting-started/installation.md)
-- [Quick Start](getting-started/quickstart.md)
-- [Core Concepts](getting-started/concepts.md)
-- [Architecture](ARCHITECTURE.md)
+## Core Workflow
 
-## Guides
+```mermaid
+flowchart LR
+    A["Benchmark / Dataset"] --> B["themis.evaluate(...) or ExperimentSession.run(...)"]
+    B --> C["Generation + Evaluation"]
+    C --> D["ExperimentStorage"]
+    D --> E["compare_runs(...) / Export / API Server"]
+```
 
-- [Evaluation](guides/evaluation.md)
-- [Comparison](guides/comparison.md)
-- [CLI](guides/cli.md)
-- [Providers](guides/providers.md)
-- [Storage](guides/storage.md)
-- [Interoperability](guides/interoperability.md)
+## Quick Recipes
 
-## Reference
+=== "Evaluate"
 
-- [ExperimentSession](reference/session.md)
-- [Specs](reference/specs.md)
-- [Benchmarks](reference/benchmarks.md)
-- [API Server](reference/api-server.md)
-- [Python API](api/overview.md)
+    ```bash
+    themis eval gsm8k --model gpt-4 --limit 100 --run-id gsm8k-gpt4
+    ```
 
-## Examples
+=== "Compare"
 
-- [examples-simple/01_quickstart.py](../examples-simple/01_quickstart.py)
-- [examples-simple/02_custom_dataset.py](../examples-simple/02_custom_dataset.py)
-- [examples-simple/04_comparison.py](../examples-simple/04_comparison.py)
-- [examples-simple/08_resume_cache.py](../examples-simple/08_resume_cache.py)
-- [examples-simple/09_research_loop.py](../examples-simple/09_research_loop.py)
+    ```bash
+    themis compare gsm8k-gpt4 gsm8k-claude --output comparison.html
+    ```
+
+=== "Serve Dashboard"
+
+    ```bash
+    themis serve --storage .cache/experiments
+    ```
+
+## Documentation Map
+
+- [Getting Started](getting-started/installation.md): installation, quickstart, and core concepts.
+- [Guides](guides/evaluation.md): evaluation design, storage, providers, comparison, and interoperability.
+- [Reference](reference/session.md): session, specs, benchmarks, and API server details.
+- [Python API](api/overview.md): function/class-level API behavior.
+- [Architecture](ARCHITECTURE.md): module boundaries and design decisions.
+
+## Runnable Examples
+
+- [examples-simple/01_quickstart.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/01_quickstart.py)
+- [examples-simple/02_custom_dataset.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/02_custom_dataset.py)
+- [examples-simple/04_comparison.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/04_comparison.py)
+- [examples-simple/08_resume_cache.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/08_resume_cache.py)
+- [examples-simple/09_research_loop.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/09_research_loop.py)

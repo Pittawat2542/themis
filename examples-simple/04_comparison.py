@@ -1,4 +1,4 @@
-"""Compare two vNext runs."""
+"""Compare two runs."""
 
 from pathlib import Path
 
@@ -30,8 +30,8 @@ def run_experiment(run_id: str, temperature: float) -> None:
 
 
 def main() -> None:
-    run_a = "demo-vnext-a"
-    run_b = "demo-vnext-b"
+    run_a = "demo-compare-a"
+    run_b = "demo-compare-b"
     storage = ExperimentStorage(".cache/experiments")
     for run_id in (run_a, run_b):
         try:

@@ -42,9 +42,9 @@ from themis import evaluate
 
 # Evaluate any model on any benchmark
 report = evaluate(
-    benchmark="gsm8k",
+    "gsm8k",
     model="gpt-4",
-    limit=100
+    limit=100,
 )
 
 accuracy = report.evaluation_report.metrics["ExactMatch"].mean
@@ -79,24 +79,24 @@ Themis includes 19 built-in benchmarks out-of-the-box:
 
 ```python
 # Math reasoning
-evaluate(benchmark="gsm8k", model="gpt-4", limit=100)
-evaluate(benchmark="math500", model="gpt-4", limit=50)
-evaluate(benchmark="aime24", model="gpt-4")
+evaluate("gsm8k", model="gpt-4", limit=100)
+evaluate("math500", model="gpt-4", limit=50)
+evaluate("aime24", model="gpt-4")
 
 # General knowledge
-evaluate(benchmark="mmlu-pro", model="gpt-4", limit=1000)
-evaluate(benchmark="supergpqa", model="gpt-4")
+evaluate("mmlu-pro", model="gpt-4", limit=1000)
+evaluate("supergpqa", model="gpt-4")
 
 # Science & medical
-evaluate(benchmark="gpqa", model="gpt-4", limit=200)
-evaluate(benchmark="medmcqa", model="gpt-4", limit=200)
+evaluate("gpqa", model="gpt-4", limit=200)
+evaluate("medmcqa", model="gpt-4", limit=200)
 
 # Commonsense & conversational
-evaluate(benchmark="commonsense_qa", model="gpt-4", limit=200)
-evaluate(benchmark="coqa", model="gpt-4", limit=200)
+evaluate("commonsense_qa", model="gpt-4", limit=200)
+evaluate("coqa", model="gpt-4", limit=200)
 
 # Quick testing
-evaluate(benchmark="demo", model="fake-math-llm", limit=10)
+evaluate("demo", model="fake-math-llm", limit=10)
 ```
 
 **See all available benchmarks:**
@@ -118,8 +118,7 @@ themis list benchmarks
 
 ```python
 # Use specific metrics
-result = evaluate(
-    benchmark="gsm8k",
+result = evaluate("gsm8k",
     model="gpt-4",
     metrics=["exact_match", "bleu", "rouge1"],
 )
@@ -145,7 +144,7 @@ print(report.summary())
 
 **CLI:**
 ```bash
-themis compare run-1 run-2 --test bootstrap --output comparison.html
+themis compare run-1 run-2 --output comparison.html
 ```
 
 ### 🌐 Web Dashboard
@@ -171,19 +170,19 @@ Themis uses [LiteLLM](https://github.com/BerriAI/litellm) for broad provider sup
 
 ```python
 # OpenAI
-evaluate(benchmark="gsm8k", model="gpt-4")
+evaluate("gsm8k", model="gpt-4")
 
 # Anthropic
-evaluate(benchmark="gsm8k", model="claude-3-opus-20240229")
+evaluate("gsm8k", model="claude-3-opus-20240229")
 
 # Azure OpenAI
-evaluate(benchmark="gsm8k", model="azure/gpt-4")
+evaluate("gsm8k", model="azure/gpt-4")
 
 # Local models (vLLM, Ollama, etc.)
-evaluate(benchmark="gsm8k", model="ollama/llama3")
+evaluate("gsm8k", model="ollama/llama3")
 
 # AWS Bedrock
-evaluate(benchmark="gsm8k", model="bedrock/anthropic.claude-3")
+evaluate("gsm8k", model="bedrock/anthropic.claude-3")
 ```
 
 ### 💾 Smart Caching
@@ -192,8 +191,7 @@ Themis automatically caches results and resumes failed runs:
 
 ```python
 # Run with caching
-result = evaluate(
-    benchmark="gsm8k",
+result = evaluate("gsm8k",
     model="gpt-4",
     limit=1000,
     run_id="my-experiment",
@@ -228,14 +226,13 @@ result = evaluate(
     metrics=["exact_match"],
 )
 
-print(result.report)
+print(result.evaluation_report.metrics["ExactMatch"].mean)
 ```
 
 ### Advanced Configuration
 
 ```python
-result = evaluate(
-    benchmark="gsm8k",
+result = evaluate("gsm8k",
     model="gpt-4",
     temperature=0.7,
     max_tokens=512,
@@ -335,8 +332,7 @@ class S3StorageBackend(StorageBackend):
     # ... implement other methods
 
 # Use custom backend
-result = evaluate(
-    benchmark="gsm8k",
+result = evaluate("gsm8k",
     model="gpt-4",
     storage_backend=S3StorageBackend(bucket="my-bucket")
 )
@@ -354,8 +350,7 @@ class RayExecutionBackend(ExecutionBackend):
     """Distributed execution with Ray"""
     # ... implementation
 
-result = evaluate(
-    benchmark="math500",
+result = evaluate("math500",
     model="gpt-4",
     execution_backend=RayExecutionBackend(num_cpus=32)
 )
@@ -407,10 +402,10 @@ themis eval <benchmark> --model <model> [options]
 themis compare <run-id-1> <run-id-2> [run-id-3...] [options]
 
 # Options:
+#   --metric NAME          Restrict to one metric
 #   --storage PATH         Storage directory
-#   --test STR             Statistical test: t_test, bootstrap, permutation
-#   --alpha FLOAT          Significance level (default: 0.05)
 #   --output FILE          Export report (.json, .html, .md)
+#   --show-diff            Include detailed per-sample differences in summary
 ```
 
 ### Server

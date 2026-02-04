@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from themis.comparison import compare_runs
 from themis.comparison.statistics import StatisticalTest
 from themis.storage import ExperimentStorage
+from themis._version import __version__
 
 
 class RunSummary(BaseModel):
@@ -71,7 +72,7 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     app = FastAPI(
         title="Themis API",
         description="REST API for Themis experiment management",
-        version="2.0.0",
+        version=__version__,
     )
     
     # Enable CORS for web dashboard
@@ -117,7 +118,7 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
         return {
             "status": "ok",
             "service": "themis-api",
-            "version": "2.0.0",
+            "version": __version__,
         }
     
     @app.get("/api/runs", response_model=List[RunSummary], tags=["runs"])

@@ -35,11 +35,12 @@ def compare_runs(
 
 ```python
 from themis.comparison import compare_runs
+from themis.comparison.statistics import StatisticalTest
 
 report = compare_runs(
     run_ids=["gpt4-run", "claude-run"],
     storage_path=".cache/experiments",
-    statistical_test="bootstrap",
+    statistical_test=StatisticalTest.BOOTSTRAP,
     alpha=0.05,
 )
 
@@ -245,16 +246,14 @@ from themis.comparison import compare_runs
 from themis.comparison.statistics import StatisticalTest
 
 # Run two experiments
-result1 = evaluate(
-    benchmark="gsm8k",
+result1 = evaluate("gsm8k",
     model="gpt-4",
     temperature=0.0,
     run_id="gpt4-temp0",
     limit=100,
 )
 
-result2 = evaluate(
-    benchmark="gsm8k",
+result2 = evaluate("gsm8k",
     model="gpt-4",
     temperature=0.7,
     run_id="gpt4-temp07",
@@ -275,9 +274,9 @@ print(report.summary(include_details=True))
 # Check significance
 for result in report.pairwise_results:
     if result.is_significant():
-        print(f"✓ {result.metric_name}: {result.winner} wins (p={result.test_result.p_value:.4f})")
+        print(f"{result.metric_name}: {result.winner} wins (p={result.test_result.p_value:.4f})")
     else:
-        print(f"✗ {result.metric_name}: No significant difference")
+        print(f"{result.metric_name}: no significant difference")
 
 # Export
 import json
@@ -286,6 +285,5 @@ Path("comparison.json").write_text(json.dumps(report.to_dict(), indent=2))
 
 ## See Also
 
-- [Comparison Guide](../COMPARISON.md) - Detailed usage guide
-- [Statistical Tests](../COMPARISON.md#statistical-tests) - Test selection guide
-- [CLI Comparison](../guides/evaluation.md#comparison) - Command-line usage
+- [Comparison Guide](../guides/comparison.md) - Detailed usage guide
+- [CLI Reference](../guides/cli.md#themis-compare) - Command-line usage

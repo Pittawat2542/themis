@@ -1,4 +1,4 @@
-"""Quick start with vNext specs + session."""
+"""Quick start with specs + session."""
 
 from themis.evaluation.metric_pipeline import MetricPipeline
 from themis.presets import get_benchmark_preset

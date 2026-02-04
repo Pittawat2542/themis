@@ -78,7 +78,7 @@ preset = BenchmarkPreset(
     name="my-benchmark",
     prompt_template=PromptTemplate(name="my-template", template="Q: {question}\nA:"),
     metrics=[metrics.ExactMatch()],
-    extractor=extractors.LastLineExtractor(),
+    extractor=extractors.IdentityExtractor(),
     dataset_loader=my_dataset_loader,
     description="My custom benchmark",
 )

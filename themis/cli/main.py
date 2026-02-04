@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Annotated, Sequence
 
 from cyclopts import App, Parameter
+from themis._version import __version__
 
 # Import provider modules to ensure they register themselves
 try:
@@ -27,7 +28,7 @@ except ImportError:
 app = App(
     name="themis",
     help="Dead simple LLM evaluation platform",
-    version="2.0.0-alpha.1",
+    version=__version__,
 )
 
 

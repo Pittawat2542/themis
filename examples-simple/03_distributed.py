@@ -1,4 +1,4 @@
-"""Execution tuning example (workers + retries) with vNext specs.
+"""Execution tuning example (workers + retries) with explicit specs.
 
 This replaces the old distributed placeholder.
 """
