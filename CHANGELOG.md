@@ -5,6 +5,21 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-02-04
+
+### Changed
+- **BREAKING**: Promoted the vNext architecture to stable `1.0.0` with `ExperimentSpec` + `run` as the primary workflow.
+- **BREAKING**: Removed `themis.experiment.builder` and migrated project tests to `themis.experiment.definitions`.
+- Standardized experiment package exports around `definitions`, `orchestrator`, `storage`, and `export`.
+
+### Fixed
+- Fixed `CacheManager.get_run_path()` so storage backends that return `None` no longer create accidental `None/report.json` artifacts.
+- Added regression coverage for run-path `None` handling in `tests/experiment/test_cache_manager.py` and `tests/storage/test_storage_backend_usage.py`.
+
+### Removed
+- Removed legacy duplicate module `themis/experiment/export_csv.py` (CSV export remains available via `themis.experiment.export`).
+- Removed obsolete builder-focused tests in `tests/experiment/test_builder.py` and `tests/experiment/test_builder_pipeline_factory.py`.
+
 ## [0.3.0] - 2026-02-03
 
 ### Added
@@ -251,7 +266,9 @@ See git history for previous releases.
 
 | Version | Supported          | Python |
 |---------|--------------------|--------|
-| 0.2.x   | ✅ Active          | 3.12+  |
+| 1.x     | ✅ Active          | 3.12+  |
+| 0.3.x   | ⚠️ Maintenance     | 3.12+  |
+| 0.2.x   | ⚠️ Maintenance     | 3.12+  |
 | 0.1.x   | ⚠️ Maintenance     | 3.12+  |
 | < 0.1   | ❌ End of Life     | 3.11+  |
 

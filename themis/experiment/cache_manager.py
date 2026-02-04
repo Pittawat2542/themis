@@ -139,7 +139,10 @@ class CacheManager:
         """
         if self._storage is None:
             return None
-        return str(self._storage.get_run_path(run_id))
+        run_path = self._storage.get_run_path(run_id)
+        if run_path is None:
+            return None
+        return str(run_path)
 
 
 __all__ = ["CacheManager"]

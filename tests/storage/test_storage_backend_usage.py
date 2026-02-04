@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from themis.core import entities as core_entities
 from themis.evaluation import extractors, metrics, pipeline as evaluation_pipeline
 from themis.session import ExperimentSession
@@ -35,7 +37,9 @@ class FakeStorage:
         return None
 
 
-def test_session_uses_storage_backend():
+def test_session_uses_storage_backend(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
     pipeline = evaluation_pipeline.EvaluationPipeline(
         extractor=extractors.IdentityExtractor(),
         metrics=[metrics.ResponseLength()],
@@ -56,3 +60,4 @@ def test_session_uses_storage_backend():
     session.run(spec, storage=StorageSpec(backend=backend))
 
     assert backend.start_called is True
+    assert Path("None").exists() is False

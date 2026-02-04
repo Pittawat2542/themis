@@ -69,8 +69,8 @@ This checklist tracks the clean-architecture vNext work (no backward compatibili
 - [x] Update examples to use `ExperimentSpec` + `run`
 
 ## Phase 12: Cleanup & Release
-- [ ] Delete legacy modules and tests
-- [ ] Add breaking changes to `CHANGELOG.md`
-- [ ] Bump major version in `pyproject.toml`
+- [x] Delete legacy modules and tests
+- [x] Add breaking changes to `CHANGELOG.md`
+- [x] Bump major version in `pyproject.toml`
 - [x] Run `uv run pytest`
 - [ ] Tag release
