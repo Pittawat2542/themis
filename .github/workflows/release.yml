@@ -1,0 +1,82 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (for example: v1.2.3)"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: resolve-tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          if [[ -z "${TAG}" ]]; then
+            echo "Unable to determine release tag" >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.resolve-tag.outputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Validate release metadata
+        run: python scripts/ci/validate_release.py --tag "${{ steps.resolve-tag.outputs.tag }}"
+
+      - name: Extract release notes from changelog
+        run: |
+          python scripts/ci/extract_release_notes.py \
+            --tag "${{ steps.resolve-tag.outputs.tag }}" \
+            --changelog CHANGELOG.md \
+            --output release_notes.md
+
+      - name: Build package artifacts
+        run: uv build
+
+      - name: Create or update GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.resolve-tag.outputs.tag }}
+          name: Themis ${{ steps.resolve-tag.outputs.tag }}
+          bodyFile: release_notes.md
+          artifacts: "dist/*"
+          artifactErrorsFailBuild: true
+          allowUpdates: true
+          updateOnlyUnreleased: false
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}

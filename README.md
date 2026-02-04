@@ -1,551 +1,210 @@
 # Themis
 
-> **Modern LLM evaluation framework for researchers and practitioners**
+> Lightweight, practical evaluation workflows for LLM experiments.
 
-Themis makes it easy to evaluate language models systematically with one-liner Python APIs, built-in benchmarks, statistical comparisons, and a web dashboard.
-
+[![CI](https://github.com/Pittawat2542/themis/actions/workflows/ci.yml/badge.svg)](https://github.com/Pittawat2542/themis/actions/workflows/ci.yml)
+[![Docs](https://github.com/Pittawat2542/themis/actions/workflows/docs.yml/badge.svg)](https://github.com/Pittawat2542/themis/actions/workflows/docs.yml)
+[![PyPI version](https://img.shields.io/pypi/v/themis-eval.svg)](https://pypi.org/project/themis-eval/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
----
+Themis gives you two clean entry points:
 
-## Why Themis?
+- `themis.evaluate(...)` for quick benchmark and dataset evaluation.
+- `ExperimentSession().run(spec, ...)` for explicit, versioned workflows.
 
-- **🚀 Simple**: One-line Python API or CLI commands—no configuration files needed
-- **📊 Comprehensive**: 100+ LLM providers, built-in benchmarks, NLP & code metrics
-- **🔬 Statistical**: Compare runs with t-tests, bootstrap, and permutation tests
-- **💾 Reliable**: Automatic caching, resume failed runs, smart cache invalidation
-- **🌐 Visual**: Web dashboard for exploring results and comparisons
-- **🔌 Extensible**: Pluggable backends for custom storage and execution
+It includes built-in benchmarks, metric pipelines, caching/resume, comparison utilities, and a web server for run inspection.
 
----
+## Why Themis
 
-## Quick Start
+- **Fast start**: run your first evaluation in a few lines.
+- **Structured control**: spec/session API for reproducible workflows.
+- **Built-in presets**: curated benchmark definitions with prompt + metrics + extractors.
+- **Extensible**: register datasets, metrics, providers, and benchmark presets.
+- **Practical storage**: local cache, resumable runs, robust storage backend.
+- **Production-minded CI/CD**: strict docs build, package validation, release automation.
 
-### Installation
+## Installation
 
 ```bash
-# Using pip
+# stable release
 pip install themis-eval
 
-# Or with uv (recommended)
-uv pip install themis-eval
+# with optional extras
+pip install "themis-eval[math,nlp,code,server]"
 
-# With optional features
-pip install themis-eval[math,nlp,code,server]
+# or with uv
+uv pip install themis-eval
 ```
 
-### One-Liner Evaluation
+## Quick Start (No API key)
+
+Use the built-in fake model with the demo preset:
 
 ```python
 from themis import evaluate
 
-# Evaluate any model on any benchmark
+report = evaluate(
+    "demo",
+    model="fake-math-llm",
+    limit=10,
+)
+
+metric = report.evaluation_report.metrics["ExactMatch"]
+print(f"ExactMatch: {metric.mean:.2%}")
+```
+
+## Quick Start (Real model)
+
+```python
+from themis import evaluate
+
 report = evaluate(
     "gsm8k",
     model="gpt-4",
     limit=100,
+    metrics=["exact_match", "math_verify"],
 )
 
-accuracy = report.evaluation_report.metrics["ExactMatch"].mean
-print(f"Accuracy: {accuracy:.2%}")
+print(report.evaluation_report.metrics["ExactMatch"].mean)
 ```
 
-### CLI Usage
+## CLI Workflow
 
 ```bash
-# Evaluate a model
-themis eval gsm8k --model gpt-4 --limit 100
+# Run two experiments
+themis eval gsm8k --model gpt-4 --limit 100 --run-id run-a
+themis eval gsm8k --model gpt-4 --temperature 0.7 --limit 100 --run-id run-b
 
-# Compare two models
-themis eval gsm8k --model gpt-4 --limit 100 --run-id gpt4-run
-themis eval gsm8k --model claude-3-opus --limit 100 --run-id claude-run
-themis compare gpt4-run claude-run
+# Compare them
+themis compare run-a run-b
 
-# Start web dashboard
-themis serve
-
-# Share a run
-themis share gpt4-run --output-dir share
+# Explore in browser
+themis serve --storage .cache/experiments
 ```
 
----
+Helpful commands:
 
-## Features
+```bash
+themis list benchmarks
+themis list runs --storage .cache/experiments
+themis list metrics
+```
 
-### 🎯 Built-in Benchmarks
+## Spec + Session API (v1 workflow)
 
-Themis includes 19 built-in benchmarks out-of-the-box:
+Use this when you want explicit control over dataset, pipeline, execution, and storage specs.
 
 ```python
-# Math reasoning
-evaluate("gsm8k", model="gpt-4", limit=100)
-evaluate("math500", model="gpt-4", limit=50)
-evaluate("aime24", model="gpt-4")
+from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.presets import get_benchmark_preset
+from themis.session import ExperimentSession
+from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
-# General knowledge
-evaluate("mmlu-pro", model="gpt-4", limit=1000)
-evaluate("supergpqa", model="gpt-4")
+preset = get_benchmark_preset("gsm8k")
+pipeline = MetricPipeline(extractor=preset.extractor, metrics=preset.metrics)
 
-# Science & medical
-evaluate("gpqa", model="gpt-4", limit=200)
-evaluate("medmcqa", model="gpt-4", limit=200)
+spec = ExperimentSpec(
+    dataset=preset.load_dataset(limit=100),
+    prompt=preset.prompt_template.template,
+    model="litellm:gpt-4",
+    sampling={"temperature": 0.0, "max_tokens": 512},
+    pipeline=pipeline,
+    run_id="gsm8k-gpt4",
+)
 
-# Commonsense & conversational
-evaluate("commonsense_qa", model="gpt-4", limit=200)
-evaluate("coqa", model="gpt-4", limit=200)
-
-# Quick testing
-evaluate("demo", model="fake-math-llm", limit=10)
+report = ExperimentSession().run(
+    spec,
+    execution=ExecutionSpec(workers=8),
+    storage=StorageSpec(path=".cache/experiments", cache=True),
+)
 ```
 
-**See all available benchmarks:**
+## Built-in Coverage
+
+Themis ships with math, reasoning, science, and QA presets (for example: `gsm8k`, `math500`, `aime24`, `aime25`, `mmlu-pro`, `supergpqa`, `gpqa`, `commonsense_qa`, `coqa`, `demo`).
+
+List everything from CLI:
+
 ```bash
 themis list benchmarks
 ```
 
-### 📈 Rich Metrics
+Supported metric families include:
 
-**Math Metrics:**
-- Exact Match
-- Math Verification (symbolic & numeric)
+- exact/verification metrics (for math/structured outputs)
+- NLP metrics (`BLEU`, `ROUGE`, `BERTScore`, `METEOR`)
+- code metrics (`PassAtK`, `CodeBLEU`, execution-based checks)
 
-**NLP Metrics:**
-- BLEU, ROUGE, BERTScore, METEOR
+## Extending Themis
 
-**Code Metrics:**
-- Pass@k, CodeBLEU, Execution Accuracy
+Top-level extension APIs are available directly from `themis`:
 
 ```python
-# Use specific metrics
-result = evaluate("gsm8k",
-    model="gpt-4",
-    metrics=["exact_match", "bleu", "rouge1"],
-)
+import themis
+
+# themis.register_metric(name, metric_cls)
+# themis.register_dataset(name, factory)
+# themis.register_provider(name, factory)
+# themis.register_benchmark(preset)
 ```
 
-### 🔬 Statistical Comparison
+See the extension guides:
 
-Compare multiple runs with statistical significance testing:
-
-```python
-from themis.comparison import compare_runs
-
-report = compare_runs(
-    run_ids=["gpt4-run", "claude-run"],
-    storage_path=".cache/experiments",
-    statistical_test="bootstrap",
-    alpha=0.05
-)
-
-print(report.summary())
-# Shows: win/loss matrices, p-values, effect sizes
-```
-
-**CLI:**
-```bash
-themis compare run-1 run-2 --output comparison.html
-```
-
-### 🌐 Web Dashboard
-
-Start the API server and view results in your browser:
-
-```bash
-themis serve
-
-# Open http://localhost:8080/dashboard
-# API docs at http://localhost:8080/docs
-```
-
-**Features:**
-- List all experiment runs
-- View detailed results
-- Compare multiple runs
-- REST API + WebSocket support
-
-### 🔌 100+ LLM Providers
-
-Themis uses [LiteLLM](https://github.com/BerriAI/litellm) for broad provider support:
-
-```python
-# OpenAI
-evaluate("gsm8k", model="gpt-4")
-
-# Anthropic
-evaluate("gsm8k", model="claude-3-opus-20240229")
-
-# Azure OpenAI
-evaluate("gsm8k", model="azure/gpt-4")
-
-# Local models (vLLM, Ollama, etc.)
-evaluate("gsm8k", model="ollama/llama3")
-
-# AWS Bedrock
-evaluate("gsm8k", model="bedrock/anthropic.claude-3")
-```
-
-### 💾 Smart Caching
-
-Themis automatically caches results and resumes failed runs:
-
-```python
-# Run with caching
-result = evaluate("gsm8k",
-    model="gpt-4",
-    limit=1000,
-    run_id="my-experiment",
-    resume=True  # Skip already-evaluated samples
-)
-```
-
-Cache invalidation is automatic when you change:
-- Model parameters (temperature, max_tokens, etc.)
-- Prompt template
-- Evaluation metrics
-
----
-
-## Examples
-
-### Custom Dataset
-
-```python
-from themis import evaluate
-
-# Your own data
-dataset = [
-    {"prompt": "What is 2+2?", "answer": "4"},
-    {"prompt": "What is 3+3?", "answer": "6"},
-]
-
-result = evaluate(
-    dataset,
-    model="gpt-4",
-    prompt="Answer this math question: {prompt}",
-    metrics=["exact_match"],
-)
-
-print(result.evaluation_report.metrics["ExactMatch"].mean)
-```
-
-### Advanced Configuration
-
-```python
-result = evaluate("gsm8k",
-    model="gpt-4",
-    temperature=0.7,
-    max_tokens=512,
-    num_samples=3,  # Sample 3 responses per prompt
-    workers=8,  # Parallel execution
-    storage=".cache/my-experiments",
-    run_id="experiment-2024-01",
-)
-```
-
-### Programmatic Comparison
-
-```python
-from themis.comparison.statistics import t_test, bootstrap_confidence_interval
-
-# Model A scores
-scores_a = [0.85, 0.87, 0.83, 0.90, 0.82]
-# Model B scores  
-scores_b = [0.78, 0.80, 0.79, 0.82, 0.77]
-
-# Statistical test
-result = bootstrap_confidence_interval(
-    scores_a, scores_b,
-    n_bootstrap=10000,
-    confidence_level=0.95
-)
-
-print(f"Significant: {result.significant}")
-print(f"CI: {result.confidence_interval}")
-```
-
----
-
-## Architecture
-
-Themis is built on a clean, modular architecture:
-
-```
-┌─────────────────────────────────────────┐
-│         themis.evaluate()                │  ← Simple API
-│    (One-line evaluation interface)       │
-└─────────────────┬───────────────────────┘
-                  │
-         ┌────────┴────────┐
-         │                 │
-    ┌────▼─────┐     ┌────▼─────┐
-    │ Presets  │     │Generation│
-    │ System   │     │ Pipeline │
-    └────┬─────┘     └────┬─────┘
-         │                 │
-    ┌────▼─────┐     ┌────▼─────┐
-    │Benchmarks│     │Evaluation│
-    │(19 built-│     │ Pipeline │
-    │   in)    │     └────┬─────┘
-    └──────────┘          │
-                     ┌────▼─────┐
-                     │ Storage  │
-                     │  (V2)    │
-                     └──────────┘
-```
-
-**Key Components:**
-
-- **Presets**: Pre-configured benchmarks with prompts, metrics, and datasets
-- **Generation**: Model inference with caching and resume
-- **Evaluation**: Metric computation with smart cache invalidation
-- **Storage**: Atomic writes, file locking, SQLite metadata
-- **Comparison**: Statistical tests, win/loss matrices
-- **Server**: REST API and WebSocket for web dashboard
-
----
+- [Extending Themis](https://pittawat2542.github.io/themis/)
+- [API Backends Reference](docs/api/backends.md)
 
 ## Documentation
 
-- **[API Reference](docs/index.md)** - Detailed API documentation
-- **[Examples](examples-simple/)** - Runnable code examples
-- **[Backends API](docs/api/backends.md)** - Custom storage and execution
-- **[API Server](docs/reference/api-server.md)** - Web dashboard and REST API
-- **[Comparison Engine](docs/guides/comparison.md)** - Statistical testing guide
+- Docs site: https://pittawat2542.github.io/themis/
+- Getting started: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
+- Evaluation guide: [docs/guides/evaluation.md](docs/guides/evaluation.md)
+- Comparison guide: [docs/guides/comparison.md](docs/guides/comparison.md)
+- Session/spec reference: [docs/reference/session.md](docs/reference/session.md), [docs/reference/specs.md](docs/reference/specs.md)
+- CI/CD and release process: [docs/guides/ci-cd.md](docs/guides/ci-cd.md)
 
----
+## Examples
 
-## Advanced Usage
+Runnable examples live in [`examples-simple/`](examples-simple/):
 
-### Custom Backends
+- `01_quickstart.py`
+- `02_custom_dataset.py`
+- `04_comparison.py`
+- `05_api_server.py`
+- `07_provider_ready.py`
+- `08_resume_cache.py`
+- `09_research_loop.py`
 
-Implement custom storage or execution strategies:
-
-```python
-from themis.backends import StorageBackend, ExecutionBackend
-
-class S3StorageBackend(StorageBackend):
-    """Store results in AWS S3"""
-    def save_generation_record(self, run_id, record):
-        # Upload to S3
-        pass
-    # ... implement other methods
-
-# Use custom backend
-result = evaluate("gsm8k",
-    model="gpt-4",
-    storage_backend=S3StorageBackend(bucket="my-bucket")
-)
-```
-
-See [docs/api/backends.md](docs/api/backends.md) for details.
-
-### Distributed Execution
-
-```python
-from themis.backends import ExecutionBackend
-import ray
-
-class RayExecutionBackend(ExecutionBackend):
-    """Distributed execution with Ray"""
-    # ... implementation
-
-result = evaluate("math500",
-    model="gpt-4",
-    execution_backend=RayExecutionBackend(num_cpus=32)
-)
-```
-
-### Monitoring & Observability
-
-Connect to the WebSocket endpoint for real-time updates:
-
-```python
-import asyncio
-import websockets
-import json
-
-async def monitor():
-    async with websockets.connect("ws://localhost:8080/ws") as ws:
-        await ws.send(json.dumps({"type": "subscribe", "run_id": "my-run"}))
-        async for message in ws:
-            print(json.loads(message))
-
-asyncio.run(monitor())
-```
-
----
-
-## CLI Reference
-
-### Evaluation
+Run one:
 
 ```bash
-# Basic evaluation
-themis eval <benchmark> --model <model> [options]
-
-# Options:
-#   --limit N              Evaluate first N samples
-#   --temperature FLOAT    Sampling temperature (default: 0.0)
-#   --max-tokens INT       Maximum tokens (default: 512)
-#   --workers INT          Parallel workers (default: 4)
-#   --run-id STR           Run identifier
-#   --storage PATH         Storage directory
-#   --resume               Resume from cache
-#   --output FILE          Export results (.json, .csv, .html)
+uv run python examples-simple/01_quickstart.py
 ```
-
-### Comparison
-
-```bash
-# Compare two or more runs
-themis compare <run-id-1> <run-id-2> [run-id-3...] [options]
-
-# Options:
-#   --metric NAME          Restrict to one metric
-#   --storage PATH         Storage directory
-#   --output FILE          Export report (.json, .html, .md)
-#   --show-diff            Include detailed per-sample differences in summary
-```
-
-### Server
-
-```bash
-# Start API server
-themis serve [options]
-
-# Options:
-#   --port INT             Port (default: 8080)
-#   --host STR             Host (default: 127.0.0.1)
-#   --storage PATH         Storage directory
-#   --reload               Auto-reload (dev mode)
-```
-
-### List
-
-```bash
-# List available resources
-themis list <what>
-
-# Options:
-#   runs         List all experiment runs
-#   benchmarks   List available benchmarks
-#   metrics      List available metrics
-```
-
----
 
 ## Development
 
-### Setup
-
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/themis.git
-cd themis
+# install all dev + feature dependencies
+uv sync --all-extras --dev
 
-# Install with dev dependencies
-uv pip install -e ".[dev,math,nlp,code,server]"
-
-# Run tests
+# test
 uv run pytest
 
-# Run specific test
-uv run pytest tests/comparison/test_statistics.py -v
+# strict docs build
+uv run mkdocs build --strict
+
+# baseline syntax/runtime lint used in CI
+uv run ruff check --select E9,F63,F7 themis tests
 ```
-
-### Project Structure
-
-```
-themis/
-├── themis/
-│   ├── api.py                  # Main evaluate() function
-│   ├── presets/                # Benchmark presets
-│   ├── generation/             # Model inference
-│   ├── evaluation/             # Metrics & evaluation
-│   ├── comparison/             # Statistical comparison
-│   ├── backends/               # Pluggable backends
-│   ├── server/                 # FastAPI server
-│   └── cli/                    # CLI commands
-├── tests/                      # Test suite
-├── examples-simple/            # Minimal examples
-├── docs/                       # Documentation
-└── pyproject.toml             # Package configuration
-```
-
-### Running Examples
-
-```bash
-# Simple quickstart
-uv run python examples-simple/01_quickstart.py
-
-# Custom dataset
-uv run python examples-simple/02_custom_dataset.py
-
-# Comparison example
-uv run python examples-simple/04_comparison.py
-
-# API server example
-uv run python examples-simple/05_api_server.py
-
-# Resume/cache example
-uv run python examples-simple/08_resume_cache.py
-
-# End-to-end research loop example
-uv run python examples-simple/09_research_loop.py
-```
-
----
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-Areas where we'd love help:
-- Additional benchmark presets
-- New evaluation metrics
-- Backend implementations (Ray, S3, etc.)
-- Documentation improvements
-- Bug reports and feature requests
-
----
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Citation
 
-If you use Themis in your research, please cite:
-
-```bibtex
-@software{themis2024,
-  title = {Themis: Modern LLM Evaluation Framework},
-  author = {Your Name},
-  year = {2024},
-  url = {https://github.com/yourusername/themis}
-}
-```
-
----
+If you use Themis in research, cite via [`CITATION.cff`](CITATION.cff).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-## Acknowledgments
-
-- Built on [LiteLLM](https://github.com/BerriAI/litellm) for provider support
-- Inspired by [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
-- Statistical methods from established research practices
-
----
-
-## Support
-
-- **Documentation**: [docs/index.md](docs/index.md)
-- **Examples**: [examples-simple/](examples-simple/)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/themis/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/themis/discussions)
-
----
-
-**Made with ❤️ for the LLM research community**
+MIT. See [LICENSE](LICENSE).

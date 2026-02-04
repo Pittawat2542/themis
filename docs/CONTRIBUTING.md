@@ -108,6 +108,10 @@ uv run mkdocs build --strict
   ```bash
   uv run python scripts/ci/validate_release.py --tag vX.Y.Z
   ```
+- Generate release body from changelog (used by automation):
+  ```bash
+  uv run python scripts/ci/extract_release_notes.py --tag vX.Y.Z --changelog CHANGELOG.md --output /tmp/release_notes.md
+  ```
 
 ## Reporting Issues
 

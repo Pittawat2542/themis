@@ -46,6 +46,13 @@ Before publishing, it validates:
 
 Validation entrypoint: `scripts/ci/validate_release.py`
 
+### GitHub Release (`.github/workflows/release.yml`)
+
+- Creates or updates a GitHub Release automatically when a `v*.*.*` tag is pushed.
+- Pulls release body directly from the matching section in `CHANGELOG.md`.
+- Builds and uploads wheel/sdist artifacts (`dist/*`) to the release.
+- Supports manual dispatch with an explicit `tag` input.
+
 ## Local Preflight Commands
 
 Run these before opening a pull request:
@@ -59,6 +66,9 @@ uv run pytest -q --cov=themis --cov-report=xml --cov-fail-under=60
 
 # Docs build in strict mode
 uv run mkdocs build --strict
+
+# Preview extracted release notes for a tag
+uv run python scripts/ci/extract_release_notes.py --tag vX.Y.Z --changelog CHANGELOG.md --output /tmp/release_notes.md
 
 # Baseline syntax/runtime safety lint
 uv run ruff check --select E9,F63,F7 themis tests
@@ -78,4 +88,5 @@ uv run ruff check <changed_python_files>
 3. Update `docs/CHANGELOG.md` current release block.
 4. Update `CITATION.cff` version/date.
 5. Create and push tag: `vX.Y.Z`.
-6. Verify PyPI workflow completes successfully.
+6. Verify `Create GitHub Release` workflow publishes release notes + artifacts.
+7. Verify `Publish to PyPI` workflow completes successfully.
