@@ -1,5 +1,7 @@
 """Tests for comparison statistics module."""
 
+import random
+
 import pytest
 
 from themis.comparison.statistics import (
@@ -106,6 +108,22 @@ class TestBootstrap:
         
         assert result.statistic == median_diff(samples_a, samples_b)
 
+    def test_bootstrap_does_not_mutate_global_random_state(self):
+        """Test bootstrap uses local RNG and does not reset global random state."""
+        samples_a = [1.0, 2.0, 3.0]
+        samples_b = [2.0, 3.0, 4.0]
+
+        random.seed(2024)
+        _ = random.random()
+        expected_next = random.random()
+
+        random.seed(2024)
+        _ = random.random()
+        bootstrap_confidence_interval(samples_a, samples_b, n_bootstrap=100, seed=42)
+        observed_next = random.random()
+
+        assert observed_next == expected_next
+
 
 class TestPermutation:
     """Tests for permutation test."""
@@ -152,6 +170,22 @@ class TestPermutation:
         
         assert result.statistic >= 0
 
+    def test_permutation_does_not_mutate_global_random_state(self):
+        """Test permutation uses local RNG and does not reset global random state."""
+        samples_a = [1.0, 2.0, 3.0]
+        samples_b = [2.0, 3.0, 4.0]
+
+        random.seed(12345)
+        _ = random.random()
+        expected_next = random.random()
+
+        random.seed(12345)
+        _ = random.random()
+        permutation_test(samples_a, samples_b, n_permutations=100, seed=42)
+        observed_next = random.random()
+
+        assert observed_next == expected_next
+
 
 class TestMcNemar:
     """Tests for McNemar's test."""
@@ -186,6 +220,13 @@ class TestMcNemar:
         result = mcnemar_test(contingency)
         
         assert not result.significant
+
+    def test_mcnemar_uses_exact_binomial_p_value(self):
+        """Test McNemar p-value uses exact binomial test for discordant pairs."""
+        # b=10, c=0 -> two-sided exact p-value = 2 * (0.5 ** 10) = 0.001953125
+        contingency = (0, 10, 0, 0)
+        result = mcnemar_test(contingency)
+        assert result.p_value == pytest.approx(0.001953125, rel=1e-6)
 
 
 class TestTestResult:

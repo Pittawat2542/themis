@@ -212,8 +212,7 @@ def bootstrap_confidence_interval(
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform bootstrap on empty samples")
     
-    if seed is not None:
-        random.seed(seed)
+    rng = random.Random(seed)
     
     # Default statistic: difference in means
     if statistic_fn is None:
@@ -227,8 +226,8 @@ def bootstrap_confidence_interval(
     bootstrap_diffs = []
     for _ in range(n_bootstrap):
         # Resample with replacement
-        resampled_a = [random.choice(samples_a) for _ in range(len(samples_a))]
-        resampled_b = [random.choice(samples_b) for _ in range(len(samples_b))]
+        resampled_a = [rng.choice(samples_a) for _ in range(len(samples_a))]
+        resampled_b = [rng.choice(samples_b) for _ in range(len(samples_b))]
         
         diff = statistic_fn(resampled_a, resampled_b)
         bootstrap_diffs.append(diff)
@@ -289,8 +288,7 @@ def permutation_test(
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform permutation test on empty samples")
     
-    if seed is not None:
-        random.seed(seed)
+    rng = random.Random(seed)
     
     # Default statistic: absolute difference in means
     if statistic_fn is None:
@@ -310,7 +308,7 @@ def permutation_test(
     for _ in range(n_permutations):
         # Shuffle and split
         shuffled = combined.copy()
-        random.shuffle(shuffled)
+        rng.shuffle(shuffled)
         
         perm_a = shuffled[:n_a]
         perm_b = shuffled[n_a:]
@@ -370,18 +368,9 @@ def mcnemar_test(
     # McNemar's statistic with continuity correction
     chi_square = ((abs(b - c) - 1) ** 2) / (b + c)
     
-    # Approximate p-value (chi-square with 1 df)
-    # For chi-square > 3.84, p < 0.05
-    # For chi-square > 6.63, p < 0.01
-    if chi_square > 10.83:
-        p_value = 0.001
-    elif chi_square > 6.63:
-        p_value = 0.01
-    elif chi_square > 3.84:
-        p_value = 0.05
-    else:
-        # Rough linear approximation
-        p_value = 1.0 - (chi_square / 3.84) * 0.95
+    # Use exact two-sided binomial test for discordant pairs:
+    # X ~ Binomial(n=b+c, p=0.5), p = 2 * P(X <= min(b, c))
+    p_value = _exact_mcnemar_p_value(b, c)
     
     return StatisticalTestResult(
         test_name="McNemar's test",
@@ -390,6 +379,18 @@ def mcnemar_test(
         significant=p_value < alpha,
         confidence_level=1 - alpha,
     )
+
+
+def _exact_mcnemar_p_value(b: int, c: int) -> float:
+    """Compute exact two-sided McNemar p-value via binomial distribution."""
+    n = b + c
+    if n <= 0:
+        return 1.0
+    k = min(b, c)
+    cumulative = 0.0
+    for i in range(k + 1):
+        cumulative += math.comb(n, i) * (0.5**n)
+    return min(1.0, 2.0 * cumulative)
 
 
 __all__ = [
