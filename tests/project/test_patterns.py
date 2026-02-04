@@ -2,7 +2,7 @@ import pytest
 
 from themis.core import entities as core_entities
 from themis.evaluation import reports as evaluation_reports
-from themis.experiment import builder as experiment_builder
+from themis.experiment import definitions as experiment_definitions
 from themis.experiment import orchestrator
 from themis.generation import templates
 from themis.project import (
@@ -21,8 +21,8 @@ def _definition_for_variant(variant):
     model_spec = core_entities.ModelSpec(
         identifier=f"model-{variant.slug()}", provider="fake"
     )
-    binding = experiment_builder.ModelBinding(spec=model_spec, provider_name="fake")
-    return experiment_builder.ExperimentDefinition(
+    binding = experiment_definitions.ModelBinding(spec=model_spec, provider_name="fake")
+    return experiment_definitions.ExperimentDefinition(
         templates=[template],
         sampling_parameters=[sampling],
         model_bindings=[binding],

@@ -1,4 +1,4 @@
-"""Shared experiment definitions used by the builder."""
+"""Shared experiment definitions for orchestration assembly."""
 
 from __future__ import annotations
 

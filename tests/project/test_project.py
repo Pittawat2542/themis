@@ -1,21 +1,21 @@
 import pytest
 
 from themis.core import entities as core_entities
-from themis.experiment import builder as experiment_builder
+from themis.experiment import definitions as experiment_definitions
 from themis.generation import templates
 from themis.project import Project, ProjectExperiment
 
 
 def _experiment_definition(
     name: str = "demo",
-) -> experiment_builder.ExperimentDefinition:
+) -> experiment_definitions.ExperimentDefinition:
     template = templates.PromptTemplate(
         name=f"{name}-template", template="Solve {problem}"
     )
     sampling = core_entities.SamplingConfig(temperature=0.0, top_p=1.0, max_tokens=32)
     model_spec = core_entities.ModelSpec(identifier=f"{name}-model", provider="fake")
-    binding = experiment_builder.ModelBinding(spec=model_spec, provider_name="fake")
-    return experiment_builder.ExperimentDefinition(
+    binding = experiment_definitions.ModelBinding(spec=model_spec, provider_name="fake")
+    return experiment_definitions.ExperimentDefinition(
         templates=[template],
         sampling_parameters=[sampling],
         model_bindings=[binding],
