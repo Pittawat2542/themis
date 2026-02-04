@@ -120,7 +120,9 @@ class ComparisonEngine:
             # Find run with highest mean
             best_run = max(
                 run_ids,
-                key=lambda rid: sum(run_data[rid][metric]) / len(run_data[rid][metric])
+                key=lambda rid: (
+                    sum(run_data[rid][metric].values()) / len(run_data[rid][metric])
+                ),
             )
             best_run_per_metric[metric] = best_run
         
@@ -147,27 +149,30 @@ class ComparisonEngine:
             },
         )
     
-    def _load_run_metrics(self, run_id: str) -> dict[str, list[float]]:
+    def _load_run_metrics(self, run_id: str) -> dict[str, dict[str, float]]:
         """Load all metric scores for a run.
         
         Returns:
-            Dictionary mapping metric names to lists of scores
+            Dictionary mapping metric names to sample_id -> score mappings
         """
         # Load evaluation records from storage (returns dict of cache_key -> EvaluationRecord)
         eval_dict = self._storage.load_cached_evaluations(run_id)
         
         # Organize scores by metric
-        metric_scores: dict[str, list[float]] = {}
+        metric_scores: dict[str, dict[str, float]] = {}
         
         # eval_dict is a dict, so iterate over values
         for record in eval_dict.values():
+            sample_id = record.sample_id
+            if sample_id is None:
+                continue
             for score_obj in record.scores:
                 metric_name = score_obj.metric_name
                 if metric_name not in metric_scores:
-                    metric_scores[metric_name] = []
+                    metric_scores[metric_name] = {}
 
                 score = score_obj.value
-                metric_scores[metric_name].append(score)
+                metric_scores[metric_name][sample_id] = score
         
         return metric_scores
     
@@ -176,8 +181,8 @@ class ComparisonEngine:
         run_a_id: str,
         run_b_id: str,
         metric_name: str,
-        samples_a: list[float],
-        samples_b: list[float],
+        samples_a: dict[str, float],
+        samples_b: dict[str, float],
         test_type: StatisticalTest,
     ) -> reports.ComparisonResult:
         """Compare two runs on a single metric.
@@ -193,9 +198,19 @@ class ComparisonEngine:
         Returns:
             ComparisonResult with comparison statistics
         """
+        common_sample_ids = sorted(set(samples_a) & set(samples_b))
+        if not common_sample_ids:
+            raise ValueError(
+                f"Cannot compare metric '{metric_name}' for runs '{run_a_id}' and "
+                f"'{run_b_id}': no overlapping sample_ids."
+            )
+
+        aligned_a = [samples_a[sample_id] for sample_id in common_sample_ids]
+        aligned_b = [samples_b[sample_id] for sample_id in common_sample_ids]
+
         # Calculate means
-        mean_a = sum(samples_a) / len(samples_a)
-        mean_b = sum(samples_b) / len(samples_b)
+        mean_a = sum(aligned_a) / len(aligned_a)
+        mean_b = sum(aligned_b) / len(aligned_b)
         
         # Calculate delta
         delta = mean_a - mean_b
@@ -205,19 +220,19 @@ class ComparisonEngine:
         test_result = None
         if test_type == StatisticalTest.T_TEST:
             test_result = statistics.t_test(
-                samples_a, samples_b, alpha=self._alpha, paired=True
+                aligned_a, aligned_b, alpha=self._alpha, paired=True
             )
         elif test_type == StatisticalTest.BOOTSTRAP:
             test_result = statistics.bootstrap_confidence_interval(
-                samples_a,
-                samples_b,
+                aligned_a,
+                aligned_b,
                 n_bootstrap=self._n_bootstrap,
                 confidence_level=1 - self._alpha,
             )
         elif test_type == StatisticalTest.PERMUTATION:
             test_result = statistics.permutation_test(
-                samples_a,
-                samples_b,
+                aligned_a,
+                aligned_b,
                 n_permutations=self._n_permutations,
                 alpha=self._alpha,
             )
@@ -238,8 +253,8 @@ class ComparisonEngine:
             delta_percent=delta_percent,
             winner=winner,
             test_result=test_result,
-            run_a_samples=samples_a,
-            run_b_samples=samples_b,
+            run_a_samples=aligned_a,
+            run_b_samples=aligned_b,
         )
     
     def _build_win_loss_matrix(
