@@ -1,16 +1,19 @@
 """Safe code execution for testing functional correctness.
 
-This module provides utilities for safely executing generated code against
-test cases in a sandboxed environment.
+This module executes untrusted generated code in an isolated subprocess with
+timeouts and restricted builtins.
 """
 
 from __future__ import annotations
 
+import contextlib
 import multiprocessing
-import signal
+import queue
+import time
+import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Sequence
+from typing import Any, Sequence
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
@@ -18,7 +21,7 @@ from themis.interfaces import Metric
 
 class ExecutionStatus(str, Enum):
     """Execution result status."""
-    
+
     PASSED = "passed"
     FAILED = "failed"
     TIMEOUT = "timeout"
@@ -27,16 +30,8 @@ class ExecutionStatus(str, Enum):
 
 @dataclass
 class ExecutionResult:
-    """Result of code execution.
-    
-    Attributes:
-        status: Execution status
-        passed: Whether all tests passed
-        output: Captured stdout/stderr
-        error: Error message if any
-        duration: Execution time in seconds
-    """
-    
+    """Result of code execution."""
+
     status: ExecutionStatus
     passed: bool
     output: str = ""
@@ -44,56 +39,141 @@ class ExecutionResult:
     duration: float = 0.0
 
 
+def _blocked_import(*_args: Any, **_kwargs: Any):
+    raise ImportError("Imports are disabled in execution sandbox")
+
+
+def _safe_builtins() -> dict[str, Any]:
+    """Return safe builtins for sandbox execution."""
+    return {
+        "__import__": _blocked_import,
+        "abs": abs,
+        "all": all,
+        "any": any,
+        "bool": bool,
+        "dict": dict,
+        "enumerate": enumerate,
+        "filter": filter,
+        "float": float,
+        "int": int,
+        "len": len,
+        "list": list,
+        "map": map,
+        "max": max,
+        "min": min,
+        "pow": pow,
+        "range": range,
+        "reversed": reversed,
+        "round": round,
+        "set": set,
+        "sorted": sorted,
+        "str": str,
+        "sum": sum,
+        "tuple": tuple,
+        "zip": zip,
+        "Exception": Exception,
+        "ValueError": ValueError,
+        "TypeError": TypeError,
+        "ArithmeticError": ArithmeticError,
+        "ZeroDivisionError": ZeroDivisionError,
+        "AssertionError": AssertionError,
+    }
+
+
+def _apply_memory_limit(max_memory_mb: int) -> None:
+    """Apply best-effort process memory limits."""
+    if max_memory_mb <= 0:
+        return
+
+    try:
+        import resource
+    except Exception:
+        return
+
+    max_bytes = max_memory_mb * 1024 * 1024
+    for limit_name in ("RLIMIT_AS", "RLIMIT_DATA"):
+        limit = getattr(resource, limit_name, None)
+        if limit is None:
+            continue
+        try:
+            resource.setrlimit(limit, (max_bytes, max_bytes))
+        except Exception:
+            # Some platforms disallow changing specific limits.
+            pass
+
+
+def _execution_worker(
+    *,
+    code: str,
+    function_name: str,
+    test_input: Any,
+    expected_output: Any,
+    max_memory_mb: int,
+    result_queue: Any,
+) -> None:
+    """Execute untrusted code in isolated process and send a result payload."""
+    _apply_memory_limit(max_memory_mb)
+
+    try:
+        restricted_globals = {"__builtins__": _safe_builtins()}
+        local_vars: dict[str, Any] = {}
+        exec(code, restricted_globals, local_vars)
+
+        candidate = local_vars.get(function_name)
+        if not callable(candidate):
+            result_queue.put(
+                {
+                    "status": ExecutionStatus.ERROR.value,
+                    "passed": False,
+                    "output": "",
+                    "error": f"Function '{function_name}' not found",
+                }
+            )
+            return
+
+        if isinstance(test_input, (list, tuple)):
+            actual_output = candidate(*test_input)
+        else:
+            actual_output = candidate(test_input)
+
+        passed = actual_output == expected_output
+        result_queue.put(
+            {
+                "status": (
+                    ExecutionStatus.PASSED.value
+                    if passed
+                    else ExecutionStatus.FAILED.value
+                ),
+                "passed": passed,
+                "output": str(actual_output),
+                "error": None,
+            }
+        )
+    except BaseException as exc:
+        result_queue.put(
+            {
+                "status": ExecutionStatus.ERROR.value,
+                "passed": False,
+                "output": "",
+                "error": str(exc),
+            }
+        )
+
+
 class ExecutionAccuracy(Metric):
-    """Execute code and check against test cases.
-    
-    This metric safely executes generated code in a restricted environment
-    and verifies correctness against provided test cases.
-    
-    Security considerations:
-    - Executes in subprocess with timeout
-    - Restricted globals (no file I/O, network, etc.)
-    - Resource limits (memory, time)
-    
-    Attributes:
-        name: Metric identifier ("execution_accuracy")
-        timeout: Maximum execution time per test (seconds)
-        max_memory_mb: Maximum memory usage (MB)
-    
-    Example:
-        >>> from themis.evaluation.metrics.code import ExecutionAccuracy
-        >>> metric = ExecutionAccuracy(timeout=3.0)
-        >>> 
-        >>> # Reference contains test cases
-        >>> test_cases = {
-        ...     "test_fn": test_function,
-        ...     "inputs": [(1, 2), (3, 4)],
-        ...     "expected": [3, 7]
-        ... }
-        >>> 
-        >>> score = metric.compute(
-        ...     prediction="def add(a, b): return a + b",
-        ...     references=[test_cases]
-        ... )
-    """
-    
+    """Execute code and check against test cases in an isolated sandbox process."""
+
     requires_reference = True
-    
+
     def __init__(
         self,
         timeout: float = 3.0,
         max_memory_mb: int = 512,
     ):
-        """Initialize execution metric.
-        
-        Args:
-            timeout: Maximum execution time per test (seconds)
-            max_memory_mb: Maximum memory usage (MB)
-        """
         self.name = "execution_accuracy"
         self.timeout = timeout
         self.max_memory_mb = max_memory_mb
-    
+
     def compute(
         self,
         *,
@@ -101,18 +181,8 @@ class ExecutionAccuracy(Metric):
         references: Sequence[Any],
         metadata: dict[str, Any] | None = None,
     ) -> MetricScore:
-        """Execute code and compute accuracy.
-        
-        Args:
-            prediction: Generated code to execute
-            references: List of test specifications
-            metadata: Optional metadata dict
-        
-        Returns:
-            MetricScore with execution accuracy
-        """
         code_str = str(prediction)
-        
+
         if not references:
             return MetricScore(
                 metric_name=self.name,
@@ -120,8 +190,7 @@ class ExecutionAccuracy(Metric):
                 details={"error": "No test cases provided"},
                 metadata=metadata or {},
             )
-        
-        # Extract test cases from reference
+
         test_spec = references[0]
         if not isinstance(test_spec, dict):
             return MetricScore(
@@ -130,11 +199,11 @@ class ExecutionAccuracy(Metric):
                 details={"error": "Test specification must be a dictionary"},
                 metadata=metadata or {},
             )
-        
+
         test_inputs = test_spec.get("inputs", [])
         expected_outputs = test_spec.get("expected", [])
         test_fn_name = test_spec.get("function_name", "solution")
-        
+
         if len(test_inputs) != len(expected_outputs):
             return MetricScore(
                 metric_name=self.name,
@@ -142,8 +211,7 @@ class ExecutionAccuracy(Metric):
                 details={"error": "Mismatch between inputs and expected outputs"},
                 metadata=metadata or {},
             )
-        
-        # Execute code and run tests
+
         results = []
         for test_input, expected in zip(test_inputs, expected_outputs):
             result = self._execute_test(
@@ -153,12 +221,11 @@ class ExecutionAccuracy(Metric):
                 expected,
             )
             results.append(result)
-        
-        # Compute accuracy
+
         passed = sum(1 for r in results if r.passed)
         total = len(results)
         accuracy = passed / total if total > 0 else 0.0
-        
+
         return MetricScore(
             metric_name=self.name,
             value=accuracy,
@@ -178,7 +245,7 @@ class ExecutionAccuracy(Metric):
             },
             metadata=metadata or {},
         )
-    
+
     def _execute_test(
         self,
         code: str,
@@ -186,95 +253,78 @@ class ExecutionAccuracy(Metric):
         test_input: Any,
         expected_output: Any,
     ) -> ExecutionResult:
-        """Execute a single test case.
-        
-        Args:
-            code: Code to execute
-            function_name: Name of function to test
-            test_input: Input to pass to function
-            expected_output: Expected output
-        
-        Returns:
-            ExecutionResult with status and outcome
-        """
-        import time
-        
-        start_time = time.time()
-        
+        start = time.perf_counter()
         try:
-            # Create restricted globals (no file I/O, network, etc.)
-            restricted_globals = {
-                "__builtins__": {
-                    "abs": abs,
-                    "all": all,
-                    "any": any,
-                    "bool": bool,
-                    "dict": dict,
-                    "enumerate": enumerate,
-                    "filter": filter,
-                    "float": float,
-                    "int": int,
-                    "len": len,
-                    "list": list,
-                    "map": map,
-                    "max": max,
-                    "min": min,
-                    "range": range,
-                    "reversed": reversed,
-                    "set": set,
-                    "sorted": sorted,
-                    "str": str,
-                    "sum": sum,
-                    "tuple": tuple,
-                    "zip": zip,
-                }
-            }
-            
-            # Execute code with timeout
-            local_vars = {}
-            exec(code, restricted_globals, local_vars)
-            
-            # Get the function
-            if function_name not in local_vars:
-                return ExecutionResult(
-                    status=ExecutionStatus.ERROR,
-                    passed=False,
-                    error=f"Function '{function_name}' not found",
-                    duration=time.time() - start_time,
+            ctx = multiprocessing.get_context("fork")
+        except ValueError:
+            ctx = multiprocessing.get_context("spawn")
+        result_queue = ctx.Queue()
+        process = ctx.Process(
+            target=_execution_worker,
+            kwargs={
+                "code": code,
+                "function_name": function_name,
+                "test_input": test_input,
+                "expected_output": expected_output,
+                "max_memory_mb": self.max_memory_mb,
+                "result_queue": result_queue,
+            },
+        )
+
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="This process .* is multi-threaded, use of fork\\(\\)",
+                    category=DeprecationWarning,
                 )
-            
-            func = local_vars[function_name]
-            
-            # Run function with input
-            if isinstance(test_input, (list, tuple)):
-                actual_output = func(*test_input)
-            else:
-                actual_output = func(test_input)
-            
-            # Check if output matches expected
-            passed = actual_output == expected_output
-            
+                process.start()
+            process.join(self.timeout)
+
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1.0)
+                return ExecutionResult(
+                    status=ExecutionStatus.TIMEOUT,
+                    passed=False,
+                    error=f"Execution timeout ({self.timeout}s)",
+                    duration=time.perf_counter() - start,
+                )
+
+            payload = result_queue.get_nowait()
             return ExecutionResult(
-                status=ExecutionStatus.PASSED if passed else ExecutionStatus.FAILED,
-                passed=passed,
-                output=str(actual_output),
-                duration=time.time() - start_time,
+                status=ExecutionStatus(payload.get("status", ExecutionStatus.ERROR.value)),
+                passed=bool(payload.get("passed", False)),
+                output=str(payload.get("output", "")),
+                error=(
+                    str(payload["error"])
+                    if payload.get("error") is not None
+                    else None
+                ),
+                duration=time.perf_counter() - start,
             )
-            
-        except TimeoutError:
-            return ExecutionResult(
-                status=ExecutionStatus.TIMEOUT,
-                passed=False,
-                error=f"Execution timeout ({self.timeout}s)",
-                duration=self.timeout,
-            )
-        except Exception as e:
+        except queue.Empty:
             return ExecutionResult(
                 status=ExecutionStatus.ERROR,
                 passed=False,
-                error=str(e),
-                duration=time.time() - start_time,
+                error=f"Worker exited with code {process.exitcode}",
+                duration=time.perf_counter() - start,
             )
+        except BaseException as exc:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1.0)
+            return ExecutionResult(
+                status=ExecutionStatus.ERROR,
+                passed=False,
+                error=str(exc),
+                duration=time.perf_counter() - start,
+            )
+        finally:
+            with contextlib.suppress(Exception):
+                result_queue.close()
+            with contextlib.suppress(Exception):
+                result_queue.join_thread()
 
 
 __all__ = ["ExecutionAccuracy", "ExecutionResult", "ExecutionStatus"]
