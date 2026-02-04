@@ -5,7 +5,7 @@
 Themis supports two evaluation entry points:
 
 - `themis.evaluate(...)`: fastest path for common workflows.
-- `ExperimentSession().run(spec, ...)`: explicit vNext API with full control.
+- `ExperimentSession().run(spec, ...)`: explicit spec/session API with full control.
 
 ## Quick API
 
@@ -20,7 +20,7 @@ report = evaluate(
 )
 ```
 
-## vNext Spec API
+## Spec API
 
 ```python
 from themis.evaluation.metric_pipeline import MetricPipeline

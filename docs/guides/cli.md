@@ -56,7 +56,7 @@ themis eval BENCHMARK --model MODEL [OPTIONS]
 
 Notes:
 - Custom dataset files are not yet supported via CLI. Use the Python API for custom datasets.
-- `--distributed` currently returns an error in the vNext CLI.
+- `--distributed` currently returns an error in the current CLI.
 
 ### Examples
 

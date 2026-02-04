@@ -12,7 +12,7 @@ Themis is built on a layered architecture:
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────┐
-│        ExperimentSession     │  vNext orchestration
+│        ExperimentSession     │  spec-driven orchestration
 └──────────────┬──────────────┘
                │
      ┌─────────▼─────────┐
@@ -153,7 +153,7 @@ evaluate("gsm8k", model="claude-3-opus-20240229")
 evaluate("gsm8k", model="azure/gpt-4")
 ```
 
-### 7. Specs & Sessions (vNext)
+### 7. Specs & Sessions
 
 For advanced control, use explicit specs:
 

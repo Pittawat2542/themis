@@ -133,7 +133,7 @@ nav:
           - Backends: api/backends.md
 
   - Architecture:
-      - vNext Architecture: ARCHITECTURE_VNEXT.md
+      - Architecture: ARCHITECTURE.md
 
   - Project:
       - Changelog: CHANGELOG.md

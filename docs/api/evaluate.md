@@ -80,7 +80,7 @@ Maximum tokens generated per response.
 
 **`num_samples`** : `int = 1`
 
-Number of samples per prompt. This is currently only partially wired in vNext.
+Number of samples per prompt. This is currently only partially wired in the spec/session flow.
 
 **`distributed`** : `bool = False`
 

@@ -1,6 +1,6 @@
 # ExperimentSession
 
-`ExperimentSession` is the vNext entry point for running experiments using explicit specs.
+`ExperimentSession` is the primary entry point for running experiments using explicit specs.
 
 ## Usage
 

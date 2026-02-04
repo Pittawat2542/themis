@@ -1,6 +1,6 @@
-# Clean API Proposal (No Backward Compatibility)
+# Architecture Overview
 
-This document proposes a simplified architecture and API for the next major version of Themis, assuming we drop backward compatibility. The goal is a single, explicit mental model for research workflows, with fewer overlapping entry points and stronger contracts across generation, evaluation, execution, and storage.
+This document describes the current architecture and API direction for Themis. The goal is a single, explicit mental model for research workflows, with fewer overlapping entry points and stronger contracts across generation, evaluation, execution, and storage.
 
 ## Goals
 - Single entry point with explicit configuration.
@@ -12,7 +12,7 @@ This document proposes a simplified architecture and API for the next major vers
 ## Non-Goals
 - Preserving existing function signatures or module paths.
 - Supporting multiple overlapping “ways” to do the same task.
-- Shipping all future integrations in vNext.
+- Shipping all future integrations immediately.
 
 ## Current Pain Points
 - Multiple entry points and partial overlaps (`evaluate`, CLI, builder, task helpers).
@@ -140,7 +140,7 @@ Single narrative, no forks:
 5. CLI Reference
 6. API Reference
 
-## Migration Strategy (vNext, No Backward Compatibility)
+## Migration Strategy (No Backward Compatibility)
 1. New API and spec model shipped in parallel branch.
 2. CLI updated to use spec model.
 3. Remove old builder/task helpers.

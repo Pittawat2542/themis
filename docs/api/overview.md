@@ -13,7 +13,7 @@ Complete API documentation for Themis.
 
 The primary entry point for running evaluations. See [evaluate() documentation](evaluate.md) for details.
 
-### Sessions & Specs (vNext)
+### Sessions & Specs
 
 - **`ExperimentSession`** - Orchestrates runs with explicit specs
 - **`ExperimentSpec`** - Dataset + prompt + model + pipeline

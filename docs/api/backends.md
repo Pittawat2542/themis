@@ -27,7 +27,7 @@ report = evaluate(
 - `themis.backends.execution.LocalExecutionBackend`
 - `themis.backends.execution.SequentialExecutionBackend`
 
-Example with vNext specs:
+Example with specs:
 
 ```python
 from themis.backends.execution import LocalExecutionBackend

@@ -16,7 +16,7 @@ report = evaluate(
 )
 ```
 
-### vNext Spec API
+### Spec API
 
 ```python
 report = ExperimentSession().run(

@@ -10,7 +10,7 @@ accuracy = report.evaluation_report.metrics["ExactMatch"].mean
 print(f"Accuracy: {accuracy:.2%}")
 ```
 
-## 2) Use vNext Specs + Session
+## 2) Use Specs + Session
 
 ```python
 from themis.evaluation.metric_pipeline import MetricPipeline

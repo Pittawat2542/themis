@@ -1,6 +1,6 @@
-# vNext Specs
+# Specs
 
-The vNext API uses explicit spec objects to configure experiments.
+The API uses explicit spec objects to configure experiments.
 
 ## ExperimentSpec
 

@@ -5,7 +5,7 @@ Themis routes generation via provider + model.
 ## Model String Formats
 
 - Auto-detected model name: `"gpt-4"`, `"claude-3-opus-20240229"`
-- Canonical key: `"provider:model_id"` (recommended for vNext specs)
+- Canonical key: `"provider:model_id"` (recommended for specs)
 
 Examples:
 

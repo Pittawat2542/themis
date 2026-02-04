@@ -1,13 +1,13 @@
 # Themis Documentation
 
-This documentation is focused on the vNext architecture (`ExperimentSpec` + `ExperimentSession`).
+This documentation is focused on the current architecture (`ExperimentSpec` + `ExperimentSession`).
 
 ## Start Here
 
 - [Installation](getting-started/installation.md)
 - [Quick Start](getting-started/quickstart.md)
 - [Core Concepts](getting-started/concepts.md)
-- [vNext Architecture](ARCHITECTURE_VNEXT.md)
+- [Architecture](ARCHITECTURE.md)
 
 ## Guides
 
