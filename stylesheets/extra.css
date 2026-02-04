@@ -1,0 +1,147 @@
+:root {
+    --themis-radius: 14px;
+    --themis-card-border: 1px solid color-mix(in srgb, var(--md-default-fg-color) 14%, transparent);
+    --themis-card-bg: linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--md-default-bg-color) 94%, var(--md-primary-fg-color) 6%),
+        color-mix(in srgb, var(--md-default-bg-color) 96%, var(--md-accent-fg-color) 4%)
+    );
+    --themis-shadow: 0 12px 24px color-mix(in srgb, var(--md-default-fg-color) 12%, transparent);
+}
+
+.md-typeset {
+    font-size: 0.82rem;
+}
+
+.md-typeset code {
+    border-radius: 0.35rem;
+    padding: 0.12em 0.38em;
+}
+
+.md-typeset table:not([class]) {
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 0.55rem;
+}
+
+.md-typeset table:not([class]) th {
+    background: color-mix(in srgb, var(--md-primary-fg-color) 8%, var(--md-default-bg-color));
+    font-weight: 650;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+    border-radius: 0.65rem;
+}
+
+.landing-hero {
+    border: var(--themis-card-border);
+    border-radius: 1.1rem;
+    background: radial-gradient(
+            120% 120% at 100% 0%,
+            color-mix(in srgb, var(--md-accent-fg-color) 22%, transparent),
+            transparent 60%
+        ),
+        radial-gradient(
+            120% 120% at 0% 100%,
+            color-mix(in srgb, var(--md-primary-fg-color) 20%, transparent),
+            transparent 65%
+        ),
+        var(--themis-card-bg);
+    box-shadow: var(--themis-shadow);
+    padding: 2rem 2rem 1.8rem;
+    margin: 0.5rem 0 1.5rem;
+}
+
+.hero-kicker {
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    color: var(--md-primary-fg-color);
+    margin: 0 0 0.55rem;
+    font-weight: 700;
+}
+
+.hero-title {
+    margin: 0;
+    line-height: 1.12;
+    font-size: clamp(1.8rem, 4.5vw, 2.7rem);
+}
+
+.hero-subtitle {
+    margin: 0.8rem 0 0;
+    max-width: 56ch;
+    color: var(--md-default-fg-color--light);
+    font-size: 1.03rem;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-top: 1.2rem;
+}
+
+.path-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.9rem;
+    margin: 0.9rem 0 1.8rem;
+}
+
+.path-card {
+    display: block;
+    padding: 0.95rem 1rem;
+    border-radius: var(--themis-radius);
+    border: var(--themis-card-border);
+    text-decoration: none;
+    color: inherit;
+    background: var(--themis-card-bg);
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.path-card h3 {
+    margin: 0 0 0.32rem;
+    font-size: 0.95rem;
+}
+
+.path-card p {
+    margin: 0;
+    color: var(--md-default-fg-color--light);
+    font-size: 0.78rem;
+}
+
+.path-card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--md-primary-fg-color) 50%, transparent);
+    box-shadow: var(--themis-shadow);
+}
+
+.md-typeset .tabbed-set {
+    border: var(--themis-card-border);
+    border-radius: var(--themis-radius);
+    padding: 0.45rem 0.7rem 0.25rem;
+    margin-top: 0.7rem;
+}
+
+.md-nav__link--active {
+    font-weight: 700;
+}
+
+.md-search-result__article {
+    border: var(--themis-card-border);
+    border-radius: 0.75rem;
+    padding: 0.85rem 0.95rem;
+}
+
+[data-md-color-scheme="slate"] .landing-hero,
+[data-md-color-scheme="slate"] .path-card,
+[data-md-color-scheme="slate"] .md-typeset .tabbed-set {
+    box-shadow: none;
+    border-color: color-mix(in srgb, var(--md-default-fg-color) 18%, transparent);
+}
+
+@media screen and (max-width: 860px) {
+    .landing-hero {
+        padding: 1.45rem 1.15rem 1.2rem;
+    }
+}
