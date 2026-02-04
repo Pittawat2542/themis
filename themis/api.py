@@ -34,6 +34,7 @@ Example:
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -58,6 +59,18 @@ logger = logging.getLogger(__name__)
 
 # Module-level metrics registry for custom metrics
 _METRICS_REGISTRY: dict[str, type] = {}
+_PROVIDER_OPTION_KEYS = (
+    "api_key",
+    "base_url",
+    "api_base",
+    "api_version",
+    "timeout",
+    "max_retries",
+    "n_parallel",
+    "organization",
+    "api_type",
+    "region_name",
+)
 
 
 def register_metric(name: str, metric_cls: type) -> None:
@@ -181,6 +194,12 @@ def evaluate(
         >>> print(f"Accuracy: {report.evaluation_report.metrics['accuracy']:.2%}")
         Accuracy: 85.00%
     """
+    if distributed:
+        raise ValueError(
+            "distributed=True is not supported yet. "
+            "Use execution_backend for custom/distributed execution."
+        )
+
     logger.info("=" * 60)
     logger.info("Starting Themis evaluation")
     logger.info(f"Model: {model}")
@@ -196,6 +215,8 @@ def evaluate(
         logger.warning("⚠️  No api_key provided - may fail for custom API endpoints")
     logger.info("=" * 60)
     
+    provider_options = _extract_provider_options(kwargs)
+
     # Import presets system (lazy import to avoid circular dependencies)
     from themis.presets import get_benchmark_preset
     
@@ -272,7 +293,7 @@ def evaluate(
         
         # Use standard field names
         metadata_fields = ()
-        reference_field = "answer"
+        reference_field = _detect_reference_field(dataset)
         dataset_id_field = "id"
     
     # Build evaluation pipeline
@@ -287,7 +308,16 @@ def evaluate(
         dataset=dataset,
         prompt=prompt_template.template,
         model=model,
-        sampling={"temperature": temperature, "top_p": kwargs.get("top_p", 0.95), "max_tokens": max_tokens},
+        sampling={
+            "temperature": temperature,
+            "top_p": kwargs.get("top_p", 0.95),
+            "max_tokens": max_tokens,
+        },
+        provider_options=provider_options,
+        num_samples=num_samples,
+        dataset_id_field=dataset_id_field,
+        reference_field=reference_field,
+        metadata_fields=metadata_fields,
         pipeline=pipeline,
         run_id=run_id,
     )
@@ -304,15 +334,27 @@ def evaluate(
     )
 
     session = ExperimentSession()
-    report = session.run(spec, execution=execution, storage=storage_spec)
+    return session.run(spec, execution=execution, storage=storage_spec, on_result=on_result)
 
-    if num_samples > 1:
-        # vNext session does not yet wire repeated sampling; preserve expected behavior for now.
-        if report.generation_results:
-            record = report.generation_results[0]
-            record.attempts = [record] * num_samples
-            record.metrics["attempt_count"] = num_samples
-    return report
+
+def _extract_provider_options(kwargs: dict[str, Any]) -> dict[str, Any]:
+    options = {key: kwargs[key] for key in _PROVIDER_OPTION_KEYS if key in kwargs}
+    # Normalize common alias for LiteLLM constructor compatibility.
+    if "base_url" in options and "api_base" not in options:
+        options["api_base"] = options.pop("base_url")
+    elif "base_url" in options:
+        options.pop("base_url")
+    return options
+
+
+def _detect_reference_field(dataset: Sequence[dict[str, Any]]) -> str | None:
+    if not dataset:
+        return "answer"
+    if any("answer" in row for row in dataset):
+        return "answer"
+    if any("reference" in row for row in dataset):
+        return "reference"
+    return None
 
 
 def _resolve_metrics(metric_names: list[str]) -> list:

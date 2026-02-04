@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from themis.core.entities import ExperimentReport, ModelSpec, SamplingConfig
+from themis.core.entities import ExperimentReport, GenerationRecord, ModelSpec, SamplingConfig
 from themis.evaluation.pipeline import EvaluationPipelineContract
 from themis.experiment.orchestrator import ExperimentOrchestrator
 from themis.generation.plan import GenerationPlan
 from themis.generation.router import ProviderRouter
 from themis.generation.runner import GenerationRunner
+from themis.generation.strategies import RepeatedSamplingStrategy
 from themis.generation.templates import PromptTemplate
 from themis.interfaces import DatasetAdapter
 from themis.presets import parse_model_name
@@ -29,6 +30,7 @@ class ExperimentSession:
         *,
         execution: ExecutionSpec | None = None,
         storage: StorageSpec | None = None,
+        on_result: Callable[[GenerationRecord], None] | None = None,
     ) -> ExperimentReport:
         execution = execution or ExecutionSpec()
         storage = storage or StorageSpec()
@@ -41,7 +43,9 @@ class ExperimentSession:
 
         dataset = _resolve_dataset(spec.dataset)
 
-        provider_name, model_id, provider_options = _parse_model(spec.model)
+        provider_name, model_id, provider_options = _parse_model(
+            spec.model, provider_options=spec.provider_options
+        )
         model_spec = ModelSpec(identifier=model_id, provider=provider_name)
         sampling = _build_sampling(spec.sampling)
 
@@ -49,15 +53,23 @@ class ExperimentSession:
             templates=[PromptTemplate(name="default", template=spec.prompt)],
             models=[model_spec],
             sampling_parameters=[sampling],
-            dataset_id_field="id",
-            reference_field="answer",
+            dataset_id_field=spec.dataset_id_field,
+            reference_field=spec.reference_field,
+            metadata_fields=spec.metadata_fields,
         )
 
         provider = create_provider(provider_name, **provider_options)
         router = ProviderRouter({(provider_name, model_id): provider})
 
+        strategy_resolver = None
+        if spec.num_samples > 1:
+            strategy_resolver = lambda task: RepeatedSamplingStrategy(
+                attempts=spec.num_samples
+            )
+
         runner = GenerationRunner(
             provider=router,
+            strategy_resolver=strategy_resolver,
             max_parallel=execution.workers,
             max_retries=execution.max_retries,
             retry_initial_delay=execution.retry_initial_delay,
@@ -80,14 +92,20 @@ class ExperimentSession:
             run_id=spec.run_id,
             resume=storage.cache,
             cache_results=storage.cache,
+            on_result=on_result,
         )
 
 
-def _parse_model(model: str) -> tuple[str, str, dict]:
+def _parse_model(
+    model: str, *, provider_options: Mapping[str, Any] | None = None
+) -> tuple[str, str, dict[str, Any]]:
+    options = dict(provider_options or {})
     if ":" in model:
         provider_name, model_id = model.split(":", 1)
-        return provider_name, model_id, {}
-    return parse_model_name(model)
+        return provider_name, model_id, options
+
+    parsed_provider, model_id, parsed_options = parse_model_name(model, **options)
+    return parsed_provider, model_id, parsed_options
 
 
 def _build_sampling(data: dict) -> SamplingConfig:

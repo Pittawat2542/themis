@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -18,8 +18,13 @@ class ExperimentSpec:
     prompt: str
     model: str
     sampling: Mapping[str, Any] = field(default_factory=dict)
+    provider_options: Mapping[str, Any] = field(default_factory=dict)
     pipeline: object | None = None
     run_id: str | None = None
+    num_samples: int = 1
+    dataset_id_field: str = "id"
+    reference_field: str | None = "answer"
+    metadata_fields: Sequence[str] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.prompt:
@@ -28,6 +33,8 @@ class ExperimentSpec:
             raise ValueError("ExperimentSpec.model must be a non-empty string.")
         if self.pipeline is None:
             raise ValueError("ExperimentSpec.pipeline must be provided.")
+        if self.num_samples < 1:
+            raise ValueError("ExperimentSpec.num_samples must be >= 1.")
 
 
 __all__ = ["ExperimentSpec"]

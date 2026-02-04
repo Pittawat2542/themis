@@ -3,6 +3,7 @@
 import pytest
 
 from themis.api import evaluate, _resolve_metrics
+from themis.generation.clients import FakeMathModelClient
 from themis.presets import get_benchmark_preset, list_benchmarks, parse_model_name
 
 
@@ -112,29 +113,35 @@ class TestBenchmarkPresets:
 class TestEvaluateAPI:
     """Test the main evaluate() API."""
     
-    def test_evaluate_custom_dataset(self):
-        """Test evaluation with custom dataset."""
-        # Note: This would require full integration, so we just test the interface
+    def test_evaluate_custom_dataset(self, tmp_path):
+        """Test evaluation with custom dataset runs end-to-end."""
         dataset = [
             {"id": "1", "question": "What is 2+2?", "answer": "4"},
         ]
-        
-        # This would require a real model, so we just verify the function signature
-        # In a real test, we'd use a mock or fake model
-        pass  # TODO: Implement with mocked components
+
+        report = evaluate(
+            dataset,
+            model="fake-math-llm",
+            prompt="What is {question}?",
+            storage=tmp_path,
+            run_id="custom-dataset-test",
+            resume=False,
+        )
+        assert len(report.generation_results) == 1
+        assert "ExactMatch" in report.evaluation_report.metrics
     
     def test_evaluate_requires_model(self):
         """Test that model parameter is required."""
-        # The function signature requires model, so this is enforced by Python
-        pass
+        with pytest.raises(TypeError, match="missing 1 required keyword-only argument: 'model'"):
+            evaluate("demo")  # type: ignore[call-arg]
     
     def test_evaluate_with_invalid_benchmark_raises(self):
         """Test that invalid benchmark raises ValueError."""
-        # Would need to actually call evaluate() with mocked components
-        pass  # TODO: Implement with mocked components
+        with pytest.raises(ValueError, match="Unknown benchmark"):
+            evaluate("nonexistent-benchmark", model="fake-math-llm")
 
     def test_evaluate_num_samples_generates_attempts(self, tmp_path):
-        """Test that num_samples triggers repeated sampling."""
+        """Test that num_samples triggers real repeated sampling attempts."""
         dataset = [
             {"id": "1", "question": "2+2", "answer": "4"},
         ]
@@ -152,6 +159,87 @@ class TestEvaluateAPI:
         record = report.generation_results[0]
         assert len(record.attempts) == 3
         assert record.metrics.get("attempt_count") == 3
+        assert [attempt.task.metadata.get("attempts") for attempt in record.attempts] == [
+            0,
+            1,
+            2,
+        ]
+
+    def test_evaluate_passes_provider_options(self, tmp_path, monkeypatch):
+        """Test that provider kwargs are propagated to provider creation."""
+        captured: dict[str, object] = {}
+
+        def _fake_create_provider(name: str, **options):
+            captured["name"] = name
+            captured["options"] = dict(options)
+            return FakeMathModelClient(seed=7)
+
+        monkeypatch.setattr("themis.session.create_provider", _fake_create_provider)
+
+        evaluate(
+            [{"id": "1", "question": "2+2", "answer": "4"}],
+            model="litellm:gpt-4",
+            prompt="What is {question}?",
+            api_key="test-key",
+            api_base="http://localhost:1234/v1",
+            storage=tmp_path,
+            run_id="provider-options-test",
+            resume=False,
+        )
+
+        assert captured["name"] == "litellm"
+        options = captured["options"]
+        assert isinstance(options, dict)
+        assert options.get("api_key") == "test-key"
+        assert options.get("api_base") == "http://localhost:1234/v1"
+
+    def test_evaluate_calls_on_result_callback(self, tmp_path):
+        """Test that on_result callback is called for each generation record."""
+        seen_ids: list[str | None] = []
+
+        def _on_result(record):
+            seen_ids.append(record.task.metadata.get("dataset_id"))
+
+        evaluate(
+            [
+                {"id": "1", "question": "2+2", "answer": "4"},
+                {"id": "2", "question": "1+1", "answer": "2"},
+            ],
+            model="fake-math-llm",
+            prompt="What is {question}?",
+            on_result=_on_result,
+            storage=tmp_path,
+            run_id="on-result-callback-test",
+            resume=False,
+        )
+
+        assert seen_ids == ["1", "2"]
+
+    def test_evaluate_rejects_distributed_mode(self, tmp_path):
+        """Test that unsupported distributed mode fails fast."""
+        with pytest.raises(ValueError, match="distributed"):
+            evaluate(
+                [{"id": "1", "question": "2+2", "answer": "4"}],
+                model="fake-math-llm",
+                prompt="What is {question}?",
+                distributed=True,
+                storage=tmp_path,
+                run_id="distributed-not-supported",
+                resume=False,
+            )
+
+    def test_evaluate_custom_dataset_reference_field(self, tmp_path):
+        """Test that custom datasets support `reference` field as ground truth."""
+        report = evaluate(
+            [{"id": "1", "question": "2+2", "reference": "4"}],
+            model="fake-math-llm",
+            prompt="What is {question}?",
+            metrics=["exact_match"],
+            storage=tmp_path,
+            run_id="reference-field-test",
+            resume=False,
+        )
+        assert report.evaluation_report.failures == []
 
 
 # Run simple import test to verify module loads
