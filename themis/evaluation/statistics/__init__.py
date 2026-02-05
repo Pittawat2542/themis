@@ -7,6 +7,14 @@ significance tests, and statistical comparisons across experiment runs.
 from __future__ import annotations
 
 from .bootstrap import bootstrap_ci
+from .comparison_tests import (
+    StatisticalTest,
+    StatisticalTestResult,
+    bootstrap_confidence_interval,
+    mcnemar_test,
+    permutation_test as comparison_permutation_test,
+    t_test as comparison_t_test,
+)
 from .confidence_intervals import (
     compute_confidence_interval,
     compute_statistical_summary,
@@ -50,4 +58,11 @@ __all__ = [
     # Effect sizes
     "cohens_h",
     "cohens_d",
+    # Comparison-facing compatibility API
+    "StatisticalTest",
+    "StatisticalTestResult",
+    "comparison_t_test",
+    "bootstrap_confidence_interval",
+    "comparison_permutation_test",
+    "mcnemar_test",
 ]

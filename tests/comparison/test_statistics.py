@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from themis.comparison import statistics as comparison_statistics
+from themis.evaluation.statistics import comparison_tests as canonical_statistics
 from themis.evaluation.statistics import (
     bootstrap_ci as evaluation_bootstrap_ci,
     paired_t_test as evaluation_paired_t_test,
@@ -68,8 +69,8 @@ class TestTTest:
 
     def test_t_test_p_value_monotonic_for_small_df(self):
         """Test p-values are monotonic with larger t-statistics for same df."""
-        p_low = comparison_statistics._approximate_t_test_p_value(2.1, 10)
-        p_high = comparison_statistics._approximate_t_test_p_value(2.9, 10)
+        p_low = canonical_statistics._approximate_t_test_p_value(2.1, 10)
+        p_high = canonical_statistics._approximate_t_test_p_value(2.9, 10)
         assert p_high < p_low
 
     def test_t_test_paired_uses_evaluation_stack(self, monkeypatch):
@@ -89,7 +90,7 @@ class TestTTest:
             )
 
         monkeypatch.setattr(
-            comparison_statistics, "evaluation_paired_t_test", _fake_paired_t_test
+            canonical_statistics, "evaluation_paired_t_test", _fake_paired_t_test
         )
 
         result = t_test([0.8, 0.9, 1.0], [0.2, 0.1, 0.0], paired=True, alpha=0.05)
@@ -132,7 +133,7 @@ class TestTTest:
                 treatment_ci=SimpleNamespace(lower=0.7, upper=0.9),
             )
 
-        monkeypatch.setattr(comparison_statistics, "evaluation_compare_metrics", _fake_compare_metrics)
+        monkeypatch.setattr(canonical_statistics, "evaluation_compare_metrics", _fake_compare_metrics)
 
         result = t_test([0.7, 0.8, 0.9], [0.1, 0.2, 0.3], paired=False, alpha=0.05)
         assert calls["count"] == 1
@@ -220,7 +221,7 @@ class TestBootstrap:
                 n_bootstrap=n_bootstrap,
             )
 
-        monkeypatch.setattr(comparison_statistics, "evaluation_bootstrap_ci", _fake_bootstrap_ci)
+        monkeypatch.setattr(canonical_statistics, "evaluation_bootstrap_ci", _fake_bootstrap_ci)
 
         result = bootstrap_confidence_interval(
             [3.0, 4.0, 5.0],
@@ -326,7 +327,7 @@ class TestPermutation:
             )
 
         monkeypatch.setattr(
-            comparison_statistics, "evaluation_permutation_test", _fake_permutation_test
+            canonical_statistics, "evaluation_permutation_test", _fake_permutation_test
         )
 
         result = permutation_test(

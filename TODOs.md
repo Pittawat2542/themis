@@ -14,7 +14,7 @@ Every item follows red -> green -> refactor.
 ## Current Status (Reassessed)
 
 - Completed major slices: evaluate/session wiring, comparison alignment/statistics hardening, sandboxed execution metric, storage adapter contract fixes, reproducibility manifest, parallel completion-order generation.
-- Remaining high-impact gaps: full statistics-module consolidation, docs/coverage hardening.
+- Remaining high-impact gaps: coverage hardening.
 
 ## P0 - Correctness and Research Validity
 
@@ -33,7 +33,7 @@ TDD:
 
 ### 2) Make statistical comparison rigorous by default
 
-- [ ] Unify to a single statistics module (`themis/evaluation/statistics`) and remove duplicate comparison-specific implementation (most inference paths now delegated; compatibility wrappers remain).
+- [x] Unify to a single statistics module (`themis/evaluation/statistics`) and remove duplicate comparison-specific implementation.
 - [x] Require sample alignment by `sample_id` for paired tests.
 - [x] Replace rough p-value approximations with exact/scipy-backed implementations; define deterministic fallback policy.
 - [x] Add multiple-comparison correction policy as part of report generation defaults.
@@ -119,7 +119,7 @@ TDD:
 
 ## Proposed Execution Order
 
-- [x] Sprint 1: P0.1, P0.2 (mostly complete; stats consolidation remains)
+- [x] Sprint 1: P0.1, P0.2
 - [x] Sprint 2: P0.3, P1.4
 - [x] Sprint 3: P1.5, P2.6
 - [ ] Sprint 4: P3.7, P3.8
