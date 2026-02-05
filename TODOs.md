@@ -86,7 +86,7 @@ TDD:
 ### 6) Improve execution throughput and memory behavior
 
 - [x] Use completion-order result handling (`as_completed`) in threaded generation path.
-- [ ] Stream records/evaluations in chunks instead of full in-memory materialization.
+- [x] Stream records/evaluations in chunks instead of full in-memory materialization.
 - [x] Replace directory scanning for run lookup with indexed lookup in storage metadata DB.
 - [ ] Add bounded-memory mode for large runs.
 

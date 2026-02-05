@@ -96,6 +96,7 @@ class ExperimentOrchestrator:
         cache_results: bool = True,
         on_result: Callable[[GenerationRecord], None] | None = None,
         run_manifest: dict[str, object] | None = None,
+        evaluation_batch_size: int = 100,
     ) -> ExperimentReport:
         """Run experiment: generate responses, evaluate, and report results.
 
@@ -108,11 +109,14 @@ class ExperimentOrchestrator:
             cache_results: Whether to cache new results
             on_result: Optional callback for each generation result
             run_manifest: Required reproducibility manifest for this run
+            evaluation_batch_size: Number of records per evaluation batch
 
         Returns:
             ExperimentReport with generation results, evaluation, and metadata
         """
         logger.info("Orchestrator: Initializing experiment run")
+        if evaluation_batch_size < 1:
+            raise ValueError("evaluation_batch_size must be >= 1")
         
         # Initialize integrations
         self._integrations.initialize_run(
@@ -198,9 +202,34 @@ class ExperimentOrchestrator:
         generation_results: list[GenerationRecord] = []
         failures: list[ExperimentFailure] = []
         pending_tasks: list[GenerationTask] = []
-        pending_records: list[GenerationRecord] = []
-        pending_keys: list[str] = []
         cached_eval_records: list[EvaluationRecord] = []
+        eval_batch: list[GenerationRecord] = []
+        new_eval_records: list[EvaluationRecord] = []
+        new_eval_failures: list[EvaluationFailure] = []
+        expected_metric_names: set[str] = set()
+        if hasattr(self._evaluation, "_metrics"):
+            expected_metric_names.update(
+                metric.name for metric in self._evaluation._metrics
+            )
+
+        def _flush_eval_batch() -> None:
+            nonlocal eval_batch
+            if not eval_batch:
+                return
+            logger.info(
+                "Orchestrator: Evaluating batch of %s records...",
+                len(eval_batch),
+            )
+            batch_report = self._evaluation.evaluate(eval_batch)
+            expected_metric_names.update(batch_report.metrics.keys())
+            for record, evaluation in zip(eval_batch, batch_report.records):
+                if cache_results:
+                    self._cache.save_evaluation_record(
+                        run_identifier, record, evaluation, evaluation_config
+                    )
+                new_eval_records.append(evaluation)
+            new_eval_failures.extend(batch_report.failures)
+            eval_batch = []
 
         for task in tasks:
             task_cache_key = experiment_storage.task_cache_key(task)
@@ -220,8 +249,9 @@ class ExperimentOrchestrator:
                 if evaluation is not None:
                     cached_eval_records.append(evaluation)
                 else:
-                    pending_records.append(cached)
-                    pending_keys.append(eval_cache_key)
+                    eval_batch.append(cached)
+                    if len(eval_batch) >= evaluation_batch_size:
+                        _flush_eval_batch()
                 if on_result:
                     on_result(cached)
             else:
@@ -273,41 +303,30 @@ class ExperimentOrchestrator:
                         run_identifier, record, cache_key
                     )
                     
-                logger.debug(f"Orchestrator: Processing record (adding to pending...)")
-                pending_records.append(record)
-                pending_keys.append(cache_key)
+                logger.debug("Orchestrator: Processing record (queueing evaluation...)")
+                eval_batch.append(record)
+                if len(eval_batch) >= evaluation_batch_size:
+                    _flush_eval_batch()
                 
                 logger.debug(f"Orchestrator: Processing record (callback...)")
                 if on_result:
                     on_result(record)
                 logger.debug(f"Orchestrator: Record processing complete")
 
-        # Evaluate pending records
-        logger.info(f"Orchestrator: Preparing to evaluate {len(pending_records)} pending records...")
-        if pending_records:
-            logger.info(f"Orchestrator: Starting evaluation of {len(pending_records)} records...")
-            try:
-                new_evaluation_report = self._evaluation.evaluate(pending_records)
-                logger.info(f"Orchestrator: ✅ Evaluation complete - got {len(new_evaluation_report.records)} results")
-            except Exception as e:
-                logger.error(f"Orchestrator: ❌ Evaluation failed: {e}")
-                raise
-        else:
-            logger.info("Orchestrator: No new records to evaluate (all cached)")
-            new_evaluation_report = evaluation_pipeline.EvaluationReport(
-                metrics={}, failures=[], records=[]
-            )
-
-        # Cache evaluation results
-        for record, evaluation in zip(pending_records, new_evaluation_report.records):
-            self._cache.save_evaluation_record(
-                run_identifier, record, evaluation, evaluation_config
-            )
+        # Evaluate remaining queued records
+        logger.info(
+            "Orchestrator: Flushing final evaluation batch (%s queued)...",
+            len(eval_batch),
+        )
+        _flush_eval_batch()
 
         # Combine cached and new evaluations
         logger.info("Orchestrator: Combining cached and new evaluations...")
         evaluation_report = self._combine_evaluations(
-            cached_eval_records, new_evaluation_report
+            cached_eval_records,
+            new_eval_records,
+            new_eval_failures,
+            expected_metric_names=expected_metric_names,
         )
         logger.info(f"Orchestrator: Total evaluation records: {len(evaluation_report.records)}")
 
@@ -466,16 +485,19 @@ class ExperimentOrchestrator:
     def _combine_evaluations(
         self,
         cached_records: list[EvaluationRecord],
-        new_report: evaluation_pipeline.EvaluationReport,
+        new_records: list[EvaluationRecord],
+        new_failures: list[EvaluationFailure],
+        *,
+        expected_metric_names: set[str] | None = None,
     ) -> evaluation_pipeline.EvaluationReport:
-        all_records = list(cached_records) + list(new_report.records)
+        all_records = list(cached_records) + list(new_records)
         per_metric: dict[str, list[MetricScore]] = {}
         for record in all_records:
             for score in record.scores:
                 per_metric.setdefault(score.metric_name, []).append(score)
 
         aggregates: dict[str, evaluation_pipeline.MetricAggregate] = {}
-        metric_names = set(per_metric.keys()) | set(new_report.metrics.keys())
+        metric_names = set(per_metric.keys()) | set(expected_metric_names or set())
         for name in metric_names:
             scores = per_metric.get(name, [])
             mean = sum(score.value for score in scores) / len(scores) if scores else 0.0
@@ -486,7 +508,7 @@ class ExperimentOrchestrator:
                 per_sample=scores,
             )
 
-        failures = list(new_report.failures)
+        failures = list(new_failures)
         for record in cached_records:
             for message in record.failures:
                 failures.append(

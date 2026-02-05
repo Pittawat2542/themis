@@ -213,7 +213,8 @@ class TestEvaluateAPI:
             resume=False,
         )
 
-        assert seen_ids == ["1", "2"]
+        assert len(seen_ids) == 2
+        assert set(seen_ids) == {"1", "2"}
 
     def test_evaluate_rejects_distributed_mode(self, tmp_path):
         """Test that unsupported distributed mode fails fast."""
