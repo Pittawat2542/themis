@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from themis.core import entities as core_entities
+from themis.experiment.cost import CostTracker as RuntimeCostTracker
 
 # Provider pricing per 1M tokens (as of 2024)
 # Format: {provider_model: (input_cost_per_1m, output_cost_per_1m)}
@@ -103,7 +104,7 @@ class CostSummary:
     cost_by_provider: Dict[str, float]
 
 
-class CostTracker:
+class CostTracker(RuntimeCostTracker):
     """Track and compute costs for LLM API usage.
 
     This class maintains a record of all API calls and their costs,
@@ -121,6 +122,7 @@ class CostTracker:
                 (input_cost_per_1m, output_cost_per_1m) tuples.
                 Defaults to DEFAULT_PRICING if not provided.
         """
+        super().__init__()
         self.pricing = pricing or DEFAULT_PRICING.copy()
         self.records: List[CostRecord] = []
 
@@ -186,8 +188,19 @@ class CostTracker:
             },
         )
 
+        self.record_generation(
+            model=model_id,
+            prompt_tokens=usage.input_tokens,
+            completion_tokens=usage.output_tokens,
+            cost=total_cost,
+        )
         self.records.append(cost_record)
         return cost_record
+
+    def reset(self) -> None:
+        """Reset both compatibility and runtime tracking state."""
+        super().reset()
+        self.records.clear()
 
     def get_summary(self) -> CostSummary:
         """Compute aggregated cost summary across all tracked records.
@@ -196,13 +209,14 @@ class CostTracker:
             CostSummary with aggregated statistics
         """
         if not self.records:
+            runtime = self.get_breakdown()
             return CostSummary(
-                total_cost=0.0,
-                total_tokens=0,
-                total_input_tokens=0,
-                total_output_tokens=0,
-                num_requests=0,
-                cost_by_model={},
+                total_cost=runtime.total_cost,
+                total_tokens=runtime.token_counts.get("total_tokens", 0),
+                total_input_tokens=runtime.token_counts.get("prompt_tokens", 0),
+                total_output_tokens=runtime.token_counts.get("completion_tokens", 0),
+                num_requests=runtime.api_calls,
+                cost_by_model=runtime.per_model_costs.copy(),
                 cost_by_provider={},
             )
 

@@ -6,11 +6,13 @@ It replaces 20+ commands with a smaller, task-oriented set.
 
 from __future__ import annotations
 
+import builtins
+import json
 import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Sequence
+from typing import Annotated, Any, Sequence
 
 from cyclopts import App, Parameter
 from themis._version import __version__
@@ -80,51 +82,68 @@ def eval(
     if limit:
         print(f"Limit: {limit} samples")
     print()
-    
-    # Check if it's a file (custom dataset)
-    if Path(benchmark_or_dataset).exists():
-        print(f"Loading custom dataset from: {benchmark_or_dataset}")
-        # TODO: Load dataset from file
-        print("Error: Custom dataset files not yet implemented")
-        return 1
 
     try:
-        from themis.evaluation.pipeline import EvaluationPipeline
-        from themis.generation.templates import PromptTemplate
-        from themis.presets import get_benchmark_preset
-        from themis.session import ExperimentSession
-        from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
-
-        # Resolve benchmark preset
-        preset = get_benchmark_preset(benchmark_or_dataset)
-
-        dataset = preset.load_dataset(limit=limit)
-
-        if prompt is None:
-            prompt_template = preset.prompt_template
-        else:
-            prompt_template = PromptTemplate(name="custom", template=prompt)
-
-        pipeline = EvaluationPipeline(
-            extractor=preset.extractor,
-            metrics=preset.metrics,
-        )
-
-        spec = ExperimentSpec(
-            dataset=dataset,
-            prompt=prompt_template.template,
-            model=model,
-            sampling={"temperature": temperature, "max_tokens": max_tokens},
-            pipeline=pipeline,
-            run_id=run_id,
-        )
-
+        custom_dataset_path = Path(benchmark_or_dataset)
+        is_custom_dataset = custom_dataset_path.exists()
         storage_root = _resolve_storage_root(storage)
-        report = ExperimentSession().run(
-            spec,
-            execution=ExecutionSpec(workers=workers),
-            storage=StorageSpec(path=storage_root, cache=resume),
-        )
+
+        if is_custom_dataset:
+            print(f"Loading custom dataset from: {custom_dataset_path}")
+            from themis.api import evaluate as evaluate_api
+
+            dataset_rows, detected_prompt_field, _ = _load_custom_dataset_file(
+                custom_dataset_path
+            )
+            prompt_template = prompt or f"{{{detected_prompt_field}}}"
+            report = evaluate_api(
+                dataset_rows,
+                model=model,
+                prompt=prompt_template,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                workers=workers,
+                storage=storage_root,
+                run_id=run_id,
+                resume=resume,
+                limit=limit,
+            )
+        else:
+            from themis.evaluation.pipeline import EvaluationPipeline
+            from themis.generation.templates import PromptTemplate
+            from themis.presets import get_benchmark_preset
+            from themis.session import ExperimentSession
+            from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
+
+            # Resolve benchmark preset
+            preset = get_benchmark_preset(benchmark_or_dataset)
+
+            dataset = preset.load_dataset(limit=limit)
+
+            if prompt is None:
+                prompt_template = preset.prompt_template
+            else:
+                prompt_template = PromptTemplate(name="custom", template=prompt)
+
+            pipeline = EvaluationPipeline(
+                extractor=preset.extractor,
+                metrics=preset.metrics,
+            )
+
+            spec = ExperimentSpec(
+                dataset=dataset,
+                prompt=prompt_template.template,
+                model=model,
+                sampling={"temperature": temperature, "max_tokens": max_tokens},
+                pipeline=pipeline,
+                run_id=run_id,
+            )
+
+            report = ExperimentSession().run(
+                spec,
+                execution=ExecutionSpec(workers=workers),
+                storage=StorageSpec(path=storage_root, cache=resume),
+            )
         
         # Print results
         print("\n" + "=" * 80)
@@ -538,6 +557,104 @@ def _resolve_storage_root(storage: str | None) -> Path:
     if env_storage:
         return Path(env_storage).expanduser()
     return Path(".cache/experiments")
+
+
+_PROMPT_FIELD_CANDIDATES = ("prompt", "question", "input", "text", "query", "problem")
+_REFERENCE_FIELD_CANDIDATES = (
+    "answer",
+    "reference",
+    "expected",
+    "label",
+    "target",
+    "solution",
+)
+_ID_FIELD_CANDIDATES = ("id", "sample_id", "dataset_id", "unique_id", "uid")
+
+
+def _load_custom_dataset_file(path: Path) -> tuple[list[dict[str, Any]], str, str]:
+    rows = _read_dataset_rows(path)
+    if not rows:
+        raise ValueError(f"Dataset file is empty: {path}")
+
+    normalized_rows: list[dict[str, Any]] = []
+    for index, row in enumerate(rows, 1):
+        if not isinstance(row, dict):
+            raise ValueError(
+                f"Row {index} in {path} must be a JSON object, got {type(row).__name__}."
+            )
+        normalized_rows.append(dict(row))
+
+    prompt_field = _detect_required_field(
+        normalized_rows, _PROMPT_FIELD_CANDIDATES, "prompt"
+    )
+    reference_field = _detect_required_field(
+        normalized_rows, _REFERENCE_FIELD_CANDIDATES, "reference"
+    )
+    id_field = _detect_optional_field(normalized_rows, _ID_FIELD_CANDIDATES)
+
+    for index, row in enumerate(normalized_rows, 1):
+        if id_field is None:
+            row["id"] = str(index)
+        elif id_field != "id":
+            row["id"] = row[id_field]
+
+        if reference_field not in ("answer", "reference"):
+            row.setdefault("reference", row[reference_field])
+
+    return normalized_rows, prompt_field, reference_field
+
+
+def _read_dataset_rows(path: Path) -> list[Any]:
+    suffix = path.suffix.lower()
+    if suffix == ".jsonl":
+        rows: list[Any] = []
+        with path.open("r", encoding="utf-8") as handle:
+            for line_no, line in enumerate(handle, 1):
+                content = line.strip()
+                if not content:
+                    continue
+                try:
+                    rows.append(json.loads(content))
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"Invalid JSON on line {line_no} in {path}: {exc.msg}"
+                    ) from exc
+        return rows
+    if suffix == ".json":
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in {path}: {exc.msg}") from exc
+        if not isinstance(payload, builtins.list):
+            raise ValueError(
+                f"JSON dataset in {path} must be a top-level array of row objects."
+            )
+        return payload
+    raise ValueError(
+        f"Unsupported dataset format '{suffix or '<none>'}' for {path}. "
+        "Use .json or .jsonl."
+    )
+
+
+def _detect_required_field(
+    rows: list[dict[str, Any]], candidates: tuple[str, ...], kind: str
+) -> str:
+    field = _detect_optional_field(rows, candidates)
+    if field is None:
+        options = ", ".join(candidates)
+        raise ValueError(
+            f"Could not detect {kind} field in dataset. Add one of: {options}."
+        )
+    return field
+
+
+def _detect_optional_field(
+    rows: list[dict[str, Any]], candidates: tuple[str, ...]
+) -> str | None:
+    for candidate in candidates:
+        if all(candidate in row for row in rows):
+            return candidate
+    return None
 
 
 def _generate_comparison_html(report) -> str:

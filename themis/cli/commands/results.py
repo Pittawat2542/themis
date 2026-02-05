@@ -8,6 +8,9 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
+DEFAULT_RESULTS_STORAGE = Path(".cache/experiments")
+LEGACY_RESULTS_STORAGE = Path(".cache/runs")
+
 
 def summary_command(
     *,
@@ -22,7 +25,7 @@ def summary_command(
         Parameter(
             help="Storage directory containing experiment results",
         ),
-    ] = Path(".cache/runs"),
+    ] = DEFAULT_RESULTS_STORAGE,
 ) -> int:
     """View quick summary of a single experiment run.
 
@@ -40,8 +43,18 @@ def summary_command(
           --run-id $(ls -t outputs/evaluation | head -1)
     """
     try:
+        storage, used_legacy = _resolve_storage_with_legacy_fallback(storage)
+        if used_legacy:
+            print(
+                f"Warning: Falling back to legacy storage path '{storage}'. "
+                "Use '.cache/experiments' for new runs."
+            )
+
         # Try to find summary.json
-        run_dir = storage / run_id
+        run_dir = _find_run_dir(storage, run_id)
+        if run_dir is None:
+            print(f"Error: Run '{run_id}' not found under {storage}")
+            return 1
         summary_path = run_dir / "summary.json"
 
         if not summary_path.exists():
@@ -119,7 +132,7 @@ def list_command(
         Parameter(
             help="Storage directory containing experiment results",
         ),
-    ] = Path(".cache/runs"),
+    ] = DEFAULT_RESULTS_STORAGE,
     limit: Annotated[
         int | None,
         Parameter(
@@ -149,25 +162,28 @@ def list_command(
         uv run python -m themis.cli results list --sort-by accuracy
     """
     try:
+        storage, used_legacy = _resolve_storage_with_legacy_fallback(storage)
+        if used_legacy:
+            print(
+                f"Warning: Falling back to legacy storage path '{storage}'. "
+                "Use '.cache/experiments' for new runs."
+            )
+
         if not storage.exists():
             print(f"Error: Storage directory not found: {storage}")
             return 1
 
         # Find all summary.json files
         summaries = []
-        for run_dir in storage.iterdir():
-            if not run_dir.is_dir():
+        for summary_path, run_name in _iter_summary_paths(storage):
+            try:
+                with summary_path.open("r", encoding="utf-8") as f:
+                    summary = json.load(f)
+                summary["_run_dir"] = run_name
+                summary["_mtime"] = summary_path.stat().st_mtime
+                summaries.append(summary)
+            except Exception:
                 continue
-            summary_path = run_dir / "summary.json"
-            if summary_path.exists():
-                try:
-                    with summary_path.open("r", encoding="utf-8") as f:
-                        summary = json.load(f)
-                    summary["_run_dir"] = run_dir.name
-                    summary["_mtime"] = summary_path.stat().st_mtime
-                    summaries.append(summary)
-                except Exception:
-                    continue
 
         if not summaries:
             print(f"No experiment runs found in {storage}")
@@ -247,6 +263,76 @@ def list_command(
 
         traceback.print_exc()
         return 1
+
+
+def _resolve_storage_with_legacy_fallback(storage: Path) -> tuple[Path, bool]:
+    if storage.exists():
+        return storage, False
+    if storage == DEFAULT_RESULTS_STORAGE and LEGACY_RESULTS_STORAGE.exists():
+        return LEGACY_RESULTS_STORAGE, True
+    return storage, False
+
+
+def _find_run_dir(storage: Path, run_id: str) -> Path | None:
+    # Current storage format: <root>/experiments/<experiment_id>/runs/<run_id>
+    experiments_root = storage / "experiments"
+    if experiments_root.exists():
+        for exp_dir in experiments_root.iterdir():
+            candidate = exp_dir / "runs" / run_id
+            if candidate.exists():
+                return candidate
+
+    # Also support <root>/<experiment_id>/runs/<run_id>
+    for exp_dir in storage.iterdir():
+        candidate = exp_dir / "runs" / run_id
+        if candidate.exists():
+            return candidate
+
+    # Legacy layout: <root>/<run_id>
+    legacy_candidate = storage / run_id
+    if legacy_candidate.exists():
+        return legacy_candidate
+    return None
+
+
+def _iter_summary_paths(storage: Path) -> list[tuple[Path, str]]:
+    found: list[tuple[Path, str]] = []
+
+    experiments_root = storage / "experiments"
+    if experiments_root.exists():
+        for exp_dir in experiments_root.iterdir():
+            runs_dir = exp_dir / "runs"
+            if not runs_dir.exists():
+                continue
+            for run_dir in runs_dir.iterdir():
+                if not run_dir.is_dir():
+                    continue
+                summary_path = run_dir / "summary.json"
+                if summary_path.exists():
+                    found.append((summary_path, run_dir.name))
+        return found
+
+    for exp_dir in storage.iterdir():
+        runs_dir = exp_dir / "runs"
+        if not runs_dir.exists():
+            continue
+        for run_dir in runs_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+            summary_path = run_dir / "summary.json"
+            if summary_path.exists():
+                found.append((summary_path, run_dir.name))
+
+    if found:
+        return found
+
+    for run_dir in storage.iterdir():
+        if not run_dir.is_dir():
+            continue
+        summary_path = run_dir / "summary.json"
+        if summary_path.exists():
+            found.append((summary_path, run_dir.name))
+    return found
 
 
 __all__ = ["summary_command", "list_command"]
