@@ -5,6 +5,29 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-05
+
+### Added
+- Added custom dataset file support to `themis eval` for `.json` and `.jsonl` inputs with schema validation.
+- Added bounded in-flight task controls for streaming generation execution (`ExecutionSpec.max_in_flight_tasks`).
+- Added truncation metadata for bounded-memory runs and explicit guardrails for inferential helpers when per-sample vectors are incomplete.
+
+### Changed
+- Cache keys are now versioned and stronger: generation task keys include reference fingerprints; evaluation keys always include an evaluation-config fingerprint.
+- Results CLI defaults now use `.cache/experiments` with legacy `.cache/runs` fallback warnings.
+- Comparison metadata now records the effective statistical test used in each run comparison.
+- Timing metadata in standard evaluation pipeline now separates extractor, metric compute, and item-total timing.
+
+### Fixed
+- Session/model provider options now normalize `base_url -> api_base` consistently with top-level API behavior.
+- Bootstrap comparison mode is now CI-only (no synthetic p-values), and multiple-comparison correction is only applied to valid hypothesis-test p-values.
+- Server run detail endpoint now resolves sample prompt/response robustly when evaluation and generation cache key formats differ.
+- Unified compatibility cost tracker with canonical runtime cost tracking implementation to reduce maintenance drift.
+
+### Migration Notes
+- Cache keys changed in 1.1.0. Existing cached runs remain readable, but old keys will not produce false cache hits under new key formats.
+- If scripts relied on `.cache/runs` defaults for results commands, either pass `--storage .cache/runs` explicitly or migrate to `.cache/experiments`.
+
 ## [1.0.0] - 2026-02-04
 
 ### Changed

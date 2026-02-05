@@ -32,12 +32,12 @@ themis demo --model fake-math-llm --limit 10
 
 ## themis eval
 
-Run an evaluation on a benchmark.
+Run an evaluation on a benchmark or custom dataset file.
 
 ### Synopsis
 
 ```bash
-themis eval BENCHMARK --model MODEL [OPTIONS]
+themis eval BENCHMARK_OR_DATASET --model MODEL [OPTIONS]
 ```
 
 ### Options
@@ -53,9 +53,6 @@ themis eval BENCHMARK --model MODEL [OPTIONS]
 - `--resume / --no-resume`
 - `--output FILE` (`.csv`, `.json`, `.html`)
 
-Notes:
-- Custom dataset files are not yet supported via CLI. Use the Python API for custom datasets.
-
 ### Examples
 
 ```bash
@@ -70,6 +67,9 @@ themis eval gsm8k --model gpt-4 --prompt "Q: {prompt}\nA:"
 
 # Export results
 themis eval gsm8k --model gpt-4 --output results.json
+
+# Custom dataset (.jsonl)
+themis eval data.jsonl --model gpt-4 --prompt "Q: {question}\nA:"
 ```
 
 ---

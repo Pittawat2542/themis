@@ -67,5 +67,5 @@ This canonical shape is used consistently by storage, comparison, exports, and s
 ## Current Trade-offs
 
 - Distributed/custom execution requires an explicit `execution_backend` implementation.
-- Custom dataset files are not yet supported in `themis eval ...` CLI; use Python API for dataset objects.
+- `themis eval ...` supports benchmark names and custom dataset files (`.json` / `.jsonl`) with field validation.
 - Custom storage backends must be ExperimentStorage-compatible for full session integration.

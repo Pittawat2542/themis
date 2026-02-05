@@ -220,6 +220,8 @@ print(f"CI: {result.confidence_interval}")
 print(f"Significant: {result.significant}")
 ```
 
+Bootstrap mode in Themis is CI-only inference and does not return p-values.
+
 ### permutation_test()
 
 Perform permutation test.
