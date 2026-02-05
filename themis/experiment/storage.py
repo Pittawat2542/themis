@@ -27,7 +27,7 @@ import shutil
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Literal
+from typing import Any, Dict, Iterable, Iterator, List, Literal
 
 # fcntl is Unix-only
 if sys.platform == "win32":
@@ -296,12 +296,16 @@ class ExperimentStorage:
                 """)
                 conn.commit()
 
-    def _connect_db(self) -> sqlite3.Connection:
+    @contextlib.contextmanager
+    def _connect_db(self) -> Iterator[sqlite3.Connection]:
         """Create a SQLite connection configured for concurrent access."""
         db_path = self._root / "experiments.db"
         conn = sqlite3.connect(db_path, timeout=30.0)
-        conn.execute("PRAGMA busy_timeout=30000")
-        return conn
+        try:
+            conn.execute("PRAGMA busy_timeout=30000")
+            yield conn
+        finally:
+            conn.close()
 
     @contextlib.contextmanager
     def _acquire_lock(self, run_id: str):

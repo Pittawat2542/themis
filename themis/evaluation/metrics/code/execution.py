@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import multiprocessing
+import sys
 import time
 import tracemalloc
 import warnings
@@ -317,6 +318,9 @@ class ExecutionAccuracy(Metric):
                 # Parent does not write to the child pipe endpoint.
                 send_conn.close()
             process.join(self.timeout)
+            if process.is_alive() and sys.platform == "win32":
+                # Allow extra time for spawn startup on Windows CI.
+                process.join(max(1.0, self.timeout))
 
             if process.is_alive():
                 process.terminate()
