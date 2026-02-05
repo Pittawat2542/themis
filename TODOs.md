@@ -47,13 +47,13 @@ TDD:
 
 - [x] Replace inline `exec` execution with isolated worker process runtime.
 - [ ] Enforce hard timeout and memory limits per test case (timeout done, memory-limit verification still pending).
-- [ ] Restrict imports/syscalls and explicitly define allowed builtins (imports/file I/O blocked; network/process-spawn coverage pending).
+- [x] Restrict imports/syscalls and explicitly define allowed builtins.
 - [x] Record execution status taxonomy (timeout, runtime error, forbidden operation, assertion fail).
 
 TDD:
 - [x] Add tests for timeout enforcement.
 - [ ] Add tests for memory-limit enforcement.
-- [ ] Add tests that filesystem/network/process-spawn operations are blocked.
+- [x] Add tests that filesystem/network/process-spawn operations are blocked.
 - [x] Add tests verifying deterministic result schema for pass/fail/error states.
 
 ## P1 - API and Storage Quality

@@ -81,6 +81,50 @@ def test_execution_accuracy_blocks_file_io():
     assert "open" in (result["error"] or "").lower()
 
 
+def test_execution_accuracy_blocks_network_access():
+    metric = ExecutionAccuracy(timeout=0.5)
+    score = metric.compute(
+        prediction=(
+            "def solution(x):\n"
+            "    sock_mod = __import__('socket')\n"
+            "    s = sock_mod.socket()\n"
+            "    return x\n"
+        ),
+        references=[
+            {
+                "function_name": "solution",
+                "inputs": [1],
+                "expected": [1],
+            }
+        ],
+    )
+    result = score.details["results"][0]
+    assert result["status"] == "error"
+    assert "import" in (result["error"] or "").lower()
+
+
+def test_execution_accuracy_blocks_process_spawn():
+    metric = ExecutionAccuracy(timeout=0.5)
+    score = metric.compute(
+        prediction=(
+            "def solution(x):\n"
+            "    sub = __import__('subprocess')\n"
+            "    sub.run(['echo', 'hi'])\n"
+            "    return x\n"
+        ),
+        references=[
+            {
+                "function_name": "solution",
+                "inputs": [1],
+                "expected": [1],
+            }
+        ],
+    )
+    result = score.details["results"][0]
+    assert result["status"] == "error"
+    assert "import" in (result["error"] or "").lower()
+
+
 def test_execution_accuracy_passes_simple_solution():
     metric = ExecutionAccuracy(timeout=0.5)
     score = metric.compute(
