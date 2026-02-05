@@ -216,9 +216,9 @@ class TestEvaluateAPI:
         assert len(seen_ids) == 2
         assert set(seen_ids) == {"1", "2"}
 
-    def test_evaluate_rejects_distributed_mode(self, tmp_path):
-        """Test that unsupported distributed mode fails fast."""
-        with pytest.raises(ValueError, match="distributed"):
+    def test_evaluate_rejects_unknown_distributed_arg(self, tmp_path):
+        """Test that removed placeholder args fail at API boundary."""
+        with pytest.raises(ValueError, match="Unsupported option"):
             evaluate(
                 [{"id": "1", "question": "2+2", "answer": "4"}],
                 model="fake-math-llm",

@@ -186,7 +186,9 @@ class ExperimentStorage:
         self._task_index: dict[str, set[str]] = {}
         self._template_index: dict[str, dict[str, str]] = {}
         self._run_dir_index: dict[str, Path] = {}
-        self._locks: dict[str, tuple[int, int]] = {}  # (fd, count) for reentrant locks
+        # run_id -> (fd, count) for reentrant locks (owner tracked separately).
+        self._locks: dict[str, tuple[int, int]] = {}
+        self._lock_owners: dict[str, int] = {}
 
     def _init_database(self):
         """Initialize SQLite metadata database."""
@@ -282,8 +284,10 @@ class ExperimentStorage:
         Raises:
             TimeoutError: If lock cannot be acquired within 30 seconds
         """
-        # Check if we already hold the lock (reentrant)
-        if run_id in self._locks:
+        # Reentrant only for the same thread.
+        owner = self._lock_owners.get(run_id)
+        thread_id = threading.get_ident()
+        if run_id in self._locks and owner == thread_id:
             lock_fd, count = self._locks[run_id]
             self._locks[run_id] = (lock_fd, count + 1)
             try:
@@ -311,6 +315,7 @@ class ExperimentStorage:
             self._acquire_os_lock(lock_fd, run_id, lock_path, timeout=30)
 
             self._locks[run_id] = (lock_fd, 1)
+            self._lock_owners[run_id] = thread_id
             yield
         finally:
             # Release lock (only if this was the outermost lock)
@@ -428,6 +433,7 @@ class ExperimentStorage:
 
         # Clean up tracking
         self._locks.pop(run_id, None)
+        self._lock_owners.pop(run_id, None)
 
     def start_run(
         self,

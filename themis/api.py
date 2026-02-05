@@ -20,13 +20,11 @@ Example:
         prompt="Solve: {question}"
     )
     
-    # Distributed with cloud storage
+    # Custom execution backend
     report = themis.evaluate(
         "gsm8k",
         model="gpt-4",
-        distributed=True,
         workers=8,
-        storage="s3://my-bucket/experiments"
     )
     ```
 """
@@ -71,6 +69,7 @@ _PROVIDER_OPTION_KEYS = (
     "api_type",
     "region_name",
 )
+_ALLOWED_EXTRA_OPTIONS = {"top_p", *_PROVIDER_OPTION_KEYS}
 
 
 def register_metric(name: str, metric_cls: type) -> None:
@@ -129,7 +128,6 @@ def evaluate(
     max_tokens: int = 512,
     num_samples: int = 1,
     max_records_in_memory: int | None = None,
-    distributed: bool = False,
     workers: int = 4,
     storage: str | Path | None = None,
     storage_backend: object | None = None,
@@ -168,8 +166,6 @@ def evaluate(
             metrics, ensembling, or measuring response variance.
         max_records_in_memory: Optional cap on generation/evaluation records kept in
             the returned report to bound memory for very large runs.
-        distributed: Whether to use distributed execution. Currently a placeholder
-            for future Ray integration.
         workers: Number of parallel workers for generation. Higher = faster but may
             hit rate limits. Recommended: 4-16 for APIs, 32+ for local models.
         storage: Storage location for results and cache. Defaults to ".cache/experiments".
@@ -197,12 +193,6 @@ def evaluate(
         >>> print(f"Accuracy: {report.evaluation_report.metrics['accuracy']:.2%}")
         Accuracy: 85.00%
     """
-    if distributed:
-        raise ValueError(
-            "distributed=True is not supported yet. "
-            "Use execution_backend for custom/distributed execution."
-        )
-
     logger.info("=" * 60)
     logger.info("Starting Themis evaluation")
     logger.info(f"Model: {model}")
@@ -218,6 +208,14 @@ def evaluate(
         logger.warning("⚠️  No api_key provided - may fail for custom API endpoints")
     logger.info("=" * 60)
     
+    unsupported_options = sorted(set(kwargs.keys()) - _ALLOWED_EXTRA_OPTIONS)
+    if unsupported_options:
+        unsupported = ", ".join(unsupported_options)
+        raise ValueError(
+            f"Unsupported option(s): {unsupported}. "
+            "Supported extra options are provider options and `top_p`."
+        )
+
     provider_options = _extract_provider_options(kwargs)
 
     # Import presets system (lazy import to avoid circular dependencies)

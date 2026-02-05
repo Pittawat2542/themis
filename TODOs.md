@@ -14,13 +14,13 @@ Every item follows red -> green -> refactor.
 ## Current Status (Reassessed)
 
 - Completed major slices: evaluate/session wiring, comparison alignment/statistics hardening, sandboxed execution metric, storage adapter contract fixes, reproducibility manifest, parallel completion-order generation.
-- Remaining high-impact gaps: full statistics-module consolidation, canonical storage protocol lifecycle, large-run memory regression checks, docs/coverage hardening.
+- Remaining high-impact gaps: full statistics-module consolidation, docs/coverage hardening.
 
 ## P0 - Correctness and Research Validity
 
 ### 1) Rebuild `evaluate()` wiring as a strict façade
 
-- [ ] Remove placeholder/legacy args that are not implemented (`distributed`, etc.) or implement them fully (currently fail-fast only).
+- [x] Remove placeholder/legacy args that are not implemented (`distributed`, etc.) or implement them fully.
 - [x] Ensure `evaluate()` passes all execution/runtime options into session/orchestrator (provider kwargs, `on_result`, sampling controls).
 - [x] Remove post-hoc fake `num_samples` behavior; execute true multi-sampling in generation.
 - [x] Enforce explicit argument validation with actionable error messages.
@@ -120,6 +120,6 @@ TDD:
 ## Proposed Execution Order
 
 - [x] Sprint 1: P0.1, P0.2 (mostly complete; stats consolidation remains)
-- [x] Sprint 2: P0.3, P1.4 (mostly complete; sandbox/storage protocol gaps remain)
-- [x] Sprint 3: P1.5, P2.6 (partial complete; throughput done, memory/indexing pending)
+- [x] Sprint 2: P0.3, P1.4
+- [x] Sprint 3: P1.5, P2.6
 - [ ] Sprint 4: P3.7, P3.8
