@@ -6,7 +6,7 @@ This module provides pluggable backend interfaces for extending Themis functiona
 
 Themis supports custom backends for:
 - **Storage**: Where and how experiment data is persisted
-- **Execution**: How tasks are executed (parallel, distributed, async)
+- **Execution**: How tasks are executed (parallel, async, or custom schedulers)
 
 ## Quick Start
 
@@ -18,23 +18,28 @@ from themis.backends import LocalExecutionBackend
 
 # Use default file storage + local threading
 result = evaluate(
-    benchmark="demo",
+    "demo",
     model="gpt-4",
     workers=8,  # Uses LocalExecutionBackend with 8 threads
 )
 ```
 
-### Custom Storage Backend (Experimental)
+### Storage Backends with `evaluate()`
 
 ```python
 from themis import evaluate
-from my_backends import S3StorageBackend
+from themis.backends.storage import LocalFileStorageBackend
 
-# Store results in S3 (custom storage backends are not yet wired into evaluate)
-storage = S3StorageBackend(bucket="my-experiments")
-
-# TODO: Use ExperimentStorage directly until custom storage backends are integrated
+result = evaluate(
+    "demo",
+    model="gpt-4",
+    storage_backend=LocalFileStorageBackend(".cache/experiments"),
+)
 ```
+
+Notes:
+- `evaluate()` currently expects storage backends that are ExperimentStorage-compatible.
+- Full custom `StorageBackend` integration is still evolving at the high-level API.
 
 ### Custom Execution Backend
 
@@ -46,7 +51,7 @@ from my_backends import RayExecutionBackend
 executor = RayExecutionBackend(num_cpus=32)
 
 result = evaluate(
-    benchmark="math500",
+    "math500",
     model="gpt-4",
     execution_backend=executor,  # Custom execution
 )
@@ -122,7 +127,7 @@ class RayExecutionBackend(ExecutionBackend):
 **Use custom storage when:**
 - You need team collaboration (S3, GCS)
 - You want to query results with SQL (PostgreSQL)
-- You need distributed caching (Redis)
+- You can provide an ExperimentStorage-compatible adapter
 
 **Use custom execution when:**
 - You have > 10,000 samples
@@ -157,8 +162,9 @@ class RayExecutionBackend(ExecutionBackend):
                      └──────────┘
          │                 │
     ┌────▼─────┐     ┌────▼─────┐
-    │Custom S3 │     │Custom Ray│
-    │ Backend  │     │ Backend  │
+    │Adapter-  │     │Custom Ray│
+    │backed    │     │ Backend  │
+    │ Storage  │     │(example) │
     └──────────┘     └──────────┘
 ```
 
