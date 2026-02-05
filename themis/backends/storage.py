@@ -243,15 +243,7 @@ class StorageBackend(ABC):
 
 
 class LocalFileStorageBackend(StorageBackend):
-    """Adapter for the existing ExperimentStorage implementation.
-    
-    This class wraps the current file-based storage implementation
-    to conform to the StorageBackend interface.
-    
-    Note:
-        This is a compatibility layer. New code should use the interface,
-        but existing storage logic is preserved.
-    """
+    """StorageBackend adapter over ExperimentStorage."""
     
     def __init__(self, storage_path: str | Path):
         """Initialize with path to storage directory.
@@ -264,7 +256,7 @@ class LocalFileStorageBackend(StorageBackend):
 
     @property
     def experiment_storage(self):
-        """Expose underlying ExperimentStorage for compatibility."""
+        """Expose underlying ExperimentStorage."""
         return self._storage
     
     def save_run_metadata(self, run_id: str, metadata: Dict[str, Any]) -> None:

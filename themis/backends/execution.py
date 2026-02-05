@@ -126,7 +126,7 @@ class LocalExecutionBackend(ExecutionBackend):
             items: Iterable of items to process
             max_workers: Override default max_workers
             timeout: Timeout for each task (seconds)
-            **kwargs: Ignored (for interface compatibility)
+            **kwargs: Backend-specific extras (unused by local backend)
             
         Yields:
             Results as they complete

@@ -28,7 +28,7 @@ from __future__ import annotations
 # vNext: protocol definition for evaluation pipelines
 from typing import Protocol, Sequence, runtime_checkable
 
-# Re-export pipeline implementations for backward compatibility
+# Re-export pipeline implementations from canonical modules.
 from themis.evaluation.pipelines.composable_pipeline import (
     ComposableEvaluationPipeline,
     ComposableEvaluationReportPipeline,

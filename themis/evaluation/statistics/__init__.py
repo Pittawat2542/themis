@@ -58,7 +58,7 @@ __all__ = [
     # Effect sizes
     "cohens_h",
     "cohens_d",
-    # Comparison-facing compatibility API
+    # Comparison-focused public API
     "StatisticalTest",
     "StatisticalTestResult",
     "comparison_t_test",
