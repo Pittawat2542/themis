@@ -42,3 +42,21 @@ def test_local_storage_backend_delete_run(tmp_path):
 
     assert backend.run_exists(run_id) is False
     assert run_id not in backend.list_runs()
+
+
+def test_local_storage_backend_lifecycle_methods(tmp_path):
+    backend = LocalFileStorageBackend(tmp_path)
+    run_id = "run-lifecycle"
+    generation_record = make_record(sample_id="s1")
+    evaluation_record = make_evaluation_record(
+        sample_id="s1", metric_name="ExactMatch", value=1.0
+    )
+
+    backend.start_run(run_id, experiment_id="exp-lifecycle", config={"foo": "bar"})
+    backend.append_generation_record(run_id, generation_record)
+    backend.append_evaluation_record(run_id, generation_record, evaluation_record)
+    backend.complete_run(run_id)
+
+    metadata = backend.load_run_metadata(run_id)
+    assert metadata["status"] == "completed"
+    assert metadata["experiment_id"] == "exp-lifecycle"

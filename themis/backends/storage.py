@@ -192,6 +192,55 @@ class StorageBackend(ABC):
         """
         pass
 
+    # Canonical lifecycle semantics (vNext).
+    def start_run(
+        self,
+        run_id: str,
+        *,
+        experiment_id: str = "default",
+        config: Dict[str, Any] | None = None,
+    ) -> None:
+        """Start a run and persist initial metadata."""
+        metadata: Dict[str, Any] = {
+            "run_id": run_id,
+            "experiment_id": experiment_id,
+            "config_snapshot": dict(config or {}),
+        }
+        self.save_run_metadata(run_id, metadata)
+
+    def append_generation_record(
+        self,
+        run_id: str,
+        record: GenerationRecord,
+        *,
+        cache_key: str | None = None,
+    ) -> None:
+        """Append a generation record to a run."""
+        _ = cache_key  # cache keys are backend-specific
+        self.save_generation_record(run_id, record)
+
+    def append_evaluation_record(
+        self,
+        run_id: str,
+        generation_record: GenerationRecord,
+        evaluation_record: EvaluationRecord,
+    ) -> None:
+        """Append an evaluation record to a run."""
+        self.save_evaluation_record(run_id, generation_record, evaluation_record)
+
+    def complete_run(self, run_id: str) -> None:
+        """Mark a run as completed."""
+        metadata = self.load_run_metadata(run_id)
+        metadata["status"] = "completed"
+        self.save_run_metadata(run_id, metadata)
+
+    def fail_run(self, run_id: str, error_message: str) -> None:
+        """Mark a run as failed with an error message."""
+        metadata = self.load_run_metadata(run_id)
+        metadata["status"] = "failed"
+        metadata["error_message"] = error_message
+        self.save_run_metadata(run_id, metadata)
+
 
 class LocalFileStorageBackend(StorageBackend):
     """Adapter for the existing ExperimentStorage implementation.
@@ -232,6 +281,13 @@ class LocalFileStorageBackend(StorageBackend):
         run_metadata = self._storage._load_run_metadata(run_id)
         run_metadata.experiment_id = experiment_id
         run_metadata.config_snapshot = dict(metadata)
+        status = metadata.get("status")
+        if status is not None:
+            from themis.experiment.storage import RunStatus
+
+            run_metadata.status = RunStatus(status)
+        if "error_message" in metadata:
+            run_metadata.error_message = metadata.get("error_message")
         run_metadata.updated_at = metadata.get("updated_at", run_metadata.updated_at)
         self._storage._save_run_metadata(run_metadata)
     
@@ -305,6 +361,40 @@ class LocalFileStorageBackend(StorageBackend):
     def delete_run(self, run_id: str) -> None:
         """Delete run."""
         self._storage.delete_run(run_id)
+
+    def start_run(
+        self,
+        run_id: str,
+        *,
+        experiment_id: str = "default",
+        config: Dict[str, Any] | None = None,
+    ) -> None:
+        self._storage.start_run(run_id, experiment_id=experiment_id, config=config or {})
+
+    def append_generation_record(
+        self,
+        run_id: str,
+        record: GenerationRecord,
+        *,
+        cache_key: str | None = None,
+    ) -> None:
+        self._ensure_run_exists(run_id)
+        self._storage.append_record(run_id, record, cache_key=cache_key)
+
+    def append_evaluation_record(
+        self,
+        run_id: str,
+        generation_record: GenerationRecord,
+        evaluation_record: EvaluationRecord,
+    ) -> None:
+        self._ensure_run_exists(run_id)
+        self._storage.append_evaluation(run_id, generation_record, evaluation_record)
+
+    def complete_run(self, run_id: str) -> None:
+        self._storage.complete_run(run_id)
+
+    def fail_run(self, run_id: str, error_message: str) -> None:
+        self._storage.fail_run(run_id, error_message)
 
     def _ensure_run_exists(self, run_id: str) -> None:
         if not self._storage.run_metadata_exists(run_id):

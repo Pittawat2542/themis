@@ -61,12 +61,12 @@ TDD:
 ### 4) Fix storage backend contracts and simplify adapter model
 
 - [x] Fix `LocalFileStorageBackend.save_evaluation_record` signature usage.
-- [ ] Define one canonical storage protocol and make all adapters conform strictly.
+- [x] Define one canonical storage protocol and make all adapters conform strictly.
 - [x] Remove partial/unimplemented adapter methods or implement fully.
-- [ ] Add clear lifecycle semantics (`start_run`, `append`, `complete_run`, `fail_run`).
+- [x] Add clear lifecycle semantics (`start_run`, `append`, `complete_run`, `fail_run`).
 
 TDD:
-- [ ] Add contract tests shared across all storage backends.
+- [x] Add contract tests shared across all storage backends.
 - [x] Add adapter integration tests for generation + evaluation + report persistence.
 - [x] Add tests for concurrent access and reentrant locking invariants.
 
