@@ -1,7 +1,7 @@
 """Dataset schema and metadata definitions.
 
 This module provides enhanced dataset abstractions with schema validation,
-metadata, and filtering capabilities while maintaining backward compatibility.
+metadata, and filtering capabilities.
 """
 
 from __future__ import annotations

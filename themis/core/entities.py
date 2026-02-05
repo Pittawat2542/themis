@@ -59,8 +59,8 @@ class Reference(Generic[T]):
     """Reference value with optional type information.
 
     This is a generic dataclass that can hold typed reference values.
-    For backward compatibility, it can be used without type parameters
-    and will behave like Reference[Any].
+    It can also be used without type parameters and will behave like
+    Reference[Any].
 
     The value field can hold any type including:
     - Simple types: str, int, float, bool

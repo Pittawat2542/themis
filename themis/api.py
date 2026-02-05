@@ -344,7 +344,7 @@ def evaluate(
 
 def _extract_provider_options(kwargs: dict[str, Any]) -> dict[str, Any]:
     options = {key: kwargs[key] for key in _PROVIDER_OPTION_KEYS if key in kwargs}
-    # Normalize common alias for LiteLLM constructor compatibility.
+    # Normalize the common LiteLLM base URL alias.
     if "base_url" in options and "api_base" not in options:
         options["api_base"] = options.pop("base_url")
     elif "base_url" in options:
