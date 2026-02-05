@@ -156,9 +156,11 @@ def evaluate(
         prompt: Custom prompt template using Python format strings. Variables like
             {prompt}, {question}, {context} will be replaced with dataset fields.
             If None, uses the benchmark's default prompt template.
-        metrics: List of metric names to compute. Available: "ExactMatch", "MathVerify",
-            "BLEU", "ROUGE", "BERTScore", "METEOR", "PassAtK", "CodeBLEU",
-            "ExecutionAccuracy". If None, uses benchmark defaults.
+        metrics: List of metric names to compute. Common built-ins include:
+            "exact_match", "math_verify", "response_length", "bleu",
+            "rouge1", "rouge2", "rougeL", "bertscore", "meteor",
+            "pass_at_k", "codebleu", "execution_accuracy".
+            If None, benchmark defaults are used.
         temperature: Sampling temperature (0.0 = deterministic/greedy, 1.0 = standard,
             2.0 = very random). Recommended: 0.0 for evaluation reproducibility.
         max_tokens: Maximum tokens in model response. Typical values: 256 for short
@@ -191,8 +193,8 @@ def evaluate(
     
     Example:
         >>> report = themis.evaluate("math500", model="gpt-4", limit=10)
-        >>> print(f"Accuracy: {report.evaluation_report.metrics['accuracy']:.2%}")
-        Accuracy: 85.00%
+        >>> print(f"ExactMatch: {report.evaluation_report.metrics['ExactMatch'].mean:.2%}")
+        ExactMatch: 85.00%
     """
     logger.info("=" * 60)
     logger.info("Starting Themis evaluation")

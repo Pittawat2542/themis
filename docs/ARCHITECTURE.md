@@ -66,6 +66,6 @@ This canonical shape is used consistently by storage, comparison, exports, and s
 
 ## Current Trade-offs
 
-- `distributed=True` in `evaluate(...)`/CLI is reserved and currently not wired.
+- Distributed/custom execution requires an explicit `execution_backend` implementation.
 - Custom dataset files are not yet supported in `themis eval ...` CLI; use Python API for dataset objects.
 - Custom storage backends must be ExperimentStorage-compatible for full session integration.

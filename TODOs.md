@@ -99,12 +99,12 @@ TDD:
 
 ### 7) Remove ambiguous behavior and outdated docs
 
-- [ ] Align API docs with actual metric names and accepted inputs.
-- [ ] Remove claims for unimplemented features.
-- [ ] Make error messages reference exact accepted alternatives.
+- [x] Align API docs with actual metric names and accepted inputs.
+- [x] Remove claims for unimplemented features.
+- [x] Make error messages reference exact accepted alternatives.
 
 TDD:
-- [ ] Add docs lint/check tests for stale feature flags and API signatures.
+- [x] Add docs lint/check tests for stale feature flags and API signatures.
 - [x] Add tests validating metric-name normalization and error output.
 
 ### 8) Raise test quality and coverage for critical paths

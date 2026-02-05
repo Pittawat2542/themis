@@ -15,7 +15,7 @@ def evaluate(
     temperature: float = 0.0,
     max_tokens: int = 512,
     num_samples: int = 1,
-    distributed: bool = False,
+    max_records_in_memory: int | None = None,
     workers: int = 4,
     storage: str | Path | None = None,
     storage_backend: object | None = None,
@@ -80,11 +80,12 @@ Maximum tokens generated per response.
 
 **`num_samples`** : `int = 1`
 
-Number of samples per prompt. This is currently only partially wired in the spec/session flow.
+Number of samples per prompt.
 
-**`distributed`** : `bool = False`
+**`max_records_in_memory`** : `int | None = None`
 
-Reserved for future distributed execution. Currently ignored.
+Optional cap on generation/evaluation records retained in memory in the returned
+report (useful for very large runs).
 
 **`workers`** : `int = 4`
 
@@ -118,8 +119,12 @@ Callback invoked per generation record.
 
 **`**kwargs`** : `Any`
 
-Currently used for `top_p` in sampling. Other provider-specific kwargs are
-reserved for future wiring.
+Supported extra options:
+- `top_p`
+- Provider options: `api_key`, `base_url`/`api_base`, `api_version`, `timeout`,
+  `max_retries`, `n_parallel`, `organization`, `api_type`, `region_name`, `seed`
+
+Unknown options fail fast with a `ValueError`.
 
 ## Return Value
 
