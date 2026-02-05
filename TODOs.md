@@ -33,14 +33,14 @@ TDD:
 
 ### 2) Make statistical comparison rigorous by default
 
-- [ ] Unify to a single statistics module (`themis/evaluation/statistics`) and remove duplicate comparison-specific implementation (delegation added, cleanup still pending).
+- [ ] Unify to a single statistics module (`themis/evaluation/statistics`) and remove duplicate comparison-specific implementation (most inference paths now delegated; compatibility wrappers remain).
 - [x] Require sample alignment by `sample_id` for paired tests.
-- [ ] Replace rough p-value approximations with exact/scipy-backed implementations; define deterministic fallback policy (exact McNemar + deterministic RNG done, policy still pending).
+- [x] Replace rough p-value approximations with exact/scipy-backed implementations; define deterministic fallback policy.
 - [x] Add multiple-comparison correction policy as part of report generation defaults.
 
 TDD:
 - [x] Add paired-test alignment tests (mismatched IDs must fail with clear message).
-- [ ] Add golden tests for t-test/permutation/bootstrap outputs against reference implementations.
+- [x] Add golden tests for t-test/permutation/bootstrap outputs against reference implementations.
 - [x] Add tests verifying correction method behavior (Holm-Bonferroni) across multiple metrics.
 
 ### 3) Secure code execution metrics

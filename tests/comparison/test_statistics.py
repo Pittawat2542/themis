@@ -6,6 +6,11 @@ from types import SimpleNamespace
 import pytest
 
 from themis.comparison import statistics as comparison_statistics
+from themis.evaluation.statistics import (
+    bootstrap_ci as evaluation_bootstrap_ci,
+    paired_t_test as evaluation_paired_t_test,
+    permutation_test as evaluation_permutation_test,
+)
 from themis.comparison.statistics import (
     StatisticalTest,
     StatisticalTestResult,
@@ -91,6 +96,48 @@ class TestTTest:
         assert calls["count"] == 1
         assert result.statistic == pytest.approx(3.5)
         assert result.p_value == pytest.approx(0.0125)
+        assert result.significant is True
+
+    def test_t_test_paired_matches_evaluation_reference(self):
+        """Golden test: paired t-test aligns with evaluation.statistics output."""
+        samples_a = [0.2, 0.4, 0.6, 0.8, 1.0]
+        samples_b = [0.1, 0.2, 0.5, 0.7, 0.9]
+
+        result = t_test(samples_a, samples_b, paired=True, alpha=0.05)
+        reference = evaluation_paired_t_test(
+            samples_b, samples_a, significance_level=0.05
+        )
+
+        assert result.statistic == pytest.approx(reference.t_statistic)
+        assert result.p_value == pytest.approx(reference.p_value)
+        assert result.significant == reference.is_significant
+
+    def test_t_test_independent_uses_evaluation_stack(self, monkeypatch):
+        """Independent t-test should delegate core inference to evaluation stack."""
+        calls = {"count": 0}
+
+        def _fake_compare_metrics(baseline_scores, treatment_scores, significance_level=0.05):
+            calls["count"] += 1
+            assert len(baseline_scores) == 3
+            assert len(treatment_scores) == 3
+            return SimpleNamespace(
+                baseline_mean=0.2,
+                treatment_mean=0.8,
+                difference=0.6,
+                relative_change=300.0,
+                t_statistic=2.8,
+                p_value=0.02,
+                is_significant=True,
+                baseline_ci=SimpleNamespace(lower=0.1, upper=0.3),
+                treatment_ci=SimpleNamespace(lower=0.7, upper=0.9),
+            )
+
+        monkeypatch.setattr(comparison_statistics, "evaluation_compare_metrics", _fake_compare_metrics)
+
+        result = t_test([0.7, 0.8, 0.9], [0.1, 0.2, 0.3], paired=False, alpha=0.05)
+        assert calls["count"] == 1
+        assert result.statistic == pytest.approx(2.8)
+        assert result.p_value == pytest.approx(0.02)
         assert result.significant is True
 
 
@@ -185,6 +232,23 @@ class TestBootstrap:
         assert result.statistic == pytest.approx(2.0)
         assert result.confidence_interval == pytest.approx((1.9, 2.1))
 
+    def test_bootstrap_matches_evaluation_reference(self):
+        """Golden test: default bootstrap path matches evaluation bootstrap CI."""
+        samples_a = [0.5, 0.6, 0.7, 0.8]
+        samples_b = [0.2, 0.3, 0.4, 0.5]
+        diffs = [a - b for a, b in zip(samples_a, samples_b)]
+
+        result = bootstrap_confidence_interval(
+            samples_a, samples_b, n_bootstrap=500, confidence_level=0.95, seed=7
+        )
+        reference = evaluation_bootstrap_ci(
+            diffs, n_bootstrap=500, confidence_level=0.95, seed=7
+        )
+
+        assert result.statistic == pytest.approx(reference.statistic)
+        assert result.confidence_interval[0] == pytest.approx(reference.ci_lower)
+        assert result.confidence_interval[1] == pytest.approx(reference.ci_upper)
+
 
 class TestPermutation:
     """Tests for permutation test."""
@@ -275,6 +339,19 @@ class TestPermutation:
         # Comparison module reports absolute statistic for readability.
         assert result.statistic == pytest.approx(0.4)
         assert result.p_value == pytest.approx(0.03)
+
+    def test_permutation_matches_evaluation_reference(self):
+        """Golden test: default permutation path matches evaluation reference."""
+        samples_a = [0.2, 0.4, 0.6, 0.8]
+        samples_b = [0.1, 0.2, 0.3, 0.5]
+
+        result = permutation_test(samples_a, samples_b, n_permutations=600, seed=99)
+        reference = evaluation_permutation_test(
+            samples_a, samples_b, statistic="mean_diff", n_permutations=600, seed=99
+        )
+
+        assert result.statistic == pytest.approx(abs(reference.observed_statistic))
+        assert result.p_value == pytest.approx(reference.p_value)
 
 
 class TestMcNemar:

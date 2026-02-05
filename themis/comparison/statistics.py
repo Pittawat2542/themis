@@ -16,9 +16,11 @@ from typing import Sequence
 from themis.evaluation.statistics.distributions import t_critical_value, t_to_p_value
 from themis.evaluation.statistics import (
     bootstrap_ci as evaluation_bootstrap_ci,
+    compare_metrics as evaluation_compare_metrics,
     paired_t_test as evaluation_paired_t_test,
     permutation_test as evaluation_permutation_test,
 )
+from themis.core import entities as core_entities
 
 
 class StatisticalTest(str, Enum):
@@ -127,24 +129,31 @@ def t_test(
         effect_size = mean_diff / sd_diff if sd_diff > 1e-10 else (1.0 if abs(mean_diff) > 1e-10 else 0.0)
         
     else:
-        # Independent samples t-test
-        # Calculate pooled standard deviation
+        # Independent samples: delegate core test inference to evaluation stack.
+        baseline_scores = [
+            core_entities.MetricScore(metric_name="comparison", value=value)
+            for value in samples_b
+        ]
+        treatment_scores = [
+            core_entities.MetricScore(metric_name="comparison", value=value)
+            for value in samples_a
+        ]
+        independent_result = evaluation_compare_metrics(
+            baseline_scores, treatment_scores, significance_level=alpha
+        )
+        t_stat = independent_result.t_statistic
+        p_value = independent_result.p_value
+
+        # Cohen's d on pooled variance for interpretability.
         var_a = sum((x - mean_a) ** 2 for x in samples_a) / (n_a - 1) if n_a > 1 else 0
         var_b = sum((x - mean_b) ** 2 for x in samples_b) / (n_b - 1) if n_b > 1 else 0
         
         pooled_sd = math.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2))
-        se = pooled_sd * math.sqrt(1/n_a + 1/n_b)
-        
-        # T-statistic
-        t_stat = (mean_a - mean_b) / se if se > 0 else 0.0
-        df = n_a + n_b - 2
+        se = pooled_sd * math.sqrt(1 / n_a + 1 / n_b)
+        df = max(1, n_a + n_b - 2)
         
         # Effect size (Cohen's d)
         effect_size = (mean_a - mean_b) / pooled_sd if pooled_sd > 0 else 0.0
-    
-    # Two-tailed p-value for independent test path.
-    if not paired:
-        p_value = _approximate_t_test_p_value(abs(t_stat), df)
     
     # Confidence interval with t critical value helper (SciPy-backed when available).
     confidence_level = 1 - alpha
