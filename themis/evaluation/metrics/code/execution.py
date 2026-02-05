@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import multiprocessing
 import queue
+import threading
 import time
 import tracemalloc
 import warnings
@@ -114,6 +115,9 @@ def _execution_worker(
 ) -> None:
     """Execute untrusted code in isolated process and send a result payload."""
     _apply_memory_limit(max_memory_mb)
+    with contextlib.suppress(Exception):
+        # Prevent child shutdown from waiting on queue feeder thread.
+        result_queue.cancel_join_thread()
 
     try:
         if max_memory_mb > 0:
@@ -287,10 +291,7 @@ class ExecutionAccuracy(Metric):
         expected_output: Any,
     ) -> ExecutionResult:
         start = time.perf_counter()
-        try:
-            ctx = multiprocessing.get_context("fork")
-        except ValueError:
-            ctx = multiprocessing.get_context("spawn")
+        ctx = self._get_mp_context()
         result_queue = ctx.Queue()
         process = ctx.Process(
             target=_execution_worker,
@@ -324,7 +325,7 @@ class ExecutionAccuracy(Metric):
                     duration=time.perf_counter() - start,
                 )
 
-            payload = result_queue.get_nowait()
+            payload = result_queue.get(timeout=0.1)
             return ExecutionResult(
                 status=ExecutionStatus(payload.get("status", ExecutionStatus.ERROR.value)),
                 passed=bool(payload.get("passed", False)),
@@ -358,6 +359,16 @@ class ExecutionAccuracy(Metric):
                 result_queue.close()
             with contextlib.suppress(Exception):
                 result_queue.join_thread()
+
+    @staticmethod
+    def _get_mp_context() -> multiprocessing.context.BaseContext:
+        """Select a safe multiprocessing start method for metric execution."""
+        if threading.active_count() > 1:
+            return multiprocessing.get_context("spawn")
+        try:
+            return multiprocessing.get_context("fork")
+        except ValueError:
+            return multiprocessing.get_context("spawn")
 
 
 __all__ = ["ExecutionAccuracy", "ExecutionResult", "ExecutionStatus"]
