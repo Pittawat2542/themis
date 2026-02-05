@@ -11,6 +11,7 @@ from typing import Sequence
 
 from themis.comparison import reports, statistics
 from themis.comparison.statistics import StatisticalTest
+from themis.evaluation.statistics import holm_bonferroni
 from themis.storage import ExperimentStorage
 
 
@@ -30,6 +31,7 @@ class ComparisonEngine:
         alpha: float = 0.05,
         n_bootstrap: int = 10000,
         n_permutations: int = 10000,
+        multiple_comparison_correction: str | None = "holm-bonferroni",
     ):
         """Initialize comparison engine.
         
@@ -40,6 +42,8 @@ class ComparisonEngine:
             alpha: Significance level for tests
             n_bootstrap: Number of bootstrap iterations
             n_permutations: Number of permutations for permutation test
+            multiple_comparison_correction: Correction policy for multiple
+                comparisons. Use "holm-bonferroni" (default) or None.
         """
         if storage is None and storage_path is None:
             raise ValueError("Either storage or storage_path must be provided")
@@ -49,6 +53,7 @@ class ComparisonEngine:
         self._alpha = alpha
         self._n_bootstrap = n_bootstrap
         self._n_permutations = n_permutations
+        self._multiple_comparison_correction = multiple_comparison_correction
     
     def compare_runs(
         self,
@@ -107,6 +112,8 @@ class ComparisonEngine:
                         statistical_test or self._statistical_test,
                     )
                     pairwise_results.append(result)
+
+        self._apply_multiple_comparison_correction(pairwise_results)
         
         # Build win/loss matrices
         win_loss_matrices = {}
@@ -146,6 +153,10 @@ class ComparisonEngine:
                 "alpha": self._alpha,
                 "n_runs": len(run_ids),
                 "n_metrics": len(metrics),
+                "multiple_comparison_correction": self._multiple_comparison_correction,
+                "n_hypotheses_corrected": sum(
+                    1 for result in pairwise_results if result.test_result is not None
+                ),
             },
         )
     
@@ -256,6 +267,43 @@ class ComparisonEngine:
             run_a_samples=aligned_a,
             run_b_samples=aligned_b,
         )
+
+    def _apply_multiple_comparison_correction(
+        self, pairwise_results: list[reports.ComparisonResult]
+    ) -> None:
+        """Apply configured multiple-comparison correction in-place."""
+        if self._multiple_comparison_correction is None:
+            return
+        if self._multiple_comparison_correction != "holm-bonferroni":
+            raise ValueError(
+                "Unsupported multiple comparison correction: "
+                f"{self._multiple_comparison_correction}"
+            )
+
+        tested_results = [
+            result for result in pairwise_results if result.test_result is not None
+        ]
+        if not tested_results:
+            return
+
+        p_values = [result.test_result.p_value for result in tested_results]
+        corrected_flags = holm_bonferroni(p_values, alpha=self._alpha)
+        corrected_p_values = _holm_adjusted_p_values(p_values)
+
+        for result, corrected, corrected_p in zip(
+            tested_results, corrected_flags, corrected_p_values
+        ):
+            result.corrected_significant = corrected
+            result.corrected_p_value = corrected_p
+            if corrected:
+                if result.delta > 0:
+                    result.winner = result.run_a_id
+                elif result.delta < 0:
+                    result.winner = result.run_b_id
+                else:
+                    result.winner = "tie"
+            else:
+                result.winner = "tie"
     
     def _build_win_loss_matrix(
         self,
@@ -349,6 +397,26 @@ def compare_runs(
     )
     
     return engine.compare_runs(run_ids, metrics=metrics)
+
+
+def _holm_adjusted_p_values(p_values: Sequence[float]) -> list[float]:
+    """Return Holm-Bonferroni adjusted p-values in original order."""
+    n = len(p_values)
+    if n == 0:
+        return []
+
+    indexed = sorted((p, idx) for idx, p in enumerate(p_values))
+    adjusted_sorted = [0.0] * n
+    running_max = 0.0
+    for rank, (p_val, _orig_idx) in enumerate(indexed):
+        adjusted = (n - rank) * p_val
+        running_max = max(running_max, adjusted)
+        adjusted_sorted[rank] = min(1.0, running_max)
+
+    adjusted = [0.0] * n
+    for rank, (_p_val, orig_idx) in enumerate(indexed):
+        adjusted[orig_idx] = adjusted_sorted[rank]
+    return adjusted
 
 
 __all__ = [

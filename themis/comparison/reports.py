@@ -39,11 +39,15 @@ class ComparisonResult:
     delta_percent: float
     winner: str  # run_a_id, run_b_id, or "tie"
     test_result: StatisticalTestResult | None = None
+    corrected_significant: bool | None = None
+    corrected_p_value: float | None = None
     run_a_samples: list[float] = field(default_factory=list)
     run_b_samples: list[float] = field(default_factory=list)
     
     def is_significant(self) -> bool:
         """Check if the difference is statistically significant."""
+        if self.corrected_significant is not None:
+            return self.corrected_significant
         return self.test_result is not None and self.test_result.significant
     
     def summary(self) -> str:
@@ -59,7 +63,12 @@ class ComparisonResult:
         
         if self.test_result:
             sig_marker = "***" if self.is_significant() else "n.s."
-            summary += f" [{sig_marker}, p={self.test_result.p_value:.4f}]"
+            p_value = (
+                self.corrected_p_value
+                if self.corrected_p_value is not None
+                else self.test_result.p_value
+            )
+            summary += f" [{sig_marker}, p={p_value:.4f}]"
         
         return summary
 
@@ -260,6 +269,8 @@ class ComparisonReport:
                     "winner": r.winner,
                     "significant": r.is_significant(),
                     "p_value": r.test_result.p_value if r.test_result else None,
+                    "corrected_significant": r.corrected_significant,
+                    "corrected_p_value": r.corrected_p_value,
                 }
                 for r in self.pairwise_results
             ],

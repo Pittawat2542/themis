@@ -232,6 +232,7 @@ def compare_reports_with_holm(
     n_permutations: int = 10000,
     seed: int | None = None,
     paired: bool = True,
+    alpha: float = 0.05,
 ) -> Dict[str, object]:
     p_values: list[float] = []
     pt_results: Dict[str, PermutationTestResult] = {}
@@ -257,7 +258,7 @@ def compare_reports_with_holm(
             )
         pt_results[name] = pt
         p_values.append(pt.p_value)
-    corrected = holm_bonferroni(p_values)
+    corrected = holm_bonferroni(p_values, alpha=alpha)
     return {
         "per_metric": pt_results,
         "holm_significant": corrected,

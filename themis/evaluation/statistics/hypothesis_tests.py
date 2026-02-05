@@ -261,7 +261,7 @@ def paired_t_test(
     )
 
 
-def holm_bonferroni(p_values: Sequence[float]) -> List[bool]:
+def holm_bonferroni(p_values: Sequence[float], *, alpha: float = 0.05) -> List[bool]:
     """Apply Holm-Bonferroni correction for multiple comparisons.
 
     This method controls the family-wise error rate (FWER) while being
@@ -276,7 +276,7 @@ def holm_bonferroni(p_values: Sequence[float]) -> List[bool]:
 
     Example:
         >>> p_vals = [0.01, 0.04, 0.03, 0.20]
-        >>> significant = holm_bonferroni(p_vals)
+        >>> significant = holm_bonferroni(p_vals, alpha=0.05)
         >>> # Returns which tests are significant after correction
     """
     if not p_values:
@@ -290,8 +290,6 @@ def holm_bonferroni(p_values: Sequence[float]) -> List[bool]:
 
     # Apply Holm-Bonferroni sequential rejection
     results = [False] * n
-    alpha = 0.05  # Standard significance level
-
     for rank, (p_val, orig_idx) in enumerate(indexed_pvals):
         # Adjusted threshold: alpha / (n - rank)
         threshold = alpha / (n - rank)

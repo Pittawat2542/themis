@@ -11,59 +11,64 @@ Every item follows red -> green -> refactor.
 - Keep statistical methods scientifically defensible by default.
 - Require reproducibility metadata in all run artifacts.
 
+## Current Status (Reassessed)
+
+- Completed major slices: evaluate/session wiring, comparison alignment/statistics hardening, sandboxed execution metric, storage adapter contract fixes, reproducibility manifest, parallel completion-order generation.
+- Remaining high-impact gaps: full statistics-module consolidation, stronger execution sandbox tests (memory/network/process), canonical storage protocol lifecycle, chunked/bounded-memory orchestration, docs/coverage hardening.
+
 ## P0 - Correctness and Research Validity
 
 ### 1) Rebuild `evaluate()` wiring as a strict façade
 
-- [ ] Remove placeholder/legacy args that are not implemented (`distributed`, etc.) or implement them fully.
-- [ ] Ensure `evaluate()` passes all execution/runtime options into session/orchestrator (provider kwargs, `on_result`, sampling controls).
-- [ ] Remove post-hoc fake `num_samples` behavior; execute true multi-sampling in generation.
-- [ ] Enforce explicit argument validation with actionable error messages.
+- [ ] Remove placeholder/legacy args that are not implemented (`distributed`, etc.) or implement them fully (currently fail-fast only).
+- [x] Ensure `evaluate()` passes all execution/runtime options into session/orchestrator (provider kwargs, `on_result`, sampling controls).
+- [x] Remove post-hoc fake `num_samples` behavior; execute true multi-sampling in generation.
+- [x] Enforce explicit argument validation with actionable error messages.
 
 TDD:
-- [ ] Add API integration tests proving provider kwargs reach provider construction.
-- [ ] Add test proving `on_result` is called once per produced record.
-- [ ] Add test proving `num_samples=n` generates `n` real attempts (not duplicated references).
-- [ ] Add test asserting unsupported args fail fast.
+- [x] Add API integration tests proving provider kwargs reach provider construction.
+- [x] Add test proving `on_result` is called once per produced record.
+- [x] Add test proving `num_samples=n` generates `n` real attempts (not duplicated references).
+- [x] Add test asserting unsupported args fail fast.
 
 ### 2) Make statistical comparison rigorous by default
 
-- [ ] Unify to a single statistics module (`themis/evaluation/statistics`) and remove duplicate comparison-specific implementation.
-- [ ] Require sample alignment by `sample_id` for paired tests.
-- [ ] Replace rough p-value approximations with exact/scipy-backed implementations; define deterministic fallback policy.
-- [ ] Add multiple-comparison correction policy as part of report generation defaults.
+- [ ] Unify to a single statistics module (`themis/evaluation/statistics`) and remove duplicate comparison-specific implementation (delegation added, cleanup still pending).
+- [x] Require sample alignment by `sample_id` for paired tests.
+- [ ] Replace rough p-value approximations with exact/scipy-backed implementations; define deterministic fallback policy (exact McNemar + deterministic RNG done, policy still pending).
+- [x] Add multiple-comparison correction policy as part of report generation defaults.
 
 TDD:
-- [ ] Add paired-test alignment tests (mismatched IDs must fail with clear message).
+- [x] Add paired-test alignment tests (mismatched IDs must fail with clear message).
 - [ ] Add golden tests for t-test/permutation/bootstrap outputs against reference implementations.
-- [ ] Add tests verifying correction method behavior (Holm-Bonferroni) across multiple metrics.
+- [x] Add tests verifying correction method behavior (Holm-Bonferroni) across multiple metrics.
 
 ### 3) Secure code execution metrics
 
-- [ ] Replace inline `exec` execution with isolated worker process runtime.
-- [ ] Enforce hard timeout and memory limits per test case.
-- [ ] Restrict imports/syscalls and explicitly define allowed builtins.
-- [ ] Record execution status taxonomy (timeout, runtime error, forbidden operation, assertion fail).
+- [x] Replace inline `exec` execution with isolated worker process runtime.
+- [ ] Enforce hard timeout and memory limits per test case (timeout done, memory-limit verification still pending).
+- [ ] Restrict imports/syscalls and explicitly define allowed builtins (imports/file I/O blocked; network/process-spawn coverage pending).
+- [x] Record execution status taxonomy (timeout, runtime error, forbidden operation, assertion fail).
 
 TDD:
-- [ ] Add tests for timeout enforcement.
+- [x] Add tests for timeout enforcement.
 - [ ] Add tests for memory-limit enforcement.
 - [ ] Add tests that filesystem/network/process-spawn operations are blocked.
-- [ ] Add tests verifying deterministic result schema for pass/fail/error states.
+- [x] Add tests verifying deterministic result schema for pass/fail/error states.
 
 ## P1 - API and Storage Quality
 
 ### 4) Fix storage backend contracts and simplify adapter model
 
-- [ ] Fix `LocalFileStorageBackend.save_evaluation_record` signature usage.
+- [x] Fix `LocalFileStorageBackend.save_evaluation_record` signature usage.
 - [ ] Define one canonical storage protocol and make all adapters conform strictly.
-- [ ] Remove partial/unimplemented adapter methods or implement fully.
+- [x] Remove partial/unimplemented adapter methods or implement fully.
 - [ ] Add clear lifecycle semantics (`start_run`, `append`, `complete_run`, `fail_run`).
 
 TDD:
 - [ ] Add contract tests shared across all storage backends.
-- [ ] Add adapter integration tests for generation + evaluation + report persistence.
-- [ ] Add tests for concurrent access and reentrant locking invariants.
+- [x] Add adapter integration tests for generation + evaluation + report persistence.
+- [x] Add tests for concurrent access and reentrant locking invariants.
 
 ### 5) Reproducibility manifest as first-class artifact
 
@@ -100,7 +105,7 @@ TDD:
 
 TDD:
 - [ ] Add docs lint/check tests for stale feature flags and API signatures.
-- [ ] Add tests validating metric-name normalization and error output.
+- [x] Add tests validating metric-name normalization and error output.
 
 ### 8) Raise test quality and coverage for critical paths
 
@@ -114,7 +119,7 @@ TDD:
 
 ## Proposed Execution Order
 
-- [ ] Sprint 1: P0.1, P0.2
-- [ ] Sprint 2: P0.3, P1.4
-- [ ] Sprint 3: P1.5, P2.6
+- [x] Sprint 1: P0.1, P0.2 (mostly complete; stats consolidation remains)
+- [x] Sprint 2: P0.3, P1.4 (mostly complete; sandbox/storage protocol gaps remain)
+- [x] Sprint 3: P1.5, P2.6 (partial complete; throughput done, memory/indexing pending)
 - [ ] Sprint 4: P3.7, P3.8
