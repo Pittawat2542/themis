@@ -92,7 +92,7 @@ TDD:
 
 TDD:
 - [x] Add performance regression tests for head-of-line blocking scenarios.
-- [ ] Add large-run tests asserting memory does not scale linearly with total samples.
+- [x] Add large-run tests asserting memory does not scale linearly with total samples.
 - [x] Add tests validating indexed run lookup behavior under many runs.
 
 ## P3 - UX, Docs, and Test Suite Hardening

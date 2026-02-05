@@ -325,6 +325,45 @@ def test_experiment_bounded_memory_mode_rejects_invalid_limit():
         )
 
 
+def test_experiment_bounded_memory_scales_sublinearly_for_large_runs():
+    dataset = [
+        {
+            "id": f"sample-{idx}",
+            "topic": f"Country-{idx}",
+            "expected": f"Capital-{idx}",
+            "subject": "geo",
+        }
+        for idx in range(200)
+    ]
+    answers = {row["id"]: row["expected"] for row in dataset}
+    plan = make_plan()
+    runner_impl = EchoRunner(answers_by_sample_id=answers)
+    eval_pipeline = make_pipeline()
+
+    experiment_runner = orchestrator.ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=runner_impl,
+        evaluation_pipeline=eval_pipeline,
+    )
+
+    report = experiment_runner.run(
+        dataset,
+        resume=False,
+        max_records_in_memory=3,
+        evaluation_batch_size=25,
+    )
+
+    assert report.metadata["total_samples"] == 200
+    assert report.metadata["generation_records_retained"] == 3
+    assert report.metadata["evaluation_records_retained"] == 3
+    assert report.metadata["generation_records_dropped"] == 197
+    assert report.metadata["evaluation_records_dropped"] == 197
+    assert len(report.generation_results) == 3
+    assert len(report.evaluation_report.records) == 3
+    assert report.evaluation_report.metrics["ExactMatch"].count == 200
+    assert len(report.evaluation_report.metrics["ExactMatch"].per_sample) == 3
+
+
 def test_experiment_can_resume_from_storage(tmp_path):
     dataset = build_dataset()
     answers = {row["id"]: row["expected"] for row in dataset}
