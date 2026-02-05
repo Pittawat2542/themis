@@ -70,6 +70,29 @@ class TestComparisonResult:
         assert "0.85" in summary or "0.850" in summary
         assert "↑" in summary  # Positive change arrow
 
+    def test_comparison_result_summary_handles_ci_only_test_results(self):
+        test_result = StatisticalTestResult(
+            test_name="bootstrap",
+            statistic=0.1,
+            p_value=None,
+            significant=True,
+            inference_mode="ci_only",
+        )
+        result = ComparisonResult(
+            metric_name="accuracy",
+            run_a_id="a",
+            run_b_id="b",
+            run_a_mean=0.8,
+            run_b_mean=0.7,
+            delta=0.1,
+            delta_percent=14.3,
+            winner="a",
+            test_result=test_result,
+        )
+
+        summary = result.summary()
+        assert "CI-only" in summary
+
 
 class TestWinLossMatrix:
     """Tests for WinLossMatrix."""

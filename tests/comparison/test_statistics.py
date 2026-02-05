@@ -171,6 +171,8 @@ class TestBootstrap:
         assert not result.significant
         ci = result.confidence_interval
         assert ci[0] <= 0 <= ci[1]  # 0 should be in CI
+        assert result.p_value is None
+        assert result.inference_mode == "ci_only"
     
     def test_bootstrap_custom_statistic(self):
         """Test bootstrap with custom statistic function."""
@@ -249,6 +251,8 @@ class TestBootstrap:
         assert result.statistic == pytest.approx(reference.statistic)
         assert result.confidence_interval[0] == pytest.approx(reference.ci_lower)
         assert result.confidence_interval[1] == pytest.approx(reference.ci_upper)
+        assert result.p_value is None
+        assert result.inference_mode == "ci_only"
 
 
 class TestPermutation:

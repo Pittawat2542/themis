@@ -68,7 +68,10 @@ class ComparisonResult:
                 if self.corrected_p_value is not None
                 else self.test_result.p_value
             )
-            summary += f" [{sig_marker}, p={p_value:.4f}]"
+            if p_value is None:
+                summary += f" [{sig_marker}, CI-only]"
+            else:
+                summary += f" [{sig_marker}, p={p_value:.4f}]"
         
         return summary
 

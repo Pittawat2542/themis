@@ -193,6 +193,33 @@ class TestEvaluateAPI:
         assert options.get("api_key") == "test-key"
         assert options.get("api_base") == "http://localhost:1234/v1"
 
+    def test_evaluate_normalizes_base_url_alias(self, tmp_path, monkeypatch):
+        captured: dict[str, object] = {}
+
+        def _fake_create_provider(name: str, **options):
+            captured["name"] = name
+            captured["options"] = dict(options)
+            return FakeMathModelClient(seed=7)
+
+        monkeypatch.setattr("themis.session.create_provider", _fake_create_provider)
+
+        evaluate(
+            [{"id": "1", "question": "2+2", "answer": "4"}],
+            model="gpt-4",
+            prompt="What is {question}?",
+            api_key="test-key",
+            base_url="http://localhost:1234/v1",
+            storage=tmp_path,
+            run_id="provider-base-url-alias",
+            resume=False,
+        )
+
+        assert captured["name"] == "litellm"
+        options = captured["options"]
+        assert isinstance(options, dict)
+        assert options.get("api_base") == "http://localhost:1234/v1"
+        assert "base_url" not in options
+
     def test_evaluate_calls_on_result_callback(self, tmp_path):
         """Test that on_result callback is called for each generation record."""
         seen_ids: list[str | None] = []

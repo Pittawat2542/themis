@@ -19,6 +19,7 @@ from themis.generation.templates import PromptTemplate
 from themis.interfaces import DatasetAdapter
 from themis.presets import parse_model_name
 from themis.providers import create_provider
+from themis.providers.options import normalize_provider_options
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 
@@ -77,6 +78,7 @@ class ExperimentSession:
             retry_initial_delay=execution.retry_initial_delay,
             retry_backoff_multiplier=execution.retry_backoff_multiplier,
             retry_max_delay=execution.retry_max_delay,
+            max_in_flight_tasks=execution.max_in_flight_tasks,
             execution_backend=execution.backend,
         )
 
@@ -120,13 +122,13 @@ class ExperimentSession:
 def _parse_model(
     model: str, *, provider_options: Mapping[str, Any] | None = None
 ) -> tuple[str, str, dict[str, Any]]:
-    options = dict(provider_options or {})
+    options = normalize_provider_options(provider_options)
     if ":" in model:
         provider_name, model_id = model.split(":", 1)
         return provider_name, model_id, options
 
     parsed_provider, model_id, parsed_options = parse_model_name(model, **options)
-    return parsed_provider, model_id, parsed_options
+    return parsed_provider, model_id, normalize_provider_options(parsed_options)
 
 
 def _build_sampling(data: dict) -> SamplingConfig:

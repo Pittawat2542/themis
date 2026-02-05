@@ -173,6 +173,11 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
         # Load records
         eval_records = storage.load_cached_evaluations(run_id)
         gen_records_dict = storage.load_cached_records(run_id)
+        gen_by_sample_id = {
+            record.task.metadata.get("dataset_id"): record
+            for record in gen_records_dict.values()
+            if record.task.metadata.get("dataset_id") is not None
+        }
         
         # Calculate metrics
         metrics_dict: Dict[str, List[float]] = {}
@@ -181,6 +186,8 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
         for cache_key, eval_record in eval_records.items():
             # Get generation record
             gen_record = gen_records_dict.get(cache_key)
+            if gen_record is None and eval_record.sample_id is not None:
+                gen_record = gen_by_sample_id.get(eval_record.sample_id)
             
             # Extract scores
             scores = {}

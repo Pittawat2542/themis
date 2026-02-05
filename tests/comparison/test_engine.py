@@ -149,3 +149,53 @@ def test_compare_runs_holm_correction_respects_engine_alpha(tmp_path, monkeypatc
 
     assert result.corrected_significant is False
     assert result.winner == "tie"
+
+
+def test_compare_runs_metadata_reflects_effective_override(tmp_path):
+    storage = experiment_storage.ExperimentStorage(tmp_path)
+    for run_id, value in [("run-a", 1.0), ("run-b", 0.0)]:
+        storage.start_run(run_id, experiment_id="default")
+        record = make_record(sample_id="s1")
+        eval_record = make_evaluation_record(
+            sample_id="s1", metric_name="ExactMatch", value=value
+        )
+        storage.append_record(
+            run_id,
+            record,
+            cache_key=experiment_storage.task_cache_key(record.task),
+        )
+        storage.append_evaluation(run_id, record, eval_record)
+
+    engine = ComparisonEngine(storage=storage, statistical_test=StatisticalTest.BOOTSTRAP)
+    report = engine.compare_runs(
+        ["run-a", "run-b"], metrics=["ExactMatch"], statistical_test=StatisticalTest.T_TEST
+    )
+
+    assert report.metadata["statistical_test"] == StatisticalTest.T_TEST.value
+
+
+def test_holm_correction_skips_ci_only_results(tmp_path):
+    storage = experiment_storage.ExperimentStorage(tmp_path)
+    for run_id, value in [("run-a", 1.0), ("run-b", 0.0)]:
+        storage.start_run(run_id, experiment_id="default")
+        record = make_record(sample_id="s1")
+        eval_record = core_entities.EvaluationRecord(
+            sample_id="s1",
+            scores=[
+                core_entities.MetricScore(metric_name="MetricA", value=value),
+                core_entities.MetricScore(metric_name="MetricB", value=value),
+            ],
+        )
+        storage.append_record(
+            run_id,
+            record,
+            cache_key=experiment_storage.task_cache_key(record.task),
+        )
+        storage.append_evaluation(run_id, record, eval_record)
+
+    engine = ComparisonEngine(storage=storage, statistical_test=StatisticalTest.BOOTSTRAP)
+    report = engine.compare_runs(["run-a", "run-b"], metrics=["MetricA", "MetricB"])
+
+    assert report.metadata["n_hypotheses_corrected"] == 0
+    assert all(result.corrected_significant is None for result in report.pairwise_results)
+    assert all(result.corrected_p_value is None for result in report.pairwise_results)

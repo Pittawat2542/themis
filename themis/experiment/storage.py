@@ -27,7 +27,7 @@ import shutil
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Iterable, List, Literal
+from typing import Any, Dict, Iterable, List, Literal
 
 # fcntl is Unix-only
 if sys.platform == "win32":
@@ -44,6 +44,47 @@ from themis.core import entities as core_entities
 from themis.core import serialization as core_serialization
 
 STORAGE_FORMAT_VERSION = "2.0.0"
+TASK_CACHE_KEY_VERSION = "k2"
+
+
+def _json_default(value: Any) -> Any:
+    """Best-effort stable JSON serializer for cache key fingerprinting."""
+    if isinstance(value, set):
+        return sorted(value, key=repr)
+    if isinstance(value, Path):
+        return str(value)
+    if hasattr(value, "__dict__"):
+        return vars(value)
+    return repr(value)
+
+
+def _stable_hash(value: Any, *, length: int = 12) -> str:
+    """Return a deterministic short hash for arbitrary JSON-serializable values."""
+    serialized = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=_json_default,
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:length]
+
+
+def _reference_fingerprint(task: core_entities.GenerationTask) -> str:
+    reference = task.reference
+    if reference is None:
+        return _stable_hash(None)
+    payload = {"kind": reference.kind, "value": reference.value}
+    return _stable_hash(payload)
+
+
+def _evaluation_config_fingerprint(evaluation_config: dict | None) -> str:
+    canonical_default = {"metrics": [], "extractor": "unknown"}
+    if evaluation_config:
+        payload = evaluation_config
+    else:
+        payload = canonical_default
+    return _stable_hash(payload)
 
 
 class RunStatus(str, Enum):
@@ -1299,22 +1340,7 @@ class ExperimentStorage:
 
     def _task_cache_key(self, task: core_entities.GenerationTask) -> str:
         """Generate cache key for task."""
-        dataset_raw = task.metadata.get("dataset_id") or task.metadata.get("sample_id")
-        dataset_id = str(dataset_raw) if dataset_raw is not None else ""
-        manifest_hash = task.metadata.get("manifest_hash")
-        manifest_id = str(manifest_hash) if manifest_hash is not None else ""
-        prompt_hash = hashlib.sha256(task.prompt.text.encode("utf-8")).hexdigest()[:12]
-        sampling = task.sampling
-        sampling_key = (
-            f"{sampling.temperature:.3f}-{sampling.top_p:.3f}-{sampling.max_tokens}"
-        )
-        template = task.prompt.spec.name
-        model = task.model.identifier
-        return "::".join(
-            filter(
-                None, [dataset_id, template, model, sampling_key, prompt_hash, manifest_id]
-            )
-        )
+        return task_cache_key(task)
 
     # ===== Phase 3 Features =====
 
@@ -1636,6 +1662,7 @@ def task_cache_key(task: core_entities.GenerationTask) -> str:
     manifest_hash = task.metadata.get("manifest_hash")
     manifest_id = str(manifest_hash) if manifest_hash is not None else ""
     prompt_hash = hashlib.sha256(task.prompt.text.encode("utf-8")).hexdigest()[:12]
+    reference_hash = _reference_fingerprint(task)
     sampling = task.sampling
     sampling_key = (
         f"{sampling.temperature:.3f}-{sampling.top_p:.3f}-{sampling.max_tokens}"
@@ -1643,7 +1670,19 @@ def task_cache_key(task: core_entities.GenerationTask) -> str:
     template = task.prompt.spec.name
     model = task.model.identifier
     return "::".join(
-        filter(None, [dataset_id, template, model, sampling_key, prompt_hash, manifest_id])
+        filter(
+            None,
+            [
+                TASK_CACHE_KEY_VERSION,
+                dataset_id,
+                template,
+                model,
+                sampling_key,
+                prompt_hash,
+                reference_hash,
+                manifest_id,
+            ],
+        )
     )
 
 
@@ -1664,7 +1703,8 @@ def evaluation_cache_key(
             - Any other evaluation settings
 
     Returns:
-        Cache key string that includes both task and evaluation config
+        Cache key string that includes both task and evaluation config.
+        Even when config is omitted, a canonical default config fingerprint is used.
 
     Example:
         >>> config = {
@@ -1675,14 +1715,7 @@ def evaluation_cache_key(
     """
     task_key = task_cache_key(task)
 
-    if not evaluation_config:
-        # If evaluation config is omitted, use the task key.
-        return task_key
-
-    # Create deterministic hash of evaluation configuration
-    config_str = json.dumps(evaluation_config, sort_keys=True)
-    config_hash = hashlib.sha256(config_str.encode("utf-8")).hexdigest()[:12]
-
+    config_hash = _evaluation_config_fingerprint(evaluation_config)
     return f"{task_key}::eval:{config_hash}"
 
 

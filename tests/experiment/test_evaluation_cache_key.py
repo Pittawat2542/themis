@@ -1,9 +1,11 @@
 """Unit tests for evaluation cache key functionality."""
 
+import hashlib
+
 import pytest
 
 from themis.core import entities as core_entities
-from themis.experiment.storage import evaluation_cache_key, task_cache_key
+from themis.experiment.storage import ExperimentStorage, evaluation_cache_key, task_cache_key
 
 
 def make_test_task(dataset_id: str = "test-1", temperature: float = 0.7) -> core_entities.GenerationTask:
@@ -24,12 +26,13 @@ def make_test_task(dataset_id: str = "test-1", temperature: float = 0.7) -> core
 
 
 def test_evaluation_cache_key_without_config():
-    """Test that evaluation_cache_key without config returns task key."""
+    """Test that evaluation_cache_key without config still includes eval fingerprint."""
     task = make_test_task()
     task_key = task_cache_key(task)
     eval_key = evaluation_cache_key(task, None)
-    
-    assert eval_key == task_key, "Should match task key when no config provided"
+
+    assert eval_key.startswith(task_key), "Should keep task key prefix"
+    assert "::eval:" in eval_key, "Should include canonical eval fingerprint"
 
 
 def test_evaluation_cache_key_with_config():
@@ -140,13 +143,16 @@ def test_task_cache_key_format():
     key = task_cache_key(task)
     
     parts = key.split("::")
-    assert len(parts) == 5, "Task key should have 5 parts"
-    # dataset_id::template::model::sampling::prompt_hash
-    
-    assert parts[0] == "test-1", "First part should be dataset_id"
-    assert parts[1] == "math", "Second part should be template"
-    assert parts[2] == "gpt-4", "Third part should be model"
-    assert "0.700-1.000-100" in parts[3], "Fourth part should be sampling"
+    assert len(parts) == 7, "Task key should have version + 6 data components"
+    # k2::dataset_id::template::model::sampling::prompt_hash::reference_hash
+
+    assert parts[0] == "k2", "First part should be cache key version"
+    assert parts[1] == "test-1", "Second part should be dataset_id"
+    assert parts[2] == "math", "Third part should be template"
+    assert parts[3] == "gpt-4", "Fourth part should be model"
+    assert "0.700-1.000-100" in parts[4], "Fifth part should be sampling"
+    assert len(parts[5]) == 12, "Prompt hash should be 12 chars"
+    assert len(parts[6]) == 12, "Reference hash should be 12 chars"
 
 
 def test_task_cache_key_includes_manifest_hash():
@@ -194,13 +200,51 @@ def test_evaluation_cache_key_format():
 
 
 def test_evaluation_cache_key_with_empty_config():
-    """Test that empty config dict behaves like None."""
+    """Test that omitted/empty config use the same canonical default hash."""
     task = make_test_task()
     task_key = task_cache_key(task)
     
     eval_key_none = evaluation_cache_key(task, None)
     eval_key_empty = evaluation_cache_key(task, {})
     
-    # Empty config is falsy in Python (empty dict), so should match task key
-    assert eval_key_none == task_key, "None config should return task key"
-    assert eval_key_empty == task_key, "Empty dict is falsy, should return task key"
+    assert eval_key_none.startswith(task_key)
+    assert eval_key_none == eval_key_empty
+
+
+def test_task_cache_key_invalidates_on_reference_change():
+    task_a = make_test_task()
+    task_b = make_test_task()
+    task_b.reference = core_entities.Reference(kind="answer", value="3")
+
+    assert task_cache_key(task_a) != task_cache_key(task_b)
+
+
+def test_new_cache_keys_do_not_false_hit_legacy_records(tmp_path):
+    storage = ExperimentStorage(tmp_path)
+    run_id = "legacy-run"
+    storage.start_run(run_id, experiment_id="default")
+
+    task = make_test_task()
+    record = core_entities.GenerationRecord(
+        task=task,
+        output=core_entities.ModelOutput(text="2"),
+        error=None,
+        metrics={},
+    )
+    old_key = _legacy_task_cache_key(task)
+    storage.append_record(run_id, record, cache_key=old_key)
+
+    loaded = storage.load_cached_records(run_id)
+    assert old_key in loaded  # old data remains readable
+    assert task_cache_key(task) not in loaded  # no false hit under new key format
+
+
+def _legacy_task_cache_key(task: core_entities.GenerationTask) -> str:
+    dataset_raw = task.metadata.get("dataset_id") or task.metadata.get("sample_id")
+    dataset_id = str(dataset_raw) if dataset_raw is not None else ""
+    prompt_hash = hashlib.sha256(task.prompt.text.encode("utf-8")).hexdigest()[:12]
+    sampling = task.sampling
+    sampling_key = (
+        f"{sampling.temperature:.3f}-{sampling.top_p:.3f}-{sampling.max_tokens}"
+    )
+    return "::".join([dataset_id, task.prompt.spec.name, task.model.identifier, sampling_key, prompt_hash])

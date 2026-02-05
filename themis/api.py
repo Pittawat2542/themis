@@ -39,6 +39,7 @@ from typing import Any, Callable, Sequence
 from themis.core.entities import ExperimentReport, GenerationRecord
 from themis.evaluation.pipeline import EvaluationPipeline
 from themis.generation.templates import PromptTemplate
+from themis.providers.options import normalize_provider_options
 from themis.session import ExperimentSession
 from themis.specs import ExperimentSpec, ExecutionSpec, StorageSpec
 
@@ -344,12 +345,7 @@ def evaluate(
 
 def _extract_provider_options(kwargs: dict[str, Any]) -> dict[str, Any]:
     options = {key: kwargs[key] for key in _PROVIDER_OPTION_KEYS if key in kwargs}
-    # Normalize the common LiteLLM base URL alias.
-    if "base_url" in options and "api_base" not in options:
-        options["api_base"] = options.pop("base_url")
-    elif "base_url" in options:
-        options.pop("base_url")
-    return options
+    return normalize_provider_options(options)
 
 
 def _detect_reference_field(dataset: Sequence[dict[str, Any]]) -> str | None:

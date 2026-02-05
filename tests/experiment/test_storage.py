@@ -64,10 +64,11 @@ def test_experiment_storage_roundtrip(tmp_path):
     evaluation = core_entities.EvaluationRecord(sample_id="1", scores=[score])
     storage.append_evaluation("run-1", record, evaluation)
 
-    # Without evaluation_config, evaluation cache key equals task key.
+    # Without evaluation_config, evaluation cache key uses canonical default config.
     cached_eval = storage.load_cached_evaluations("run-1")
-    assert key in cached_eval
-    assert cached_eval[key].scores[0].value == 1.0
+    default_eval_key = experiment_storage.evaluation_cache_key(record.task, None)
+    assert default_eval_key in cached_eval
+    assert cached_eval[default_eval_key].scores[0].value == 1.0
     
     # Append evaluation with config (new behavior)
     eval_config = {

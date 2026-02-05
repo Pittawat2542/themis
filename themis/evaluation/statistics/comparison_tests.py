@@ -46,20 +46,24 @@ class StatisticalTestResult:
         confidence_level: Confidence level used (e.g., 0.95 for 95%)
         effect_size: Effect size (e.g., Cohen's d)
         confidence_interval: Confidence interval for the difference
+        inference_mode: Whether this result supports hypothesis testing (`hypothesis_test`)
+            or only uncertainty estimation (`ci_only`)
     """
     
     test_name: str
     statistic: float
-    p_value: float
+    p_value: float | None
     significant: bool
     confidence_level: float = 0.95
     effect_size: float | None = None
     confidence_interval: tuple[float, float] | None = None
+    inference_mode: str = "hypothesis_test"
     
     def __str__(self) -> str:
         """Human-readable summary."""
         sig_str = "significant" if self.significant else "not significant"
-        result = f"{self.test_name}: p={self.p_value:.4f} ({sig_str})"
+        p_text = f"{self.p_value:.4f}" if self.p_value is not None else "n/a"
+        result = f"{self.test_name}: p={p_text} ({sig_str})"
         
         if self.effect_size is not None:
             result += f", effect_size={self.effect_size:.3f}"
@@ -209,7 +213,10 @@ def bootstrap_confidence_interval(
         seed: Random seed for reproducibility
     
     Returns:
-        StatisticalTestResult with bootstrap confidence interval
+        StatisticalTestResult with bootstrap confidence interval.
+
+    Notes:
+        This path is CI-only inference. We intentionally do not synthesize p-values.
     """
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform bootstrap on empty samples")
@@ -226,14 +233,14 @@ def bootstrap_confidence_interval(
         )
         ci = (boot.ci_lower, boot.ci_upper)
         significant = not (ci[0] <= 0 <= ci[1])
-        p_value = (1 / n_bootstrap) if significant else 1.0
         return StatisticalTestResult(
             test_name=f"bootstrap (n={n_bootstrap})",
             statistic=boot.statistic,
-            p_value=p_value,
+            p_value=None,
             significant=significant,
             confidence_level=confidence_level,
             confidence_interval=ci,
+            inference_mode="ci_only",
         )
 
     rng = random.Random(seed)
@@ -267,17 +274,14 @@ def bootstrap_confidence_interval(
     # Check if 0 is in the confidence interval
     significant = not (ci[0] <= 0 <= ci[1])
     
-    # Pseudo p-value: proportion of bootstrap samples with opposite sign
-    p_value = sum(1 for d in bootstrap_diffs if (d * observed_diff) < 0) / n_bootstrap
-    p_value = max(p_value, 1 / n_bootstrap)  # Lower bound
-    
     return StatisticalTestResult(
         test_name=f"bootstrap (n={n_bootstrap})",
         statistic=observed_diff,
-        p_value=p_value,
+        p_value=None,
         significant=significant,
         confidence_level=confidence_level,
         confidence_interval=ci,
+        inference_mode="ci_only",
     )
 
 

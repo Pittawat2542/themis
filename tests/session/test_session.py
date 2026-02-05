@@ -5,6 +5,7 @@ import pytest
 from themis.evaluation import extractors, metrics, pipeline as evaluation_pipeline
 from themis.experiment.manifest import manifest_hash
 from themis.experiment.storage import ExperimentStorage
+from themis.generation.clients import FakeMathModelClient
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
@@ -80,3 +81,79 @@ def test_session_persists_reproducibility_manifest(tmp_path):
     assert "git_commit_hash" in manifest
     assert snapshot["manifest_hash"] == manifest_hash(manifest)
     assert report.metadata["manifest_hash"] == snapshot["manifest_hash"]
+
+
+def test_session_normalizes_base_url_provider_option(tmp_path, monkeypatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_provider(name: str, **options):
+        captured["name"] = name
+        captured["options"] = dict(options)
+        return FakeMathModelClient(seed=7)
+
+    monkeypatch.setattr("themis.session.create_provider", _fake_create_provider)
+
+    pipeline = evaluation_pipeline.EvaluationPipeline(
+        extractor=extractors.IdentityExtractor(),
+        metrics=[metrics.ResponseLength()],
+    )
+    spec = ExperimentSpec(
+        dataset=[{"id": "1", "question": "2+2", "answer": "4"}],
+        prompt="{question}",
+        model="gpt-4",
+        provider_options={
+            "base_url": "http://localhost:1234/v1",
+            "api_key": "test-key",
+        },
+        pipeline=pipeline,
+        run_id="session-base-url",
+    )
+
+    ExperimentSession().run(
+        spec,
+        execution=ExecutionSpec(workers=1),
+        storage=StorageSpec(path=tmp_path),
+    )
+
+    assert captured["name"] == "litellm"
+    options = captured["options"]
+    assert isinstance(options, dict)
+    assert options.get("api_base") == "http://localhost:1234/v1"
+    assert "base_url" not in options
+
+
+def test_session_prefers_explicit_api_base_over_base_url(tmp_path, monkeypatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_provider(name: str, **options):
+        captured["options"] = dict(options)
+        return FakeMathModelClient(seed=7)
+
+    monkeypatch.setattr("themis.session.create_provider", _fake_create_provider)
+
+    pipeline = evaluation_pipeline.EvaluationPipeline(
+        extractor=extractors.IdentityExtractor(),
+        metrics=[metrics.ResponseLength()],
+    )
+    spec = ExperimentSpec(
+        dataset=[{"id": "1", "question": "2+2", "answer": "4"}],
+        prompt="{question}",
+        model="gpt-4",
+        provider_options={
+            "api_base": "http://preferred/v1",
+            "base_url": "http://legacy/v1",
+        },
+        pipeline=pipeline,
+        run_id="session-api-base-preferred",
+    )
+
+    ExperimentSession().run(
+        spec,
+        execution=ExecutionSpec(workers=1),
+        storage=StorageSpec(path=tmp_path),
+    )
+
+    options = captured["options"]
+    assert isinstance(options, dict)
+    assert options.get("api_base") == "http://preferred/v1"
+    assert "base_url" not in options

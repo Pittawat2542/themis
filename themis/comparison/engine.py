@@ -77,6 +77,7 @@ class ComparisonEngine:
         """
         if len(run_ids) < 2:
             raise ValueError("Need at least 2 runs to compare")
+        effective_test = statistical_test or self._statistical_test
         
         # Load all runs
         run_data = {}
@@ -109,7 +110,7 @@ class ComparisonEngine:
                         metric,
                         run_data[run_a][metric],
                         run_data[run_b][metric],
-                        statistical_test or self._statistical_test,
+                        effective_test,
                     )
                     pairwise_results.append(result)
 
@@ -149,13 +150,13 @@ class ComparisonEngine:
             best_run_per_metric=best_run_per_metric,
             overall_best_run=overall_best_run,
             metadata={
-                "statistical_test": self._statistical_test.value,
+                "statistical_test": effective_test.value,
                 "alpha": self._alpha,
                 "n_runs": len(run_ids),
                 "n_metrics": len(metrics),
                 "multiple_comparison_correction": self._multiple_comparison_correction,
                 "n_hypotheses_corrected": sum(
-                    1 for result in pairwise_results if result.test_result is not None
+                    1 for result in pairwise_results if _supports_p_value_correction(result)
                 ),
             },
         )
@@ -281,17 +282,26 @@ class ComparisonEngine:
             )
 
         tested_results = [
-            result for result in pairwise_results if result.test_result is not None
+            result for result in pairwise_results if _supports_p_value_correction(result)
         ]
         if not tested_results:
             return
 
-        p_values = [result.test_result.p_value for result in tested_results]
+        eligible_results: list[reports.ComparisonResult] = []
+        p_values = []
+        for result in tested_results:
+            p_value = result.test_result.p_value
+            if p_value is None:  # Defensive guard; filtered above.
+                continue
+            eligible_results.append(result)
+            p_values.append(p_value)
+        if not p_values:
+            return
         corrected_flags = holm_bonferroni(p_values, alpha=self._alpha)
         corrected_p_values = _holm_adjusted_p_values(p_values)
 
         for result, corrected, corrected_p in zip(
-            tested_results, corrected_flags, corrected_p_values
+            eligible_results, corrected_flags, corrected_p_values
         ):
             result.corrected_significant = corrected
             result.corrected_p_value = corrected_p
@@ -417,6 +427,15 @@ def _holm_adjusted_p_values(p_values: Sequence[float]) -> list[float]:
     for rank, (_p_val, orig_idx) in enumerate(indexed):
         adjusted[orig_idx] = adjusted_sorted[rank]
     return adjusted
+
+
+def _supports_p_value_correction(result: reports.ComparisonResult) -> bool:
+    test_result = result.test_result
+    if test_result is None:
+        return False
+    if getattr(test_result, "inference_mode", "hypothesis_test") != "hypothesis_test":
+        return False
+    return test_result.p_value is not None
 
 
 __all__ = [
