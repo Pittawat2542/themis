@@ -9,6 +9,7 @@ from themis.core import entities as core_entities
 from themis.evaluation import extractors, math_verify_utils, metrics, pipeline
 from themis.experiment import orchestrator
 from themis.experiment import storage as experiment_storage
+from themis.experiment.cache_manager import CacheManager
 from themis.generation import clients, plan, runner, templates
 from themis.interfaces import ModelProvider
 
@@ -117,7 +118,11 @@ def build_math500_zero_shot_experiment(
         generation_plan=math_plan,
         generation_runner=math_runner,
         evaluation_pipeline=eval_pipeline,
-        storage=storage,
+        cache_manager=CacheManager(
+            storage=storage,
+            enable_resume=True,
+            enable_cache=True,
+        ),
     )
 
 

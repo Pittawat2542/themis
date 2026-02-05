@@ -5,6 +5,7 @@ import pytest
 from themis.core import entities as core_entities
 from themis.evaluation import extractors, metrics, pipeline as evaluation_pipeline
 from themis.experiment import orchestrator, storage as experiment_storage
+from themis.experiment.cache_manager import CacheManager
 from themis.generation import plan as generation_plan
 from themis.generation import templates
 
@@ -113,6 +114,23 @@ def test_experiment_run_produces_generation_and_evaluation_reports():
     exact_report = report.evaluation_report.metrics["ExactMatch"]
     assert exact_report.count == 2
     assert exact_report.mean == pytest.approx(1.0)
+
+
+def test_orchestrator_rejects_legacy_storage_constructor_arg(tmp_path):
+    plan = make_plan()
+    eval_pipeline = make_pipeline()
+    runner_impl = EchoRunner(
+        answers_by_sample_id={"sample-1": "Paris", "sample-2": "Berlin"}
+    )
+    storage = experiment_storage.ExperimentStorage(tmp_path / "cache")
+
+    with pytest.raises(TypeError, match="unexpected keyword argument 'storage'"):
+        orchestrator.ExperimentOrchestrator(  # type: ignore[call-arg]
+            generation_plan=plan,
+            generation_runner=runner_impl,
+            evaluation_pipeline=eval_pipeline,
+            storage=storage,
+        )
 
 
 def test_experiment_can_limit_dataset_and_emit_callbacks():
@@ -225,7 +243,7 @@ def test_experiment_skips_evaluation_when_cached(tmp_path):
         generation_plan=plan,
         generation_runner=runner_impl,
         evaluation_pipeline=eval_pipeline,
-        storage=storage,
+        cache_manager=CacheManager(storage=storage),
     )
 
     experiment_runner.run(dataset, run_id="cached", resume=False)
@@ -237,7 +255,7 @@ def test_experiment_skips_evaluation_when_cached(tmp_path):
         generation_plan=plan,
         generation_runner=runner_impl,
         evaluation_pipeline=CountingPipeline(counter),
-        storage=storage,
+        cache_manager=CacheManager(storage=storage),
     )
 
     experiment_runner.run(dataset=None, run_id="cached", resume=True)
@@ -376,7 +394,7 @@ def test_experiment_can_resume_from_storage(tmp_path):
         generation_plan=plan,
         generation_runner=runner_impl,
         evaluation_pipeline=eval_pipeline,
-        storage=storage,
+        cache_manager=CacheManager(storage=storage),
     )
 
     run_id = "math-demo"
@@ -394,7 +412,7 @@ def test_experiment_can_resume_from_storage(tmp_path):
         generation_plan=plan,
         generation_runner=noop_runner,
         evaluation_pipeline=eval_pipeline,
-        storage=storage,
+        cache_manager=CacheManager(storage=storage),
     )
 
     report = resume_orchestrator.run(dataset=None, run_id=run_id, resume=True)

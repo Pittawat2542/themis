@@ -21,8 +21,9 @@ def test_default_storage_path_used_when_path_is_none():
         experiment = _build_experiment(config)
 
         # Verify that the storage was created with the default path
-        assert experiment._storage is not None
-        assert experiment._storage._root == default_path
+        assert experiment._cache.has_storage is True
+        assert experiment._cache._storage is not None
+        assert experiment._cache._storage._root == default_path
 
 
 def test_specific_path_takes_precedence_over_default():
@@ -42,8 +43,9 @@ def test_specific_path_takes_precedence_over_default():
         experiment = _build_experiment(config)
 
         # Verify that the storage was created with the specific path (not the default)
-        assert experiment._storage is not None
-        assert experiment._storage._root == specific_path
+        assert experiment._cache.has_storage is True
+        assert experiment._cache._storage is not None
+        assert experiment._cache._storage._root == specific_path
 
 
 def test_no_storage_when_both_paths_are_none():
@@ -54,4 +56,4 @@ def test_no_storage_when_both_paths_are_none():
     experiment = _build_experiment(config)
 
     # Verify that no storage was created
-    assert experiment._storage is None
+    assert experiment._cache.has_storage is False

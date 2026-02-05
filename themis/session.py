@@ -9,6 +9,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from themis.core.entities import ExperimentReport, GenerationRecord, ModelSpec, SamplingConfig
 from themis.evaluation.pipeline import EvaluationPipelineContract
 from themis.experiment.manifest import build_reproducibility_manifest
+from themis.experiment.cache_manager import CacheManager
 from themis.experiment.orchestrator import ExperimentOrchestrator
 from themis.generation.plan import GenerationPlan
 from themis.generation.router import ProviderRouter
@@ -80,6 +81,11 @@ class ExperimentSession:
         )
 
         storage_backend = _resolve_storage(storage)
+        cache_manager = CacheManager(
+            storage=storage_backend,
+            enable_resume=storage.cache,
+            enable_cache=storage.cache,
+        )
         manifest = build_reproducibility_manifest(
             model=model_id,
             provider=provider_name,
@@ -97,7 +103,7 @@ class ExperimentSession:
             generation_plan=plan,
             generation_runner=runner,
             evaluation_pipeline=pipeline,
-            storage=storage_backend,
+            cache_manager=cache_manager,
         )
 
         return orchestrator.run(

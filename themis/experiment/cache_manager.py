@@ -65,6 +65,12 @@ class CacheManager:
             return {}
         return self._storage.load_cached_records(run_id)
 
+    def load_cached_dataset(self, run_id: str) -> list[dict[str, object]] | None:
+        """Load cached dataset for a run when available."""
+        if not self._enable_resume or self._storage is None:
+            return None
+        return self._storage.load_dataset(run_id)
+
     def load_cached_evaluations(
         self, run_id: str, evaluation_config: dict | None = None
     ) -> dict[str, EvaluationRecord]:

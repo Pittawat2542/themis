@@ -77,8 +77,6 @@ class ExperimentOrchestrator:
         generation_plan: generation_plan.GenerationPlan,
         generation_runner: generation_runner.GenerationRunner,
         evaluation_pipeline: evaluation_pipeline.EvaluationPipeline,
-        storage: experiment_storage.ExperimentStorage | None = None,
-        integrations_config: IntegrationsConfig | None = None,
         cache_manager: CacheManager | None = None,
         integration_manager: IntegrationManager | None = None,
     ) -> None:
@@ -88,8 +86,6 @@ class ExperimentOrchestrator:
             generation_plan: Plan for expanding dataset into tasks
             generation_runner: Runner for executing generation tasks
             evaluation_pipeline: Pipeline for evaluating outputs
-            storage: Optional storage backend (deprecated, use cache_manager)
-            integrations_config: Integration config (deprecated, use integration_manager)
             cache_manager: Manager for caching and resumability
             integration_manager: Manager for external integrations
         """
@@ -97,21 +93,17 @@ class ExperimentOrchestrator:
         self._runner = generation_runner
         self._evaluation = evaluation_pipeline
 
-        # Support both new managers and legacy direct parameters for backward compatibility
         self._cache = cache_manager or CacheManager(
-            storage=storage,
-            enable_resume=True,
-            enable_cache=True,
+            storage=None,
+            enable_resume=False,
+            enable_cache=False,
         )
         self._integrations = integration_manager or IntegrationManager(
-            config=integrations_config or IntegrationsConfig()
+            config=IntegrationsConfig()
         )
 
         # Initialize cost tracker
         self._cost_tracker = CostTracker()
-
-        # Keep legacy references for backward compatibility
-        self._storage = storage
 
     def run(
         self,
@@ -547,9 +539,10 @@ class ExperimentOrchestrator:
             return list(dataset)
         if dataset_loader is not None:
             return list(dataset_loader())
-        # Try to load from cache (for backward compatibility, still use _storage directly)
-        if self._storage is not None and run_id is not None:
-            return self._storage.load_dataset(run_id)
+        if run_id is not None:
+            cached_dataset = self._cache.load_cached_dataset(run_id)
+            if cached_dataset is not None:
+                return cached_dataset
         raise ValueError(
             "No dataset provided. Supply `dataset=` rows, a `dataset_loader`, "
             "or set `run_id` with storage configured so cached data can be reloaded."
