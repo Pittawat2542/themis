@@ -185,6 +185,7 @@ class ExperimentStorage:
         # In-memory caches
         self._task_index: dict[str, set[str]] = {}
         self._template_index: dict[str, dict[str, str]] = {}
+        self._run_dir_index: dict[str, Path] = {}
         self._locks: dict[str, tuple[int, int]] = {}  # (fd, count) for reentrant locks
 
     def _init_database(self):
@@ -453,7 +454,7 @@ class ExperimentStorage:
                 raise ValueError(f"Run {run_id} already exists")
 
             # Create run directory
-            run_dir = self._get_run_dir(run_id)
+            run_dir = self._get_run_dir(run_id, experiment_id=experiment_id)
             run_dir.mkdir(parents=True, exist_ok=True)
 
             # Create metadata
@@ -763,13 +764,52 @@ class ExperimentStorage:
         """Check if run metadata exists (public API)."""
         return self._run_metadata_exists(run_id)
 
-    def _get_run_dir(self, run_id: str) -> Path:
+    def _get_run_dir(self, run_id: str, experiment_id: str | None = None) -> Path:
         """Get run directory path.
 
         Uses hierarchical structure: experiments/<experiment_id>/runs/<run_id>/
         Falls back to experiments/default/runs/<run_id>/ if experiment_id unknown.
         """
-        # Check if we already have metadata
+        if experiment_id is not None:
+            run_dir = self._experiments_dir / experiment_id / "runs" / run_id
+            self._run_dir_index[run_id] = run_dir
+            return run_dir
+
+        cached_dir = self._run_dir_index.get(run_id)
+        if cached_dir is not None and cached_dir.exists():
+            return cached_dir
+
+        indexed_dir = self._get_run_dir_from_metadata_index(run_id)
+        if indexed_dir is not None:
+            self._run_dir_index[run_id] = indexed_dir
+            return indexed_dir
+
+        scanned_dir = self._get_run_dir_by_scanning(run_id)
+        if scanned_dir is not None:
+            self._run_dir_index[run_id] = scanned_dir
+            return scanned_dir
+
+        # Default location for new runs
+        return self._experiments_dir / "default" / "runs" / run_id
+
+    def _get_run_dir_from_metadata_index(self, run_id: str) -> Path | None:
+        """Resolve run path from metadata index (SQLite)."""
+        if not self._config.use_sqlite_metadata:
+            return None
+        try:
+            with self._connect_db() as conn:
+                row = conn.execute(
+                    "SELECT experiment_id FROM runs WHERE run_id = ?",
+                    (run_id,),
+                ).fetchone()
+        except sqlite3.Error:
+            return None
+        if row is None:
+            return None
+        return self._experiments_dir / row[0] / "runs" / run_id
+
+    def _get_run_dir_by_scanning(self, run_id: str) -> Path | None:
+        """Resolve run path by scanning experiment directories."""
         for exp_dir in self._experiments_dir.iterdir():
             if not exp_dir.is_dir():
                 continue
@@ -779,9 +819,7 @@ class ExperimentStorage:
             candidate_path = runs_dir / run_id / "metadata.json"
             if candidate_path.exists():
                 return runs_dir / run_id
-
-        # Default location for new runs
-        return self._experiments_dir / "default" / "runs" / run_id
+        return None
 
     def _get_generation_dir(self, run_id: str) -> Path:
         """Get generation data directory."""
@@ -1388,6 +1426,7 @@ class ExperimentStorage:
             run_dir: Run directory to delete
         """
         run_id = run_dir.name
+        self._run_dir_index.pop(run_id, None)
 
         # Remove from SQLite
         if self._config.use_sqlite_metadata:

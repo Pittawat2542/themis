@@ -14,7 +14,7 @@ Every item follows red -> green -> refactor.
 ## Current Status (Reassessed)
 
 - Completed major slices: evaluate/session wiring, comparison alignment/statistics hardening, sandboxed execution metric, storage adapter contract fixes, reproducibility manifest, parallel completion-order generation.
-- Remaining high-impact gaps: full statistics-module consolidation, stronger execution sandbox tests (memory/network/process), canonical storage protocol lifecycle, chunked/bounded-memory orchestration, docs/coverage hardening.
+- Remaining high-impact gaps: full statistics-module consolidation, canonical storage protocol lifecycle, chunked/bounded-memory orchestration, docs/coverage hardening.
 
 ## P0 - Correctness and Research Validity
 
@@ -87,13 +87,13 @@ TDD:
 
 - [x] Use completion-order result handling (`as_completed`) in threaded generation path.
 - [ ] Stream records/evaluations in chunks instead of full in-memory materialization.
-- [ ] Replace directory scanning for run lookup with indexed lookup in storage metadata DB.
+- [x] Replace directory scanning for run lookup with indexed lookup in storage metadata DB.
 - [ ] Add bounded-memory mode for large runs.
 
 TDD:
 - [x] Add performance regression tests for head-of-line blocking scenarios.
 - [ ] Add large-run tests asserting memory does not scale linearly with total samples.
-- [ ] Add tests validating indexed run lookup behavior under many runs.
+- [x] Add tests validating indexed run lookup behavior under many runs.
 
 ## P3 - UX, Docs, and Test Suite Hardening
 

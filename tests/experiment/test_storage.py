@@ -397,6 +397,62 @@ def test_sqlite_metadata(tmp_path):
     assert row[2] == "in_progress"
 
 
+def test_start_run_uses_experiment_scoped_directory(tmp_path):
+    """Run directories should be scoped by experiment_id, not always default."""
+    storage = experiment_storage.ExperimentStorage(
+        tmp_path, config=StorageConfig(use_sqlite_metadata=True)
+    )
+    storage.start_run("run-1", "exp-scoped", config={})
+
+    scoped_metadata = (
+        tmp_path / "experiments" / "exp-scoped" / "runs" / "run-1" / "metadata.json"
+    )
+    default_metadata = (
+        tmp_path / "experiments" / "default" / "runs" / "run-1" / "metadata.json"
+    )
+
+    assert scoped_metadata.exists()
+    assert not default_metadata.exists()
+
+
+def test_get_run_dir_uses_sqlite_index_without_scanning(tmp_path, monkeypatch):
+    """Lookup should use metadata index and avoid filesystem scan when possible."""
+    storage = experiment_storage.ExperimentStorage(
+        tmp_path, config=StorageConfig(use_sqlite_metadata=True)
+    )
+    storage.start_run("run-1", "exp-indexed", config={})
+    storage._run_dir_index.clear()
+
+    def _fail_scan(_run_id: str):
+        raise AssertionError("Unexpected directory scan")
+
+    monkeypatch.setattr(storage, "_get_run_dir_by_scanning", _fail_scan)
+    resolved = storage._get_run_dir("run-1")
+
+    assert resolved == tmp_path / "experiments" / "exp-indexed" / "runs" / "run-1"
+
+
+def test_get_run_dir_index_lookup_scales_to_many_runs(tmp_path, monkeypatch):
+    """Many run lookups should resolve through metadata index without scanning."""
+    storage = experiment_storage.ExperimentStorage(
+        tmp_path, config=StorageConfig(use_sqlite_metadata=True)
+    )
+    run_ids = [f"run-{idx}" for idx in range(50)]
+    for run_id in run_ids:
+        storage.start_run(run_id, "exp-many", config={})
+
+    storage._run_dir_index.clear()
+
+    def _fail_scan(_run_id: str):
+        raise AssertionError("Unexpected directory scan")
+
+    monkeypatch.setattr(storage, "_get_run_dir_by_scanning", _fail_scan)
+
+    for run_id in run_ids:
+        resolved = storage._get_run_dir(run_id)
+        assert resolved == tmp_path / "experiments" / "exp-many" / "runs" / run_id
+
+
 def test_format_versioning(tmp_path):
     """Test format versioning in storage files."""
     storage = experiment_storage.ExperimentStorage(tmp_path)
