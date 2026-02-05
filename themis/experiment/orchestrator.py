@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 from themis.config.schema import IntegrationsConfig
 
@@ -197,14 +197,10 @@ class ExperimentOrchestrator:
         # Expand dataset into generation tasks
         logger.info("Orchestrator: Expanding dataset into generation tasks...")
         try:
-            tasks = list(self._plan.expand(selected_dataset))
-            logger.info(f"Orchestrator: Created {len(tasks)} generation tasks")
+            task_iterator = iter(self._plan.expand(selected_dataset))
         except Exception as e:
             logger.error(f"Orchestrator: ❌ Failed to expand dataset: {e}")
             raise
-        if run_manifest_hash is not None:
-            for task in tasks:
-                task.metadata["manifest_hash"] = run_manifest_hash
 
         # Build evaluation configuration for cache invalidation
         evaluation_config = self._build_evaluation_config()
@@ -228,7 +224,6 @@ class ExperimentOrchestrator:
         cached_eval_records = _RetentionBuffer(max_records_in_memory)
         new_eval_records = _RetentionBuffer(max_records_in_memory)
         failures: list[ExperimentFailure] = []
-        pending_tasks: list[GenerationTask] = []
         eval_batch: list[GenerationRecord] = []
         new_eval_failures: list[EvaluationFailure] = []
         cached_eval_failures: list[EvaluationFailure] = []
@@ -239,6 +234,8 @@ class ExperimentOrchestrator:
         successful_generations_total = 0
         failed_generations_total = 0
         evaluation_record_failures_total = 0
+        discovered_tasks_total = 0
+        pending_tasks_total = 0
 
         if hasattr(self._evaluation, "_metrics"):
             expected_metric_names.update(
@@ -277,46 +274,57 @@ class ExperimentOrchestrator:
             new_eval_failures.extend(batch_report.failures)
             eval_batch = []
 
-        for task in tasks:
-            task_cache_key = experiment_storage.task_cache_key(task)
-            cached = cached_records.get(task_cache_key)
-            if cached is not None:
-                generation_results.append(cached)
-                if cached.error:
-                    failed_generations_total += 1
-                else:
-                    successful_generations_total += 1
-                if cached.error:
-                    failures.append(
-                        ExperimentFailure(
-                            sample_id=cached.task.metadata.get("dataset_id"),
-                            message=cached.error.message,
+        def _iter_pending_tasks() -> Iterable[GenerationTask]:
+            nonlocal discovered_tasks_total
+            nonlocal pending_tasks_total
+            nonlocal successful_generations_total
+            nonlocal failed_generations_total
+            for task in task_iterator:
+                discovered_tasks_total += 1
+                if run_manifest_hash is not None:
+                    task.metadata["manifest_hash"] = run_manifest_hash
+                task_cache_key = experiment_storage.task_cache_key(task)
+                cached = cached_records.get(task_cache_key)
+                if cached is not None:
+                    generation_results.append(cached)
+                    if cached.error:
+                        failed_generations_total += 1
+                    else:
+                        successful_generations_total += 1
+                    if cached.error:
+                        failures.append(
+                            ExperimentFailure(
+                                sample_id=cached.task.metadata.get("dataset_id"),
+                                message=cached.error.message,
+                            )
                         )
+                    eval_cache_key = experiment_storage.evaluation_cache_key(
+                        task, evaluation_config
                     )
-                # Use evaluation_cache_key that includes evaluation config
-                eval_cache_key = experiment_storage.evaluation_cache_key(task, evaluation_config)
-                evaluation = cached_evaluations.get(eval_cache_key)
-                if evaluation is not None:
-                    cached_eval_records.append(evaluation)
-                    _accumulate_evaluation_record(evaluation)
-                    for message in evaluation.failures:
-                        cached_eval_failures.append(
-                            EvaluationFailure(sample_id=evaluation.sample_id, message=message)
-                        )
-                else:
-                    eval_batch.append(cached)
-                    if len(eval_batch) >= evaluation_batch_size:
-                        _flush_eval_batch()
-                if on_result:
-                    on_result(cached)
-            else:
-                pending_tasks.append(task)
+                    evaluation = cached_evaluations.get(eval_cache_key)
+                    if evaluation is not None:
+                        cached_eval_records.append(evaluation)
+                        _accumulate_evaluation_record(evaluation)
+                        for message in evaluation.failures:
+                            cached_eval_failures.append(
+                                EvaluationFailure(
+                                    sample_id=evaluation.sample_id, message=message
+                                )
+                            )
+                    else:
+                        eval_batch.append(cached)
+                        if len(eval_batch) >= evaluation_batch_size:
+                            _flush_eval_batch()
+                    if on_result:
+                        on_result(cached)
+                    continue
 
-        # Run pending generation tasks
-        if pending_tasks:
-            logger.info(f"Orchestrator: Running {len(pending_tasks)} generation tasks...")
-            completed = 0
-            for record in self._runner.run(pending_tasks):
+                pending_tasks_total += 1
+                yield task
+
+        # Run pending generation tasks without pre-materializing task lists.
+        completed = 0
+        for record in self._runner.run(_iter_pending_tasks()):
                 logger.debug(f"Orchestrator: Received generation record")
                 generation_results.append(record)
                 if record.error:
@@ -326,8 +334,15 @@ class ExperimentOrchestrator:
                 completed += 1
                 
                 # Log progress every 10 samples or at key milestones
-                if completed % 10 == 0 or completed == len(pending_tasks):
-                    logger.info(f"Orchestrator: Generation progress: {completed}/{len(pending_tasks)} ({100*completed//len(pending_tasks)}%)")
+                if pending_tasks_total and (
+                    completed % 10 == 0 or completed == pending_tasks_total
+                ):
+                    logger.info(
+                        "Orchestrator: Generation progress: %s/%s (%s%%)",
+                        completed,
+                        pending_tasks_total,
+                        (100 * completed // pending_tasks_total),
+                    )
 
                 logger.debug(f"Orchestrator: Processing record (cost tracking...)")
                 # Track cost for successful generations
@@ -372,6 +387,13 @@ class ExperimentOrchestrator:
                     on_result(record)
                 logger.debug(f"Orchestrator: Record processing complete")
 
+        logger.info(
+            "Orchestrator: Task scan complete (%s total, %s pending, %s cached)",
+            discovered_tasks_total,
+            pending_tasks_total,
+            discovered_tasks_total - pending_tasks_total,
+        )
+
         # Evaluate remaining queued records
         logger.info(
             "Orchestrator: Flushing final evaluation batch (%s queued)...",
@@ -402,6 +424,9 @@ class ExperimentOrchestrator:
             logger.info(f"Orchestrator: Total cost: ${cost_breakdown.total_cost:.4f}")
 
         # Build metadata
+        evaluation_truncation = evaluation_report.metadata.get(
+            "per_sample_metrics_truncated", False
+        )
         metadata = {
             "total_samples": len(selected_dataset),
             "successful_generations": successful_generations_total,
@@ -410,6 +435,7 @@ class ExperimentOrchestrator:
             "generation_records_dropped": generation_results.dropped,
             "evaluation_records_retained": len(evaluation_report.records),
             "evaluation_records_dropped": cached_eval_records.dropped + new_eval_records.dropped,
+            "per_sample_metrics_truncated": bool(evaluation_truncation),
             "run_id": run_identifier,
             "evaluation_failures": evaluation_record_failures_total + len(
                 evaluation_report.failures
@@ -587,15 +613,26 @@ class ExperimentOrchestrator:
 
         aggregates: dict[str, evaluation_pipeline.MetricAggregate] = {}
         metric_names = set(metric_counts.keys()) | set(expected_metric_names or set())
+        metrics_truncated = False
+        per_metric_truncation: dict[str, dict[str, int | bool]] = {}
         for name in metric_names:
             scores = metric_samples.get(name, [])
             count = metric_counts.get(name, 0)
             mean = (metric_sums.get(name, 0.0) / count) if count else 0.0
+            truncated_count = max(0, count - len(scores))
+            per_sample_complete = truncated_count == 0
+            metrics_truncated = metrics_truncated or (not per_sample_complete)
+            per_metric_truncation[name] = {
+                "per_sample_complete": per_sample_complete,
+                "truncated_count": truncated_count,
+            }
             aggregates[name] = evaluation_pipeline.MetricAggregate(
                 name=name,
                 count=count,
                 mean=mean,
                 per_sample=list(scores),
+                per_sample_complete=per_sample_complete,
+                truncated_count=truncated_count,
             )
 
         failures = list(new_failures)
@@ -612,6 +649,13 @@ class ExperimentOrchestrator:
             metrics=aggregates,
             failures=failures,
             records=all_records,
+            metadata={
+                "max_records_in_memory": max_records_in_memory,
+                "records_retained": len(all_records),
+                "records_dropped": record_buffer.dropped,
+                "per_sample_metrics_truncated": metrics_truncated,
+                "per_metric": per_metric_truncation,
+            },
         )
 
     def _save_report_json(self, report: ExperimentReport, run_id: str) -> None:

@@ -104,3 +104,30 @@ def test_reports_alignment_requires_overlap():
 
     with pytest.raises(ValueError):
         reports.paired_t_test_for_metric(report_a, report_b, "ExactMatch")
+
+
+def test_inferential_helpers_reject_truncated_per_sample_vectors():
+    truncated = reports.EvaluationReport(
+        metrics={
+            "ExactMatch": reports.MetricAggregate(
+                name="ExactMatch",
+                count=10,
+                mean=0.8,
+                per_sample=[
+                    core_entities.MetricScore(metric_name="ExactMatch", value=1.0),
+                    core_entities.MetricScore(metric_name="ExactMatch", value=0.0),
+                ],
+                per_sample_complete=False,
+                truncated_count=8,
+            )
+        },
+        failures=[],
+        records=[],
+        metadata={"per_sample_metrics_truncated": True},
+    )
+
+    with pytest.raises(ValueError, match="truncated subset"):
+        reports.ci_for_metric(truncated, "ExactMatch")
+
+    with pytest.raises(ValueError, match="truncated subset"):
+        reports.permutation_test_for_metric(truncated, truncated, "ExactMatch")

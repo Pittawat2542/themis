@@ -262,6 +262,39 @@ def test_experiment_skips_evaluation_when_cached(tmp_path):
     assert counter[0] == 0
 
 
+def test_resume_invalidates_cached_eval_when_reference_changes(tmp_path):
+    storage = experiment_storage.ExperimentStorage(tmp_path / "cache")
+    plan = make_plan()
+    eval_pipeline = make_pipeline()
+    cache = CacheManager(storage=storage)
+
+    run_id = "reference-change"
+    dataset_bad_reference = [
+        {"id": "sample-1", "topic": "France", "expected": "Lyon", "subject": "geo"}
+    ]
+    dataset_correct_reference = [
+        {"id": "sample-1", "topic": "France", "expected": "Paris", "subject": "geo"}
+    ]
+
+    first = orchestrator.ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=EchoRunner(answers_by_sample_id={"sample-1": "Paris"}),
+        evaluation_pipeline=eval_pipeline,
+        cache_manager=cache,
+    )
+    first_report = first.run(dataset_bad_reference, run_id=run_id, resume=False)
+    assert first_report.evaluation_report.metrics["ExactMatch"].mean == 0.0
+
+    second = orchestrator.ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=EchoRunner(answers_by_sample_id={"sample-1": "Paris"}),
+        evaluation_pipeline=eval_pipeline,
+        cache_manager=cache,
+    )
+    second_report = second.run(dataset_correct_reference, run_id=run_id, resume=True)
+    assert second_report.evaluation_report.metrics["ExactMatch"].mean == 1.0
+
+
 def test_experiment_evaluates_in_configured_batches():
     dataset = build_dataset() + [
         {"id": "sample-3", "topic": "Spain", "expected": "Madrid", "subject": "geo"},
@@ -289,6 +322,25 @@ def test_experiment_evaluates_in_configured_batches():
     # 5 records with batch size 2 -> 3 evaluation calls
     assert counter[0] == 3
     assert report.evaluation_report.metrics["ExactMatch"].count == 5
+
+
+def test_orchestrator_streams_pending_tasks_to_runner():
+    dataset = build_dataset()
+    answers = {row["id"]: row["expected"] for row in dataset}
+
+    class StreamingAssertRunner(EchoRunner):
+        def run(self, requests):  # type: ignore[override]
+            assert not isinstance(requests, list)
+            yield from super().run(requests)
+
+    experiment_runner = orchestrator.ExperimentOrchestrator(
+        generation_plan=make_plan(),
+        generation_runner=StreamingAssertRunner(answers_by_sample_id=answers),
+        evaluation_pipeline=make_pipeline(),
+    )
+
+    report = experiment_runner.run(dataset, resume=False)
+    assert report.metadata["successful_generations"] == len(dataset)
 
 
 def test_experiment_bounded_memory_mode_limits_report_records():
@@ -320,9 +372,14 @@ def test_experiment_bounded_memory_mode_limits_report_records():
     assert report.metadata["evaluation_records_retained"] == 2
     assert report.metadata["evaluation_records_dropped"] == 3
     assert report.metadata["successful_generations"] == 5
+    assert report.metadata["per_sample_metrics_truncated"] is True
     assert len(report.generation_results) == 2
     assert len(report.evaluation_report.records) == 2
-    assert report.evaluation_report.metrics["ExactMatch"].count == 5
+    exact = report.evaluation_report.metrics["ExactMatch"]
+    assert exact.count == 5
+    assert exact.per_sample_complete is False
+    assert exact.truncated_count == 3
+    assert report.evaluation_report.metadata["per_sample_metrics_truncated"] is True
 
 
 def test_experiment_bounded_memory_mode_rejects_invalid_limit():
@@ -379,7 +436,10 @@ def test_experiment_bounded_memory_scales_sublinearly_for_large_runs():
     assert len(report.generation_results) == 3
     assert len(report.evaluation_report.records) == 3
     assert report.evaluation_report.metrics["ExactMatch"].count == 200
-    assert len(report.evaluation_report.metrics["ExactMatch"].per_sample) == 3
+    exact = report.evaluation_report.metrics["ExactMatch"]
+    assert len(exact.per_sample) == 3
+    assert exact.per_sample_complete is False
+    assert exact.truncated_count == 197
 
 
 def test_experiment_can_resume_from_storage(tmp_path):

@@ -36,6 +36,8 @@ class MetricAggregate:
     count: int
     mean: float
     per_sample: List[core_entities.MetricScore]
+    per_sample_complete: bool = True
+    truncated_count: int = 0
 
     @classmethod
     def from_scores(
@@ -48,6 +50,8 @@ class MetricAggregate:
             count=len(scores),
             mean=mean(score.value for score in scores),
             per_sample=scores,
+            per_sample_complete=True,
+            truncated_count=0,
         )
 
 
@@ -57,6 +61,33 @@ class EvaluationReport:
     failures: List[EvaluationFailure]
     records: List[core_entities.EvaluationRecord]
     slices: dict[str, dict[str, MetricAggregate]] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+def _has_full_per_sample_available(
+    report: EvaluationReport, metric_name: str
+) -> bool:
+    agg = report.metrics.get(metric_name)
+    if agg is None:
+        return False
+    if not agg.per_sample_complete:
+        return False
+    return len(agg.per_sample) == agg.count
+
+
+def _require_full_per_sample_available(
+    report: EvaluationReport, metric_name: str, *, helper_name: str
+) -> None:
+    agg = report.metrics.get(metric_name)
+    if agg is None:
+        return
+    if _has_full_per_sample_available(report, metric_name):
+        return
+    raise ValueError(
+        f"{helper_name} requires full per-sample data for metric '{metric_name}', "
+        "but the report only retains a truncated subset. Re-run without "
+        "max_records_in_memory (or increase it) to enable inferential statistics."
+    )
 
 
 def _metric_values(report: EvaluationReport, metric_name: str) -> list[float]:
@@ -99,6 +130,9 @@ def ci_for_metric(
     confidence_level: float = 0.95,
     n_bootstrap: int = 10000,
 ) -> BootstrapResult:
+    _require_full_per_sample_available(
+        report, metric_name, helper_name="ci_for_metric"
+    )
     values = _metric_values(report, metric_name)
     if not values:
         raise ValueError(f"No scores for metric '{metric_name}'")
@@ -116,6 +150,12 @@ def permutation_test_for_metric(
     seed: int | None = None,
     align_by_sample_id: bool = True,
 ) -> PermutationTestResult:
+    _require_full_per_sample_available(
+        report_a, metric_name, helper_name="permutation_test_for_metric"
+    )
+    _require_full_per_sample_available(
+        report_b, metric_name, helper_name="permutation_test_for_metric"
+    )
     if align_by_sample_id:
         values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
     else:
@@ -140,6 +180,12 @@ def paired_permutation_test_for_metric(
     n_permutations: int = 10000,
     seed: int | None = None,
 ) -> PermutationTestResult:
+    _require_full_per_sample_available(
+        report_a, metric_name, helper_name="paired_permutation_test_for_metric"
+    )
+    _require_full_per_sample_available(
+        report_b, metric_name, helper_name="paired_permutation_test_for_metric"
+    )
     values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
     return paired_permutation_test(
         values_a,
@@ -167,6 +213,12 @@ def cohens_d_for_metric(
     report_b: EvaluationReport,
     metric_name: str,
 ) -> EffectSize:
+    _require_full_per_sample_available(
+        report_a, metric_name, helper_name="cohens_d_for_metric"
+    )
+    _require_full_per_sample_available(
+        report_b, metric_name, helper_name="cohens_d_for_metric"
+    )
     values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
     if len(values_a) < 2 or len(values_b) < 2:
         raise ValueError("Each group must have at least 2 values for Cohen's d")
@@ -179,6 +231,12 @@ def paired_t_test_for_metric(
     metric_name: str,
     significance_level: float = 0.05,
 ) -> ComparisonResult:
+    _require_full_per_sample_available(
+        report_a, metric_name, helper_name="paired_t_test_for_metric"
+    )
+    _require_full_per_sample_available(
+        report_b, metric_name, helper_name="paired_t_test_for_metric"
+    )
     values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
     result = paired_t_test(values_a, values_b, significance_level=significance_level)
     return ComparisonResult(
@@ -214,6 +272,9 @@ def ci_for_slice_metric(
     confidence_level: float = 0.95,
     n_bootstrap: int = 10000,
 ) -> BootstrapResult:
+    _require_full_per_sample_available(
+        report, metric_name, helper_name="ci_for_slice_metric"
+    )
     values = _slice_metric_values(report, slice_name, metric_name)
     if not values:
         raise ValueError(

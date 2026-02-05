@@ -194,3 +194,62 @@ def test_runner_parallel_yields_completion_order():
     results = list(runner.run(requests))
 
     assert [record.task.prompt.text for record in results] == ["fast", "slow"]
+
+
+def test_runner_streams_iterables_without_full_materialization():
+    provider = FakeModelProvider()
+    sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.9, max_tokens=32)
+
+    class TrackingTasks:
+        def __init__(self, total: int):
+            self.total = total
+            self.requested = 0
+
+        def __iter__(self):
+            for idx in range(self.total):
+                self.requested += 1
+                yield build_task(f"Task {idx}", "gpt-4o", sampling)
+
+    tasks = TrackingTasks(total=20)
+    runner = generation_runner.GenerationRunner(provider=provider, max_parallel=1)
+    stream = runner.run(tasks)
+
+    first = next(stream)
+    assert first.task.prompt.text == "Task 0"
+    assert tasks.requested == 1
+
+    remaining = list(stream)
+    assert len(remaining) == 19
+
+
+def test_runner_bounds_in_flight_task_submission():
+    class SlowProvider(FakeModelProvider):
+        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+            time.sleep(0.03)
+            return super().generate(task)
+
+    provider = SlowProvider()
+    sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.9, max_tokens=32)
+
+    class TrackingTasks:
+        def __init__(self, total: int):
+            self.total = total
+            self.requested = 0
+
+        def __iter__(self):
+            for idx in range(self.total):
+                self.requested += 1
+                yield build_task(f"Task {idx}", "gpt-4o", sampling)
+
+    tasks = TrackingTasks(total=10)
+    runner = generation_runner.GenerationRunner(
+        provider=provider,
+        max_parallel=2,
+        max_in_flight_tasks=3,
+    )
+    stream = runner.run(tasks)
+
+    first = next(stream)
+    assert first.output is not None
+    assert tasks.requested <= 3
+    assert len([first, *list(stream)]) == 10

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,6 +33,7 @@ class GenerationRunner:
         retry_initial_delay: float = 0.5,
         retry_backoff_multiplier: float = 2.0,
         retry_max_delay: float | None = 2.0,
+        max_in_flight_tasks: int | None = None,
     ) -> None:
         self._provider = provider
         self._strategy_resolver = strategy_resolver or (
@@ -45,23 +47,34 @@ class GenerationRunner:
         self._retry_max_delay = (
             retry_max_delay if retry_max_delay is None else max(0.0, retry_max_delay)
         )
+        if max_in_flight_tasks is not None and max_in_flight_tasks < 1:
+            raise ValueError("max_in_flight_tasks must be >= 1 when provided.")
+        default_in_flight = self._max_parallel * 4
+        self._max_in_flight_tasks = max_in_flight_tasks or default_in_flight
 
     def run(
         self, tasks: Iterable[core_entities.GenerationTask]
     ) -> Iterator[core_entities.GenerationRecord]:
-        task_list = list(tasks)
-        if not task_list:
+        task_iter = iter(tasks)
+        try:
+            first_task = next(task_iter)
+        except StopIteration:
             logger.info("Runner: No tasks to execute")
             return
-        
-        logger.info(f"Runner: Starting execution of {len(task_list)} tasks with {self._max_parallel} workers")
+
+        task_stream = itertools.chain([first_task], task_iter)
+        logger.info(
+            "Runner: Starting execution with %s workers (max_in_flight=%s)",
+            self._max_parallel,
+            self._max_in_flight_tasks,
+        )
 
         if self._execution_backend is not None:
             logger.info("Runner: Using custom execution backend")
             backend = self._execution_backend
             try:
                 for result in backend.map(
-                    self._execute_task, task_list, max_workers=self._max_parallel
+                    self._execute_task, task_stream, max_workers=self._max_parallel
                 ):
                     yield result
             except Exception as e:
@@ -71,25 +84,52 @@ class GenerationRunner:
 
         if self._max_parallel <= 1:
             logger.info("Runner: Using sequential execution (1 worker)")
-            for i, task in enumerate(task_list, 1):
-                logger.debug(f"Runner: Processing task {i}/{len(task_list)}")
+            for i, task in enumerate(task_stream, 1):
+                logger.debug("Runner: Processing task %s", i)
                 yield self._execute_task(task)
             return
 
         logger.info(f"Runner: Using parallel execution ({self._max_parallel} workers)")
+        yield from self._run_parallel_streaming(task_stream)
+
+    def _run_parallel_streaming(
+        self, tasks: Iterable[core_entities.GenerationTask]
+    ) -> Iterator[core_entities.GenerationRecord]:
+        task_iter = iter(tasks)
+        max_in_flight = max(self._max_parallel, self._max_in_flight_tasks)
+
         with ThreadPoolExecutor(max_workers=self._max_parallel) as executor:
-            futures = [executor.submit(self._execute_task, task) for task in task_list]
+            futures = set()
             completed = 0
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
+
+            def _submit_until_full() -> None:
+                while len(futures) < max_in_flight:
+                    try:
+                        task = next(task_iter)
+                    except StopIteration:
+                        return
+                    futures.add(executor.submit(self._execute_task, task))
+
+            _submit_until_full()
+
+            while futures:
+                for future in as_completed(tuple(futures)):
+                    futures.remove(future)
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        logger.error(f"Runner: Task execution failed: {e}")
+                        raise
                     completed += 1
-                    if completed % max(1, len(task_list) // 10) == 0 or completed == len(task_list):
-                        logger.debug(f"Runner: Completed {completed}/{len(task_list)} tasks")
+                    if completed % max(1, self._max_parallel) == 0:
+                        logger.debug(
+                            "Runner: Completed %s task(s), %s in-flight",
+                            completed,
+                            len(futures),
+                        )
                     yield result
-                except Exception as e:
-                    logger.error(f"Runner: Task execution failed: {e}")
-                    raise
+                    _submit_until_full()
+                    break
 
     def _run_single_attempt(
         self, task: core_entities.GenerationTask

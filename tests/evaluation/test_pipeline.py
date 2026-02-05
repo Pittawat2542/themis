@@ -53,7 +53,12 @@ def test_pipeline_returns_metric_aggregates():
     assert not report.failures
     for score in exact_report.per_sample:
         assert "evaluation_time_ms" in score.metadata
+        assert "metric_compute_time_ms" in score.metadata
         assert "extraction_time_ms" in score.metadata
+        assert "extractor_time_ms" in score.metadata
+        assert "item_evaluation_time_ms" in score.metadata
+        assert score.metadata["item_evaluation_time_ms"] >= score.metadata["extractor_time_ms"]
+        assert score.metadata["item_evaluation_time_ms"] >= score.metadata["metric_compute_time_ms"]
     assert len(report.records) == 2
     assert report.records[0].scores
 
