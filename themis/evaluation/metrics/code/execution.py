@@ -10,6 +10,7 @@ import contextlib
 import multiprocessing
 import queue
 import time
+import tracemalloc
 import warnings
 from dataclasses import dataclass
 from enum import Enum
@@ -115,6 +116,9 @@ def _execution_worker(
     _apply_memory_limit(max_memory_mb)
 
     try:
+        if max_memory_mb > 0:
+            tracemalloc.start()
+
         restricted_globals = {"__builtins__": _safe_builtins()}
         local_vars: dict[str, Any] = {}
         exec(code, restricted_globals, local_vars)
@@ -136,6 +140,23 @@ def _execution_worker(
         else:
             actual_output = candidate(test_input)
 
+        if max_memory_mb > 0:
+            _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+            max_bytes = max_memory_mb * 1024 * 1024
+            if peak_bytes > max_bytes:
+                result_queue.put(
+                    {
+                        "status": ExecutionStatus.ERROR.value,
+                        "passed": False,
+                        "output": "",
+                        "error": (
+                            f"Memory limit exceeded: peak={peak_bytes} bytes, "
+                            f"limit={max_bytes} bytes"
+                        ),
+                    }
+                )
+                return
+
         passed = actual_output == expected_output
         result_queue.put(
             {
@@ -149,6 +170,15 @@ def _execution_worker(
                 "error": None,
             }
         )
+    except MemoryError:
+        result_queue.put(
+            {
+                "status": ExecutionStatus.ERROR.value,
+                "passed": False,
+                "output": "",
+                "error": "Memory limit exceeded",
+            }
+        )
     except BaseException as exc:
         result_queue.put(
             {
@@ -158,6 +188,9 @@ def _execution_worker(
                 "error": str(exc),
             }
         )
+    finally:
+        with contextlib.suppress(RuntimeError):
+            tracemalloc.stop()
 
 
 class ExecutionAccuracy(Metric):

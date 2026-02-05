@@ -140,3 +140,24 @@ def test_execution_accuracy_passes_simple_solution():
     assert score.value == 1.0
     assert score.details["results"][0]["status"] == "passed"
     assert score.details["results"][1]["status"] == "passed"
+
+
+def test_execution_accuracy_enforces_memory_limit():
+    metric = ExecutionAccuracy(timeout=1.0, max_memory_mb=32)
+    score = metric.compute(
+        prediction=(
+            "def solution(x):\n"
+            "    data = [0] * 20000000\n"
+            "    return x\n"
+        ),
+        references=[
+            {
+                "function_name": "solution",
+                "inputs": [1],
+                "expected": [1],
+            }
+        ],
+    )
+    result = score.details["results"][0]
+    assert result["status"] == "error"
+    assert "memory" in (result["error"] or "").lower()

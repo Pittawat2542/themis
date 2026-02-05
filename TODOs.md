@@ -46,13 +46,13 @@ TDD:
 ### 3) Secure code execution metrics
 
 - [x] Replace inline `exec` execution with isolated worker process runtime.
-- [ ] Enforce hard timeout and memory limits per test case (timeout done, memory-limit verification still pending).
+- [x] Enforce hard timeout and memory limits per test case.
 - [x] Restrict imports/syscalls and explicitly define allowed builtins.
 - [x] Record execution status taxonomy (timeout, runtime error, forbidden operation, assertion fail).
 
 TDD:
 - [x] Add tests for timeout enforcement.
-- [ ] Add tests for memory-limit enforcement.
+- [x] Add tests for memory-limit enforcement.
 - [x] Add tests that filesystem/network/process-spawn operations are blocked.
 - [x] Add tests verifying deterministic result schema for pass/fail/error states.
 
