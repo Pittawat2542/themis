@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import contextlib
 import multiprocessing
-import queue
-import threading
 import time
 import tracemalloc
 import warnings
@@ -111,13 +109,10 @@ def _execution_worker(
     test_input: Any,
     expected_output: Any,
     max_memory_mb: int,
-    result_queue: Any,
+    result_conn: Any,
 ) -> None:
     """Execute untrusted code in isolated process and send a result payload."""
     _apply_memory_limit(max_memory_mb)
-    with contextlib.suppress(Exception):
-        # Prevent child shutdown from waiting on queue feeder thread.
-        result_queue.cancel_join_thread()
 
     try:
         if max_memory_mb > 0:
@@ -129,7 +124,7 @@ def _execution_worker(
 
         candidate = local_vars.get(function_name)
         if not callable(candidate):
-            result_queue.put(
+            result_conn.send(
                 {
                     "status": ExecutionStatus.ERROR.value,
                     "passed": False,
@@ -148,7 +143,7 @@ def _execution_worker(
             _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
             max_bytes = max_memory_mb * 1024 * 1024
             if peak_bytes > max_bytes:
-                result_queue.put(
+                result_conn.send(
                     {
                         "status": ExecutionStatus.ERROR.value,
                         "passed": False,
@@ -162,7 +157,7 @@ def _execution_worker(
                 return
 
         passed = actual_output == expected_output
-        result_queue.put(
+        result_conn.send(
             {
                 "status": (
                     ExecutionStatus.PASSED.value
@@ -175,7 +170,7 @@ def _execution_worker(
             }
         )
     except MemoryError:
-        result_queue.put(
+        result_conn.send(
             {
                 "status": ExecutionStatus.ERROR.value,
                 "passed": False,
@@ -184,7 +179,7 @@ def _execution_worker(
             }
         )
     except BaseException as exc:
-        result_queue.put(
+        result_conn.send(
             {
                 "status": ExecutionStatus.ERROR.value,
                 "passed": False,
@@ -195,6 +190,8 @@ def _execution_worker(
     finally:
         with contextlib.suppress(RuntimeError):
             tracemalloc.stop()
+        with contextlib.suppress(Exception):
+            result_conn.close()
 
 
 class ExecutionAccuracy(Metric):
@@ -291,8 +288,11 @@ class ExecutionAccuracy(Metric):
         expected_output: Any,
     ) -> ExecutionResult:
         start = time.perf_counter()
-        ctx = self._get_mp_context()
-        result_queue = ctx.Queue()
+        try:
+            ctx = multiprocessing.get_context("fork")
+        except ValueError:
+            ctx = multiprocessing.get_context("spawn")
+        recv_conn, send_conn = ctx.Pipe(duplex=False)
         process = ctx.Process(
             target=_execution_worker,
             kwargs={
@@ -301,7 +301,7 @@ class ExecutionAccuracy(Metric):
                 "test_input": test_input,
                 "expected_output": expected_output,
                 "max_memory_mb": self.max_memory_mb,
-                "result_queue": result_queue,
+                "result_conn": send_conn,
             },
         )
 
@@ -313,6 +313,9 @@ class ExecutionAccuracy(Metric):
                     category=DeprecationWarning,
                 )
                 process.start()
+            with contextlib.suppress(Exception):
+                # Parent does not write to the child pipe endpoint.
+                send_conn.close()
             process.join(self.timeout)
 
             if process.is_alive():
@@ -325,7 +328,14 @@ class ExecutionAccuracy(Metric):
                     duration=time.perf_counter() - start,
                 )
 
-            payload = result_queue.get(timeout=0.1)
+            if not recv_conn.poll(0.1):
+                return ExecutionResult(
+                    status=ExecutionStatus.ERROR,
+                    passed=False,
+                    error=f"Worker exited with code {process.exitcode}",
+                    duration=time.perf_counter() - start,
+                )
+            payload = recv_conn.recv()
             return ExecutionResult(
                 status=ExecutionStatus(payload.get("status", ExecutionStatus.ERROR.value)),
                 passed=bool(payload.get("passed", False)),
@@ -335,13 +345,6 @@ class ExecutionAccuracy(Metric):
                     if payload.get("error") is not None
                     else None
                 ),
-                duration=time.perf_counter() - start,
-            )
-        except queue.Empty:
-            return ExecutionResult(
-                status=ExecutionStatus.ERROR,
-                passed=False,
-                error=f"Worker exited with code {process.exitcode}",
                 duration=time.perf_counter() - start,
             )
         except BaseException as exc:
@@ -356,19 +359,9 @@ class ExecutionAccuracy(Metric):
             )
         finally:
             with contextlib.suppress(Exception):
-                result_queue.close()
+                recv_conn.close()
             with contextlib.suppress(Exception):
-                result_queue.join_thread()
-
-    @staticmethod
-    def _get_mp_context() -> multiprocessing.context.BaseContext:
-        """Select a safe multiprocessing start method for metric execution."""
-        if threading.active_count() > 1:
-            return multiprocessing.get_context("spawn")
-        try:
-            return multiprocessing.get_context("fork")
-        except ValueError:
-            return multiprocessing.get_context("spawn")
+                send_conn.close()
 
 
 __all__ = ["ExecutionAccuracy", "ExecutionResult", "ExecutionStatus"]
