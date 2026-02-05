@@ -41,7 +41,7 @@ class DummyMetric(Metric):
 
 class InvalidMetric:
     """A class without compute method - should fail registration."""
-    pass
+    name = "invalid"
 
 
 def test_register_metric():

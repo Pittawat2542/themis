@@ -9,6 +9,7 @@ from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 class RecordingBackend(ExecutionBackend):
     def __init__(self):
         self.called = False
+        self.shutdown_called = False
 
     def map(self, func, items, *, max_workers=None, timeout=None, **kwargs):
         self.called = True
@@ -16,7 +17,7 @@ class RecordingBackend(ExecutionBackend):
             yield func(item)
 
     def shutdown(self) -> None:
-        pass
+        self.shutdown_called = True
 
 
 def test_session_uses_execution_backend(tmp_path):
@@ -43,3 +44,4 @@ def test_session_uses_execution_backend(tmp_path):
     )
 
     assert backend.called is True
+    assert backend.shutdown_called is False

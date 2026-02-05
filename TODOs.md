@@ -14,7 +14,7 @@ Every item follows red -> green -> refactor.
 ## Current Status (Reassessed)
 
 - Completed major slices: evaluate/session wiring, comparison alignment/statistics hardening, sandboxed execution metric, storage adapter contract fixes, reproducibility manifest, parallel completion-order generation.
-- Remaining high-impact gaps: coverage hardening.
+- Remaining high-impact gaps: none in the current plan; keep extending coverage where new features land.
 
 ## P0 - Correctness and Research Validity
 
@@ -109,17 +109,17 @@ TDD:
 
 ### 8) Raise test quality and coverage for critical paths
 
-- [ ] Replace placeholder `pass` tests with real behavioral assertions.
-- [ ] Set minimum coverage thresholds per critical module (API, orchestration, statistics, execution safety, storage).
+- [x] Replace placeholder `pass` tests with real behavioral assertions.
+- [x] Set minimum coverage thresholds per critical module (API, orchestration, statistics, execution safety, storage).
 - [x] Add end-to-end reproducibility test using fixed seed and manifest.
 
 TDD:
-- [ ] Add failing tests for each current placeholder in API tests.
-- [ ] Add CI gate for module-level coverage thresholds.
+- [x] Add failing tests for each current placeholder in API tests.
+- [x] Add CI gate for module-level coverage thresholds.
 
 ## Proposed Execution Order
 
 - [x] Sprint 1: P0.1, P0.2
 - [x] Sprint 2: P0.3, P1.4
 - [x] Sprint 3: P1.5, P2.6
-- [ ] Sprint 4: P3.7, P3.8
+- [x] Sprint 4: P3.7, P3.8

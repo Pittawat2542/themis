@@ -14,6 +14,11 @@ from themis.interfaces import ModelProvider
 class DummyCacheManager:
     def __init__(self):
         self.start_called = False
+        self.cached_dataset_calls: list[dict[str, object]] = []
+        self.load_cached_records_calls: list[str] = []
+        self.load_cached_evaluations_calls: list[dict[str, object]] = []
+        self.saved_generation_records: list[dict[str, object]] = []
+        self.saved_evaluation_records: list[dict[str, object]] = []
 
     @property
     def has_storage(self) -> bool:
@@ -32,19 +37,37 @@ class DummyCacheManager:
         self.start_called = True
 
     def cache_dataset(self, run_id: str, dataset: Sequence[dict[str, object]]) -> None:
-        pass
+        self.cached_dataset_calls.append(
+            {"run_id": run_id, "sample_count": len(dataset)}
+        )
 
     def load_cached_records(self, run_id: str):
+        self.load_cached_records_calls.append(run_id)
         return {}
 
     def load_cached_evaluations(self, run_id: str, evaluation_config: dict | None = None):
+        self.load_cached_evaluations_calls.append(
+            {"run_id": run_id, "evaluation_config": dict(evaluation_config or {})}
+        )
         return {}
 
     def save_generation_record(self, run_id: str, record, cache_key: str) -> None:
-        pass
+        self.saved_generation_records.append(
+            {
+                "run_id": run_id,
+                "cache_key": cache_key,
+                "sample_id": record.task.metadata.get("dataset_id"),
+            }
+        )
 
     def save_evaluation_record(self, run_id: str, generation_record, evaluation_record, evaluation_config: dict | None = None) -> None:
-        pass
+        self.saved_evaluation_records.append(
+            {
+                "run_id": run_id,
+                "sample_id": generation_record.task.metadata.get("dataset_id"),
+                "evaluation_config": dict(evaluation_config or {}),
+            }
+        )
 
     def get_run_path(self, run_id: str) -> str | None:
         return None
@@ -115,6 +138,17 @@ def test_orchestrator_uses_cache_manager_api():
     )
 
     assert cache_manager.start_called is True
+    assert cache_manager.cached_dataset_calls == [
+        {"run_id": "orchestrator-test", "sample_count": 1}
+    ]
+    assert cache_manager.load_cached_records_calls == []
+    assert cache_manager.load_cached_evaluations_calls == []
+    assert len(cache_manager.saved_generation_records) == 1
+    assert cache_manager.saved_generation_records[0]["sample_id"] == "1"
+    assert len(cache_manager.saved_evaluation_records) == 1
+    eval_config = cache_manager.saved_evaluation_records[0]["evaluation_config"]
+    assert "metrics" in eval_config
+    assert "extractor" in eval_config
     assert report.metadata["total_samples"] == 1
 
 

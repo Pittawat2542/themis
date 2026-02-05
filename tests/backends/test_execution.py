@@ -176,6 +176,7 @@ class RecordingExecutionBackend(ExecutionBackend):
     def __init__(self):
         self.called = False
         self.max_workers = None
+        self.shutdown_called = False
 
     def map(self, func, items, *, max_workers=None, timeout=None, **kwargs):
         self.called = True
@@ -184,7 +185,7 @@ class RecordingExecutionBackend(ExecutionBackend):
             yield func(item)
 
     def shutdown(self) -> None:
-        pass
+        self.shutdown_called = True
 
 
 class FakeProvider(ModelProvider):
@@ -218,4 +219,5 @@ def test_generation_runner_uses_execution_backend():
 
     assert backend.called is True
     assert backend.max_workers == 2
+    assert backend.shutdown_called is False
     assert len(results) == 2

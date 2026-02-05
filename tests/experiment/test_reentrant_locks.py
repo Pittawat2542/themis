@@ -52,7 +52,8 @@ def test_reentrant_lock_same_thread(tmp_path):
         with storage._acquire_lock("run-1"):
             # And once more
             with storage._acquire_lock("run-1"):
-                pass  # Should complete without hanging
+                _, count = storage._locks["run-1"]
+                assert count == 3
     
     # Verify lock was fully released
     assert "run-1" not in storage._locks
@@ -175,7 +176,7 @@ def test_concurrent_access_same_run_different_threads(tmp_path):
             # This should timeout, but let's not wait 30s in tests
             # Just verify the lock is blocked
             with storage._acquire_lock("run-1"):
-                pass
+                results["thread2_timeout"] = False
         except TimeoutError:
             results["thread2_timeout"] = True
     
@@ -199,8 +200,8 @@ def test_lock_cleanup_on_exception(tmp_path):
         with storage._acquire_lock("run-1"):
             assert "run-1" in storage._locks
             raise ValueError("Test exception")
-    except ValueError:
-        pass
+    except ValueError as exc:
+        assert str(exc) == "Test exception"
     
     # Lock should be cleaned up despite exception
     assert "run-1" not in storage._locks
@@ -220,16 +221,16 @@ def test_nested_lock_cleanup_on_exception(tmp_path):
                     fd2, count2 = storage._locks["run-1"]
                     assert count2 == 2
                     raise ValueError("Inner exception")
-            except ValueError:
-                pass
+            except ValueError as exc:
+                assert str(exc) == "Inner exception"
             
             # After inner exception, count should be decremented
             fd3, count3 = storage._locks["run-1"]
             assert count3 == 1
             
             raise RuntimeError("Outer exception")
-    except RuntimeError:
-        pass
+    except RuntimeError as exc:
+        assert str(exc) == "Outer exception"
     
     # After all exceptions, lock should be fully cleaned up
     assert "run-1" not in storage._locks
@@ -284,7 +285,8 @@ def test_os_compatibility_no_fcntl(tmp_path, monkeypatch):
     # Should still work, just without file locking
     with storage._acquire_lock("run-1"):
         with storage._acquire_lock("run-1"):
-            pass  # Should complete without error
+            _, count = storage._locks["run-1"]
+            assert count == 2
     
     assert "run-1" not in storage._locks
 
