@@ -87,6 +87,10 @@ class ExperimentSession:
             sampling=dict(spec.sampling),
             num_samples=spec.num_samples,
             evaluation_config=_build_evaluation_config(pipeline),
+            seeds={
+                "provider_seed": provider_options.get("seed"),
+                "sampling_seed": spec.sampling.get("seed"),
+            },
         )
 
         orchestrator = ExperimentOrchestrator(

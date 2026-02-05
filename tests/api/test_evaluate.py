@@ -264,6 +264,53 @@ class TestEvaluateAPI:
         assert report.metadata["evaluation_records_dropped"] == 2
         assert report.evaluation_report.metrics["ExactMatch"].count == 3
 
+    def test_evaluate_reproducible_with_fixed_seed_and_manifest(self, tmp_path):
+        dataset = [
+            {"id": "1", "question": "2+2", "answer": "4"},
+            {"id": "2", "question": "1+1", "answer": "2"},
+        ]
+
+        report_a = evaluate(
+            dataset,
+            model="fake:fake-math-llm",
+            prompt="What is {question}?",
+            metrics=["exact_match"],
+            storage=tmp_path,
+            run_id="repro-a",
+            resume=False,
+            seed=123,
+        )
+        report_b = evaluate(
+            dataset,
+            model="fake:fake-math-llm",
+            prompt="What is {question}?",
+            metrics=["exact_match"],
+            storage=tmp_path,
+            run_id="repro-b",
+            resume=False,
+            seed=123,
+        )
+
+        assert report_a.metadata["manifest_hash"] == report_b.metadata["manifest_hash"]
+        assert report_a.metadata["reproducibility_manifest"]["seeds"] == {
+            "provider_seed": 123,
+            "sampling_seed": None,
+        }
+        outputs_a = {
+            r.task.metadata.get("dataset_id"): r.output.text
+            for r in report_a.generation_results
+            if r.output is not None
+        }
+        outputs_b = {
+            r.task.metadata.get("dataset_id"): r.output.text
+            for r in report_b.generation_results
+            if r.output is not None
+        }
+        assert outputs_a == outputs_b
+        assert report_a.evaluation_report.metrics["ExactMatch"].mean == pytest.approx(
+            report_b.evaluation_report.metrics["ExactMatch"].mean
+        )
+
 
 # Run simple import test to verify module loads
 def test_import():

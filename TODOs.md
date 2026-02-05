@@ -111,7 +111,7 @@ TDD:
 
 - [ ] Replace placeholder `pass` tests with real behavioral assertions.
 - [ ] Set minimum coverage thresholds per critical module (API, orchestration, statistics, execution safety, storage).
-- [ ] Add end-to-end reproducibility test using fixed seed and manifest.
+- [x] Add end-to-end reproducibility test using fixed seed and manifest.
 
 TDD:
 - [ ] Add failing tests for each current placeholder in API tests.

@@ -68,6 +68,7 @@ _PROVIDER_OPTION_KEYS = (
     "organization",
     "api_type",
     "region_name",
+    "seed",
 )
 _ALLOWED_EXTRA_OPTIONS = {"top_p", *_PROVIDER_OPTION_KEYS}
 
