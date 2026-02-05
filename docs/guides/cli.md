@@ -52,11 +52,9 @@ themis eval BENCHMARK --model MODEL [OPTIONS]
 - `--storage PATH`
 - `--resume / --no-resume`
 - `--output FILE` (`.csv`, `.json`, `.html`)
-- `--distributed` (not yet supported)
 
 Notes:
 - Custom dataset files are not yet supported via CLI. Use the Python API for custom datasets.
-- `--distributed` currently returns an error in the current CLI.
 
 ### Examples
 

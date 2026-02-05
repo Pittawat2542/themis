@@ -58,8 +58,7 @@ def eval(
     storage: Annotated[str | None, Parameter(help="Storage location (local path or s3://...)")] = None,
     run_id: Annotated[str | None, Parameter(help="Unique run identifier")] = None,
     resume: Annotated[bool, Parameter(help="Resume from cached results")] = True,
-    distributed: Annotated[bool, Parameter(help="Use distributed execution with Ray")] = False,
-    workers: Annotated[int, Parameter(help="Number of workers for distributed execution")] = 4,
+    workers: Annotated[int, Parameter(help="Number of generation workers")] = 4,
     output: Annotated[str | None, Parameter(help="Output file (CSV, JSON, or HTML)")] = None,
 ) -> int:
     """Run an evaluation on a benchmark or custom dataset.
@@ -71,8 +70,8 @@ def eval(
         # Custom dataset
         themis eval data.jsonl --model claude-3-opus --prompt "Q: {question}\\nA:"
         
-        # Distributed execution
-        themis eval gsm8k --model gpt-4 --distributed --workers 8
+        # Increase generation parallelism
+        themis eval gsm8k --model gpt-4 --workers 8
     """
     from themis.experiment import export as experiment_export
     
@@ -90,10 +89,6 @@ def eval(
         return 1
 
     try:
-        if distributed:
-            print("Error: distributed execution is not supported in vNext CLI yet")
-            return 1
-
         from themis.evaluation.pipeline import EvaluationPipeline
         from themis.generation.templates import PromptTemplate
         from themis.presets import get_benchmark_preset
