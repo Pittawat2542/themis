@@ -23,7 +23,7 @@ Runs on pull requests and pushes to `main`/`develop`:
   - Build wheel/sdist and validate metadata with Twine.
 - **Dependency review**
   - PR-only vulnerability and license check for dependency changes.
-- **Release compatibility matrix**
+- **Release platform matrix**
   - On version tags (`v*.*.*`), run tests on Ubuntu, macOS, and Windows.
 
 ### Docs Deployment (`.github/workflows/docs.yml`)
