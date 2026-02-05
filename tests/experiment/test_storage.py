@@ -57,14 +57,14 @@ def test_experiment_storage_roundtrip(tmp_path):
     assert key in cached
     assert cached[key].output.text == "2"
 
-    # Append evaluation without config (backward compatibility)
+    # Append evaluation without explicit evaluation config.
     score = core_entities.MetricScore(
         metric_name="ExactMatch", value=1.0, details={}, metadata={}
     )
     evaluation = core_entities.EvaluationRecord(sample_id="1", scores=[score])
     storage.append_evaluation("run-1", record, evaluation)
 
-    # Without evaluation_config, should use task key for backward compatibility
+    # Without evaluation_config, evaluation cache key equals task key.
     cached_eval = storage.load_cached_evaluations("run-1")
     assert key in cached_eval
     assert cached_eval[key].scores[0].value == 1.0

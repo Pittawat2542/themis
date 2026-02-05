@@ -1630,7 +1630,7 @@ class ExperimentStorage:
 
 
 def task_cache_key(task: core_entities.GenerationTask) -> str:
-    """Derive a stable cache key for a generation task (module-level function for backward compatibility)."""
+    """Derive a stable cache key for a generation task."""
     dataset_raw = task.metadata.get("dataset_id") or task.metadata.get("sample_id")
     dataset_id = str(dataset_raw) if dataset_raw is not None else ""
     manifest_hash = task.metadata.get("manifest_hash")
@@ -1676,7 +1676,7 @@ def evaluation_cache_key(
     task_key = task_cache_key(task)
 
     if not evaluation_config:
-        # No config provided, use task key only (for backward compatibility)
+        # If evaluation config is omitted, use the task key.
         return task_key
 
     # Create deterministic hash of evaluation configuration

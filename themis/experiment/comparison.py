@@ -35,11 +35,7 @@ class ComparisonRow:
             cost_data = self.metadata.get("cost")
             if cost_data and "total_cost" in cost_data:
                 return cost_data["total_cost"]
-            # Fall back to metric_values if not in metadata
-            # (for backward compatibility and tests)
-            if metric_name in self.metric_values:
-                return self.metric_values[metric_name]
-            return None
+            return self.metric_values.get(metric_name)
 
         return self.metric_values.get(metric_name)
 
