@@ -9,6 +9,16 @@
     --themis-shadow: 0 12px 24px color-mix(in srgb, var(--md-default-fg-color) 12%, transparent);
 }
 
+[data-md-color-scheme="slate"] {
+    --themis-card-border: 1px solid rgba(148, 163, 184, 0.28);
+    --themis-card-bg: linear-gradient(
+        160deg,
+        rgba(30, 41, 59, 0.9),
+        rgba(15, 23, 42, 0.92)
+    );
+    --themis-shadow: 0 14px 30px rgba(2, 6, 23, 0.42);
+}
+
 .md-typeset {
     font-size: 0.82rem;
 }
@@ -136,8 +146,35 @@
 [data-md-color-scheme="slate"] .landing-hero,
 [data-md-color-scheme="slate"] .path-card,
 [data-md-color-scheme="slate"] .md-typeset .tabbed-set {
-    box-shadow: none;
-    border-color: color-mix(in srgb, var(--md-default-fg-color) 18%, transparent);
+    box-shadow: var(--themis-shadow);
+    border-color: rgba(148, 163, 184, 0.3);
+}
+
+[data-md-color-scheme="slate"] .hero-kicker {
+    color: #7dd3fc;
+}
+
+[data-md-color-scheme="slate"] .hero-subtitle,
+[data-md-color-scheme="slate"] .path-card p {
+    color: rgba(226, 232, 240, 0.86);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-button:not(.md-button--primary) {
+    border-color: rgba(125, 211, 252, 0.6);
+    color: #bae6fd;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-button:not(.md-button--primary):hover {
+    background-color: rgba(56, 189, 248, 0.12);
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+    background: rgba(30, 41, 59, 0.9);
+}
+
+[data-md-color-scheme="slate"] .md-typeset code {
+    background-color: rgba(30, 41, 59, 0.95);
+    color: #dbeafe;
 }
 
 @media screen and (max-width: 860px) {
