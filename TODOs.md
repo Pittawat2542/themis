@@ -13,8 +13,8 @@ Every item follows red -> green -> refactor.
 
 ## Current Status (Reassessed)
 
-- Completed major slices: evaluate/session wiring, comparison alignment/statistics hardening, sandboxed execution metric, storage adapter contract fixes, reproducibility manifest, parallel completion-order generation.
-- Remaining high-impact gaps: none in the current plan; keep extending coverage where new features land.
+- Plan is fully complete end-to-end (P0-P3 and all TDD checks).
+- Follow-up work should be tracked as a new plan (feature backlog), not as unfinished carry-over from this one.
 
 ## P0 - Correctness and Research Validity
 
@@ -123,3 +123,9 @@ TDD:
 - [x] Sprint 2: P0.3, P1.4
 - [x] Sprint 3: P1.5, P2.6
 - [x] Sprint 4: P3.7, P3.8
+
+## Closeout
+
+- [x] All planned items completed with tests.
+- [x] Full test suite passes after cleanup and refactors.
+- [x] No backward-compatibility cleanup items remain in this plan.
