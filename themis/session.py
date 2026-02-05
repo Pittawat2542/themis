@@ -103,6 +103,7 @@ class ExperimentSession:
             cache_results=storage.cache,
             on_result=on_result,
             run_manifest=manifest,
+            max_records_in_memory=spec.max_records_in_memory,
         )
 
 

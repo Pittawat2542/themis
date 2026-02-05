@@ -273,6 +273,58 @@ def test_experiment_evaluates_in_configured_batches():
     assert report.evaluation_report.metrics["ExactMatch"].count == 5
 
 
+def test_experiment_bounded_memory_mode_limits_report_records():
+    dataset = build_dataset() + [
+        {"id": "sample-3", "topic": "Spain", "expected": "Madrid", "subject": "geo"},
+        {"id": "sample-4", "topic": "Italy", "expected": "Rome", "subject": "geo"},
+        {"id": "sample-5", "topic": "Japan", "expected": "Tokyo", "subject": "geo"},
+    ]
+    answers = {row["id"]: row["expected"] for row in dataset}
+    plan = make_plan()
+    runner_impl = EchoRunner(answers_by_sample_id=answers)
+    eval_pipeline = make_pipeline()
+
+    experiment_runner = orchestrator.ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=runner_impl,
+        evaluation_pipeline=eval_pipeline,
+    )
+
+    report = experiment_runner.run(
+        dataset,
+        resume=False,
+        max_records_in_memory=2,
+    )
+
+    assert report.metadata["total_samples"] == 5
+    assert report.metadata["generation_records_retained"] == 2
+    assert report.metadata["generation_records_dropped"] == 3
+    assert report.metadata["evaluation_records_retained"] == 2
+    assert report.metadata["evaluation_records_dropped"] == 3
+    assert report.metadata["successful_generations"] == 5
+    assert len(report.generation_results) == 2
+    assert len(report.evaluation_report.records) == 2
+    assert report.evaluation_report.metrics["ExactMatch"].count == 5
+
+
+def test_experiment_bounded_memory_mode_rejects_invalid_limit():
+    plan = make_plan()
+    runner_impl = EchoRunner(answers_by_sample_id={})
+    eval_pipeline = make_pipeline()
+
+    experiment_runner = orchestrator.ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=runner_impl,
+        evaluation_pipeline=eval_pipeline,
+    )
+
+    with pytest.raises(ValueError, match="max_records_in_memory"):
+        experiment_runner.run(
+            [{"id": "sample-1", "topic": "France", "expected": "Paris", "subject": "geo"}],
+            max_records_in_memory=0,
+        )
+
+
 def test_experiment_can_resume_from_storage(tmp_path):
     dataset = build_dataset()
     answers = {row["id"]: row["expected"] for row in dataset}

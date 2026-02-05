@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from datetime import datetime, timezone
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from themis.config.schema import IntegrationsConfig
 
@@ -31,6 +32,33 @@ from themis.experiment.integration_manager import IntegrationManager
 from themis.experiment.pricing import calculate_cost, get_provider_pricing
 from themis.generation import plan as generation_plan
 from themis.generation import runner as generation_runner
+
+
+class _RetentionBuffer:
+    """Bounded buffer that tracks dropped items."""
+
+    def __init__(self, max_items: int | None = None) -> None:
+        self.max_items = max_items
+        self.dropped = 0
+        if max_items is None:
+            self._items: list[Any] | deque[Any] = []
+        else:
+            self._items = deque()
+
+    def append(self, item: Any) -> None:
+        if self.max_items is None:
+            assert isinstance(self._items, list)
+            self._items.append(item)
+            return
+
+        assert isinstance(self._items, deque)
+        if len(self._items) >= self.max_items:
+            self._items.popleft()
+            self.dropped += 1
+        self._items.append(item)
+
+    def to_list(self) -> list[Any]:
+        return list(self._items)
 
 
 class ExperimentOrchestrator:
@@ -97,6 +125,7 @@ class ExperimentOrchestrator:
         on_result: Callable[[GenerationRecord], None] | None = None,
         run_manifest: dict[str, object] | None = None,
         evaluation_batch_size: int = 100,
+        max_records_in_memory: int | None = None,
     ) -> ExperimentReport:
         """Run experiment: generate responses, evaluate, and report results.
 
@@ -110,6 +139,8 @@ class ExperimentOrchestrator:
             on_result: Optional callback for each generation result
             run_manifest: Required reproducibility manifest for this run
             evaluation_batch_size: Number of records per evaluation batch
+            max_records_in_memory: Maximum generation/evaluation records to keep
+                in the final report. None keeps all records.
 
         Returns:
             ExperimentReport with generation results, evaluation, and metadata
@@ -117,6 +148,8 @@ class ExperimentOrchestrator:
         logger.info("Orchestrator: Initializing experiment run")
         if evaluation_batch_size < 1:
             raise ValueError("evaluation_batch_size must be >= 1")
+        if max_records_in_memory is not None and max_records_in_memory < 1:
+            raise ValueError("max_records_in_memory must be >= 1")
         
         # Initialize integrations
         self._integrations.initialize_run(
@@ -199,18 +232,38 @@ class ExperimentOrchestrator:
             logger.info(f"Orchestrator: Found {len(cached_evaluations)} cached evaluation records")
 
         # Process tasks: use cached or run new generations
-        generation_results: list[GenerationRecord] = []
+        generation_results = _RetentionBuffer(max_records_in_memory)
+        cached_eval_records = _RetentionBuffer(max_records_in_memory)
+        new_eval_records = _RetentionBuffer(max_records_in_memory)
         failures: list[ExperimentFailure] = []
         pending_tasks: list[GenerationTask] = []
-        cached_eval_records: list[EvaluationRecord] = []
         eval_batch: list[GenerationRecord] = []
-        new_eval_records: list[EvaluationRecord] = []
         new_eval_failures: list[EvaluationFailure] = []
+        cached_eval_failures: list[EvaluationFailure] = []
         expected_metric_names: set[str] = set()
+        metric_sums: dict[str, float] = {}
+        metric_counts: dict[str, int] = {}
+        metric_samples: dict[str, _RetentionBuffer] = {}
+        successful_generations_total = 0
+        failed_generations_total = 0
+        evaluation_record_failures_total = 0
+
         if hasattr(self._evaluation, "_metrics"):
             expected_metric_names.update(
                 metric.name for metric in self._evaluation._metrics
             )
+
+        def _accumulate_evaluation_record(record: EvaluationRecord) -> None:
+            nonlocal evaluation_record_failures_total
+            evaluation_record_failures_total += len(record.failures)
+            for score in record.scores:
+                metric_name = score.metric_name
+                metric_sums[metric_name] = metric_sums.get(metric_name, 0.0) + score.value
+                metric_counts[metric_name] = metric_counts.get(metric_name, 0) + 1
+                buffer = metric_samples.setdefault(
+                    metric_name, _RetentionBuffer(max_records_in_memory)
+                )
+                buffer.append(score)
 
         def _flush_eval_batch() -> None:
             nonlocal eval_batch
@@ -227,6 +280,7 @@ class ExperimentOrchestrator:
                     self._cache.save_evaluation_record(
                         run_identifier, record, evaluation, evaluation_config
                     )
+                _accumulate_evaluation_record(evaluation)
                 new_eval_records.append(evaluation)
             new_eval_failures.extend(batch_report.failures)
             eval_batch = []
@@ -236,6 +290,10 @@ class ExperimentOrchestrator:
             cached = cached_records.get(task_cache_key)
             if cached is not None:
                 generation_results.append(cached)
+                if cached.error:
+                    failed_generations_total += 1
+                else:
+                    successful_generations_total += 1
                 if cached.error:
                     failures.append(
                         ExperimentFailure(
@@ -248,6 +306,11 @@ class ExperimentOrchestrator:
                 evaluation = cached_evaluations.get(eval_cache_key)
                 if evaluation is not None:
                     cached_eval_records.append(evaluation)
+                    _accumulate_evaluation_record(evaluation)
+                    for message in evaluation.failures:
+                        cached_eval_failures.append(
+                            EvaluationFailure(sample_id=evaluation.sample_id, message=message)
+                        )
                 else:
                     eval_batch.append(cached)
                     if len(eval_batch) >= evaluation_batch_size:
@@ -264,6 +327,10 @@ class ExperimentOrchestrator:
             for record in self._runner.run(pending_tasks):
                 logger.debug(f"Orchestrator: Received generation record")
                 generation_results.append(record)
+                if record.error:
+                    failed_generations_total += 1
+                else:
+                    successful_generations_total += 1
                 completed += 1
                 
                 # Log progress every 10 samples or at key milestones
@@ -323,10 +390,17 @@ class ExperimentOrchestrator:
         # Combine cached and new evaluations
         logger.info("Orchestrator: Combining cached and new evaluations...")
         evaluation_report = self._combine_evaluations(
-            cached_eval_records,
-            new_eval_records,
+            cached_eval_records.to_list(),
+            new_eval_records.to_list(),
             new_eval_failures,
             expected_metric_names=expected_metric_names,
+            cached_failures=cached_eval_failures,
+            metric_sums=metric_sums,
+            metric_counts=metric_counts,
+            metric_samples={
+                name: buffer.to_list() for name, buffer in metric_samples.items()
+            },
+            max_records_in_memory=max_records_in_memory,
         )
         logger.info(f"Orchestrator: Total evaluation records: {len(evaluation_report.records)}")
 
@@ -338,17 +412,16 @@ class ExperimentOrchestrator:
         # Build metadata
         metadata = {
             "total_samples": len(selected_dataset),
-            "successful_generations": sum(
-                1 for result in generation_results if not result.error
-            ),
-            "failed_generations": sum(
-                1 for result in generation_results if result.error
-            ),
+            "successful_generations": successful_generations_total,
+            "failed_generations": failed_generations_total,
+            "generation_records_retained": len(generation_results.to_list()),
+            "generation_records_dropped": generation_results.dropped,
+            "evaluation_records_retained": len(evaluation_report.records),
+            "evaluation_records_dropped": cached_eval_records.dropped + new_eval_records.dropped,
             "run_id": run_identifier,
-            "evaluation_failures": sum(
-                1 for record in evaluation_report.records if record.failures
-            )
-            + len(evaluation_report.failures),
+            "evaluation_failures": evaluation_record_failures_total + len(
+                evaluation_report.failures
+            ),
             "manifest_hash": run_manifest_hash,
             "reproducibility_manifest": manifest_payload,
             # Cost tracking
@@ -365,7 +438,7 @@ class ExperimentOrchestrator:
 
         # Create final report
         report = ExperimentReport(
-            generation_results=generation_results,
+            generation_results=generation_results.to_list(),
             evaluation_report=evaluation_report,
             failures=failures,
             metadata=metadata,
@@ -489,31 +562,58 @@ class ExperimentOrchestrator:
         new_failures: list[EvaluationFailure],
         *,
         expected_metric_names: set[str] | None = None,
+        cached_failures: list[EvaluationFailure] | None = None,
+        metric_sums: dict[str, float] | None = None,
+        metric_counts: dict[str, int] | None = None,
+        metric_samples: dict[str, list[MetricScore]] | None = None,
+        max_records_in_memory: int | None = None,
     ) -> evaluation_pipeline.EvaluationReport:
-        all_records = list(cached_records) + list(new_records)
-        per_metric: dict[str, list[MetricScore]] = {}
-        for record in all_records:
-            for score in record.scores:
-                per_metric.setdefault(score.metric_name, []).append(score)
+        record_buffer = _RetentionBuffer(max_records_in_memory)
+        for record in cached_records:
+            record_buffer.append(record)
+        for record in new_records:
+            record_buffer.append(record)
+        all_records = record_buffer.to_list()
+
+        if metric_sums is None or metric_counts is None or metric_samples is None:
+            per_metric: dict[str, list[MetricScore]] = {}
+            computed_sums: dict[str, float] = {}
+            computed_counts: dict[str, int] = {}
+            for record in all_records:
+                for score in record.scores:
+                    per_metric.setdefault(score.metric_name, []).append(score)
+                    computed_sums[score.metric_name] = (
+                        computed_sums.get(score.metric_name, 0.0) + score.value
+                    )
+                    computed_counts[score.metric_name] = (
+                        computed_counts.get(score.metric_name, 0) + 1
+                    )
+            metric_sums = computed_sums
+            metric_counts = computed_counts
+            metric_samples = per_metric
 
         aggregates: dict[str, evaluation_pipeline.MetricAggregate] = {}
-        metric_names = set(per_metric.keys()) | set(expected_metric_names or set())
+        metric_names = set(metric_counts.keys()) | set(expected_metric_names or set())
         for name in metric_names:
-            scores = per_metric.get(name, [])
-            mean = sum(score.value for score in scores) / len(scores) if scores else 0.0
+            scores = metric_samples.get(name, [])
+            count = metric_counts.get(name, 0)
+            mean = (metric_sums.get(name, 0.0) / count) if count else 0.0
             aggregates[name] = evaluation_pipeline.MetricAggregate(
                 name=name,
-                count=len(scores),
+                count=count,
                 mean=mean,
-                per_sample=scores,
+                per_sample=list(scores),
             )
 
         failures = list(new_failures)
-        for record in cached_records:
-            for message in record.failures:
-                failures.append(
-                    EvaluationFailure(sample_id=record.sample_id, message=message)
-                )
+        if cached_failures is not None:
+            failures.extend(cached_failures)
+        else:
+            for record in cached_records:
+                for message in record.failures:
+                    failures.append(
+                        EvaluationFailure(sample_id=record.sample_id, message=message)
+                    )
 
         return evaluation_pipeline.EvaluationReport(
             metrics=aggregates,

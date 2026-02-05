@@ -22,6 +22,7 @@ class ExperimentSpec:
     pipeline: object | None = None
     run_id: str | None = None
     num_samples: int = 1
+    max_records_in_memory: int | None = None
     dataset_id_field: str = "id"
     reference_field: str | None = "answer"
     metadata_fields: Sequence[str] = field(default_factory=tuple)
@@ -35,6 +36,8 @@ class ExperimentSpec:
             raise ValueError("ExperimentSpec.pipeline must be provided.")
         if self.num_samples < 1:
             raise ValueError("ExperimentSpec.num_samples must be >= 1.")
+        if self.max_records_in_memory is not None and self.max_records_in_memory < 1:
+            raise ValueError("ExperimentSpec.max_records_in_memory must be >= 1.")
 
 
 __all__ = ["ExperimentSpec"]

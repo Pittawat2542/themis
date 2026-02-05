@@ -34,3 +34,14 @@ def test_experiment_spec_requires_model():
 def test_experiment_spec_requires_pipeline():
     with pytest.raises(ValueError, match="pipeline"):
         ExperimentSpec(dataset=[], prompt="Q", model="m", pipeline=None)
+
+
+def test_experiment_spec_rejects_invalid_max_records_in_memory():
+    with pytest.raises(ValueError, match="max_records_in_memory"):
+        ExperimentSpec(
+            dataset=[],
+            prompt="Q",
+            model="m",
+            pipeline=object(),
+            max_records_in_memory=0,
+        )

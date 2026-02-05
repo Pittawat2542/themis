@@ -128,6 +128,7 @@ def evaluate(
     temperature: float = 0.0,
     max_tokens: int = 512,
     num_samples: int = 1,
+    max_records_in_memory: int | None = None,
     distributed: bool = False,
     workers: int = 4,
     storage: str | Path | None = None,
@@ -165,6 +166,8 @@ def evaluate(
             answers, 512 for medium, 2048 for long explanations or code.
         num_samples: Number of responses to generate per prompt. Use >1 for Pass@K
             metrics, ensembling, or measuring response variance.
+        max_records_in_memory: Optional cap on generation/evaluation records kept in
+            the returned report to bound memory for very large runs.
         distributed: Whether to use distributed execution. Currently a placeholder
             for future Ray integration.
         workers: Number of parallel workers for generation. Higher = faster but may
@@ -315,6 +318,7 @@ def evaluate(
         },
         provider_options=provider_options,
         num_samples=num_samples,
+        max_records_in_memory=max_records_in_memory,
         dataset_id_field=dataset_id_field,
         reference_field=reference_field,
         metadata_fields=metadata_fields,

@@ -242,6 +242,28 @@ class TestEvaluateAPI:
         )
         assert report.evaluation_report.failures == []
 
+    def test_evaluate_supports_bounded_memory_mode(self, tmp_path):
+        report = evaluate(
+            [
+                {"id": "1", "question": "2+2", "answer": "4"},
+                {"id": "2", "question": "1+1", "answer": "2"},
+                {"id": "3", "question": "3+3", "answer": "6"},
+            ],
+            model="fake-math-llm",
+            prompt="What is {question}?",
+            metrics=["exact_match"],
+            storage=tmp_path,
+            run_id="bounded-memory-test",
+            resume=False,
+            max_records_in_memory=1,
+        )
+
+        assert report.metadata["generation_records_retained"] == 1
+        assert report.metadata["generation_records_dropped"] == 2
+        assert report.metadata["evaluation_records_retained"] == 1
+        assert report.metadata["evaluation_records_dropped"] == 2
+        assert report.evaluation_report.metrics["ExactMatch"].count == 3
+
 
 # Run simple import test to verify module loads
 def test_import():
