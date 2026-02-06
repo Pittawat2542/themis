@@ -100,7 +100,9 @@ def validate_reproducibility_manifest(manifest: Mapping[str, Any]) -> None:
 
 def manifest_hash(manifest: Mapping[str, Any]) -> str:
     """Compute deterministic hash for a manifest payload."""
-    payload = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    payload = json.dumps(
+        manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

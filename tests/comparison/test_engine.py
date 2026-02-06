@@ -16,8 +16,12 @@ def test_compare_runs_handles_metric_score_lists(tmp_path):
     for run_id, value in [("run-a", 1.0), ("run-b", 0.0)]:
         storage.start_run(run_id, experiment_id="default")
         record = make_record(sample_id="s1")
-        eval_record = make_evaluation_record(sample_id="s1", metric_name="ExactMatch", value=value)
-        storage.append_record(run_id, record, cache_key=experiment_storage.task_cache_key(record.task))
+        eval_record = make_evaluation_record(
+            sample_id="s1", metric_name="ExactMatch", value=value
+        )
+        storage.append_record(
+            run_id, record, cache_key=experiment_storage.task_cache_key(record.task)
+        )
         storage.append_evaluation(run_id, record, eval_record)
 
     report = compare_runs(run_ids=["run-a", "run-b"], storage_path=tmp_path)
@@ -166,9 +170,13 @@ def test_compare_runs_metadata_reflects_effective_override(tmp_path):
         )
         storage.append_evaluation(run_id, record, eval_record)
 
-    engine = ComparisonEngine(storage=storage, statistical_test=StatisticalTest.BOOTSTRAP)
+    engine = ComparisonEngine(
+        storage=storage, statistical_test=StatisticalTest.BOOTSTRAP
+    )
     report = engine.compare_runs(
-        ["run-a", "run-b"], metrics=["ExactMatch"], statistical_test=StatisticalTest.T_TEST
+        ["run-a", "run-b"],
+        metrics=["ExactMatch"],
+        statistical_test=StatisticalTest.T_TEST,
     )
 
     assert report.metadata["statistical_test"] == StatisticalTest.T_TEST.value
@@ -193,11 +201,15 @@ def test_holm_correction_skips_ci_only_results(tmp_path):
         )
         storage.append_evaluation(run_id, record, eval_record)
 
-    engine = ComparisonEngine(storage=storage, statistical_test=StatisticalTest.BOOTSTRAP)
+    engine = ComparisonEngine(
+        storage=storage, statistical_test=StatisticalTest.BOOTSTRAP
+    )
     report = engine.compare_runs(["run-a", "run-b"], metrics=["MetricA", "MetricB"])
 
     assert report.metadata["n_hypotheses_corrected"] == 0
-    assert all(result.corrected_significant is None for result in report.pairwise_results)
+    assert all(
+        result.corrected_significant is None for result in report.pairwise_results
+    )
     assert all(result.corrected_p_value is None for result in report.pairwise_results)
 
 

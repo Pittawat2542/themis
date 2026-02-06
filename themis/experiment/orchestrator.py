@@ -148,7 +148,7 @@ class ExperimentOrchestrator:
             raise ValueError("evaluation_batch_size must be >= 1")
         if max_records_in_memory is not None and max_records_in_memory < 1:
             raise ValueError("max_records_in_memory must be >= 1")
-        
+
         # Initialize integrations
         self._integrations.initialize_run(
             {
@@ -164,11 +164,13 @@ class ExperimentOrchestrator:
             dataset_list = self._resolve_dataset(
                 dataset=dataset, dataset_loader=dataset_loader, run_id=run_id
             )
-            logger.info(f"Orchestrator: Dataset loaded ({len(dataset_list)} total samples)")
+            logger.info(
+                f"Orchestrator: Dataset loaded ({len(dataset_list)} total samples)"
+            )
         except Exception as e:
             logger.error(f"Orchestrator: ❌ Failed to load dataset: {e}")
             raise
-        
+
         selected_dataset = (
             dataset_list[:max_samples] if max_samples is not None else dataset_list
         )
@@ -180,7 +182,7 @@ class ExperimentOrchestrator:
                 manifest_payload = self._default_run_manifest()
             validate_reproducibility_manifest(manifest_payload)
             run_manifest_hash = manifest_hash(manifest_payload)
-        
+
         logger.info(f"Orchestrator: Processing {len(selected_dataset)} samples")
         logger.info(f"Orchestrator: Run ID = {run_identifier}")
 
@@ -219,12 +221,18 @@ class ExperimentOrchestrator:
             self._cache.load_cached_records(run_identifier) if resume else {}
         )
         cached_evaluations = (
-            self._cache.load_cached_evaluations(run_identifier, evaluation_config) if resume else {}
+            self._cache.load_cached_evaluations(run_identifier, evaluation_config)
+            if resume
+            else {}
         )
         if resume and cached_records:
-            logger.info(f"Orchestrator: Found {len(cached_records)} cached generation records")
+            logger.info(
+                f"Orchestrator: Found {len(cached_records)} cached generation records"
+            )
         if resume and cached_evaluations:
-            logger.info(f"Orchestrator: Found {len(cached_evaluations)} cached evaluation records")
+            logger.info(
+                f"Orchestrator: Found {len(cached_evaluations)} cached evaluation records"
+            )
 
         # Process tasks: use cached or run new generations
         generation_results = _RetentionBuffer(max_records_in_memory)
@@ -254,7 +262,9 @@ class ExperimentOrchestrator:
             evaluation_record_failures_total += len(record.failures)
             for score in record.scores:
                 metric_name = score.metric_name
-                metric_sums[metric_name] = metric_sums.get(metric_name, 0.0) + score.value
+                metric_sums[metric_name] = (
+                    metric_sums.get(metric_name, 0.0) + score.value
+                )
                 metric_counts[metric_name] = metric_counts.get(metric_name, 0) + 1
                 buffer = metric_samples.setdefault(
                     metric_name, _RetentionBuffer(max_records_in_memory)
@@ -340,7 +350,7 @@ class ExperimentOrchestrator:
                 else:
                     successful_generations_total += 1
                 completed += 1
-                
+
                 # Log progress every 10 samples or at key milestones
                 if pending_tasks_total and (
                     completed % 10 == 0 or completed == pending_tasks_total
@@ -377,19 +387,19 @@ class ExperimentOrchestrator:
                             message=record.error.message,
                         )
                     )
-                    
+
                 logger.debug("Orchestrator: Processing record (caching...)")
                 cache_key = experiment_storage.task_cache_key(record.task)
                 if cache_results:
                     self._cache.save_generation_record(
                         run_identifier, record, cache_key
                     )
-                    
+
                 logger.debug("Orchestrator: Processing record (queueing evaluation...)")
                 eval_batch.append(record)
                 if len(eval_batch) >= evaluation_batch_size:
                     _flush_eval_batch()
-                
+
                 logger.debug("Orchestrator: Processing record (callback...)")
                 if on_result:
                     on_result(record)
@@ -435,7 +445,9 @@ class ExperimentOrchestrator:
         except Exception as exc:
             self._cache.fail_run(run_identifier, str(exc))
             raise
-        logger.info(f"Orchestrator: Total evaluation records: {len(evaluation_report.records)}")
+        logger.info(
+            f"Orchestrator: Total evaluation records: {len(evaluation_report.records)}"
+        )
 
         # Get cost breakdown
         cost_breakdown = self._cost_tracker.get_breakdown()
@@ -454,12 +466,12 @@ class ExperimentOrchestrator:
             "generation_records_retained": len(generation_results.to_list()),
             "generation_records_dropped": generation_results.dropped,
             "evaluation_records_retained": len(evaluation_report.records),
-            "evaluation_records_dropped": cached_eval_records.dropped + new_eval_records.dropped,
+            "evaluation_records_dropped": cached_eval_records.dropped
+            + new_eval_records.dropped,
             "per_sample_metrics_truncated": bool(evaluation_truncation),
             "run_id": run_identifier,
-            "evaluation_failures": evaluation_record_failures_total + len(
-                evaluation_report.failures
-            ),
+            "evaluation_failures": evaluation_record_failures_total
+            + len(evaluation_report.failures),
             "manifest_hash": run_manifest_hash,
             "reproducibility_manifest": manifest_payload,
             # Cost tracking
@@ -501,7 +513,11 @@ class ExperimentOrchestrator:
 
     def _default_run_manifest(self) -> dict[str, object]:
         model = self._plan.models[0] if self._plan.models else None
-        sampling = self._plan.sampling_parameters[0] if self._plan.sampling_parameters else None
+        sampling = (
+            self._plan.sampling_parameters[0]
+            if self._plan.sampling_parameters
+            else None
+        )
         sampling_config = {
             "temperature": sampling.temperature if sampling else 0.0,
             "top_p": sampling.top_p if sampling else 0.95,
@@ -527,10 +543,10 @@ class ExperimentOrchestrator:
 
     def _build_evaluation_config(self) -> dict:
         """Build evaluation configuration for cache key generation.
-        
+
         This configuration includes all evaluation settings that affect results,
         so changing metrics or extractors will invalidate the cache.
-        
+
         Returns:
             Dictionary with evaluation configuration
         """

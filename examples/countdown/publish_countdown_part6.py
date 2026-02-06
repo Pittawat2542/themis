@@ -13,7 +13,9 @@ if __name__ == "__main__":
     report_html = bundle_dir / "report.html"
 
     if not report_json.exists():
-        raise SystemExit("Missing outputs/countdown_part6/report.json. Run run_countdown_part6_backends.py first.")
+        raise SystemExit(
+            "Missing outputs/countdown_part6/report.json. Run run_countdown_part6_backends.py first."
+        )
 
     payload = json.loads(report_json.read_text(encoding="utf-8"))
     run_name = payload.get("summary", {}).get("run_id", "countdown-part6")

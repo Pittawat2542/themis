@@ -19,7 +19,9 @@ if __name__ == "__main__":
         prompt=BASELINE_PROMPT,
         dataset_limit=20,
     )
-    report = run_spec(spec, workers=1, max_retries=3, storage_path=DEFAULT_STORAGE, cache=True)
+    report = run_spec(
+        spec, workers=1, max_retries=3, storage_path=DEFAULT_STORAGE, cache=True
+    )
 
     solve_rate = report.evaluation_report.metrics["CountdownValidity"].mean
     print(f"run_id={spec.run_id}")

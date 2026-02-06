@@ -9,17 +9,17 @@ This module provides the main entry point for running evaluations:
 Example:
     ```python
     import themis
-    
+
     # Simple benchmark evaluation
     report = themis.evaluate("math500", model="gpt-4", limit=100)
-    
+
     # Custom dataset
     report = themis.evaluate(
         dataset=[{"id": "1", "question": "...", "answer": "..."}],
         model="claude-3-opus",
         prompt="Solve: {question}"
     )
-    
+
     # Custom execution backend
     report = themis.evaluate(
         "gsm8k",
@@ -76,21 +76,21 @@ _ALLOWED_EXTRA_OPTIONS = {"top_p", *_PROVIDER_OPTION_KEYS}
 
 def register_metric(name: str, metric_cls: type) -> None:
     """Register a custom metric for use in evaluate().
-    
+
     This allows users to add their own metrics to Themis without modifying
     the source code. Registered metrics can be used by passing their names
     to the `metrics` parameter in evaluate().
-    
+
     Args:
         name: Metric name (used in evaluate(metrics=[name]))
         metric_cls: Metric class implementing the Metric interface.
             Must have a compute() method that takes prediction, references,
             and metadata parameters.
-    
+
     Raises:
         TypeError: If metric_cls is not a class
         ValueError: If metric_cls doesn't implement the required interface
-    
+
     Example:
         >>> from themis.evaluation.metrics import MyCustomMetric
         >>> themis.register_metric("my_metric", MyCustomMetric)
@@ -98,21 +98,21 @@ def register_metric(name: str, metric_cls: type) -> None:
     """
     if not isinstance(metric_cls, type):
         raise TypeError(f"metric_cls must be a class, got {type(metric_cls)}")
-    
+
     # Validate that it implements the Metric interface
     if not hasattr(metric_cls, "compute"):
         raise ValueError(
             f"{metric_cls.__name__} must implement compute() method. "
             f"See themis.evaluation.metrics for examples."
         )
-    
+
     _METRICS_REGISTRY[name] = metric_cls
     logger.info(f"Registered custom metric: {name} -> {metric_cls.__name__}")
 
 
 def get_registered_metrics() -> dict[str, type]:
     """Get all currently registered custom metrics.
-    
+
     Returns:
         Dictionary mapping metric names to their classes
     """
@@ -141,11 +141,11 @@ def evaluate(
     **kwargs: Any,
 ) -> ExperimentReport:
     """Run an LLM evaluation with automatic configuration.
-    
+
     This is the primary API for Themis. It auto-configures prompts, metrics,
     and extractors based on the benchmark name, or allows full customization
     for custom datasets.
-    
+
     Args:
         benchmark_or_dataset: Either a benchmark name (e.g., "math500", "gsm8k")
             or a list of dataset samples as dictionaries. For custom datasets,
@@ -187,15 +187,15 @@ def evaluate(
         resume: Whether to resume from cached results.
         on_result: Optional callback function called for each result.
         **kwargs: Additional provider-specific options.
-    
+
     Returns:
         ExperimentReport containing generation results, evaluation metrics,
         and metadata.
-    
+
     Raises:
         ValueError: If benchmark is unknown or configuration is invalid.
         RuntimeError: If evaluation fails.
-    
+
     Example:
         >>> report = themis.evaluate("math500", model="gpt-4", limit=10)
         >>> print(f"ExactMatch: {report.evaluation_report.metrics['ExactMatch'].mean:.2%}")
@@ -228,25 +228,23 @@ def evaluate(
 
     # Import presets system (lazy import to avoid circular dependencies)
     from themis.presets import get_benchmark_preset
-    
+
     # Determine if we're using a benchmark or custom dataset
     is_benchmark = isinstance(benchmark_or_dataset, str)
-    
+
     if is_benchmark:
         if reference_field is not None:
-            raise ValueError(
-                "`reference_field` is only supported for custom datasets."
-            )
+            raise ValueError("`reference_field` is only supported for custom datasets.")
         benchmark_name = benchmark_or_dataset
         logger.info(f"Loading benchmark: {benchmark_name}")
-        
+
         # Get preset configuration
         try:
             preset = get_benchmark_preset(benchmark_name)
         except Exception as e:
             logger.error(f"❌ Failed to get benchmark preset '{benchmark_name}': {e}")
             raise
-        
+
         # Load dataset using preset loader
         logger.info(f"Loading dataset (limit={limit})...")
         try:
@@ -255,22 +253,22 @@ def evaluate(
         except Exception as e:
             logger.error(f"❌ Failed to load dataset: {e}")
             raise
-        
+
         # Use preset prompt if not overridden
         if prompt is None:
             prompt_template = preset.prompt_template
         else:
             prompt_template = PromptTemplate(name="custom", template=prompt)
-        
+
         # Use preset metrics if not overridden
         if metrics is None:
             metrics_list = preset.metrics
         else:
             metrics_list = _resolve_metrics(metrics)
-        
+
         # Use preset extractor
         extractor = preset.extractor
-        
+
         # Use preset metadata fields
         metadata_fields = preset.metadata_fields
         selected_reference_field = preset.reference_field
@@ -280,12 +278,12 @@ def evaluate(
         logger.info("Using custom dataset")
         dataset = list(benchmark_or_dataset)
         logger.info(f"Custom dataset has {len(dataset)} samples")
-        
+
         # Limit dataset if requested
         if limit is not None:
             dataset = dataset[:limit]
             logger.info(f"Limited to {len(dataset)} samples")
-        
+
         # Use provided prompt or default
         if prompt is None:
             raise ValueError(
@@ -293,30 +291,34 @@ def evaluate(
                 "Example: prompt='Solve: {question}'"
             )
         prompt_template = PromptTemplate(name="custom", template=prompt)
-        
+
         # Use provided metrics or defaults
         if metrics is None:
             metrics_list = _resolve_metrics(["exact_match"])
         else:
             metrics_list = _resolve_metrics(metrics)
-        
+
         # Use identity extractor by default
         from themis.evaluation.extractors import IdentityExtractor
+
         extractor = IdentityExtractor()
-        
+
         # Use standard field names
         metadata_fields = ()
         selected_reference_field = _resolve_custom_reference_field(
             dataset, requested_field=reference_field
         )
-        if _metrics_require_references(metrics_list) and selected_reference_field is None:
+        if (
+            _metrics_require_references(metrics_list)
+            and selected_reference_field is None
+        ):
             raise ValueError(
                 "Could not detect a reference field for custom dataset. "
                 "Provide rows with a consistent `answer` or `reference` column, "
                 "or pass `reference_field=...`."
             )
         dataset_id_field = "id"
-    
+
     # Build evaluation pipeline
     pipeline = EvaluationPipeline(
         extractor=extractor,
@@ -356,7 +358,9 @@ def evaluate(
     )
 
     session = ExperimentSession()
-    return session.run(spec, execution=execution, storage=storage_spec, on_result=on_result)
+    return session.run(
+        spec, execution=execution, storage=storage_spec, on_result=on_result
+    )
 
 
 def _extract_provider_options(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -390,9 +394,7 @@ def _resolve_custom_reference_field(
     if requested_field == "":
         return None
     missing_indices = [
-        str(idx + 1)
-        for idx, row in enumerate(dataset)
-        if requested_field not in row
+        str(idx + 1) for idx, row in enumerate(dataset) if requested_field not in row
     ]
     if missing_indices:
         preview = ", ".join(missing_indices[:5])
@@ -403,12 +405,12 @@ def _resolve_custom_reference_field(
 
 
 def _metrics_require_references(resolved_metrics: Sequence[Any]) -> bool:
-    return any(getattr(metric, "requires_reference", True) for metric in resolved_metrics)
+    return any(
+        getattr(metric, "requires_reference", True) for metric in resolved_metrics
+    )
 
 
-def _should_warn_missing_api_key(
-    model: str, provider_options: dict[str, Any]
-) -> bool:
+def _should_warn_missing_api_key(model: str, provider_options: dict[str, Any]) -> bool:
     if provider_options.get("api_key"):
         return False
     provider = _detect_provider_name(model).lower()
@@ -449,23 +451,30 @@ def _detect_provider_name(model: str) -> str:
 
 def _resolve_metrics(metric_names: list[str]) -> list:
     """Resolve metric names to metric instances.
-    
+
     Args:
         metric_names: List of metric names (e.g., ["exact_match", "bleu"])
-    
+
     Returns:
         List of metric instances
-    
+
     Raises:
         ValueError: If a metric name is unknown
     """
     from themis.evaluation.metrics.exact_match import ExactMatch
     from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
     from themis.evaluation.metrics.response_length import ResponseLength
-    
+
     # NLP metrics (Phase 2)
     try:
-        from themis.evaluation.metrics.nlp import BLEU, ROUGE, BERTScore, METEOR, ROUGEVariant
+        from themis.evaluation.metrics.nlp import (
+            BLEU,
+            ROUGE,
+            BERTScore,
+            METEOR,
+            ROUGEVariant,
+        )
+
         nlp_available = True
     except ImportError:
         nlp_available = False
@@ -474,18 +483,20 @@ def _resolve_metrics(metric_names: list[str]) -> list:
     try:
         from themis.evaluation.metrics.code.execution import ExecutionAccuracy
         from themis.evaluation.metrics.code.pass_at_k import PassAtK
+
         code_metrics: dict[str, Any] = {
             "pass_at_k": PassAtK,
             "execution_accuracy": ExecutionAccuracy,
         }
         try:
             from themis.evaluation.metrics.code.codebleu import CodeBLEU
+
             code_metrics["codebleu"] = CodeBLEU
         except ImportError:
             pass
     except ImportError:
         code_metrics = {}
-    
+
     # Built-in metrics registry
     BUILTIN_METRICS = {
         # Core metrics
@@ -493,24 +504,26 @@ def _resolve_metrics(metric_names: list[str]) -> list:
         "math_verify": MathVerifyAccuracy,
         "response_length": ResponseLength,
     }
-    
+
     # Add NLP metrics if available
     if nlp_available:
-        BUILTIN_METRICS.update({
-            "bleu": BLEU,
-            "rouge1": lambda: ROUGE(variant=ROUGEVariant.ROUGE_1),
-            "rouge2": lambda: ROUGE(variant=ROUGEVariant.ROUGE_2),
-            "rougeL": lambda: ROUGE(variant=ROUGEVariant.ROUGE_L),
-            "bertscore": BERTScore,
-            "meteor": METEOR,
-        })
+        BUILTIN_METRICS.update(
+            {
+                "bleu": BLEU,
+                "rouge1": lambda: ROUGE(variant=ROUGEVariant.ROUGE_1),
+                "rouge2": lambda: ROUGE(variant=ROUGEVariant.ROUGE_2),
+                "rougeL": lambda: ROUGE(variant=ROUGEVariant.ROUGE_L),
+                "bertscore": BERTScore,
+                "meteor": METEOR,
+            }
+        )
 
     BUILTIN_METRICS.update(code_metrics)
-    
+
     # Merge built-in and custom metrics
     # Custom metrics can override built-in metrics
     METRICS_REGISTRY = {**BUILTIN_METRICS, **_METRICS_REGISTRY}
-    
+
     def _normalize_metric_name(name: str) -> str | None:
         raw = name.strip()
         if raw in METRICS_REGISTRY:
@@ -534,18 +547,15 @@ def _resolve_metrics(metric_names: list[str]) -> list:
         resolved = _normalize_metric_name(name)
         if resolved is None:
             available = ", ".join(sorted(METRICS_REGISTRY.keys()))
-            raise ValueError(
-                f"Unknown metric: {name}. "
-                f"Available metrics: {available}"
-            )
-        
+            raise ValueError(f"Unknown metric: {name}. Available metrics: {available}")
+
         metric_cls = METRICS_REGISTRY[resolved]
         # Handle both class and lambda factory
         if callable(metric_cls) and not isinstance(metric_cls, type):
             metrics.append(metric_cls())
         else:
             metrics.append(metric_cls())
-    
+
     return metrics
 
 

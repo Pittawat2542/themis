@@ -47,7 +47,9 @@ class DummyCacheManager:
         self.load_cached_records_calls.append(run_id)
         return {}
 
-    def load_cached_evaluations(self, run_id: str, evaluation_config: dict | None = None):
+    def load_cached_evaluations(
+        self, run_id: str, evaluation_config: dict | None = None
+    ):
         self.load_cached_evaluations_calls.append(
             {"run_id": run_id, "evaluation_config": dict(evaluation_config or {})}
         )
@@ -62,7 +64,13 @@ class DummyCacheManager:
             }
         )
 
-    def save_evaluation_record(self, run_id: str, generation_record, evaluation_record, evaluation_config: dict | None = None) -> None:
+    def save_evaluation_record(
+        self,
+        run_id: str,
+        generation_record,
+        evaluation_record,
+        evaluation_config: dict | None = None,
+    ) -> None:
         self.saved_evaluation_records.append(
             {
                 "run_id": run_id,
@@ -82,7 +90,9 @@ class DummyCacheManager:
 
 
 class FakeProvider(ModelProvider):
-    def generate(self, task: core_entities.GenerationTask) -> core_entities.GenerationRecord:
+    def generate(
+        self, task: core_entities.GenerationTask
+    ) -> core_entities.GenerationRecord:
         return core_entities.GenerationRecord(
             task=task,
             output=core_entities.ModelOutput(text="ok"),
@@ -132,11 +142,17 @@ def test_orchestrator_uses_cache_manager_api():
         resume=False,
         run_manifest={
             "schema_version": "1",
-            "model": {"identifier": "model-x", "provider": "fake", "provider_options": {}},
+            "model": {
+                "identifier": "model-x",
+                "provider": "fake",
+                "provider_options": {},
+            },
             "sampling": {"temperature": 0.0, "top_p": 1.0, "max_tokens": 8},
             "num_samples": 1,
             "evaluation": {
-                "metrics": ["themis.evaluation.metrics.response_length.ResponseLength:ResponseLength"],
+                "metrics": [
+                    "themis.evaluation.metrics.response_length.ResponseLength:ResponseLength"
+                ],
                 "extractor": "themis.evaluation.extractors.IdentityExtractor",
             },
             "seeds": {"sampling_seed": None},

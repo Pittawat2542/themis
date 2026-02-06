@@ -28,7 +28,9 @@ if __name__ == "__main__":
         dataset_limit=50,
         provider_seed=42,
     )
-    report = run_spec(spec, workers=1, max_retries=3, storage_path=".cache/experiments", cache=True)
+    report = run_spec(
+        spec, workers=1, max_retries=3, storage_path=".cache/experiments", cache=True
+    )
 
     cmp = compare_runs(
         run_ids=[baseline, candidate],

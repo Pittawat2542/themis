@@ -31,7 +31,9 @@ if __name__ == "__main__":
     try:
         report = ExperimentSession().run(
             spec,
-            execution=ExecutionSpec(backend=execution_backend, workers=2, max_retries=3),
+            execution=ExecutionSpec(
+                backend=execution_backend, workers=2, max_retries=3
+            ),
             storage=StorageSpec(backend=storage_backend, cache=True),
         )
     finally:
@@ -49,5 +51,8 @@ if __name__ == "__main__":
     )
 
     print("run_id", spec.run_id)
-    print("countdown_validity_mean", report.evaluation_report.metrics["CountdownValidity"].mean)
+    print(
+        "countdown_validity_mean",
+        report.evaluation_report.metrics["CountdownValidity"].mean,
+    )
     print("bundle_json", paths["json"])

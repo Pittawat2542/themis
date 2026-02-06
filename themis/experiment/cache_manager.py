@@ -85,7 +85,9 @@ class CacheManager:
         """
         if not self._enable_resume or self._storage is None:
             return {}
-        return self._storage.load_cached_evaluations(run_id, evaluation_config=evaluation_config)
+        return self._storage.load_cached_evaluations(
+            run_id, evaluation_config=evaluation_config
+        )
 
     def run_metadata_exists(self, run_id: str) -> bool:
         """Check if run metadata exists in storage."""
@@ -155,7 +157,10 @@ class CacheManager:
         """
         if self._storage is not None and self._enable_cache:
             self._storage.append_evaluation(
-                run_id, generation_record, evaluation_record, evaluation_config=evaluation_config
+                run_id,
+                generation_record,
+                evaluation_record,
+                evaluation_config=evaluation_config,
             )
 
     def get_run_path(self, run_id: str) -> str | None:

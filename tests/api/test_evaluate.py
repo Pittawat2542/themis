@@ -9,20 +9,20 @@ from themis.presets import get_benchmark_preset, list_benchmarks, parse_model_na
 
 class TestResolveMetrics:
     """Test metric resolution."""
-    
+
     def test_resolve_exact_match(self):
         """Test resolving exact_match metric."""
         metrics = _resolve_metrics(["exact_match"])
         assert len(metrics) == 1
         assert metrics[0].name == "ExactMatch"
-    
+
     def test_resolve_multiple_metrics(self):
         """Test resolving multiple metrics."""
         metrics = _resolve_metrics(["exact_match", "response_length"])
         assert len(metrics) == 2
         assert any(m.name == "ExactMatch" for m in metrics)
         assert any(m.name == "ResponseLength" for m in metrics)
-    
+
     def test_resolve_unknown_metric_raises(self):
         """Test that unknown metric raises ValueError."""
         with pytest.raises(ValueError, match="Unknown metric"):
@@ -38,31 +38,29 @@ class TestResolveMetrics:
 
 class TestModelParsing:
     """Test model name parsing."""
-    
+
     def test_parse_gpt4(self):
         """Test parsing GPT-4 model name."""
         provider, model_id, options = parse_model_name("gpt-4")
         assert provider == "litellm"
         assert model_id == "gpt-4"
         assert options == {}
-    
+
     def test_parse_claude(self):
         """Test parsing Claude model name."""
         provider, model_id, options = parse_model_name("claude-3-opus-20240229")
         assert provider == "litellm"
         assert model_id == "claude-3-opus-20240229"
-    
+
     def test_parse_with_options(self):
         """Test parsing with additional options."""
         provider, model_id, options = parse_model_name(
-            "gpt-4",
-            base_url="http://localhost:1234/v1",
-            api_key="test-key"
+            "gpt-4", base_url="http://localhost:1234/v1", api_key="test-key"
         )
         assert provider == "litellm"
         assert options["base_url"] == "http://localhost:1234/v1"
         assert options["api_key"] == "test-key"
-    
+
     def test_parse_fake_model(self):
         """Test parsing fake model for testing."""
         provider, model_id, options = parse_model_name("fake-math-llm")
@@ -72,7 +70,7 @@ class TestModelParsing:
 
 class TestBenchmarkPresets:
     """Test benchmark preset system."""
-    
+
     def test_list_benchmarks(self):
         """Test listing all benchmarks."""
         benchmarks = list_benchmarks()
@@ -80,7 +78,7 @@ class TestBenchmarkPresets:
         assert "demo" in benchmarks
         assert "math500" in benchmarks
         assert "gsm8k" in benchmarks
-    
+
     def test_get_demo_preset(self):
         """Test getting demo benchmark preset."""
         preset = get_benchmark_preset("demo")
@@ -88,19 +86,19 @@ class TestBenchmarkPresets:
         assert preset.prompt_template is not None
         assert len(preset.metrics) > 0
         assert preset.extractor is not None
-    
+
     def test_get_math500_preset(self):
         """Test getting MATH-500 preset."""
         preset = get_benchmark_preset("math500")
         assert preset.name == "math500"
         assert preset.reference_field == "solution"
         assert preset.dataset_id_field == "unique_id"
-    
+
     def test_get_unknown_preset_raises(self):
         """Test that unknown preset raises ValueError."""
         with pytest.raises(ValueError, match="Unknown benchmark"):
             get_benchmark_preset("nonexistent_benchmark")
-    
+
     def test_demo_dataset_loader(self):
         """Test demo dataset loader."""
         preset = get_benchmark_preset("demo")
@@ -112,7 +110,7 @@ class TestBenchmarkPresets:
 
 class TestEvaluateAPI:
     """Test the main evaluate() API."""
-    
+
     def test_evaluate_custom_dataset(self, tmp_path):
         """Test evaluation with custom dataset runs end-to-end."""
         dataset = [
@@ -129,12 +127,14 @@ class TestEvaluateAPI:
         )
         assert len(report.generation_results) == 1
         assert "ExactMatch" in report.evaluation_report.metrics
-    
+
     def test_evaluate_requires_model(self):
         """Test that model parameter is required."""
-        with pytest.raises(TypeError, match="missing 1 required keyword-only argument: 'model'"):
+        with pytest.raises(
+            TypeError, match="missing 1 required keyword-only argument: 'model'"
+        ):
             evaluate("demo")  # type: ignore[call-arg]
-    
+
     def test_evaluate_with_invalid_benchmark_raises(self):
         """Test that invalid benchmark raises ValueError."""
         with pytest.raises(ValueError, match="Unknown benchmark"):
@@ -159,7 +159,9 @@ class TestEvaluateAPI:
         record = report.generation_results[0]
         assert len(record.attempts) == 3
         assert record.metrics.get("attempt_count") == 3
-        assert [attempt.task.metadata.get("attempts") for attempt in record.attempts] == [
+        assert [
+            attempt.task.metadata.get("attempts") for attempt in record.attempts
+        ] == [
             0,
             1,
             2,
@@ -383,4 +385,5 @@ class TestEvaluateAPI:
 def test_import():
     """Test that module can be imported."""
     import themis
-    assert hasattr(themis, 'evaluate')
+
+    assert hasattr(themis, "evaluate")

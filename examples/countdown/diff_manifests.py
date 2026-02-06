@@ -46,7 +46,9 @@ if __name__ == "__main__":
 
     in_path = Path("outputs/countdown_part9/manifest_index.json")
     if not in_path.exists():
-        raise SystemExit("Missing manifest_index.json. Run build_manifest_index.py first.")
+        raise SystemExit(
+            "Missing manifest_index.json. Run build_manifest_index.py first."
+        )
 
     payload = json.loads(in_path.read_text(encoding="utf-8"))
     runs = payload.get("runs", {})

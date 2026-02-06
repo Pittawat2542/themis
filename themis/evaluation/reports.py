@@ -64,9 +64,7 @@ class EvaluationReport:
     metadata: dict[str, object] = field(default_factory=dict)
 
 
-def _has_full_per_sample_available(
-    report: EvaluationReport, metric_name: str
-) -> bool:
+def _has_full_per_sample_available(report: EvaluationReport, metric_name: str) -> bool:
     agg = report.metrics.get(metric_name)
     if agg is None:
         return False
@@ -108,7 +106,9 @@ def _metric_values_by_sample(
             if score.metric_name == metric_name:
                 values.setdefault(record.sample_id, []).append(score.value)
                 break
-    return {sample_id: mean(sample_values) for sample_id, sample_values in values.items()}
+    return {
+        sample_id: mean(sample_values) for sample_id, sample_values in values.items()
+    }
 
 
 def aligned_metric_values(
@@ -130,9 +130,7 @@ def ci_for_metric(
     confidence_level: float = 0.95,
     n_bootstrap: int = 10000,
 ) -> BootstrapResult:
-    _require_full_per_sample_available(
-        report, metric_name, helper_name="ci_for_metric"
-    )
+    _require_full_per_sample_available(report, metric_name, helper_name="ci_for_metric")
     values = _metric_values(report, metric_name)
     if not values:
         raise ValueError(f"No scores for metric '{metric_name}'")

@@ -191,7 +191,9 @@ class GenerationRunner:
                 record.metrics["generation_attempts"] = attempt
                 if attempt_errors:
                     record.metrics.setdefault("retry_errors", attempt_errors)
-                logger.debug("Runner: ✅ Completed %s in %s attempt(s)", task_label, attempt)
+                logger.debug(
+                    "Runner: ✅ Completed %s in %s attempt(s)", task_label, attempt
+                )
                 return record
             except Exception as exc:  # pragma: no cover - defensive path
                 last_error = exc

@@ -50,33 +50,41 @@ def demo(
 
 @app.command
 def eval(
-    benchmark_or_dataset: Annotated[str, Parameter(name="BENCHMARK_OR_DATASET", show_default=False)],
+    benchmark_or_dataset: Annotated[
+        str, Parameter(name="BENCHMARK_OR_DATASET", show_default=False)
+    ],
     *,
-    model: Annotated[str, Parameter(help="Model identifier (e.g., 'gpt-4', 'claude-3-opus')")],
+    model: Annotated[
+        str, Parameter(help="Model identifier (e.g., 'gpt-4', 'claude-3-opus')")
+    ],
     limit: Annotated[int | None, Parameter(help="Maximum number of samples")] = None,
     prompt: Annotated[str | None, Parameter(help="Custom prompt template")] = None,
     temperature: Annotated[float, Parameter(help="Sampling temperature")] = 0.0,
     max_tokens: Annotated[int, Parameter(help="Maximum tokens to generate")] = 512,
-    storage: Annotated[str | None, Parameter(help="Storage location (local path or s3://...)")] = None,
+    storage: Annotated[
+        str | None, Parameter(help="Storage location (local path or s3://...)")
+    ] = None,
     run_id: Annotated[str | None, Parameter(help="Unique run identifier")] = None,
     resume: Annotated[bool, Parameter(help="Resume from cached results")] = True,
     workers: Annotated[int, Parameter(help="Number of generation workers")] = 4,
-    output: Annotated[str | None, Parameter(help="Output file (CSV, JSON, or HTML)")] = None,
+    output: Annotated[
+        str | None, Parameter(help="Output file (CSV, JSON, or HTML)")
+    ] = None,
 ) -> int:
     """Run an evaluation on a benchmark or custom dataset.
-    
+
     Examples:
         # Simple benchmark
         themis eval math500 --model gpt-4 --limit 100
-        
+
         # Custom dataset
         themis eval data.jsonl --model claude-3-opus --prompt "Q: {question}\\nA:"
-        
+
         # Increase generation parallelism
         themis eval gsm8k --model gpt-4 --workers 8
     """
     from themis.experiment import export as experiment_export
-    
+
     print(f"Running evaluation: {benchmark_or_dataset}")
     print(f"Model: {model}")
     if limit:
@@ -144,12 +152,12 @@ def eval(
                 execution=ExecutionSpec(workers=workers),
                 storage=StorageSpec(path=storage_root, cache=resume),
             )
-        
+
         # Print results
         print("\n" + "=" * 80)
         print("EVALUATION RESULTS")
         print("=" * 80)
-        
+
         # Print metrics
         eval_report = report.evaluation_report
         if eval_report:
@@ -164,18 +172,18 @@ def eval(
             elif getattr(eval_report, "metrics", None):
                 for name, agg in sorted(eval_report.metrics.items()):
                     print(f"  {name}: {agg.mean:.4f} (n={agg.count})")
-        
+
         # Print sample counts
         total = len(report.generation_results)
         failures = len(report.failures)
         successful = total - failures
         print(f"\nSamples: {successful}/{total} successful")
-        
+
         # Export if requested
         if output:
             output_path = Path(output)
             suffix = output_path.suffix.lower()
-            
+
             if suffix == ".csv":
                 experiment_export.export_report_csv(report, output_path)
                 print(f"\nExported to CSV: {output_path}")
@@ -187,37 +195,46 @@ def eval(
                 print(f"\nExported to HTML: {output_path}")
             else:
                 print(f"\nWarning: Unknown output format: {suffix}")
-        
+
         return 0
-        
+
     except Exception as e:
         print(f"\nError: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 
 
 @app.command
 def compare(
-    run_ids: Annotated[builtins.list[str], Parameter(name="RUN_IDS", show_default=False)],
+    run_ids: Annotated[
+        builtins.list[str], Parameter(name="RUN_IDS", show_default=False)
+    ],
     *,
     metric: Annotated[str | None, Parameter(help="Metric to compare")] = None,
-    storage: Annotated[str | None, Parameter(help="Storage location (local path or s3://...)")] = None,
-    output: Annotated[str | None, Parameter(help="Output file (HTML or Markdown)")] = None,
-    show_diff: Annotated[bool, Parameter(help="Show examples where results differ")] = False,
+    storage: Annotated[
+        str | None, Parameter(help="Storage location (local path or s3://...)")
+    ] = None,
+    output: Annotated[
+        str | None, Parameter(help="Output file (HTML or Markdown)")
+    ] = None,
+    show_diff: Annotated[
+        bool, Parameter(help="Show examples where results differ")
+    ] = False,
 ) -> int:
     """Compare results from multiple runs with statistical tests.
-    
+
     Performs pairwise comparisons across all specified runs and metrics,
     computing win/loss matrices and statistical significance.
-    
+
     Examples:
         # Compare two runs
         themis compare run-1 run-2
-        
+
         # Compare with specific metric
         themis compare run-1 run-2 run-3 --metric ExactMatch
-        
+
         # Export to HTML
         themis compare run-1 run-2 --output comparison.html --show-diff
     """
@@ -225,25 +242,27 @@ def compare(
         if len(run_ids) < 2:
             print("Error: Need at least 2 runs to compare", file=sys.stderr)
             return 1
-        
+
         # Determine storage path (default to .cache/experiments)
         storage_path = _resolve_storage_root(storage)
-        
+
         if not storage_path.exists():
             print(f"Error: Storage path not found: {storage_path}", file=sys.stderr)
-            print("Tip: Specify storage path with THEMIS_STORAGE env var", file=sys.stderr)
+            print(
+                "Tip: Specify storage path with THEMIS_STORAGE env var", file=sys.stderr
+            )
             return 1
-        
+
         # Run comparison
         print(f"Comparing {len(run_ids)} runs: {', '.join(run_ids)}")
         print(f"Storage: {storage_path}")
         print()
-        
+
         from themis.comparison import compare_runs
         from themis.comparison.statistics import StatisticalTest
-        
+
         metrics_list = [metric] if metric else None
-        
+
         report = compare_runs(
             run_ids=run_ids,
             storage_path=storage_path,
@@ -251,17 +270,18 @@ def compare(
             statistical_test=StatisticalTest.BOOTSTRAP,
             alpha=0.05,
         )
-        
+
         # Print summary
         print(report.summary(include_details=show_diff))
-        
+
         # Export if requested
         if output:
             output_path = Path(output)
             suffix = output_path.suffix.lower()
-            
+
             if suffix == ".json":
                 import json
+
                 output_path.write_text(json.dumps(report.to_dict(), indent=2))
                 print(f"\n✓ Exported to JSON: {output_path}")
             elif suffix == ".html":
@@ -274,12 +294,13 @@ def compare(
                 print(f"\n✓ Exported to Markdown: {output_path}")
             else:
                 print(f"\nWarning: Unknown output format: {suffix}", file=sys.stderr)
-        
+
         return 0
-        
+
     except Exception as e:
         print(f"\nError: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -288,9 +309,15 @@ def compare(
 def share(
     run_id: Annotated[str, Parameter(name="RUN_ID", show_default=False)],
     *,
-    storage: Annotated[str | None, Parameter(help="Storage location (defaults to .cache/experiments)")] = None,
-    metric: Annotated[str | None, Parameter(help="Metric to highlight (default: first available)")] = None,
-    output_dir: Annotated[Path, Parameter(help="Directory to write share assets")] = Path("."),
+    storage: Annotated[
+        str | None, Parameter(help="Storage location (defaults to .cache/experiments)")
+    ] = None,
+    metric: Annotated[
+        str | None, Parameter(help="Metric to highlight (default: first available)")
+    ] = None,
+    output_dir: Annotated[
+        Path, Parameter(help="Directory to write share assets")
+    ] = Path("."),
 ) -> int:
     """Generate a shareable results badge + Markdown snippet for a run.
 
@@ -327,6 +354,7 @@ def share(
     except Exception as e:
         print(f"Unexpected error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -349,20 +377,20 @@ def serve(
     reload: Annotated[bool, Parameter(help="Enable auto-reload (dev mode)")] = False,
 ) -> int:
     """Start the Themis API server with REST and WebSocket endpoints.
-    
+
     Provides:
     - REST API for listing/viewing runs
     - Comparison endpoints with statistical tests
     - WebSocket for real-time monitoring
     - Interactive API docs at /docs
-    
+
     Examples:
         # Start server on default port
         themis serve
-        
+
         # Custom port and storage
         themis serve --port 3000 --storage ~/.themis/runs
-        
+
         # Development mode with auto-reload
         themis serve --reload
     """
@@ -383,10 +411,10 @@ def serve(
     print(f"  Storage: {storage_path}")
     print(f"  Docs:    http://{host}:{port}/docs")
     print()
-    
+
     # Create app
     app_instance = create_app(storage_path=storage_path)
-    
+
     # Run server
     uvicorn.run(
         app_instance,
@@ -395,7 +423,7 @@ def serve(
         reload=reload,
         log_level="info",
     )
-    
+
     return 0
 
 
@@ -408,17 +436,17 @@ def list_command(
     verbose: Annotated[bool, Parameter(help="Show detailed information")] = False,
 ) -> int:
     """List runs, benchmarks, or available metrics.
-    
+
     Args:
         what: What to list (runs, benchmarks, or metrics)
-    
+
     Examples:
         # List all runs
         themis list runs
-        
+
         # List available benchmarks
         themis list benchmarks
-        
+
         # List available metrics
         themis list metrics
     """
@@ -426,10 +454,10 @@ def list_command(
     if what not in ["runs", "benchmarks", "metrics"]:
         print(f"Error: '{what}' is not valid. Choose from: runs, benchmarks, metrics")
         return 1
-    
+
     if what == "benchmarks":
         from themis.presets import get_benchmark_preset, list_benchmarks
-        
+
         benchmarks = list_benchmarks()
         if limit is not None:
             benchmarks = benchmarks[:limit]
@@ -442,7 +470,7 @@ def list_command(
             else:
                 print(f"  - {benchmark}")
         return 0
-        
+
     elif what == "metrics":
         print("Available metrics:")
         print("  Core:")
@@ -461,7 +489,7 @@ def list_command(
         print("    - codebleu (requires: themis-eval[code], codebleu)")
         print("\nInstall extras: pip install themis-eval[math,nlp,code]")
         return 0
-        
+
     elif what == "runs":
         from themis.storage import ExperimentStorage
 
@@ -478,7 +506,9 @@ def list_command(
 
         print("Runs:")
         for run in runs:
-            status = run.status.value if hasattr(run.status, "value") else str(run.status)
+            status = (
+                run.status.value if hasattr(run.status, "value") else str(run.status)
+            )
             if verbose:
                 print(
                     f"  - {run.run_id} [{status}] samples={run.total_samples} "
@@ -487,7 +517,7 @@ def list_command(
             else:
                 print(f"  - {run.run_id}")
         return 0
-    
+
     return 0
 
 
@@ -495,15 +525,17 @@ def list_command(
 def clean(
     *,
     storage: Annotated[str | None, Parameter(help="Storage path to clean")] = None,
-    older_than: Annotated[int | None, Parameter(help="Remove runs older than N days")] = None,
+    older_than: Annotated[
+        int | None, Parameter(help="Remove runs older than N days")
+    ] = None,
     dry_run: Annotated[bool, Parameter(help="Show what would be deleted")] = False,
 ) -> int:
     """Clean up old runs and cached data.
-    
+
     Examples:
         # Dry run to see what would be deleted
         themis clean --dry-run
-        
+
         # Remove runs older than 30 days
         themis clean --older-than 30
     """
@@ -677,22 +709,22 @@ def _generate_comparison_html(report) -> str:
 </head>
 <body>
     <h1>Comparison Report</h1>
-    <p><strong>Runs:</strong> {', '.join(report.run_ids)}</p>
-    <p><strong>Metrics:</strong> {', '.join(report.metrics)}</p>
+    <p><strong>Runs:</strong> {", ".join(report.run_ids)}</p>
+    <p><strong>Metrics:</strong> {", ".join(report.metrics)}</p>
     <p><strong>Overall Best:</strong> {report.overall_best_run}</p>
     
     <h2>Best Run Per Metric</h2>
     <ul>
 """
-    
+
     for metric, run_id in report.best_run_per_metric.items():
         html += f"        <li><strong>{metric}:</strong> {run_id}</li>\n"
-    
+
     html += """    </ul>
     
     <h2>Win/Loss Matrices</h2>
 """
-    
+
     for metric, matrix in report.win_loss_matrices.items():
         html += f"    <h3>{metric}</h3>\n"
         html += "    <table>\n"
@@ -700,7 +732,7 @@ def _generate_comparison_html(report) -> str:
         for rid in matrix.run_ids:
             html += f"<th>{rid}</th>"
         html += "</tr>\n"
-        
+
         for i, run_id in enumerate(matrix.run_ids):
             html += f"        <tr><td><strong>{run_id}</strong></td>"
             for j in range(len(matrix.run_ids)):
@@ -708,12 +740,12 @@ def _generate_comparison_html(report) -> str:
                 css_class = result if result in ["win", "loss", "tie"] else ""
                 html += f'<td class="{css_class}">{result}</td>'
             html += "</tr>\n"
-        
+
         html += "    </table>\n"
-    
+
     html += """</body>
 </html>"""
-    
+
     return html
 
 
@@ -726,13 +758,13 @@ def _generate_comparison_markdown(report) -> str:
     lines.append(f"**Metrics:** {', '.join(report.metrics)}")
     lines.append(f"**Overall Best:** {report.overall_best_run}")
     lines.append("")
-    
+
     lines.append("## Best Run Per Metric")
     lines.append("")
     for metric, run_id in report.best_run_per_metric.items():
         lines.append(f"- **{metric}:** {run_id}")
     lines.append("")
-    
+
     lines.append("## Win/Loss Matrices")
     lines.append("")
     for metric, matrix in report.win_loss_matrices.items():
@@ -740,7 +772,7 @@ def _generate_comparison_markdown(report) -> str:
         lines.append("")
         lines.append(matrix.to_table())
         lines.append("")
-    
+
     return "\n".join(lines)
 
 
@@ -757,6 +789,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
     return int(result) if isinstance(result, int) else 0

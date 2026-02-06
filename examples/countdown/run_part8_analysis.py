@@ -17,7 +17,9 @@ from common import (
 )
 
 
-def metric_by_sample(storage: ExperimentStorage, run_id: str, metric_name: str) -> dict[str, float]:
+def metric_by_sample(
+    storage: ExperimentStorage, run_id: str, metric_name: str
+) -> dict[str, float]:
     buckets: dict[str, list[float]] = {}
     for rec in storage.load_cached_evaluations(run_id).values():
         if rec.sample_id is None:
@@ -84,7 +86,14 @@ if __name__ == "__main__":
     report_t = engine_t.compare_runs(run_ids, metrics=["CountdownValidity"])
     for row in report_t.pairwise_results[:2]:
         p_raw = row.test_result.p_value if row.test_result else None
-        print("t_test", row.run_a_id, row.run_b_id, row.delta, p_raw, row.corrected_p_value)
+        print(
+            "t_test",
+            row.run_a_id,
+            row.run_b_id,
+            row.delta,
+            p_raw,
+            row.corrected_p_value,
+        )
 
     engine_b = ComparisonEngine(
         storage_path=".cache/experiments",
@@ -98,7 +107,10 @@ if __name__ == "__main__":
     )
     row_b = report_b.pairwise_results[0]
     ci = row_b.test_result.confidence_interval if row_b.test_result else None
-    print("bootstrap_mode", row_b.test_result.inference_mode if row_b.test_result else None)
+    print(
+        "bootstrap_mode",
+        row_b.test_result.inference_mode if row_b.test_result else None,
+    )
     print("bootstrap_ci", ci)
 
     storage = ExperimentStorage(".cache/experiments")
@@ -112,6 +124,9 @@ if __name__ == "__main__":
     print("n_common", len(common))
     print("mean_delta", mean(deltas) if deltas else 0.0)
     print("delta_std", pstdev(deltas) if len(deltas) > 1 else 0.0)
-    print("hard_disagreement_rate", len(hard_disagreements) / len(common) if common else 0.0)
+    print(
+        "hard_disagreement_rate",
+        len(hard_disagreements) / len(common) if common else 0.0,
+    )
     print("dataset_limit", dataset_limit)
     print("repeats", repeats)

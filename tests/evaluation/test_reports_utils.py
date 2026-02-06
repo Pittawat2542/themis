@@ -4,10 +4,14 @@ from themis.core import entities as core_entities
 from themis.evaluation import metrics, extractors, pipeline, reports
 
 
-def make_generation_record(sample_id: str, raw_output: str, reference_value: str) -> core_entities.GenerationRecord:
+def make_generation_record(
+    sample_id: str, raw_output: str, reference_value: str
+) -> core_entities.GenerationRecord:
     sampling = core_entities.SamplingConfig(temperature=0.5, top_p=0.9, max_tokens=64)
     prompt_spec = core_entities.PromptSpec(name="qa", template="Answer: {answer}")
-    prompt_render = core_entities.PromptRender(spec=prompt_spec, text=raw_output, context={"answer": reference_value})
+    prompt_render = core_entities.PromptRender(
+        spec=prompt_spec, text=raw_output, context={"answer": reference_value}
+    )
     model_spec = core_entities.ModelSpec(identifier="gpt-4o", provider="test")
     reference = core_entities.Reference(kind="answer", value=reference_value)
     task = core_entities.GenerationTask(
@@ -48,7 +52,9 @@ def test_reports_ci_and_permutation_and_effect_sizes():
     assert 0.0 <= ci_a.ci_lower <= ci_a.ci_upper <= 1.0
 
     # Permutation test & Holm correction
-    cmp = reports.compare_reports_with_holm(report_a, report_b, ["ExactMatch"], n_permutations=500, seed=42)
+    cmp = reports.compare_reports_with_holm(
+        report_a, report_b, ["ExactMatch"], n_permutations=500, seed=42
+    )
     holm_flags = cmp["holm_significant"]
     assert isinstance(holm_flags, list)
     assert len(holm_flags) == 1
@@ -75,9 +81,7 @@ def test_reports_align_by_sample_id_for_paired_tests():
     report_a = eval_pipeline.evaluate(group_a)
     report_b = eval_pipeline.evaluate(group_b)
 
-    values_a, values_b = reports.aligned_metric_values(
-        report_a, report_b, "ExactMatch"
-    )
+    values_a, values_b = reports.aligned_metric_values(report_a, report_b, "ExactMatch")
     assert values_a == [1.0, 1.0]
     assert values_b == [0.0, 1.0]
 
@@ -97,7 +101,7 @@ def test_reports_alignment_averages_duplicate_sample_ids():
     report_a = eval_pipeline.evaluate(
         [
             make_generation_record("sample-1", "Paris", "Paris"),  # 1.0
-            make_generation_record("sample-1", "Lyon", "Paris"),   # 0.0
+            make_generation_record("sample-1", "Lyon", "Paris"),  # 0.0
         ]
     )
     report_b = eval_pipeline.evaluate(

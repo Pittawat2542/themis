@@ -8,7 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from themis.core.entities import ExperimentReport, GenerationRecord, ModelSpec, SamplingConfig
+from themis.core.entities import (
+    ExperimentReport,
+    GenerationRecord,
+    ModelSpec,
+    SamplingConfig,
+)
 from themis.evaluation.pipeline import EvaluationPipelineContract
 from themis.experiment.manifest import build_reproducibility_manifest
 from themis.experiment.cache_manager import CacheManager
@@ -42,9 +47,7 @@ class ExperimentSession:
 
         pipeline = spec.pipeline
         if not isinstance(pipeline, EvaluationPipelineContract):
-            raise TypeError(
-                "spec.pipeline must implement EvaluationPipelineContract."
-            )
+            raise TypeError("spec.pipeline must implement EvaluationPipelineContract.")
 
         dataset = _resolve_dataset(spec.dataset)
 
@@ -68,6 +71,7 @@ class ExperimentSession:
 
         strategy_resolver = None
         if spec.num_samples > 1:
+
             def strategy_resolver(task):  # noqa: ARG001
                 return RepeatedSamplingStrategy(attempts=spec.num_samples)
 
@@ -156,11 +160,11 @@ def _resolve_storage(storage: StorageSpec):
         if hasattr(backend, "experiment_storage"):
             return backend.experiment_storage
         if not hasattr(backend, "start_run"):
-            raise TypeError(
-                "storage.backend must be ExperimentStorage-compatible."
-            )
+            raise TypeError("storage.backend must be ExperimentStorage-compatible.")
         return backend
-    root = Path(storage.path) if storage.path is not None else Path(".cache/experiments")
+    root = (
+        Path(storage.path) if storage.path is not None else Path(".cache/experiments")
+    )
     from themis.storage import ExperimentStorage
 
     return ExperimentStorage(root)

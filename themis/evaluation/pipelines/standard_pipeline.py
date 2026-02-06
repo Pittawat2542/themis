@@ -278,12 +278,12 @@ class EvaluationPipeline:
                                     time.perf_counter() - metric_start
                                 ) * 1000
                                 score.metadata["evaluation_time_ms"] = metric_duration
-                                score.metadata["metric_compute_time_ms"] = metric_duration
+                                score.metadata["metric_compute_time_ms"] = (
+                                    metric_duration
+                                )
                                 item_scores_for_item.append(score)
                             except Exception as exc:  # pragma: no cover - guarded
-                                message = (
-                                    f"Metric '{metric.name}' failed for sample {sample_id}: {exc}"
-                                )
+                                message = f"Metric '{metric.name}' failed for sample {sample_id}: {exc}"
                                 logger.warning(message)
                                 failures.append(
                                     EvaluationFailure(
@@ -339,7 +339,9 @@ class EvaluationPipeline:
             ]
         )
         extractor = self._extractor
-        extractor_type = f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+        extractor_type = (
+            f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+        )
         config["extractor"] = extractor_type
         if hasattr(extractor, "field_name"):
             config["extractor_field"] = extractor.field_name

@@ -270,7 +270,9 @@ def _execution_batch_worker(
 
         result_conn.send({"status": "ok", "results": results})
     except MemoryError:
-        result_conn.send({"status": "error", "error": "Memory limit exceeded", "results": []})
+        result_conn.send(
+            {"status": "error", "error": "Memory limit exceeded", "results": []}
+        )
     except BaseException as exc:
         result_conn.send({"status": "error", "error": str(exc), "results": []})
     finally:
@@ -426,13 +428,13 @@ class ExecutionAccuracy(Metric):
                 )
             payload = recv_conn.recv()
             return ExecutionResult(
-                status=ExecutionStatus(payload.get("status", ExecutionStatus.ERROR.value)),
+                status=ExecutionStatus(
+                    payload.get("status", ExecutionStatus.ERROR.value)
+                ),
                 passed=bool(payload.get("passed", False)),
                 output=str(payload.get("output", "")),
                 error=(
-                    str(payload["error"])
-                    if payload.get("error") is not None
-                    else None
+                    str(payload["error"]) if payload.get("error") is not None else None
                 ),
                 duration=time.perf_counter() - start,
             )

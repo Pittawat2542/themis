@@ -14,7 +14,9 @@ def _prepare_run(storage: experiment_storage.ExperimentStorage, run_id: str) -> 
     storage.start_run(run_id, experiment_id="default")
 
     record = make_record(sample_id="s1")
-    eval_record = make_evaluation_record(sample_id="s1", metric_name="ExactMatch", value=1.0)
+    eval_record = make_evaluation_record(
+        sample_id="s1", metric_name="ExactMatch", value=1.0
+    )
 
     storage.append_record(
         run_id,
