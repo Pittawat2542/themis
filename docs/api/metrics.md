@@ -20,7 +20,7 @@ Metric names used in reports are taken from each metric's `name` attribute (e.g.
 
 Install extras:
 ```bash
-pip install themis-eval[math,nlp,code]
+uv add "themis-eval[math,nlp,code]"
 ```
 
 ## Base Interface
@@ -93,7 +93,7 @@ print(score.value)  # 1.0
 
 ## NLP Metrics
 
-Requires: `pip install themis-eval[nlp]`
+Requires: `uv add "themis-eval[nlp]"`
 
 ### BLEU
 
@@ -138,7 +138,7 @@ score = metric.compute(prediction="A", references=["A"])
 
 ## Code Metrics
 
-Requires: `pip install themis-eval[code]`
+Requires: `uv add "themis-eval[code]"`
 
 ### PassAtK
 

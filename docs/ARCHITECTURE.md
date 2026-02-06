@@ -7,16 +7,39 @@ Themis has two public evaluation surfaces built on the same orchestration core:
 
 ## Layered Design
 
-```text
-themis.evaluate(...) / CLI commands
-            |
-       ExperimentSession
-            |
-   ExperimentSpec / ExecutionSpec / StorageSpec
-            |
-GenerationPlan -> GenerationRunner -> EvaluationPipelineContract
-            |
-  ExperimentStorage / comparison / server / export
+```mermaid
+flowchart TD
+    A["themis.evaluate(...) / CLI commands"] --> B["ExperimentSession.run(...)"]
+    B --> C["ExperimentSpec / ExecutionSpec / StorageSpec"]
+    C --> D["GenerationPlan"]
+    D --> E["GenerationRunner"]
+    E --> F["EvaluationPipelineContract"]
+    F --> G["ExperimentStorage"]
+    G --> H["comparison / server / export"]
+```
+
+## Run Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant U as "User Code"
+    participant S as "ExperimentSession"
+    participant O as "ExperimentOrchestrator"
+    participant R as "GenerationRunner"
+    participant P as "EvaluationPipeline"
+    participant T as "ExperimentStorage"
+
+    U->>S: "run(spec, execution, storage)"
+    S->>O: "build plan + runner + cache manager"
+    O->>T: "start_run(run_id)"
+    O->>R: "generate(records)"
+    R-->>O: "GenerationRecord*"
+    O->>P: "evaluate(batch)"
+    P-->>O: "EvaluationReport"
+    O->>T: "append record/evaluation"
+    O->>T: "complete_run(run_id)"
+    O-->>S: "ExperimentReport"
+    S-->>U: "ExperimentReport"
 ```
 
 ## Primary Components

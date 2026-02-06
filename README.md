@@ -28,13 +28,10 @@ It includes built-in benchmarks, metric pipelines, caching/resume, comparison ut
 
 ```bash
 # stable release
-pip install themis-eval
+uv add themis-eval
 
 # with optional extras
-pip install "themis-eval[math,nlp,code,server]"
-
-# or with uv
-uv pip install themis-eval
+uv add "themis-eval[math,nlp,code,server]"
 ```
 
 ## Quick Start (No API key)

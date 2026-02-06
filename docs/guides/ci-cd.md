@@ -90,3 +90,8 @@ uv run ruff check <changed_python_files>
 5. Create and push tag: `vX.Y.Z`.
 6. Verify `Create GitHub Release` workflow publishes release notes + artifacts.
 7. Verify `Publish to PyPI` workflow completes successfully.
+
+## Related Tutorial
+
+- Countdown Part 5 (reproducibility + quality gates + research bundle):
+  [Countdown Tutorial](countdown-tutorial.md)

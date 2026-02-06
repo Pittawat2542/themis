@@ -2,6 +2,16 @@
 
 Use `themis.comparison.compare_runs` to compare two or more run IDs.
 
+## Comparison Flow
+
+```mermaid
+flowchart LR
+    A["Select run IDs"] --> B["Load cached evaluations from storage"]
+    B --> C["Align samples per metric"]
+    C --> D["Compute deltas + statistical tests"]
+    D --> E["Comparison report"]
+```
+
 ## Basic
 
 ```python
@@ -18,6 +28,13 @@ report = compare_runs(
 print(report.summary())
 ```
 
+## What `compare_runs(...)` Produces
+
+- Per-metric winners and deltas
+- Pairwise significance results
+- Optional multiple-hypothesis correction metadata
+- Inputs suitable for HTML/JSON export
+
 ## Metric-Scoped Comparison
 
 ```python
@@ -28,11 +45,29 @@ report = compare_runs(
 )
 ```
 
+## Recommended Evaluation Pattern
+
+```mermaid
+flowchart TD
+    A["Baseline run"] --> B["Variant run"]
+    B --> C["compare_runs(...)"]
+    C --> D{"Significant + meaningful effect size?"}
+    D -- "Yes" --> E["Adopt variant"]
+    D -- "No" --> F["Keep baseline and test next change"]
+```
+
 ## CLI
 
 ```bash
 themis compare run-a run-b --output comparison.html
 ```
+
+## Interpretation Checklist
+
+- Check effect size (`delta`) before focusing on p-values.
+- Prefer metrics that map directly to your task objective.
+- Keep run configuration differences narrow (one primary variable at a time).
+- Confirm sample alignment assumptions when using paired tests.
 
 ## Notes
 

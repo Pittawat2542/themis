@@ -6,27 +6,25 @@ Understanding the key concepts in Themis will help you use it effectively.
 
 Themis is built on a layered architecture:
 
+```mermaid
+flowchart TD
+    A["themis.evaluate(...)"] --> B["ExperimentSession.run(...)"]
+    B --> C["ExperimentSpec"]
+    C --> D["Generation + Evaluation pipeline"]
+    B --> E["StorageSpec + ExperimentStorage"]
+    D --> E
 ```
-┌─────────────────────────────────────┐
-│           themis.evaluate()          │  Simple API
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────┐
-│        ExperimentSession     │  spec-driven orchestration
-└──────────────┬──────────────┘
-               │
-     ┌─────────▼─────────┐
-     │   ExperimentSpec   │  Dataset + prompt + model
-     └─────────┬─────────┘
-               │
-┌──────────────▼──────────────┐    ┌──────────────────────┐
-│   EvaluationPipelineContract │    │    StorageSpec        │
-│   (extractor + metrics)       │    │    + ExperimentStorage│
-└──────────────┬──────────────┘    └──────────────────────┘
-               │
-        ┌──────▼──────┐
-        │ Generation  │  Providers + execution backend
-        └─────────────┘
+
+At runtime, each sample goes through a generation/evaluation loop:
+
+```mermaid
+flowchart LR
+    I["Dataset row"] --> J["Prompt rendering"]
+    J --> K["Model generation"]
+    K --> L["Extractor"]
+    L --> M["Metric compute"]
+    M --> N["EvaluationRecord"]
+    N --> O["Aggregate report + storage"]
 ```
 
 ## Key Concepts

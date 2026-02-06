@@ -76,7 +76,7 @@ It includes aggregated metrics, sample rows, and optional charts.
 Use the JSON report to build a Dataset of per-sample metrics.
 Requires `datasets`:
 ```bash
-pip install datasets
+uv add datasets
 ```
 
 ```python
@@ -105,7 +105,7 @@ If you want to upload to the Hub, see `themis/integrations/huggingface.py`.
 
 Requires `wandb`:
 ```bash
-pip install wandb
+uv add wandb
 ```
 
 ```python
@@ -134,7 +134,7 @@ For a built-in integration, see `themis/integrations/wandb.py`.
 
 Requires `mlflow`:
 ```bash
-pip install mlflow
+uv add mlflow
 ```
 
 ```python
@@ -161,3 +161,12 @@ themis eval gsm8k --model gpt-4 --limit 100 --output results.json
 themis eval gsm8k --model gpt-4 --limit 100 --output results.csv
 themis eval gsm8k --model gpt-4 --limit 100 --output results.html
 ```
+
+## Related Tutorial
+
+- Countdown Part 5 covers reproducibility gates and bundle indexing.
+- Countdown Part 6 covers backend wiring plus W&B/MLflow publication from the same bundle.
+- Countdown Part 7 covers storage observability/retention and optional Hugging Face Hub publication.
+- Countdown Part 8 covers statistical robustness and reliability analysis.
+- Countdown Part 9 covers manifest audits and reproducibility-diff gates.
+- Full guide: [Countdown Tutorial](countdown-tutorial.md)
