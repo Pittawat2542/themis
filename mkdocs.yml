@@ -95,7 +95,7 @@ markdown_extensions:
       toc_depth: 3
 
 extra:
-  announcement: "🎉 <strong>Themis 1.1.0 is out:</strong> stronger cache safety, streaming execution, and upgraded CLI dataset support. <a href='/themis/releases/1.1.0/'>See what's new</a>."
+  announcement: "🎉 <strong>Themis 1.1.1 is out:</strong> CLI compare stability fixes, docs alignment, and stronger docs regression coverage. <a href='/themis/releases/1.1.1/'>See what's new</a>."
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/pittawat2542/themis
@@ -112,6 +112,7 @@ nav:
   - Home: index.md
 
   - Releases:
+      - 1.1.1: releases/1.1.1.md
       - 1.1.0: releases/1.1.0.md
 
   - Getting Started:
@@ -121,6 +122,7 @@ nav:
 
   - Guides:
       - Evaluation: guides/evaluation.md
+      - Countdown Tutorial: guides/countdown-tutorial.md
       - Comparison: guides/comparison.md
       - Interoperability: guides/interoperability.md
       - Providers (LiteLLM): guides/providers.md

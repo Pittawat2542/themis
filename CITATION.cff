@@ -5,8 +5,8 @@ authors:
   - family-names: 'Taveekitworachai'
     given-names: 'Pittawat'
     orcid: 'https://orcid.org/0000-0002-6824-2634'
-date-released: 2026-02-05
-version: 1.1.0
+date-released: 2026-02-06
+version: 1.1.1
 url: 'https://github.com/Pittawat2542/themis'
 license: MIT
 keywords:

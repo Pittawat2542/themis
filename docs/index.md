@@ -72,10 +72,10 @@ flowchart LR
 
 ## Release Spotlight
 
-!!! success "Themis 1.1.0"
-    Stronger cache safety, streaming execution, CI-only bootstrap semantics, and direct CLI support for custom `.json` / `.jsonl` datasets.
+!!! success "Themis 1.1.1"
+    CLI compare stability fixes, docs alignment with runtime behavior, and stronger docs regression tests.
 
-    [Read the full 1.1.0 notes](releases/1.1.0.md)
+    [Read the full 1.1.1 notes](releases/1.1.1.md)
 
 ## Documentation Map
 

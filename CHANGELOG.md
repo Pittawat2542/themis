@@ -5,6 +5,22 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-02-06
+
+### Fixed
+- Fixed a CLI type-hint collision that caused `themis compare --help` and compare execution paths to fail.
+- Fixed `examples-simple/04_comparison.py` to persist comparable run artifacts for stable script behavior.
+
+### Changed
+- Updated getting-started and CLI docs to emphasize local-first workflows and source-checkout invocation (`uv run python -m themis.cli ...`).
+- Updated API docs for `evaluate(...)` to include `reference_field` and current backend behavior.
+- Updated API server docs to match current version output and installation commands.
+- Improved countdown tutorial consistency with aligned run IDs and explicit preflight/requirements guidance.
+
+### Added
+- Added CLI regression tests for compare help/execution paths.
+- Added documentation regression tests for API/CLI signature alignment and tutorial consistency.
+
 ## [1.1.0] - 2026-02-05
 
 ### Added
