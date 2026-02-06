@@ -72,10 +72,10 @@ flowchart LR
 
 ## Release Spotlight
 
-!!! success "Themis 1.1.1"
-    CLI compare stability fixes, docs alignment with runtime behavior, and stronger docs regression tests.
+!!! success "Themis 1.1.1.post1"
+    Post-release hardening: execution-metric coverage fixes, pre-commit Ruff guardrails, and CI-gated release publishing.
 
-    [Read the full 1.1.1 notes](releases/1.1.1.md)
+    [Read the full 1.1.1.post1 notes](releases/1.1.1.post1.md)
 
 ## Documentation Map
 

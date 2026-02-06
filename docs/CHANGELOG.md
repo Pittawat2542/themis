@@ -4,12 +4,11 @@ Canonical release history lives in the repository root at [`CHANGELOG.md`](https
 
 ## Current Release
 
-- Version: `1.1.1`
+- Version: `1.1.1.post1`
 - Date: `2026-02-06`
 - Highlights:
-  - Fixed `themis compare` CLI help/runtime regressions caused by type-hint collisions.
-  - Fixed `examples-simple/04_comparison.py` to persist compare-ready artifacts.
-  - Added stronger docs/test guards for CLI/documentation drift.
-  - Updated onboarding/API/tutorial docs to align with current behavior.
+  - Stabilized execution metric memory-limit error reporting and increased module coverage above gate thresholds.
+  - Added a staged-file Ruff pre-commit guard to block formatting/lint regressions before commit.
+  - Gated GitHub release/PyPI workflows on successful main CI for the release commit.
 
 For full historical notes and migration details, use the root changelog.

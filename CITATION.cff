@@ -6,7 +6,7 @@ authors:
     given-names: 'Pittawat'
     orcid: 'https://orcid.org/0000-0002-6824-2634'
 date-released: 2026-02-06
-version: 1.1.1
+version: 1.1.1.post1
 url: 'https://github.com/Pittawat2542/themis'
 license: MIT
 keywords:

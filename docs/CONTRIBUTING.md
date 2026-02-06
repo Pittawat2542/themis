@@ -107,7 +107,7 @@ files with `ruff format --check` and `ruff check` before each commit.
 
 ## Versioning & Releases
 
-- The project follows SemVer and tags releases as `vX.Y.Z`.
+- The project follows SemVer-compatible release tags (for example `vX.Y.Z` and post releases like `vX.Y.Z.postN`).
 - Keep version metadata in sync across:
   - `pyproject.toml`
   - `CHANGELOG.md`

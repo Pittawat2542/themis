@@ -2992,7 +2992,7 @@ wheels = [
 
 [[package]]
 name = "themis-eval"
-version = "1.1.1"
+version = "1.1.1.post1"
 source = { editable = "." }
 dependencies = [
     { name = "cyclopts" },

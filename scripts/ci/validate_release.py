@@ -9,7 +9,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:\.post\d+)?(?:[-+][0-9A-Za-z.-]+)?$")
 CHANGELOG_HEADER_RE = re.compile(
     r"^## \[(?P<version>[^\]]+)\] - (?P<date>\d{4}-\d{2}-\d{2})$"
 )
