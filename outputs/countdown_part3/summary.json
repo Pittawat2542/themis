@@ -1,0 +1,22 @@
+{
+  "run_id": "countdown-part3-benchmark-run",
+  "total_samples": 2,
+  "metrics": {
+    "CountdownValidity": {
+      "mean": 1.0,
+      "count": 2
+    }
+  },
+  "metadata": {
+    "model": "qwen/qwen3-1.7b",
+    "prompt_template": "default",
+    "sampling": {
+      "temperature": 0.0,
+      "top_p": 0.95,
+      "max_tokens": 512
+    }
+  },
+  "cost_usd": null,
+  "failures": 0,
+  "failure_rate": 0.0
+}

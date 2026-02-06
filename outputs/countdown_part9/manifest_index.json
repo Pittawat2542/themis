@@ -1,0 +1,100 @@
+{
+  "runs": {
+    "countdown-part6-backends-smoke": {
+      "manifest": {
+        "schema_version": "1",
+        "model": {
+          "identifier": "qwen/qwen3-1.7b",
+          "provider": "localchat",
+          "provider_options": {
+            "api_base": "http://localhost:1234/api/v1/chat"
+          }
+        },
+        "sampling": {
+          "temperature": 0.0,
+          "top_p": 0.95,
+          "max_tokens": 512
+        },
+        "num_samples": 1,
+        "evaluation": {
+          "metrics": [
+            "__main__.CountdownValidity:CountdownValidity"
+          ],
+          "extractor": "themis.evaluation.extractors.identity_extractor.IdentityExtractor"
+        },
+        "dataset": {
+          "fingerprint": "3ded510ee616f156901269bc8749437a3628fe858a6c70a644f05e8f2718ba90",
+          "benchmark_id": null
+        },
+        "prompt": {
+          "template_hash": "f247992b12a30f74bb9e75585406e419c27a7df0c5b53cf978c9d743ea047bdf"
+        },
+        "seeds": {
+          "provider_seed": null,
+          "sampling_seed": null
+        },
+        "package_versions": {
+          "themis-eval": "1.1.0",
+          "pydantic": "2.12.5",
+          "cyclopts": "4.0.0",
+          "litellm": "1.81.1"
+        },
+        "git_commit_hash": "cc9dd2d44a192dd4ec8713caf16fca78e51bc53c",
+        "runtime": {
+          "python_version": "3.12.9",
+          "platform": "macOS-26.2-arm64-arm-64bit"
+        }
+      },
+      "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+      "status": "completed"
+    },
+    "countdown-part7-ops-smoke": {
+      "manifest": {
+        "schema_version": "1",
+        "model": {
+          "identifier": "qwen/qwen3-1.7b",
+          "provider": "localchat",
+          "provider_options": {
+            "api_base": "http://localhost:1234/api/v1/chat"
+          }
+        },
+        "sampling": {
+          "temperature": 0.0,
+          "top_p": 0.95,
+          "max_tokens": 512
+        },
+        "num_samples": 1,
+        "evaluation": {
+          "metrics": [
+            "__main__.CountdownValidity:CountdownValidity"
+          ],
+          "extractor": "themis.evaluation.extractors.identity_extractor.IdentityExtractor"
+        },
+        "dataset": {
+          "fingerprint": "ebfb63f5ceb45504e50457951c91d6577c1679d5206306d8fcacf181a1e06e88",
+          "benchmark_id": null
+        },
+        "prompt": {
+          "template_hash": "f247992b12a30f74bb9e75585406e419c27a7df0c5b53cf978c9d743ea047bdf"
+        },
+        "seeds": {
+          "provider_seed": null,
+          "sampling_seed": null
+        },
+        "package_versions": {
+          "themis-eval": "1.1.0",
+          "pydantic": "2.12.5",
+          "cyclopts": "4.0.0",
+          "litellm": "1.81.1"
+        },
+        "git_commit_hash": "cc9dd2d44a192dd4ec8713caf16fca78e51bc53c",
+        "runtime": {
+          "python_version": "3.12.9",
+          "platform": "macOS-26.2-arm64-arm-64bit"
+        }
+      },
+      "manifest_hash": "04c5024837b1efdc2c9764debbecc7e0f587262c958c592f12e4b5b655bb134a",
+      "status": "completed"
+    }
+  }
+}

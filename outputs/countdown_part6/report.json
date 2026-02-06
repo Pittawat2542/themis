@@ -1,0 +1,459 @@
+{
+  "title": "Experiment report",
+  "summary": {
+    "total_samples": 8,
+    "successful_generations": 6,
+    "failed_generations": 2,
+    "generation_records_retained": 8,
+    "generation_records_dropped": 0,
+    "evaluation_records_retained": 8,
+    "evaluation_records_dropped": 0,
+    "per_sample_metrics_truncated": false,
+    "run_id": "countdown-part6-backends-smoke",
+    "evaluation_failures": 2,
+    "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+    "reproducibility_manifest": {
+      "schema_version": "1",
+      "model": {
+        "identifier": "qwen/qwen3-1.7b",
+        "provider": "localchat",
+        "provider_options": {
+          "api_base": "http://localhost:1234/api/v1/chat"
+        }
+      },
+      "sampling": {
+        "temperature": 0.0,
+        "top_p": 0.95,
+        "max_tokens": 512
+      },
+      "num_samples": 1,
+      "evaluation": {
+        "metrics": [
+          "__main__.CountdownValidity:CountdownValidity"
+        ],
+        "extractor": "themis.evaluation.extractors.identity_extractor.IdentityExtractor"
+      },
+      "dataset": {
+        "fingerprint": "3ded510ee616f156901269bc8749437a3628fe858a6c70a644f05e8f2718ba90",
+        "benchmark_id": null
+      },
+      "prompt": {
+        "template_hash": "f247992b12a30f74bb9e75585406e419c27a7df0c5b53cf978c9d743ea047bdf"
+      },
+      "seeds": {
+        "provider_seed": null,
+        "sampling_seed": null
+      },
+      "package_versions": {
+        "themis-eval": "1.1.0",
+        "pydantic": "2.12.5",
+        "cyclopts": "4.0.0",
+        "litellm": "1.81.1"
+      },
+      "git_commit_hash": "cc9dd2d44a192dd4ec8713caf16fca78e51bc53c",
+      "runtime": {
+        "python_version": "3.12.9",
+        "platform": "macOS-26.2-arm64-arm-64bit"
+      }
+    },
+    "cost": {
+      "total_cost": 0.023953,
+      "generation_cost": 0.023953,
+      "evaluation_cost": 0,
+      "currency": "USD",
+      "token_counts": {
+        "prompt_tokens": 349,
+        "completion_tokens": 11802,
+        "total_tokens": 12151
+      },
+      "api_calls": 6,
+      "per_model_costs": {
+        "qwen/qwen3-1.7b": 0.023953
+      },
+      "pricing_version": "2024-11",
+      "pricing_updated_at": "2024-11-01"
+    },
+    "run_failures": 2
+  },
+  "metrics": [
+    {
+      "name": "CountdownValidity",
+      "count": 6,
+      "mean": 0.0
+    }
+  ],
+  "samples": [
+    {
+      "sample_id": "1",
+      "metadata": {
+        "dataset_id": "1",
+        "numbers": [
+          72,
+          30,
+          29
+        ],
+        "numbers_str": "72, 30, 29",
+        "target": 72,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 0.0,
+          "details": {
+            "expression": "72/(3029)",
+            "computed_value": null,
+            "target": 72
+          },
+          "metadata": {
+            "dataset_id": "1",
+            "numbers": [
+              72,
+              30,
+              29
+            ],
+            "numbers_str": "72, 30, 29",
+            "target": 72,
+            "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+            "sample_id": "1",
+            "evaluation_time_ms": 0.4307079943828285,
+            "metric_compute_time_ms": 0.4307079943828285,
+            "extractor_time_ms": 0.006917005521245301,
+            "extraction_time_ms": 0.006917005521245301,
+            "item_evaluation_time_ms": 0.4543329996522516
+          }
+        }
+      ],
+      "failures": []
+    },
+    {
+      "sample_id": "0",
+      "metadata": {
+        "dataset_id": "0",
+        "numbers": [
+          95,
+          21,
+          3
+        ],
+        "numbers_str": "95, 21, 3",
+        "target": 88,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 0.0,
+          "details": {
+            "expression": "9521/3",
+            "computed_value": null,
+            "target": 88
+          },
+          "metadata": {
+            "dataset_id": "0",
+            "numbers": [
+              95,
+              21,
+              3
+            ],
+            "numbers_str": "95, 21, 3",
+            "target": 88,
+            "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+            "sample_id": "0",
+            "evaluation_time_ms": 0.030208000680431724,
+            "metric_compute_time_ms": 0.030208000680431724,
+            "extractor_time_ms": 0.00404199818149209,
+            "extraction_time_ms": 0.00404199818149209,
+            "item_evaluation_time_ms": 0.03954200656153262
+          }
+        }
+      ],
+      "failures": []
+    },
+    {
+      "sample_id": "2",
+      "metadata": {
+        "dataset_id": "2",
+        "numbers": [
+          67,
+          69,
+          69
+        ],
+        "numbers_str": "67, 69, 69",
+        "target": 71,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 0.0,
+          "details": {
+            "expression": "69+696771",
+            "computed_value": null,
+            "target": 71
+          },
+          "metadata": {
+            "dataset_id": "2",
+            "numbers": [
+              67,
+              69,
+              69
+            ],
+            "numbers_str": "67, 69, 69",
+            "target": 71,
+            "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+            "sample_id": "2",
+            "evaluation_time_ms": 0.020457999198697507,
+            "metric_compute_time_ms": 0.020457999198697507,
+            "extractor_time_ms": 0.0023329921532422304,
+            "extraction_time_ms": 0.0023329921532422304,
+            "item_evaluation_time_ms": 0.024583001504652202
+          }
+        }
+      ],
+      "failures": []
+    },
+    {
+      "sample_id": "3",
+      "metadata": {
+        "dataset_id": "3",
+        "numbers": [
+          67,
+          79,
+          39,
+          56
+        ],
+        "numbers_str": "67, 79, 39, 56",
+        "target": 77,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 0.0,
+          "details": {
+            "expression": "79(56/(6739))",
+            "computed_value": null,
+            "target": 77
+          },
+          "metadata": {
+            "dataset_id": "3",
+            "numbers": [
+              67,
+              79,
+              39,
+              56
+            ],
+            "numbers_str": "67, 79, 39, 56",
+            "target": 77,
+            "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+            "sample_id": "3",
+            "evaluation_time_ms": 0.024708002456463873,
+            "metric_compute_time_ms": 0.024708002456463873,
+            "extractor_time_ms": 0.002416985807940364,
+            "extraction_time_ms": 0.002416985807940364,
+            "item_evaluation_time_ms": 0.028417009161785245
+          }
+        }
+      ],
+      "failures": []
+    },
+    {
+      "sample_id": "5",
+      "metadata": {
+        "dataset_id": "5",
+        "numbers": [
+          27,
+          95,
+          4
+        ],
+        "numbers_str": "27, 95, 4",
+        "target": 17,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 0.0,
+          "details": {
+            "expression": "(9527)4",
+            "computed_value": null,
+            "target": 17
+          },
+          "metadata": {
+            "dataset_id": "5",
+            "numbers": [
+              27,
+              95,
+              4
+            ],
+            "numbers_str": "27, 95, 4",
+            "target": 17,
+            "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+            "sample_id": "5",
+            "evaluation_time_ms": 0.020040999515913427,
+            "metric_compute_time_ms": 0.020040999515913427,
+            "extractor_time_ms": 0.002749991836026311,
+            "extraction_time_ms": 0.002749991836026311,
+            "item_evaluation_time_ms": 0.02370899892412126
+          }
+        }
+      ],
+      "failures": []
+    },
+    {
+      "sample_id": "4",
+      "metadata": {
+        "dataset_id": "4",
+        "numbers": [
+          6,
+          77,
+          73,
+          20
+        ],
+        "numbers_str": "6, 77, 73, 20",
+        "target": 44,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [],
+      "failures": [
+        "Missing model output"
+      ]
+    },
+    {
+      "sample_id": "7",
+      "metadata": {
+        "dataset_id": "7",
+        "numbers": [
+          14,
+          32,
+          2
+        ],
+        "numbers_str": "14, 32, 2",
+        "target": 20,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 0.0,
+          "details": {
+            "expression": "3214+2",
+            "computed_value": null,
+            "target": 20
+          },
+          "metadata": {
+            "dataset_id": "7",
+            "numbers": [
+              14,
+              32,
+              2
+            ],
+            "numbers_str": "14, 32, 2",
+            "target": 20,
+            "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+            "sample_id": "7",
+            "evaluation_time_ms": 0.013625001884065568,
+            "metric_compute_time_ms": 0.013625001884065568,
+            "extractor_time_ms": 0.0020830048015341163,
+            "extraction_time_ms": 0.0020830048015341163,
+            "item_evaluation_time_ms": 0.016833000699989498
+          }
+        }
+      ],
+      "failures": []
+    },
+    {
+      "sample_id": "6",
+      "metadata": {
+        "dataset_id": "6",
+        "numbers": [
+          87,
+          55,
+          98,
+          91
+        ],
+        "numbers_str": "87, 55, 98, 91",
+        "target": 96,
+        "manifest_hash": "d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [],
+      "failures": [
+        "Missing model output"
+      ]
+    }
+  ],
+  "rendered_sample_limit": 100,
+  "total_samples": 8,
+  "charts": [],
+  "run_failures": [
+    {
+      "sample_id": "4",
+      "message": "Generation failed for model 'qwen/qwen3-1.7b' after 2 attempt(s): timed out"
+    },
+    {
+      "sample_id": "6",
+      "message": "Generation failed for model 'qwen/qwen3-1.7b' after 2 attempt(s): timed out"
+    }
+  ],
+  "evaluation_failures": [
+    {
+      "sample_id": "4",
+      "message": "Missing model output"
+    },
+    {
+      "sample_id": "6",
+      "message": "Missing model output"
+    }
+  ],
+  "metrics_rendered": [
+    "CountdownValidity"
+  ]
+}

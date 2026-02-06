@@ -1,0 +1,9 @@
+sample_id,dataset_id,manifest_hash,model_identifier,model_provider,numbers,numbers_str,prompt_template,sampling_max_tokens,sampling_temperature,sampling_top_p,target,metric:CountdownValidity,failures
+1,1,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[72, 30, 29]","72, 30, 29",default,512,0.0,0.95,72,0.0,
+0,0,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[95, 21, 3]","95, 21, 3",default,512,0.0,0.95,88,0.0,
+2,2,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[67, 69, 69]","67, 69, 69",default,512,0.0,0.95,71,0.0,
+3,3,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[67, 79, 39, 56]","67, 79, 39, 56",default,512,0.0,0.95,77,0.0,
+5,5,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[27, 95, 4]","27, 95, 4",default,512,0.0,0.95,17,0.0,
+4,4,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[6, 77, 73, 20]","6, 77, 73, 20",default,512,0.0,0.95,44,,Missing model output
+7,7,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[14, 32, 2]","14, 32, 2",default,512,0.0,0.95,20,0.0,
+6,6,d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7,qwen/qwen3-1.7b,localchat,"[87, 55, 98, 91]","87, 55, 98, 91",default,512,0.0,0.95,96,,Missing model output

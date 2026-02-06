@@ -1,0 +1,22 @@
+{
+  "run_id": "countdown-part6-backends-smoke",
+  "total_samples": 8,
+  "metrics": {
+    "CountdownValidity": {
+      "mean": 0.0,
+      "count": 6
+    }
+  },
+  "metadata": {
+    "model": "qwen/qwen3-1.7b",
+    "prompt_template": "default",
+    "sampling": {
+      "temperature": 0.0,
+      "top_p": 0.95,
+      "max_tokens": 512
+    }
+  },
+  "cost_usd": null,
+  "failures": 2,
+  "failure_rate": 0.25
+}

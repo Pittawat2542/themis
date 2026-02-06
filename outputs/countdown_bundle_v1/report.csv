@@ -1,0 +1,4 @@
+sample_id,dataset_id,manifest_hash,model_identifier,model_provider,numbers,numbers_str,prompt_template,sampling_max_tokens,sampling_temperature,sampling_top_p,target,metric:CountdownValidity,failures
+0,0,6076703dae055c2d345221d6ee68c208f3368cb0cd43658cff68cc5ac5f208c3,qwen/qwen3-1.7b,localchat,"[95, 21, 3]","95, 21, 3",default,128,0.0,1.0,88,1.0,
+1,1,6076703dae055c2d345221d6ee68c208f3368cb0cd43658cff68cc5ac5f208c3,qwen/qwen3-1.7b,localchat,"[72, 30, 29]","72, 30, 29",default,128,0.0,1.0,72,1.0,
+2,2,6076703dae055c2d345221d6ee68c208f3368cb0cd43658cff68cc5ac5f208c3,qwen/qwen3-1.7b,localchat,"[67, 69, 69]","67, 69, 69",default,128,0.0,1.0,71,1.0,

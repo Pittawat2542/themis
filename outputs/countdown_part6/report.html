@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Experiment report</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 32px; background: #f6f8fb; color: #1f2933; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    section { margin-bottom: 2rem; }
+    table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 2px rgba(15,23,42,0.08); }
+    th, td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb; font-size: 0.95rem; text-align: left; }
+    th { background: #f0f2f8; font-weight: 600; }
+    tbody tr:nth-child(odd) { background: #fafbff; }
+    .summary-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; }
+    .summary-item { background: white; padding: 0.75rem 1rem; border-radius: 8px; box-shadow: inset 0 0 0 1px #e5e7eb; }
+    .chart-section { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 1px 2px rgba(15,23,42,0.08); margin-bottom: 1.5rem; }
+    .chart-title { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+    .chart-svg { width: 100%; height: 320px; }
+    .chart-table { margin-top: 0.75rem; }
+    .subtle { color: #6b7280; font-size: 0.9rem; }
+    .cost-highlight { color: #059669; font-size: 1.2rem; font-weight: 600; }
+    .cost-section { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 1px 2px rgba(15,23,42,0.08); margin-bottom: 1.5rem; }
+    .cost-section h2 { font-size: 1.3rem; margin-top: 0; margin-bottom: 1rem; }
+    .cost-section h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>Experiment report</h1>
+  <section><h2>Summary</h2><ul class="summary-list"><li class="summary-item"><strong>evaluation_failures</strong><br /><span class="subtle">4</span></li>
+<li class="summary-item"><strong>evaluation_records_dropped</strong><br /><span class="subtle">0</span></li>
+<li class="summary-item"><strong>evaluation_records_retained</strong><br /><span class="subtle">8</span></li>
+<li class="summary-item"><strong>failed_generations</strong><br /><span class="subtle">2</span></li>
+<li class="summary-item"><strong>generation_records_dropped</strong><br /><span class="subtle">0</span></li>
+<li class="summary-item"><strong>generation_records_retained</strong><br /><span class="subtle">8</span></li>
+<li class="summary-item"><strong>manifest_hash</strong><br /><span class="subtle">d8bffd4bdeb4760604ac61dd915140f5bb5bc00f6e0af78255a418262680c4a7</span></li>
+<li class="summary-item"><strong>per_sample_metrics_truncated</strong><br /><span class="subtle">False</span></li>
+<li class="summary-item"><strong>reproducibility_manifest</strong><br /><span class="subtle">{&#x27;schema_version&#x27;: &#x27;1&#x27;, &#x27;model&#x27;: {&#x27;identifier&#x27;: &#x27;qwen/qwen3-1.7b&#x27;, &#x27;provider&#x27;: &#x27;localchat&#x27;, &#x27;provider_options&#x27;: {&#x27;api_base&#x27;: &#x27;http://localhost:1234/api/v1/chat&#x27;}}, &#x27;sampling&#x27;: {&#x27;temperature&#x27;: 0.0, &#x27;top_p&#x27;: 0.95, &#x27;max_tokens&#x27;: 512}, &#x27;num_samples&#x27;: 1, &#x27;evaluation&#x27;: {&#x27;metrics&#x27;: [&#x27;__main__.CountdownValidity:CountdownValidity&#x27;], &#x27;extractor&#x27;: &#x27;themis.evaluation.extractors.identity_extractor.IdentityExtractor&#x27;}, &#x27;dataset&#x27;: {&#x27;fingerprint&#x27;: &#x27;3ded510ee616f156901269bc8749437a3628fe858a6c70a644f05e8f2718ba90&#x27;, &#x27;benchmark_id&#x27;: None}, &#x27;prompt&#x27;: {&#x27;template_hash&#x27;: &#x27;f247992b12a30f74bb9e75585406e419c27a7df0c5b53cf978c9d743ea047bdf&#x27;}, &#x27;seeds&#x27;: {&#x27;provider_seed&#x27;: None, &#x27;sampling_seed&#x27;: None}, &#x27;package_versions&#x27;: {&#x27;themis-eval&#x27;: &#x27;1.1.0&#x27;, &#x27;pydantic&#x27;: &#x27;2.12.5&#x27;, &#x27;cyclopts&#x27;: &#x27;4.0.0&#x27;, &#x27;litellm&#x27;: &#x27;1.81.1&#x27;}, &#x27;git_commit_hash&#x27;: &#x27;cc9dd2d44a192dd4ec8713caf16fca78e51bc53c&#x27;, &#x27;runtime&#x27;: {&#x27;python_version&#x27;: &#x27;3.12.9&#x27;, &#x27;platform&#x27;: &#x27;macOS-26.2-arm64-arm-64bit&#x27;}}</span></li>
+<li class="summary-item"><strong>run_id</strong><br /><span class="subtle">countdown-part6-backends-smoke</span></li>
+<li class="summary-item"><strong>successful_generations</strong><br /><span class="subtle">6</span></li>
+<li class="summary-item"><strong>total_samples</strong><br /><span class="subtle">8</span></li><li class="summary-item"><strong>Run failures</strong><br /><span class="subtle">2</span></li></ul></section>
+  
+    <section>
+        <h2>💰 Cost Breakdown</h2>
+        <ul class="summary-list">
+            <li class="summary-item"><strong>Total Cost</strong><br /><span class="cost-highlight">$0.0240 USD</span></li>
+<li class="summary-item"><strong>Generation</strong><br /><span class="subtle">$0.0240</span></li>
+<li class="summary-item"><strong>Evaluation</strong><br /><span class="subtle">$0.0000</span></li>
+<li class="summary-item"><strong>API Calls</strong><br /><span class="subtle">6</span></li>
+<li class="summary-item"><strong>Tokens</strong><br /><span class="subtle">12,151 total (349 prompt + 11,802 completion)</span></li>
+        </ul>
+        
+        <h3>Cost by Model</h3>
+        <table>
+            <thead>
+                <tr><th>Model</th><th>Cost</th><th>% of Total</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>qwen/qwen3-1.7b</td><td>$0.0240</td><td>100.0%</td></tr>
+            </tbody>
+        </table>
+        
+    </section>
+    
+  <section><h2>Metrics</h2><table><thead><tr><th>Metric</th><th>Count</th><th>Mean</th></tr></thead><tbody><tr><td>CountdownValidity</td><td>6</td><td>0.0000</td></tr></tbody></table></section>
+  
+  <section><h2>Sample breakdown</h2><table><thead><tr><th>sample_id</th><th>dataset_id</th><th>manifest_hash</th><th>model_identifier</th><th>model_provider</th><th>numbers</th><th>numbers_str</th><th>prompt_template</th><th>sampling_max_tokens</th><th>sampling_temperature</th><th>sampling_top_p</th><th>target</th><th>metric:CountdownValidity</th><th>failures</th></tr></thead><tbody><tr><td>1</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>0.0</td><td></td></tr>
+<tr><td>0</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>0.0</td><td></td></tr>
+<tr><td>2</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>0.0</td><td></td></tr>
+<tr><td>3</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>0.0</td><td></td></tr>
+<tr><td>5</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>0.0</td><td></td></tr>
+<tr><td>4</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>Missing model output</td></tr>
+<tr><td>7</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>0.0</td><td></td></tr>
+<tr><td>6</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>Missing model output</td></tr></tbody></table></section>
+</body>
+</html>

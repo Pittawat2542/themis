@@ -1,0 +1,17 @@
+{
+  "baseline_run_id": "countdown-baseline-v1",
+  "candidate_run_id": "countdown-candidate-v1",
+  "metric": "CountdownValidity",
+  "baseline_mean": 1.0,
+  "candidate_mean": 1.0,
+  "candidate_delta": 0.0,
+  "significant": false,
+  "p_value": null,
+  "manifest_hash": "6076703dae055c2d345221d6ee68c208f3368cb0cd43658cff68cc5ac5f208c3",
+  "artifacts": {
+    "csv": "outputs/countdown_bundle_v1/report.csv",
+    "html": "outputs/countdown_bundle_v1/report.html",
+    "json": "outputs/countdown_bundle_v1/report.json",
+    "summary": "outputs/countdown_bundle_v1/summary.json"
+  }
+}

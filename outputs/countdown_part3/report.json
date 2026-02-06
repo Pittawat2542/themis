@@ -1,0 +1,193 @@
+{
+  "title": "Experiment report",
+  "summary": {
+    "total_samples": 2,
+    "successful_generations": 2,
+    "failed_generations": 0,
+    "generation_records_retained": 2,
+    "generation_records_dropped": 0,
+    "evaluation_records_retained": 2,
+    "evaluation_records_dropped": 0,
+    "per_sample_metrics_truncated": false,
+    "run_id": "countdown-part3-benchmark-run",
+    "evaluation_failures": 0,
+    "manifest_hash": "3173423ea35073c6ebba00ecbdc8d7ed787ec443b048e3b587d5761282ade296",
+    "reproducibility_manifest": {
+      "schema_version": "1",
+      "model": {
+        "identifier": "qwen/qwen3-1.7b",
+        "provider": "localchat",
+        "provider_options": {}
+      },
+      "sampling": {
+        "temperature": 0.0,
+        "top_p": 0.95,
+        "max_tokens": 512
+      },
+      "num_samples": 1,
+      "evaluation": {
+        "metrics": [
+          "__main__.CountdownValidity:CountdownValidity"
+        ],
+        "extractor": "themis.evaluation.extractors.identity_extractor.IdentityExtractor"
+      },
+      "dataset": {
+        "fingerprint": "7c2d886822c6c2b4faa119680fe54cb26a20e8615aa12071d2e6c5d3b1e9eaef",
+        "benchmark_id": null
+      },
+      "prompt": {
+        "template_hash": "13b885e58db6aced83440d8c4396e5057f18be63bdd50df89f854b967bafe557"
+      },
+      "seeds": {
+        "provider_seed": null,
+        "sampling_seed": null
+      },
+      "package_versions": {
+        "themis-eval": "1.1.0",
+        "pydantic": "2.12.5",
+        "cyclopts": "4.0.0",
+        "litellm": "1.81.1"
+      },
+      "git_commit_hash": "cc9dd2d44a192dd4ec8713caf16fca78e51bc53c",
+      "runtime": {
+        "python_version": "3.12.9",
+        "platform": "macOS-26.2-arm64-arm-64bit"
+      }
+    },
+    "cost": {
+      "total_cost": 0.007769,
+      "generation_cost": 0.007769,
+      "evaluation_cost": 0,
+      "currency": "USD",
+      "token_counts": {
+        "prompt_tokens": 113,
+        "completion_tokens": 3828,
+        "total_tokens": 3941
+      },
+      "api_calls": 2,
+      "per_model_costs": {
+        "qwen/qwen3-1.7b": 0.007769
+      },
+      "pricing_version": "2024-11",
+      "pricing_updated_at": "2024-11-01"
+    },
+    "run_failures": 0
+  },
+  "metrics": [
+    {
+      "name": "CountdownValidity",
+      "count": 2,
+      "mean": 1.0
+    }
+  ],
+  "samples": [
+    {
+      "sample_id": "1",
+      "metadata": {
+        "dataset_id": "1",
+        "numbers": [
+          72,
+          30,
+          29
+        ],
+        "numbers_str": "72, 30, 29",
+        "target": 72,
+        "manifest_hash": "3173423ea35073c6ebba00ecbdc8d7ed787ec443b048e3b587d5761282ade296",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 1.0,
+          "details": {
+            "expression": "72/(30-29)",
+            "computed_value": 72,
+            "target": 72,
+            "is_valid_expression": true
+          },
+          "metadata": {
+            "dataset_id": "1",
+            "numbers": [
+              72,
+              30,
+              29
+            ],
+            "numbers_str": "72, 30, 29",
+            "target": 72,
+            "manifest_hash": "3173423ea35073c6ebba00ecbdc8d7ed787ec443b048e3b587d5761282ade296",
+            "sample_id": "1",
+            "evaluation_time_ms": 0.25591699522919953,
+            "metric_compute_time_ms": 0.25591699522919953,
+            "extractor_time_ms": 0.005666996003128588,
+            "extraction_time_ms": 0.005666996003128588,
+            "item_evaluation_time_ms": 0.2681250043679029
+          }
+        }
+      ],
+      "failures": []
+    },
+    {
+      "sample_id": "0",
+      "metadata": {
+        "dataset_id": "0",
+        "numbers": [
+          95,
+          21,
+          3
+        ],
+        "numbers_str": "95, 21, 3",
+        "target": 88,
+        "manifest_hash": "3173423ea35073c6ebba00ecbdc8d7ed787ec443b048e3b587d5761282ade296",
+        "model_identifier": "qwen/qwen3-1.7b",
+        "model_provider": "localchat",
+        "prompt_template": "default",
+        "sampling_temperature": 0.0,
+        "sampling_top_p": 0.95,
+        "sampling_max_tokens": 512
+      },
+      "scores": [
+        {
+          "metric": "CountdownValidity",
+          "value": 1.0,
+          "details": {
+            "expression": "95 - (21 / 3)",
+            "computed_value": 88,
+            "target": 88,
+            "is_valid_expression": true
+          },
+          "metadata": {
+            "dataset_id": "0",
+            "numbers": [
+              95,
+              21,
+              3
+            ],
+            "numbers_str": "95, 21, 3",
+            "target": 88,
+            "manifest_hash": "3173423ea35073c6ebba00ecbdc8d7ed787ec443b048e3b587d5761282ade296",
+            "sample_id": "0",
+            "evaluation_time_ms": 0.029624992748722434,
+            "metric_compute_time_ms": 0.029624992748722434,
+            "extractor_time_ms": 0.0027919886633753777,
+            "extraction_time_ms": 0.0027919886633753777,
+            "item_evaluation_time_ms": 0.03558400203473866
+          }
+        }
+      ],
+      "failures": []
+    }
+  ],
+  "rendered_sample_limit": 100,
+  "total_samples": 2,
+  "charts": [],
+  "run_failures": [],
+  "evaluation_failures": [],
+  "metrics_rendered": [
+    "CountdownValidity"
+  ]
+}
