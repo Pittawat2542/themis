@@ -199,7 +199,7 @@ def eval(
 
 @app.command
 def compare(
-    run_ids: Annotated[list[str], Parameter(name="RUN_IDS", show_default=False)],
+    run_ids: Annotated[builtins.list[str], Parameter(name="RUN_IDS", show_default=False)],
     *,
     metric: Annotated[str | None, Parameter(help="Metric to compare")] = None,
     storage: Annotated[str | None, Parameter(help="Storage location (local path or s3://...)")] = None,
@@ -231,7 +231,7 @@ def compare(
         
         if not storage_path.exists():
             print(f"Error: Storage path not found: {storage_path}", file=sys.stderr)
-            print(f"Tip: Specify storage path with THEMIS_STORAGE env var", file=sys.stderr)
+            print("Tip: Specify storage path with THEMIS_STORAGE env var", file=sys.stderr)
             return 1
         
         # Run comparison
@@ -374,11 +374,11 @@ def serve(
         print("\nInstall with: pip install themis[server]", file=sys.stderr)
         print("           or: uv pip install themis[server]", file=sys.stderr)
         return 1
-    
-        # Determine storage path
-        storage_path = _resolve_storage_root(storage)
-    
-    print(f"Starting Themis API server...")
+
+    # Determine storage path
+    storage_path = _resolve_storage_root(storage)
+
+    print("Starting Themis API server...")
     print(f"  URL:     http://{host}:{port}")
     print(f"  Storage: {storage_path}")
     print(f"  Docs:    http://{host}:{port}/docs")
@@ -399,8 +399,8 @@ def serve(
     return 0
 
 
-@app.command
-def list(
+@app.command(name="list")
+def list_command(
     what: Annotated[str, Parameter(name="WHAT", show_default=False)],
     *,
     storage: Annotated[str | None, Parameter(help="Storage path for runs")] = None,
@@ -746,7 +746,7 @@ def _generate_comparison_markdown(report) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Main CLI entry point."""
-    parsed_argv = list(argv) if argv is not None else None
+    parsed_argv = builtins.list(argv) if argv is not None else None
     try:
         result = app(parsed_argv)
     except SystemExit as exc:  # pragma: no cover - CLI integration path

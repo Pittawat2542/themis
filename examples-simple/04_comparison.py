@@ -25,7 +25,7 @@ def run_experiment(run_id: str, temperature: float) -> None:
     ExperimentSession().run(
         spec,
         execution=ExecutionSpec(workers=2),
-        storage=StorageSpec(path=".cache/experiments", cache=False),
+        storage=StorageSpec(path=".cache/experiments", cache=True),
     )
 
 
