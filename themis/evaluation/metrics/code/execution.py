@@ -78,6 +78,7 @@ def _safe_builtins() -> dict[str, Any]:
         "ArithmeticError": ArithmeticError,
         "ZeroDivisionError": ZeroDivisionError,
         "AssertionError": AssertionError,
+        "MemoryError": MemoryError,
     }
 
 
