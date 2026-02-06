@@ -241,10 +241,15 @@ def _execution_batch_worker(
                 )
                 error = None
                 output = str(actual_output)
+            except MemoryError:
+                passed = False
+                status = ExecutionStatus.ERROR.value
+                error = "Memory limit exceeded"
+                output = ""
             except BaseException as exc:
                 passed = False
                 status = ExecutionStatus.ERROR.value
-                error = str(exc)
+                error = str(exc) or exc.__class__.__name__
                 output = ""
 
             if max_bytes is not None:
