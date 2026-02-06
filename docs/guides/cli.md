@@ -2,6 +2,9 @@
 
 Complete guide to the Themis command-line interface.
 
+If you're running from a source checkout, prefix commands with
+`uv run python -m themis.cli ...`.
+
 ## Overview
 
 Themis provides a focused set of commands:
@@ -140,7 +143,7 @@ themis serve [OPTIONS]
 - `--storage PATH`
 - `--reload` (dev mode)
 
-Requires `themis[server]`.
+Requires `themis-eval[server]`.
 
 ---
 

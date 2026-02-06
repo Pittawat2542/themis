@@ -7,20 +7,13 @@
 ## Install
 
 ```bash
-pip install themis-eval
+uv add themis-eval
 ```
 
 With optional extras:
 
 ```bash
-pip install "themis-eval[math,nlp,code,server]"
-```
-
-Using `uv`:
-
-```bash
-uv pip install themis-eval
-uv pip install "themis-eval[math,nlp,code,server]"
+uv add "themis-eval[math,nlp,code,server]"
 ```
 
 ## Contributor Environment (Recommended)
@@ -34,6 +27,10 @@ uv sync --extra dev --extra docs --extra server --extra nlp --extra code --extra
 ## Verify
 
 ```bash
+# From a source checkout
+uv run python -m themis.cli demo --limit 3
+
+# If installed as a package with console scripts
 themis demo --limit 3
 ```
 

@@ -1,6 +1,16 @@
 # Quick Start
 
-## 1) Run Your First Evaluation
+## 1) Run Your First Evaluation (No API key)
+
+```python
+from themis import evaluate
+
+report = evaluate("demo", model="fake-math-llm", limit=10)
+exact_match = report.evaluation_report.metrics["ExactMatch"].mean
+print(f"ExactMatch: {exact_match:.2%}")
+```
+
+## 2) Run a Hosted Benchmark (Optional)
 
 ```python
 from themis import evaluate
@@ -10,7 +20,7 @@ accuracy = report.evaluation_report.metrics["ExactMatch"].mean
 print(f"Accuracy: {accuracy:.2%}")
 ```
 
-## 2) Use Specs + Session
+## 3) Use Specs + Session
 
 ```python
 from themis.evaluation.metric_pipeline import MetricPipeline
@@ -36,15 +46,15 @@ report = ExperimentSession().run(
 )
 ```
 
-## 3) CLI Flow
+## 4) CLI Flow
 
 ```bash
-themis eval gsm8k --model gpt-4 --limit 100 --run-id run-a
-themis eval gsm8k --model gpt-4 --temperature 0.7 --limit 100 --run-id run-b
-themis compare run-a run-b
+uv run python -m themis.cli eval gsm8k --model gpt-4 --limit 100 --run-id run-a
+uv run python -m themis.cli eval gsm8k --model gpt-4 --temperature 0.7 --limit 100 --run-id run-b
+uv run python -m themis.cli compare run-a run-b
 ```
 
-## 4) Explore Examples
+## 5) Explore Examples
 
 - `examples-simple/01_quickstart.py`
 - `examples-simple/02_custom_dataset.py`

@@ -11,6 +11,7 @@ def evaluate(
     model: str,
     limit: int | None = None,
     prompt: str | None = None,
+    reference_field: str | None = None,
     metrics: list[str] | None = None,
     temperature: float = 0.0,
     max_tokens: int = 512,
@@ -70,6 +71,12 @@ Metric names to compute. If `None`, uses preset defaults. Example names:
 
 Metric names are normalized (case-insensitive; `ExactMatch` and `exact_match` both work).
 
+**`reference_field`** : `str | None = None`
+
+For custom datasets only, explicitly sets the reference column name (for example
+`"gold_label"`). If omitted, Themis auto-detects a consistent `answer` or
+`reference` field.
+
 **`temperature`** : `float = 0.0`
 
 Sampling temperature.
@@ -98,8 +105,7 @@ Storage location for runs and cache. Defaults to `.cache/experiments`.
 **`storage_backend`** : `object | None = None`
 
 Optional storage backend instance (typically `ExperimentStorage` or
-`LocalFileStorageBackend`). Custom storage backends are not yet wired into
-`ExperimentSession`.
+`LocalFileStorageBackend`) used by `evaluate()` through `StorageSpec`.
 
 **`execution_backend`** : `object | None = None`
 

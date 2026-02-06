@@ -16,3 +16,14 @@ def test_eval_cli_docs_match_current_signature():
 
     assert "workers" in signature.parameters
     assert "--workers" in text
+
+
+def test_cli_docs_cover_source_checkout_and_server_extra_name():
+    text = Path("docs/guides/cli.md").read_text(encoding="utf-8")
+
+    assert "uv run python -m themis.cli" in text
+    assert "themis-eval[server]" in text
+
+
+def test_compare_help_command_is_callable():
+    assert cli_main.main(["compare", "--help"]) == 0

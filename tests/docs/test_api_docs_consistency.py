@@ -17,6 +17,8 @@ def test_evaluate_docs_match_current_signature():
 
     assert "max_records_in_memory" in signature.parameters
     assert "**`max_records_in_memory`**" in text
+    assert "reference_field" in signature.parameters
+    assert "**`reference_field`**" in text
 
 
 def test_evaluate_docs_list_supported_extra_options():

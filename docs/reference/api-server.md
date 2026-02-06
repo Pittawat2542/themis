@@ -7,9 +7,13 @@ The Themis API server provides REST and WebSocket endpoints for accessing experi
 The API server requires optional dependencies:
 
 ```bash
-pip install themis[server]
-# or
-uv pip install themis[server]
+uv add "themis-eval[server]"
+```
+
+From a source checkout, start the server with:
+
+```bash
+uv run python -m themis.cli serve
 ```
 
 ## Quick Start
@@ -42,6 +46,17 @@ uvicorn.run(app, host="0.0.0.0", port=8080)
 
 ## API Endpoints
 
+### Request Flow
+
+```mermaid
+flowchart LR
+    A["HTTP client"] --> B["FastAPI route"]
+    B --> C["ExperimentStorage"]
+    C --> D["Run metadata + records + evaluations"]
+    D --> B
+    B --> E["JSON response"]
+```
+
 ### Health Check
 
 **GET** `/`
@@ -57,7 +72,7 @@ Response:
 {
   "status": "ok",
   "service": "themis-api",
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
 ```
 
@@ -212,6 +227,21 @@ Response:
 ```
 
 ## WebSocket API
+
+### WebSocket Interaction Model
+
+```mermaid
+sequenceDiagram
+    participant C as "Client"
+    participant S as "Themis server"
+
+    C->>S: "connect /ws"
+    S-->>C: "accept"
+    C->>S: "{\"type\":\"ping\"}"
+    S-->>C: "{\"type\":\"pong\"}"
+    C->>S: "{\"type\":\"subscribe\",\"run_id\":\"...\"}"
+    S-->>C: "{\"type\":\"subscribed\",\"run_id\":\"...\"}"
+```
 
 ### Connection
 
@@ -420,12 +450,12 @@ async def list_runs():
 ### Docker
 
 ```dockerfile
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
 
 # Install Themis with server extras
-RUN pip install themis[server]
+RUN uv tool install "themis-eval[server]"
 
 # Expose port
 EXPOSE 8080
@@ -494,7 +524,7 @@ If you get `ImportError: cannot import name 'create_app'`:
 
 ```bash
 # Install server dependencies
-pip install themis[server]
+uv tool install "themis-eval[server]"
 ```
 
 ### CORS Issues
