@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
@@ -43,6 +44,69 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-tag.outputs.tag }}
+
+      - name: Resolve release commit SHA
+        id: resolve-sha
+        shell: bash
+        run: |
+          SHA="$(git rev-list -n 1 "${{ steps.resolve-tag.outputs.tag }}")"
+          if [[ -z "${SHA}" ]]; then
+            echo "Unable to resolve commit for tag ${{ steps.resolve-tag.outputs.tag }}" >&2
+            exit 1
+          fi
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release SHA ${SHA}"
+
+      - name: Require CI workflow success
+        uses: actions/github-script@v8
+        env:
+          TARGET_SHA: ${{ steps.resolve-sha.outputs.sha }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const workflowId = "ci.yml";
+            const targetSha = process.env.TARGET_SHA;
+            const maxAttempts = 60;
+            const sleepMs = 30000;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: workflowId,
+                head_sha: targetSha,
+                per_page: 10,
+              });
+
+              const runs = data.workflow_runs || [];
+              if (runs.length === 0) {
+                core.info(
+                  `Attempt ${attempt}/${maxAttempts}: no CI runs found for ${targetSha} yet.`,
+                );
+              } else {
+                const run = runs[0];
+                core.info(
+                  `Attempt ${attempt}/${maxAttempts}: CI run ${run.id} status=${run.status} conclusion=${run.conclusion}`,
+                );
+                if (run.status === "completed") {
+                  if (run.conclusion === "success") {
+                    core.info(`CI succeeded for ${targetSha}.`);
+                    return;
+                  }
+                  core.setFailed(
+                    `CI workflow did not succeed for ${targetSha} (conclusion=${run.conclusion}).`,
+                  );
+                  return;
+                }
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, sleepMs));
+            }
+
+            core.setFailed(
+              `Timed out waiting for CI workflow success for ${targetSha}.`,
+            );
 
       - name: Set up Python
         uses: actions/setup-python@v6
