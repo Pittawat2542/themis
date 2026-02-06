@@ -171,7 +171,7 @@ class ComparisonEngine:
         eval_dict = self._storage.load_cached_evaluations(run_id)
         
         # Organize scores by metric
-        metric_scores: dict[str, dict[str, float]] = {}
+        metric_scores: dict[str, dict[str, list[float]]] = {}
         
         # eval_dict is a dict, so iterate over values
         for record in eval_dict.values():
@@ -184,9 +184,18 @@ class ComparisonEngine:
                     metric_scores[metric_name] = {}
 
                 score = score_obj.value
-                metric_scores[metric_name][sample_id] = score
-        
-        return metric_scores
+                metric_scores[metric_name].setdefault(sample_id, []).append(score)
+
+        # Collapse duplicated sample IDs deterministically by mean to avoid
+        # silently overwriting values during alignment.
+        collapsed: dict[str, dict[str, float]] = {}
+        for metric_name, sample_values in metric_scores.items():
+            collapsed[metric_name] = {
+                sample_id: (sum(values) / len(values))
+                for sample_id, values in sample_values.items()
+                if values
+            }
+        return collapsed
     
     def _compare_pair(
         self,

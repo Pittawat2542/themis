@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+PRICING_TABLE_VERSION = "2024-11"
+PRICING_TABLE_UPDATED_AT = "2024-11-01"
+
 # Pricing table for common LLM providers (prices per token in USD)
 # Updated as of November 2024
 PRICING_TABLE: dict[str, dict[str, float]] = {
@@ -304,6 +307,14 @@ def get_pricing_summary() -> dict[str, Any]:
     }
 
 
+def get_pricing_metadata() -> dict[str, str]:
+    """Return pricing table provenance metadata."""
+    return {
+        "version": PRICING_TABLE_VERSION,
+        "updated_at": PRICING_TABLE_UPDATED_AT,
+    }
+
+
 __all__ = [
     "PRICING_TABLE",
     "MODEL_ALIASES",
@@ -314,4 +325,7 @@ __all__ = [
     "estimate_tokens",
     "get_all_models",
     "get_pricing_summary",
+    "get_pricing_metadata",
+    "PRICING_TABLE_VERSION",
+    "PRICING_TABLE_UPDATED_AT",
 ]

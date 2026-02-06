@@ -11,7 +11,6 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -85,7 +84,8 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     )
     
     # Initialize storage
-    storage = ExperimentStorage(storage_path)
+    storage_root = Path(storage_path)
+    storage = ExperimentStorage(storage_root)
     
     # Mount static files (dashboard)
     static_dir = Path(__file__).parent / "static"
@@ -125,12 +125,10 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     async def list_runs():
         """List all experiment runs."""
         run_entries = storage.list_runs()
-        run_ids = [
-            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
-        ]
         
         summaries = []
-        for run_id in run_ids:
+        for entry in run_entries:
+            run_id = entry.run_id
             # Load basic info
             eval_records = storage.load_cached_evaluations(run_id)
             
@@ -152,10 +150,11 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
             
             summaries.append(RunSummary(
                 run_id=run_id,
-                experiment_id="default",
-                status="completed",
+                experiment_id=entry.experiment_id,
+                status=entry.status.value,
                 num_samples=len(eval_records),
                 metrics=avg_metrics,
+                created_at=entry.created_at,
             ))
         
         return summaries
@@ -163,11 +162,9 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     @app.get("/api/runs/{run_id}", response_model=RunDetail, tags=["runs"])
     async def get_run(run_id: str):
         """Get detailed information about a run."""
-        run_entries = storage.list_runs()
-        run_ids = [
-            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
-        ]
-        if run_id not in run_ids:
+        run_entries = {entry.run_id: entry for entry in storage.list_runs()}
+        run_entry = run_entries.get(run_id)
+        if run_entry is None:
             raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
         
         # Load records
@@ -222,21 +219,19 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
         
         return RunDetail(
             run_id=run_id,
-            experiment_id="default",
-            status="completed",
+            experiment_id=run_entry.experiment_id,
+            status=run_entry.status.value,
             num_samples=len(eval_records),
             metrics=avg_metrics,
             samples=samples,
+            metadata={"created_at": run_entry.created_at},
         )
     
     @app.delete("/api/runs/{run_id}", tags=["runs"])
     async def delete_run(run_id: str):
         """Delete a run."""
-        run_entries = storage.list_runs()
-        run_ids = [
-            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
-        ]
-        if run_id not in run_ids:
+        run_entries = {entry.run_id for entry in storage.list_runs()}
+        if run_id not in run_entries:
             raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
         
         # Note: Current storage doesn't implement delete
@@ -250,10 +245,7 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     async def compare_runs_api(request: ComparisonRequest):
         """Compare multiple runs."""
         # Validate runs exist
-        run_entries = storage.list_runs()
-        existing_runs = set(
-            entry.run_id if hasattr(entry, "run_id") else entry for entry in run_entries
-        )
+        existing_runs = {entry.run_id for entry in storage.list_runs()}
         for run_id in request.run_ids:
             if run_id not in existing_runs:
                 raise HTTPException(
@@ -279,7 +271,7 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
         # Run comparison
         report = compare_runs(
             run_ids=request.run_ids,
-            storage_path=storage._base_dir,
+            storage_path=storage.root,
             metrics=request.metrics,
             statistical_test=test_enum,
             alpha=request.alpha,

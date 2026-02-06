@@ -100,15 +100,15 @@ def _metric_values(report: EvaluationReport, metric_name: str) -> list[float]:
 def _metric_values_by_sample(
     report: EvaluationReport, metric_name: str
 ) -> dict[str, float]:
-    values: dict[str, float] = {}
+    values: dict[str, list[float]] = {}
     for record in report.records:
         if not record.sample_id:
             continue
         for score in record.scores:
             if score.metric_name == metric_name:
-                values[record.sample_id] = score.value
+                values.setdefault(record.sample_id, []).append(score.value)
                 break
-    return values
+    return {sample_id: mean(sample_values) for sample_id, sample_values in values.items()}
 
 
 def aligned_metric_values(

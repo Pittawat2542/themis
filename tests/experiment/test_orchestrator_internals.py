@@ -14,6 +14,8 @@ from themis.interfaces import ModelProvider
 class DummyCacheManager:
     def __init__(self):
         self.start_called = False
+        self.complete_calls: list[str] = []
+        self.fail_calls: list[dict[str, str]] = []
         self.cached_dataset_calls: list[dict[str, object]] = []
         self.load_cached_records_calls: list[str] = []
         self.load_cached_evaluations_calls: list[dict[str, object]] = []
@@ -71,6 +73,12 @@ class DummyCacheManager:
 
     def get_run_path(self, run_id: str) -> str | None:
         return None
+
+    def complete_run(self, run_id: str) -> None:
+        self.complete_calls.append(run_id)
+
+    def fail_run(self, run_id: str, error_message: str) -> None:
+        self.fail_calls.append({"run_id": run_id, "error_message": error_message})
 
 
 class FakeProvider(ModelProvider):
@@ -150,6 +158,8 @@ def test_orchestrator_uses_cache_manager_api():
     assert "metrics" in eval_config
     assert "extractor" in eval_config
     assert report.metadata["total_samples"] == 1
+    assert cache_manager.complete_calls == ["orchestrator-test"]
+    assert cache_manager.fail_calls == []
 
 
 def test_orchestrator_prefers_evaluation_fingerprint():

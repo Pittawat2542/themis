@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import warnings
 from typing import Callable, Sequence
@@ -19,6 +20,13 @@ from themis.interfaces import Metric as MetricInterface
 from themis.utils import tracing
 
 logger = logging.getLogger(__name__)
+
+
+def _stable_metric_id(name: str) -> str:
+    """Normalize display-like metric names to snake_case IDs."""
+    normalized = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_")
+    normalized = re.sub(r"(?<!^)(?=[A-Z])", "_", normalized).lower()
+    return normalized
 
 
 def _default_reference_selector(record: core_entities.GenerationRecord):
@@ -313,6 +321,12 @@ class EvaluationPipeline:
                 failures=failures,
                 records=per_record,
                 slices=self._compute_slice_aggregates(per_metric, slice_members),
+                metadata={
+                    "metric_ids": {
+                        metric_name: _stable_metric_id(metric_name)
+                        for metric_name in aggregates
+                    }
+                },
             )
 
     def evaluation_fingerprint(self) -> dict:

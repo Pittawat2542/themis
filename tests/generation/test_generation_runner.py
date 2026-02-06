@@ -253,3 +253,70 @@ def test_runner_bounds_in_flight_task_submission():
     assert first.output is not None
     assert tasks.requested <= 3
     assert len([first, *list(stream)]) == 10
+
+
+def test_runner_retries_when_provider_returns_retryable_error_record():
+    class RetryableErrorProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, task: core_entities.GenerationTask):
+            self.calls += 1
+            if self.calls < 3:
+                return core_entities.GenerationRecord(
+                    task=task,
+                    output=None,
+                    error=core_entities.ModelError(
+                        message="temporary outage",
+                        kind="ProviderError",
+                    ),
+                    metrics={},
+                )
+            return core_entities.GenerationRecord(
+                task=task,
+                output=core_entities.ModelOutput(text="ok"),
+                error=None,
+                metrics={},
+            )
+
+    sampling = core_entities.SamplingConfig(temperature=0.1, top_p=0.9, max_tokens=16)
+    requests = [build_task("Recover from error-record", "gpt-4o", sampling)]
+    provider = RetryableErrorProvider()
+    runner = generation_runner.GenerationRunner(
+        provider=provider, max_retries=3, retry_initial_delay=0.0
+    )
+
+    result = list(runner.run(requests))[0]
+    assert result.error is None
+    assert result.metrics["generation_attempts"] == 3
+    assert len(result.metrics["retry_errors"]) == 2
+
+
+def test_runner_does_not_retry_non_retryable_error_record():
+    class NonRetryableErrorProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, task: core_entities.GenerationTask):
+            self.calls += 1
+            return core_entities.GenerationRecord(
+                task=task,
+                output=None,
+                error=core_entities.ModelError(
+                    message="authentication failed",
+                    kind="AuthenticationError",
+                ),
+                metrics={},
+            )
+
+    sampling = core_entities.SamplingConfig(temperature=0.1, top_p=0.9, max_tokens=16)
+    requests = [build_task("No retry expected", "gpt-4o", sampling)]
+    provider = NonRetryableErrorProvider()
+    runner = generation_runner.GenerationRunner(
+        provider=provider, max_retries=3, retry_initial_delay=0.0
+    )
+
+    result = list(runner.run(requests))[0]
+    assert result.error is not None
+    assert provider.calls == 1
+    assert result.metrics["generation_attempts"] == 1

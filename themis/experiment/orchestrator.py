@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Sequence
 
 from themis.config.schema import IntegrationsConfig
-
-logger = logging.getLogger(__name__)
 from themis.core.entities import (
     EvaluationRecord,
     ExperimentFailure,
@@ -29,9 +28,16 @@ from themis.experiment import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
 from themis.experiment.cost import CostTracker
 from themis.experiment.integration_manager import IntegrationManager
-from themis.experiment.pricing import calculate_cost, get_provider_pricing
+from themis.experiment.pricing import calculate_cost, get_pricing_metadata
 from themis.generation import plan as generation_plan
 from themis.generation import runner as generation_runner
+
+logger = logging.getLogger(__name__)
+
+
+def _stable_metric_id(name: str) -> str:
+    normalized = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_")
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", normalized).lower()
 
 
 class _RetentionBuffer:
@@ -199,6 +205,7 @@ class ExperimentOrchestrator:
         try:
             task_iterator = iter(self._plan.expand(selected_dataset))
         except Exception as e:
+            self._cache.fail_run(run_identifier, str(e))
             logger.error(f"Orchestrator: ❌ Failed to expand dataset: {e}")
             raise
 
@@ -324,8 +331,9 @@ class ExperimentOrchestrator:
 
         # Run pending generation tasks without pre-materializing task lists.
         completed = 0
-        for record in self._runner.run(_iter_pending_tasks()):
-                logger.debug(f"Orchestrator: Received generation record")
+        try:
+            for record in self._runner.run(_iter_pending_tasks()):
+                logger.debug("Orchestrator: Received generation record")
                 generation_results.append(record)
                 if record.error:
                     failed_generations_total += 1
@@ -344,7 +352,7 @@ class ExperimentOrchestrator:
                         (100 * completed // pending_tasks_total),
                     )
 
-                logger.debug(f"Orchestrator: Processing record (cost tracking...)")
+                logger.debug("Orchestrator: Processing record (cost tracking...)")
                 # Track cost for successful generations
                 if record.output and record.output.usage:
                     usage = record.output.usage
@@ -361,7 +369,7 @@ class ExperimentOrchestrator:
                         cost=cost,
                     )
 
-                logger.debug(f"Orchestrator: Processing record (error handling...)")
+                logger.debug("Orchestrator: Processing record (error handling...)")
                 if record.error:
                     failures.append(
                         ExperimentFailure(
@@ -370,7 +378,7 @@ class ExperimentOrchestrator:
                         )
                     )
                     
-                logger.debug(f"Orchestrator: Processing record (caching...)")
+                logger.debug("Orchestrator: Processing record (caching...)")
                 cache_key = experiment_storage.task_cache_key(record.task)
                 if cache_results:
                     self._cache.save_generation_record(
@@ -382,10 +390,13 @@ class ExperimentOrchestrator:
                 if len(eval_batch) >= evaluation_batch_size:
                     _flush_eval_batch()
                 
-                logger.debug(f"Orchestrator: Processing record (callback...)")
+                logger.debug("Orchestrator: Processing record (callback...)")
                 if on_result:
                     on_result(record)
-                logger.debug(f"Orchestrator: Record processing complete")
+                logger.debug("Orchestrator: Record processing complete")
+        except Exception as exc:
+            self._cache.fail_run(run_identifier, str(exc))
+            raise
 
         logger.info(
             "Orchestrator: Task scan complete (%s total, %s pending, %s cached)",
@@ -399,27 +410,36 @@ class ExperimentOrchestrator:
             "Orchestrator: Flushing final evaluation batch (%s queued)...",
             len(eval_batch),
         )
-        _flush_eval_batch()
+        try:
+            _flush_eval_batch()
+        except Exception as exc:
+            self._cache.fail_run(run_identifier, str(exc))
+            raise
 
         # Combine cached and new evaluations
         logger.info("Orchestrator: Combining cached and new evaluations...")
-        evaluation_report = self._combine_evaluations(
-            cached_eval_records.to_list(),
-            new_eval_records.to_list(),
-            new_eval_failures,
-            expected_metric_names=expected_metric_names,
-            cached_failures=cached_eval_failures,
-            metric_sums=metric_sums,
-            metric_counts=metric_counts,
-            metric_samples={
-                name: buffer.to_list() for name, buffer in metric_samples.items()
-            },
-            max_records_in_memory=max_records_in_memory,
-        )
+        try:
+            evaluation_report = self._combine_evaluations(
+                cached_eval_records.to_list(),
+                new_eval_records.to_list(),
+                new_eval_failures,
+                expected_metric_names=expected_metric_names,
+                cached_failures=cached_eval_failures,
+                metric_sums=metric_sums,
+                metric_counts=metric_counts,
+                metric_samples={
+                    name: buffer.to_list() for name, buffer in metric_samples.items()
+                },
+                max_records_in_memory=max_records_in_memory,
+            )
+        except Exception as exc:
+            self._cache.fail_run(run_identifier, str(exc))
+            raise
         logger.info(f"Orchestrator: Total evaluation records: {len(evaluation_report.records)}")
 
         # Get cost breakdown
         cost_breakdown = self._cost_tracker.get_breakdown()
+        pricing_metadata = get_pricing_metadata()
         if cost_breakdown.total_cost > 0:
             logger.info(f"Orchestrator: Total cost: ${cost_breakdown.total_cost:.4f}")
 
@@ -451,6 +471,8 @@ class ExperimentOrchestrator:
                 "token_counts": cost_breakdown.token_counts,
                 "api_calls": cost_breakdown.api_calls,
                 "per_model_costs": cost_breakdown.per_model_costs,
+                "pricing_version": pricing_metadata["version"],
+                "pricing_updated_at": pricing_metadata["updated_at"],
             },
         }
 
@@ -472,6 +494,8 @@ class ExperimentOrchestrator:
         # Save report.json for multi-experiment comparison
         if cache_results:
             self._save_report_json(report, run_identifier)
+
+        self._cache.complete_run(run_identifier)
 
         return report
 
@@ -655,6 +679,10 @@ class ExperimentOrchestrator:
                 "records_dropped": record_buffer.dropped,
                 "per_sample_metrics_truncated": metrics_truncated,
                 "per_metric": per_metric_truncation,
+                "metric_ids": {
+                    metric_name: _stable_metric_id(metric_name)
+                    for metric_name in metric_names
+                },
             },
         )
 

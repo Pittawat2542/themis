@@ -269,6 +269,46 @@ class TestEvaluateAPI:
         )
         assert report.evaluation_report.failures == []
 
+    def test_evaluate_custom_dataset_reference_field_override(self, tmp_path):
+        report = evaluate(
+            [{"id": "1", "question": "2+2", "gold_label": "4"}],
+            model="fake-math-llm",
+            prompt="What is {question}?",
+            reference_field="gold_label",
+            metrics=["exact_match"],
+            storage=tmp_path,
+            run_id="reference-field-override-test",
+            resume=False,
+        )
+        assert report.evaluation_report.failures == []
+
+    def test_evaluate_custom_dataset_mixed_reference_fields_fails_fast(self, tmp_path):
+        with pytest.raises(ValueError, match="mixed or partial reference fields"):
+            evaluate(
+                [
+                    {"id": "1", "question": "2+2", "answer": "4"},
+                    {"id": "2", "question": "1+1", "reference": "2"},
+                ],
+                model="fake-math-llm",
+                prompt="What is {question}?",
+                metrics=["exact_match"],
+                storage=tmp_path,
+                run_id="mixed-reference-fields",
+                resume=False,
+            )
+
+    def test_evaluate_custom_dataset_missing_reference_fails_fast(self, tmp_path):
+        with pytest.raises(ValueError, match="Could not detect a reference field"):
+            evaluate(
+                [{"id": "1", "question": "2+2"}],
+                model="fake-math-llm",
+                prompt="What is {question}?",
+                metrics=["exact_match"],
+                storage=tmp_path,
+                run_id="missing-reference-fast-fail",
+                resume=False,
+            )
+
     def test_evaluate_supports_bounded_memory_mode(self, tmp_path):
         report = evaluate(
             [

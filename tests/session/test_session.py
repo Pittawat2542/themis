@@ -34,6 +34,9 @@ def test_experiment_session_runs_with_list_dataset(tmp_path):
 
     assert report.metadata["total_samples"] == 1
     assert "ResponseLength" in report.evaluation_report.metrics
+    storage = ExperimentStorage(tmp_path)
+    metadata = storage._load_run_metadata("session-test")
+    assert metadata.status.value == "completed"
 
 
 def test_experiment_session_rejects_bad_pipeline():
@@ -157,3 +160,36 @@ def test_session_prefers_explicit_api_base_over_base_url(tmp_path, monkeypatch):
     assert isinstance(options, dict)
     assert options.get("api_base") == "http://preferred/v1"
     assert "base_url" not in options
+
+
+def test_session_marks_run_failed_when_orchestration_raises(tmp_path, monkeypatch):
+    pipeline = evaluation_pipeline.EvaluationPipeline(
+        extractor=extractors.IdentityExtractor(),
+        metrics=[metrics.ResponseLength()],
+    )
+    spec = ExperimentSpec(
+        dataset=[{"id": "1", "question": "2+2", "answer": "4"}],
+        prompt="{question}",
+        model="fake:fake-math-llm",
+        pipeline=pipeline,
+        run_id="session-failure-status",
+    )
+
+    def _explode(*args, **kwargs):  # noqa: ANN002, ANN003
+        raise RuntimeError("forced combine failure")
+
+    monkeypatch.setattr(
+        "themis.experiment.orchestrator.ExperimentOrchestrator._combine_evaluations",
+        _explode,
+    )
+
+    with pytest.raises(RuntimeError, match="forced combine failure"):
+        ExperimentSession().run(
+            spec,
+            execution=ExecutionSpec(workers=1),
+            storage=StorageSpec(path=tmp_path),
+        )
+
+    storage = ExperimentStorage(tmp_path)
+    metadata = storage._load_run_metadata("session-failure-status")
+    assert metadata.status.value == "failed"

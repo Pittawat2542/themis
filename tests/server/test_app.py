@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import pytest
-
-fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
+
+pytest.importorskip("fastapi")
 
 from themis.experiment import storage as experiment_storage
 from themis.server.app import create_app
@@ -57,3 +57,56 @@ def test_server_runs_list(tmp_path):
 
     assert payload
     assert payload[0]["metrics"]["ExactMatch"] == 1.0
+    assert payload[0]["status"] == "in_progress"
+    assert payload[0]["experiment_id"] == "default"
+
+
+def test_server_compare_endpoint(tmp_path):
+    storage = experiment_storage.ExperimentStorage(tmp_path)
+    _prepare_run(storage, "run-a")
+
+    storage.start_run("run-b", experiment_id="default")
+    record = make_record(sample_id="s1")
+    eval_record = make_evaluation_record(
+        sample_id="s1", metric_name="ExactMatch", value=0.0
+    )
+    storage.append_record(
+        "run-b",
+        record,
+        cache_key=experiment_storage.task_cache_key(record.task),
+    )
+    storage.append_evaluation("run-b", record, eval_record)
+
+    app = create_app(storage_path=tmp_path)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/api/compare",
+        json={
+            "run_ids": ["run-a", "run-b"],
+            "metrics": ["ExactMatch"],
+            "statistical_test": "bootstrap",
+            "alpha": 0.05,
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["metrics"] == ["ExactMatch"]
+    assert len(payload["pairwise_results"]) == 1
+
+
+def test_server_compare_endpoint_rejects_invalid_input(tmp_path):
+    storage = experiment_storage.ExperimentStorage(tmp_path)
+    _prepare_run(storage, "run-a")
+
+    app = create_app(storage_path=tmp_path)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/api/compare",
+        json={
+            "run_ids": ["run-a"],
+            "metrics": ["ExactMatch"],
+        },
+    )
+    assert resp.status_code == 400

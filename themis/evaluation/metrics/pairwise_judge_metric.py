@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Sequence
+
+from themis.core import entities as core_entities
+from themis.interfaces import Metric as MetricInterface
 
 
 def _extract_json_payload(raw_text: str) -> tuple[dict[str, Any], bool]:
@@ -18,9 +21,6 @@ def _extract_json_payload(raw_text: str) -> tuple[dict[str, Any], bool]:
                 pass
     return {}, False
 
-from themis.core import entities as core_entities
-from themis.interfaces import Metric as MetricInterface
-
 
 @dataclass
 class PairwiseJudgeMetric(MetricInterface):
@@ -28,6 +28,7 @@ class PairwiseJudgeMetric(MetricInterface):
     judge_provider: Any
     sampling: core_entities.SamplingConfig | None = None
     rubric: dict[str, str] | Sequence[str] = ()
+    _runner: Any = field(init=False, default=None, repr=False)
 
     def __post_init__(self) -> None:
         self.name = "PairwiseJudge"
@@ -40,7 +41,6 @@ class PairwiseJudgeMetric(MetricInterface):
         references: Sequence[Any],
         metadata: dict[str, Any] | None = None,
     ) -> core_entities.MetricScore:
-        from themis.generation.runner import GenerationRunner
         from themis.generation.templates import PromptTemplate
 
         md = dict(metadata or {})
@@ -98,7 +98,7 @@ class PairwiseJudgeMetric(MetricInterface):
         )
 
         try:
-            runner = GenerationRunner(provider=self.judge_provider)
+            runner = self._get_runner()
             record = next(iter(runner.run([task])))
             raw_text = record.output.text if record.output else ""
         except Exception as exc:  # pragma: no cover - provider failure
@@ -139,3 +139,10 @@ class PairwiseJudgeMetric(MetricInterface):
             },
             metadata=md,
         )
+
+    def _get_runner(self):
+        if self._runner is None:
+            from themis.generation.runner import GenerationRunner
+
+            self._runner = GenerationRunner(provider=self.judge_provider)
+        return self._runner

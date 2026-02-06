@@ -2,11 +2,32 @@
 
 from __future__ import annotations
 
+import math
 import random
 from statistics import mean
 from typing import Callable, Sequence
 
 from .types import BootstrapResult
+
+
+def _percentile(sorted_values: Sequence[float], quantile: float) -> float:
+    """Return linearly interpolated percentile from a pre-sorted sequence."""
+    if not sorted_values:
+        raise ValueError("Cannot compute percentile of empty sequence")
+    if quantile <= 0:
+        return float(sorted_values[0])
+    if quantile >= 1:
+        return float(sorted_values[-1])
+
+    idx = (len(sorted_values) - 1) * quantile
+    lower = math.floor(idx)
+    upper = math.ceil(idx)
+    if lower == upper:
+        return float(sorted_values[lower])
+    fraction = idx - lower
+    return float(
+        sorted_values[lower] * (1.0 - fraction) + sorted_values[upper] * fraction
+    )
 
 
 def bootstrap_ci(
@@ -63,17 +84,13 @@ def bootstrap_ci(
 
     # Compute percentile CI
     alpha = 1 - confidence_level
-    lower_idx = int(n_bootstrap * alpha / 2)
-    upper_idx = int(n_bootstrap * (1 - alpha / 2))
-
-    # Ensure indices are within bounds
-    lower_idx = max(0, min(lower_idx, n_bootstrap - 1))
-    upper_idx = max(0, min(upper_idx, n_bootstrap - 1))
+    lower_q = alpha / 2
+    upper_q = 1 - alpha / 2
 
     return BootstrapResult(
         statistic=observed_stat,
-        ci_lower=bootstrap_stats[lower_idx],
-        ci_upper=bootstrap_stats[upper_idx],
+        ci_lower=_percentile(bootstrap_stats, lower_q),
+        ci_upper=_percentile(bootstrap_stats, upper_q),
         confidence_level=confidence_level,
         n_bootstrap=n_bootstrap,
     )

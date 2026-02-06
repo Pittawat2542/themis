@@ -32,7 +32,7 @@ Example:
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+import os
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -125,6 +125,7 @@ def evaluate(
     model: str,
     limit: int | None = None,
     prompt: str | None = None,
+    reference_field: str | None = None,
     metrics: list[str] | None = None,
     temperature: float = 0.0,
     max_tokens: int = 512,
@@ -157,6 +158,9 @@ def evaluate(
         prompt: Custom prompt template using Python format strings. Variables like
             {prompt}, {question}, {context} will be replaced with dataset fields.
             If None, uses the benchmark's default prompt template.
+        reference_field: Field name containing references for custom datasets.
+            If None, Themis auto-detects a consistent field (`answer` or `reference`).
+            This option is ignored for built-in benchmarks.
         metrics: List of metric names to compute. Common built-ins include:
             "exact_match", "math_verify", "response_length", "bleu",
             "rouge1", "rouge2", "rougeL", "bertscore", "meteor",
@@ -206,12 +210,7 @@ def evaluate(
         logger.info(f"Num samples per prompt: {num_samples}")
     if "api_base" in kwargs:
         logger.info(f"Custom API base: {kwargs['api_base']}")
-    if "api_key" in kwargs:
-        logger.info("API key: <provided>")
-    else:
-        logger.warning("⚠️  No api_key provided - may fail for custom API endpoints")
-    logger.info("=" * 60)
-    
+
     unsupported_options = sorted(set(kwargs.keys()) - _ALLOWED_EXTRA_OPTIONS)
     if unsupported_options:
         unsupported = ", ".join(unsupported_options)
@@ -221,6 +220,11 @@ def evaluate(
         )
 
     provider_options = _extract_provider_options(kwargs)
+    if "api_key" in kwargs:
+        logger.info("API key: <provided>")
+    elif _should_warn_missing_api_key(model, provider_options):
+        logger.warning("⚠️  No api_key provided - may fail for hosted API models")
+    logger.info("=" * 60)
 
     # Import presets system (lazy import to avoid circular dependencies)
     from themis.presets import get_benchmark_preset
@@ -229,6 +233,10 @@ def evaluate(
     is_benchmark = isinstance(benchmark_or_dataset, str)
     
     if is_benchmark:
+        if reference_field is not None:
+            raise ValueError(
+                "`reference_field` is only supported for custom datasets."
+            )
         benchmark_name = benchmark_or_dataset
         logger.info(f"Loading benchmark: {benchmark_name}")
         
@@ -265,7 +273,7 @@ def evaluate(
         
         # Use preset metadata fields
         metadata_fields = preset.metadata_fields
-        reference_field = preset.reference_field
+        selected_reference_field = preset.reference_field
         dataset_id_field = preset.dataset_id_field
     else:
         # Custom dataset
@@ -298,7 +306,15 @@ def evaluate(
         
         # Use standard field names
         metadata_fields = ()
-        reference_field = _detect_reference_field(dataset)
+        selected_reference_field = _resolve_custom_reference_field(
+            dataset, requested_field=reference_field
+        )
+        if _metrics_require_references(metrics_list) and selected_reference_field is None:
+            raise ValueError(
+                "Could not detect a reference field for custom dataset. "
+                "Provide rows with a consistent `answer` or `reference` column, "
+                "or pass `reference_field=...`."
+            )
         dataset_id_field = "id"
     
     # Build evaluation pipeline
@@ -322,7 +338,7 @@ def evaluate(
         num_samples=num_samples,
         max_records_in_memory=max_records_in_memory,
         dataset_id_field=dataset_id_field,
-        reference_field=reference_field,
+        reference_field=selected_reference_field,
         metadata_fields=metadata_fields,
         pipeline=pipeline,
         run_id=run_id,
@@ -351,11 +367,84 @@ def _extract_provider_options(kwargs: dict[str, Any]) -> dict[str, Any]:
 def _detect_reference_field(dataset: Sequence[dict[str, Any]]) -> str | None:
     if not dataset:
         return "answer"
-    if any("answer" in row for row in dataset):
+    answer_in_all = all("answer" in row for row in dataset)
+    reference_in_all = all("reference" in row for row in dataset)
+    if answer_in_all:
         return "answer"
-    if any("reference" in row for row in dataset):
+    if reference_in_all:
         return "reference"
+    if any(("answer" in row) or ("reference" in row) for row in dataset):
+        raise ValueError(
+            "Detected mixed or partial reference fields across rows. "
+            "Use a consistent `answer` or `reference` column, or pass "
+            "`reference_field=...`."
+        )
     return None
+
+
+def _resolve_custom_reference_field(
+    dataset: Sequence[dict[str, Any]], *, requested_field: str | None
+) -> str | None:
+    if requested_field is None:
+        return _detect_reference_field(dataset)
+    if requested_field == "":
+        return None
+    missing_indices = [
+        str(idx + 1)
+        for idx, row in enumerate(dataset)
+        if requested_field not in row
+    ]
+    if missing_indices:
+        preview = ", ".join(missing_indices[:5])
+        raise ValueError(
+            f"reference_field='{requested_field}' is missing in row(s): {preview}."
+        )
+    return requested_field
+
+
+def _metrics_require_references(resolved_metrics: Sequence[Any]) -> bool:
+    return any(getattr(metric, "requires_reference", True) for metric in resolved_metrics)
+
+
+def _should_warn_missing_api_key(
+    model: str, provider_options: dict[str, Any]
+) -> bool:
+    if provider_options.get("api_key"):
+        return False
+    provider = _detect_provider_name(model).lower()
+    if provider in {"fake", "vllm"}:
+        return False
+    if provider_options.get("api_base"):
+        # Assume custom/local endpoints can be keyless.
+        return False
+    key_envs = (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "AZURE_API_KEY",
+        "GOOGLE_API_KEY",
+        "COHERE_API_KEY",
+        "LITELLM_API_KEY",
+    )
+    if any(os.getenv(env) for env in key_envs):
+        return False
+    return provider in {
+        "litellm",
+        "openai",
+        "anthropic",
+        "azure",
+        "bedrock",
+        "gemini",
+        "cohere",
+    }
+
+
+def _detect_provider_name(model: str) -> str:
+    if ":" in model:
+        return model.split(":", 1)[0]
+    from themis.presets import parse_model_name
+
+    provider_name, _, _ = parse_model_name(model)
+    return provider_name
 
 
 def _resolve_metrics(metric_names: list[str]) -> list:

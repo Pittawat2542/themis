@@ -231,6 +231,11 @@ class ExperimentStorage:
         self._locks: dict[str, tuple[int, int]] = {}
         self._lock_owners: dict[str, int] = {}
 
+    @property
+    def root(self) -> Path:
+        """Filesystem root directory for this storage instance."""
+        return self._root
+
     def _init_database(self):
         """Initialize SQLite metadata database."""
         with self._db_write_lock:

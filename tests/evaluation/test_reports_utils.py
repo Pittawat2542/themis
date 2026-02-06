@@ -87,6 +87,31 @@ def test_reports_align_by_sample_id_for_paired_tests():
     assert 0.0 <= paired.p_value <= 1.0
 
 
+def test_reports_alignment_averages_duplicate_sample_ids():
+    extractor = extractors.IdentityExtractor()
+    metric = metrics.ExactMatch()
+    eval_pipeline = pipeline.EvaluationPipeline(extractor=extractor, metrics=[metric])
+
+    # Duplicate sample_id values are intentionally present and should be aggregated
+    # deterministically (mean across duplicates) before pairing.
+    report_a = eval_pipeline.evaluate(
+        [
+            make_generation_record("sample-1", "Paris", "Paris"),  # 1.0
+            make_generation_record("sample-1", "Lyon", "Paris"),   # 0.0
+        ]
+    )
+    report_b = eval_pipeline.evaluate(
+        [
+            make_generation_record("sample-1", "Paris", "Paris"),  # 1.0
+            make_generation_record("sample-1", "Paris", "Paris"),  # 1.0
+        ]
+    )
+
+    values_a, values_b = reports.aligned_metric_values(report_a, report_b, "ExactMatch")
+    assert values_a == [0.5]
+    assert values_b == [1.0]
+
+
 def test_reports_alignment_requires_overlap():
     extractor = extractors.IdentityExtractor()
     metric = metrics.ExactMatch()

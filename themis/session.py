@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -66,9 +68,8 @@ class ExperimentSession:
 
         strategy_resolver = None
         if spec.num_samples > 1:
-            strategy_resolver = lambda task: RepeatedSamplingStrategy(
-                attempts=spec.num_samples
-            )
+            def strategy_resolver(task):  # noqa: ARG001
+                return RepeatedSamplingStrategy(attempts=spec.num_samples)
 
         runner = GenerationRunner(
             provider=router,
@@ -99,6 +100,8 @@ class ExperimentSession:
                 "provider_seed": provider_options.get("seed"),
                 "sampling_seed": spec.sampling.get("seed"),
             },
+            dataset_fingerprint=_dataset_fingerprint(dataset),
+            prompt_fingerprint=_prompt_fingerprint(spec.prompt),
         )
 
         orchestrator = ExperimentOrchestrator(
@@ -190,6 +193,25 @@ def _build_evaluation_config(pipeline: EvaluationPipelineContract) -> dict[str, 
     fingerprint.setdefault("extractor", "unknown")
 
     return fingerprint
+
+
+def _stable_json_hash(value: object) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        default=repr,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _dataset_fingerprint(dataset: Sequence[dict]) -> str:
+    return _stable_json_hash(dataset)
+
+
+def _prompt_fingerprint(prompt: str) -> str:
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
 
 __all__ = ["ExperimentSession"]

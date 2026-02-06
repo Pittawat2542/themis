@@ -199,3 +199,65 @@ def test_holm_correction_skips_ci_only_results(tmp_path):
     assert report.metadata["n_hypotheses_corrected"] == 0
     assert all(result.corrected_significant is None for result in report.pairwise_results)
     assert all(result.corrected_p_value is None for result in report.pairwise_results)
+
+
+def test_compare_runs_aggregates_duplicate_sample_ids(tmp_path):
+    storage = experiment_storage.ExperimentStorage(tmp_path)
+
+    storage.start_run("run-a", experiment_id="default")
+    record_a1 = make_record(sample_id="s1", prompt_text="Q1")
+    record_a2 = make_record(sample_id="s1", prompt_text="Q2")
+    storage.append_record(
+        "run-a",
+        record_a1,
+        cache_key=experiment_storage.task_cache_key(record_a1.task),
+    )
+    storage.append_record(
+        "run-a",
+        record_a2,
+        cache_key=experiment_storage.task_cache_key(record_a2.task),
+    )
+    storage.append_evaluation(
+        "run-a",
+        record_a1,
+        make_evaluation_record(sample_id="s1", metric_name="ExactMatch", value=1.0),
+    )
+    storage.append_evaluation(
+        "run-a",
+        record_a2,
+        make_evaluation_record(sample_id="s1", metric_name="ExactMatch", value=0.0),
+    )
+
+    storage.start_run("run-b", experiment_id="default")
+    record_b1 = make_record(sample_id="s1", prompt_text="P1")
+    record_b2 = make_record(sample_id="s1", prompt_text="P2")
+    storage.append_record(
+        "run-b",
+        record_b1,
+        cache_key=experiment_storage.task_cache_key(record_b1.task),
+    )
+    storage.append_record(
+        "run-b",
+        record_b2,
+        cache_key=experiment_storage.task_cache_key(record_b2.task),
+    )
+    storage.append_evaluation(
+        "run-b",
+        record_b1,
+        make_evaluation_record(sample_id="s1", metric_name="ExactMatch", value=1.0),
+    )
+    storage.append_evaluation(
+        "run-b",
+        record_b2,
+        make_evaluation_record(sample_id="s1", metric_name="ExactMatch", value=1.0),
+    )
+
+    report = compare_runs(
+        run_ids=["run-a", "run-b"],
+        storage_path=tmp_path,
+        metrics=["ExactMatch"],
+        statistical_test=StatisticalTest.T_TEST,
+    )
+    result = report.pairwise_results[0]
+    assert result.run_a_mean == pytest.approx(0.5)
+    assert result.run_b_mean == pytest.approx(1.0)

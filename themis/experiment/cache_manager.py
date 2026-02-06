@@ -106,6 +106,22 @@ class CacheManager:
                 raise ValueError("Run config is required when starting a cached run.")
             self._storage.start_run(run_id, experiment_id=experiment_id, config=config)
 
+    def complete_run(self, run_id: str) -> None:
+        """Mark a run as completed when storage is available."""
+        if self._storage is None:
+            return
+        if not self._storage.run_metadata_exists(run_id):
+            return
+        self._storage.complete_run(run_id)
+
+    def fail_run(self, run_id: str, error_message: str) -> None:
+        """Mark a run as failed when storage is available."""
+        if self._storage is None:
+            return
+        if not self._storage.run_metadata_exists(run_id):
+            return
+        self._storage.fail_run(run_id, error_message)
+
     def save_generation_record(
         self,
         run_id: str,

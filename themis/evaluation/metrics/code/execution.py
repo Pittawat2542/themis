@@ -195,6 +195,91 @@ def _execution_worker(
             result_conn.close()
 
 
+def _execution_batch_worker(
+    *,
+    code: str,
+    function_name: str,
+    test_inputs: Sequence[Any],
+    expected_outputs: Sequence[Any],
+    max_memory_mb: int,
+    result_conn: Any,
+) -> None:
+    """Execute all tests in one isolated process to reduce fork overhead."""
+    _apply_memory_limit(max_memory_mb)
+    try:
+        if max_memory_mb > 0:
+            tracemalloc.start()
+        max_bytes = max_memory_mb * 1024 * 1024 if max_memory_mb > 0 else None
+
+        restricted_globals = {"__builtins__": _safe_builtins()}
+        local_vars: dict[str, Any] = {}
+        exec(code, restricted_globals, local_vars)
+        candidate = local_vars.get(function_name)
+        if not callable(candidate):
+            result_conn.send(
+                {
+                    "status": "error",
+                    "error": f"Function '{function_name}' not found",
+                    "results": [],
+                }
+            )
+            return
+
+        results: list[dict[str, Any]] = []
+        for test_input, expected_output in zip(test_inputs, expected_outputs):
+            case_start = time.perf_counter()
+            try:
+                if isinstance(test_input, (list, tuple)):
+                    actual_output = candidate(*test_input)
+                else:
+                    actual_output = candidate(test_input)
+                passed = actual_output == expected_output
+                status = (
+                    ExecutionStatus.PASSED.value
+                    if passed
+                    else ExecutionStatus.FAILED.value
+                )
+                error = None
+                output = str(actual_output)
+            except BaseException as exc:
+                passed = False
+                status = ExecutionStatus.ERROR.value
+                error = str(exc)
+                output = ""
+
+            if max_bytes is not None:
+                _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+                if peak_bytes > max_bytes:
+                    passed = False
+                    status = ExecutionStatus.ERROR.value
+                    error = (
+                        f"Memory limit exceeded: peak={peak_bytes} bytes, "
+                        f"limit={max_bytes} bytes"
+                    )
+                    output = ""
+
+            results.append(
+                {
+                    "status": status,
+                    "passed": passed,
+                    "error": error,
+                    "output": output,
+                    "duration": time.perf_counter() - case_start,
+                }
+            )
+
+        result_conn.send({"status": "ok", "results": results})
+    except MemoryError:
+        result_conn.send({"status": "error", "error": "Memory limit exceeded", "results": []})
+    except BaseException as exc:
+        result_conn.send({"status": "error", "error": str(exc), "results": []})
+    finally:
+        with contextlib.suppress(RuntimeError):
+            tracemalloc.stop()
+        with contextlib.suppress(Exception):
+            result_conn.close()
+
+
 class ExecutionAccuracy(Metric):
     """Execute code and check against test cases in an isolated sandbox process."""
 
@@ -247,15 +332,12 @@ class ExecutionAccuracy(Metric):
                 metadata=metadata or {},
             )
 
-        results = []
-        for test_input, expected in zip(test_inputs, expected_outputs):
-            result = self._execute_test(
-                code_str,
-                test_fn_name,
-                test_input,
-                expected,
-            )
-            results.append(result)
+        results = self._execute_tests_batch(
+            code_str,
+            test_fn_name,
+            test_inputs,
+            expected_outputs,
+        )
 
         passed = sum(1 for r in results if r.passed)
         total = len(results)
@@ -325,6 +407,9 @@ class ExecutionAccuracy(Metric):
             if process.is_alive():
                 process.terminate()
                 process.join(timeout=1.0)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=1.0)
                 return ExecutionResult(
                     status=ExecutionStatus.TIMEOUT,
                     passed=False,
@@ -355,12 +440,140 @@ class ExecutionAccuracy(Metric):
             if process.is_alive():
                 process.terminate()
                 process.join(timeout=1.0)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=1.0)
             return ExecutionResult(
                 status=ExecutionStatus.ERROR,
                 passed=False,
                 error=str(exc),
                 duration=time.perf_counter() - start,
             )
+        finally:
+            with contextlib.suppress(Exception):
+                recv_conn.close()
+            with contextlib.suppress(Exception):
+                send_conn.close()
+
+    def _execute_tests_batch(
+        self,
+        code: str,
+        function_name: str,
+        test_inputs: Sequence[Any],
+        expected_outputs: Sequence[Any],
+    ) -> list[ExecutionResult]:
+        start = time.perf_counter()
+        try:
+            ctx = multiprocessing.get_context("fork")
+        except ValueError:
+            ctx = multiprocessing.get_context("spawn")
+        recv_conn, send_conn = ctx.Pipe(duplex=False)
+        process = ctx.Process(
+            target=_execution_batch_worker,
+            kwargs={
+                "code": code,
+                "function_name": function_name,
+                "test_inputs": list(test_inputs),
+                "expected_outputs": list(expected_outputs),
+                "max_memory_mb": self.max_memory_mb,
+                "result_conn": send_conn,
+            },
+        )
+
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="This process .* is multi-threaded, use of fork\\(\\)",
+                    category=DeprecationWarning,
+                )
+                process.start()
+            with contextlib.suppress(Exception):
+                send_conn.close()
+
+            # Scale timeout by number of tests while preserving the single-test semantics.
+            timeout = max(self.timeout, self.timeout * max(1, len(test_inputs)))
+            process.join(timeout)
+            if process.is_alive() and sys.platform == "win32":
+                process.join(max(1.0, timeout))
+
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1.0)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=1.0)
+                duration = time.perf_counter() - start
+                return [
+                    ExecutionResult(
+                        status=ExecutionStatus.TIMEOUT,
+                        passed=False,
+                        error=f"Execution timeout ({timeout}s)",
+                        duration=duration,
+                    )
+                    for _ in test_inputs
+                ]
+
+            if not recv_conn.poll(0.1):
+                duration = time.perf_counter() - start
+                return [
+                    ExecutionResult(
+                        status=ExecutionStatus.ERROR,
+                        passed=False,
+                        error=f"Worker exited with code {process.exitcode}",
+                        duration=duration,
+                    )
+                    for _ in test_inputs
+                ]
+
+            payload = recv_conn.recv()
+            if payload.get("status") != "ok":
+                duration = time.perf_counter() - start
+                return [
+                    ExecutionResult(
+                        status=ExecutionStatus.ERROR,
+                        passed=False,
+                        error=str(payload.get("error", "unknown execution error")),
+                        duration=duration,
+                    )
+                    for _ in test_inputs
+                ]
+
+            results: list[ExecutionResult] = []
+            for item in payload.get("results", []):
+                results.append(
+                    ExecutionResult(
+                        status=ExecutionStatus(
+                            item.get("status", ExecutionStatus.ERROR.value)
+                        ),
+                        passed=bool(item.get("passed", False)),
+                        output=str(item.get("output", "")),
+                        error=(
+                            str(item["error"])
+                            if item.get("error") is not None
+                            else None
+                        ),
+                        duration=float(item.get("duration", 0.0)),
+                    )
+                )
+            return results
+        except BaseException as exc:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1.0)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=1.0)
+            duration = time.perf_counter() - start
+            return [
+                ExecutionResult(
+                    status=ExecutionStatus.ERROR,
+                    passed=False,
+                    error=str(exc),
+                    duration=duration,
+                )
+                for _ in test_inputs
+            ]
         finally:
             with contextlib.suppress(Exception):
                 recv_conn.close()

@@ -19,6 +19,17 @@ logger = logging.getLogger(__name__)
 class GenerationRunner:
     """Delegates generation tasks to an injected provider with strategy support."""
 
+    _NON_RETRYABLE_ERROR_MARKERS = (
+        "authentication",
+        "api_key",
+        "invalid_request",
+        "badrequest",
+        "permission",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+    )
+
     def __init__(
         self,
         *,
@@ -147,6 +158,36 @@ class GenerationRunner:
                     self._max_retries,
                 )
                 record = self._invoke_provider(task)
+                if record.error is not None:
+                    error_message = record.error.message
+                    retryable = self._is_retryable_record_error(record)
+                    if not retryable:
+                        record.metrics["generation_attempts"] = attempt
+                        if attempt_errors:
+                            record.metrics.setdefault("retry_errors", attempt_errors)
+                        return record
+                    logger.warning(
+                        "Runner: ⚠️  Attempt %s/%s for %s returned retryable provider error: %s",
+                        attempt,
+                        self._max_retries,
+                        task_label,
+                        error_message[:100],
+                    )
+                    attempt_errors.append(
+                        {
+                            "attempt": attempt,
+                            "error": error_message,
+                            "exception_type": record.error.kind,
+                        }
+                    )
+                    last_error = RuntimeError(error_message)
+                    if attempt >= self._max_retries:
+                        break
+                    if delay > 0:
+                        time.sleep(delay)
+                    delay = self._next_delay(delay)
+                    continue
+
                 record.metrics["generation_attempts"] = attempt
                 if attempt_errors:
                     record.metrics.setdefault("retry_errors", attempt_errors)
@@ -175,6 +216,17 @@ class GenerationRunner:
                 delay = self._next_delay(delay)
 
         return self._build_failure_record(task, attempt_errors, last_error)
+
+    def _is_retryable_record_error(
+        self, record: core_entities.GenerationRecord
+    ) -> bool:
+        error = record.error
+        if error is None:
+            return False
+        haystack = f"{error.kind} {error.message}".lower()
+        return not any(
+            marker in haystack for marker in self._NON_RETRYABLE_ERROR_MARKERS
+        )
 
     def _invoke_provider(
         self, task: core_entities.GenerationTask

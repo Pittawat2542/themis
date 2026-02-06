@@ -33,6 +33,9 @@ def build_reproducibility_manifest(
     num_samples: int,
     evaluation_config: Mapping[str, Any],
     seeds: Mapping[str, Any] | None = None,
+    dataset_fingerprint: str | None = None,
+    prompt_fingerprint: str | None = None,
+    benchmark_id: str | None = None,
     cwd: Path | None = None,
 ) -> dict[str, Any]:
     """Build a reproducibility manifest with deterministic structure."""
@@ -50,6 +53,13 @@ def build_reproducibility_manifest(
         },
         "num_samples": int(num_samples),
         "evaluation": dict(evaluation_config),
+        "dataset": {
+            "fingerprint": dataset_fingerprint or "unknown",
+            "benchmark_id": benchmark_id,
+        },
+        "prompt": {
+            "template_hash": prompt_fingerprint or "unknown",
+        },
         "seeds": dict(seeds or {"sampling_seed": None}),
         "package_versions": _collect_package_versions(),
         "git_commit_hash": _git_commit_hash(cwd=cwd),
