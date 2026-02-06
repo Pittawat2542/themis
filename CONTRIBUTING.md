@@ -73,6 +73,15 @@ uv run ruff check --select E9,F63,F7 themis tests
 uv run mkdocs build --strict
 ```
 
+To prevent commit-time Ruff regressions, enable the repository pre-commit hook:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This hook runs `scripts/ci/check_staged_python.sh`, which validates staged Python
+files with `ruff format --check` and `ruff check` before each commit.
+
 ### Project Structure
 
 - `themis/`: Source code

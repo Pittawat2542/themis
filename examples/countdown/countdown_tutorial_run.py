@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import themis
-
 from common import (
     BASELINE_PROMPT,
     DEFAULT_STORAGE,
