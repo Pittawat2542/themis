@@ -126,7 +126,7 @@ nav:
       - Countdown Tutorial: guides/countdown-tutorial.md
       - Comparison: guides/comparison.md
       - Interoperability: guides/interoperability.md
-      - Providers (LiteLLM): guides/providers.md
+      - Providers and Models: guides/providers.md
       - Storage: guides/storage.md
       - CI/CD: guides/ci-cd.md
 

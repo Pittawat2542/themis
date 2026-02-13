@@ -138,7 +138,7 @@ print(report.summary())
 
 ### 6. Providers
 
-Themis uses LiteLLM for provider support:
+Themis supports both hosted providers (via LiteLLM) and local in-process vLLM:
 
 ```python
 # OpenAI
@@ -150,6 +150,9 @@ evaluate("gsm8k", model="claude-3-opus-20240229")
 # Azure OpenAI
 evaluate("gsm8k", model="azure/gpt-4")
 ```
+
+For all provider keys, model string formats, and connection recipes, see
+[Providers and Model Connectivity](../guides/providers.md).
 
 ### 7. Specs & Sessions
 
