@@ -55,13 +55,32 @@ class VLLMProvider(ModelProvider):
         )
         dataset_id = task.metadata.get("dataset_id", "sample")
         request_id = f"themis-{dataset_id}-{time.time_ns()}"
+
+        # Handle LoRA request if specified in task metadata
+        lora_request = None
+        lora_path = task.metadata.get("lora_path")
+        if lora_path:
+            lora_name = task.metadata.get("lora_name", f"lora-{request_id}")
+            lora_int_id = hash(lora_name) % 100000 + 1  # Simple ID generation
+            lora_request = self._lora_request_cls(
+                lora_name=lora_name,
+                lora_int_id=lora_int_id,
+                lora_path=lora_path,
+            )
+
         chunks: List[str] = []
         tokenizer = getattr(engine, "tokenizer", None)
-        async for output in engine.generate(
-            prompt=task.prompt.text,
-            sampling_params=sampling_params,
-            request_id=request_id,
-        ):
+
+        # Prepare generation kwargs
+        generate_kwargs = {
+            "prompt": task.prompt.text,
+            "sampling_params": sampling_params,
+            "request_id": request_id,
+        }
+        if lora_request:
+            generate_kwargs["lora_request"] = lora_request
+
+        async for output in engine.generate(**generate_kwargs):
             if output.outputs:
                 chunks.append(output.outputs[0].text)
         final_text = chunks[-1] if chunks else ""
@@ -81,8 +100,9 @@ class VLLMProvider(ModelProvider):
         return engine
 
     def _create_engines(self):
-        AsyncLLMEngine, SamplingParams = self._load_vllm_classes()
+        AsyncLLMEngine, SamplingParams, LoraRequest = self._load_vllm_classes()
         self._sampling_params_cls = SamplingParams
+        self._lora_request_cls = LoraRequest
         engine_count = self._determine_engine_count()
         engines = []
         for idx in range(engine_count):
@@ -122,11 +142,12 @@ class VLLMProvider(ModelProvider):
     def _load_vllm_classes():
         try:
             from vllm import AsyncLLMEngine, SamplingParams
+            from vllm.lora.request import LoraRequest
         except ImportError as exc:  # pragma: no cover - optional dep
             raise RuntimeError(
                 "vLLM is not installed. Install via `pip install vllm` to use VLLMProvider."
             ) from exc
-        return AsyncLLMEngine, SamplingParams
+        return AsyncLLMEngine, SamplingParams, LoraRequest
 
 
 register_provider("vllm", VLLMProvider)
