@@ -16,6 +16,7 @@ from typing import Annotated, Any, Sequence
 
 from cyclopts import App, Parameter
 from themis._version import __version__
+from themis.utils import logging_utils
 
 # Import provider modules to ensure they register themselves
 try:
@@ -39,12 +40,20 @@ def demo(
     *,
     model: Annotated[str, Parameter(help="Model identifier")] = "fake-math-llm",
     limit: Annotated[int, Parameter(help="Maximum number of samples")] = 10,
+    verbose: Annotated[bool, Parameter(help="Enable debug logging")] = False,
+    json_logs: Annotated[bool, Parameter(help="Output logs as JSON")] = False,
 ) -> int:
     """Run the built-in demo benchmark."""
+    logging_utils.configure_logging(
+        level="debug" if verbose else "info",
+        log_format="json" if json_logs else "human",
+    )
     return eval(
         "demo",
         model=model,
         limit=limit,
+        verbose=verbose,
+        json_logs=json_logs,
     )
 
 
@@ -70,6 +79,8 @@ def eval(
     output: Annotated[
         str | None, Parameter(help="Output file (CSV, JSON, or HTML)")
     ] = None,
+    verbose: Annotated[bool, Parameter(help="Enable debug logging")] = False,
+    json_logs: Annotated[bool, Parameter(help="Output logs as JSON")] = False,
 ) -> int:
     """Run an evaluation on a benchmark or custom dataset.
 
@@ -84,6 +95,16 @@ def eval(
         themis eval gsm8k --model gpt-4 --workers 8
     """
     from themis.experiment import export as experiment_export
+
+    # Configure logging if not already configured (demo check might be redundant but safe)
+    # Note: configure_logging uses force=True so last call wins.
+    # If called from demo(), it's called twice. First with demo args, then here.
+    # We should trust the caller (demo) or ensuring eval sets it if called directly.
+    # Since eval is also a command, it needs to set it.
+    logging_utils.configure_logging(
+        level="debug" if verbose else "info",
+        log_format="json" if json_logs else "human",
+    )
 
     print(f"Running evaluation: {benchmark_or_dataset}")
     print(f"Model: {model}")
@@ -200,9 +221,10 @@ def eval(
 
     except Exception as e:
         print(f"\nError: {e}", file=sys.stderr)
-        import traceback
+        import logging
 
-        traceback.print_exc()
+        logger = logging.getLogger(__name__)
+        logger.error("Command failed", exc_info=True)
         return 1
 
 
@@ -222,6 +244,8 @@ def compare(
     show_diff: Annotated[
         bool, Parameter(help="Show examples where results differ")
     ] = False,
+    verbose: Annotated[bool, Parameter(help="Enable debug logging")] = False,
+    json_logs: Annotated[bool, Parameter(help="Output logs as JSON")] = False,
 ) -> int:
     """Compare results from multiple runs with statistical tests.
 
@@ -238,6 +262,10 @@ def compare(
         # Export to HTML
         themis compare run-1 run-2 --output comparison.html --show-diff
     """
+    logging_utils.configure_logging(
+        level="debug" if verbose else "info",
+        log_format="json" if json_logs else "human",
+    )
     try:
         if len(run_ids) < 2:
             print("Error: Need at least 2 runs to compare", file=sys.stderr)
@@ -299,9 +327,10 @@ def compare(
 
     except Exception as e:
         print(f"\nError: {e}", file=sys.stderr)
-        import traceback
+        import logging
 
-        traceback.print_exc()
+        logger = logging.getLogger(__name__)
+        logger.error("Command failed", exc_info=True)
         return 1
 
 
@@ -353,9 +382,10 @@ def share(
         return 1
     except Exception as e:
         print(f"Unexpected error: {e}", file=sys.stderr)
-        import traceback
+        import logging
 
-        traceback.print_exc()
+        logger = logging.getLogger(__name__)
+        logger.error("Share failed", exc_info=True)
         return 1
 
     print("✓ Share assets created")
@@ -375,6 +405,8 @@ def serve(
     host: Annotated[str, Parameter(help="Host to bind to")] = "127.0.0.1",
     storage: Annotated[str | None, Parameter(help="Storage path for runs")] = None,
     reload: Annotated[bool, Parameter(help="Enable auto-reload (dev mode)")] = False,
+    verbose: Annotated[bool, Parameter(help="Enable debug logging")] = False,
+    json_logs: Annotated[bool, Parameter(help="Output logs as JSON")] = False,
 ) -> int:
     """Start the Themis API server with REST and WebSocket endpoints.
 
@@ -394,6 +426,10 @@ def serve(
         # Development mode with auto-reload
         themis serve --reload
     """
+    logging_utils.configure_logging(
+        level="debug" if verbose else "info",
+        log_format="json" if json_logs else "human",
+    )
     try:
         from themis.server import create_app
         import uvicorn
@@ -416,13 +452,20 @@ def serve(
     app_instance = create_app(storage_path=storage_path)
 
     # Run server
-    uvicorn.run(
-        app_instance,
-        host=host,
-        port=port,
-        reload=reload,
-        log_level="info",
-    )
+    try:
+        uvicorn.run(
+            app_instance,
+            host=host,
+            port=port,
+            reload=reload,
+            log_level="info",
+        )
+    except Exception:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error("Server failed", exc_info=True)
+        return 1
 
     return 0
 
@@ -454,6 +497,11 @@ def list_command(
     if what not in ["runs", "benchmarks", "metrics"]:
         print(f"Error: '{what}' is not valid. Choose from: runs, benchmarks, metrics")
         return 1
+
+    logging_utils.configure_logging(
+        level="debug" if verbose else "info",
+        log_format="human",
+    )
 
     if what == "benchmarks":
         from themis.presets import get_benchmark_preset, list_benchmarks
@@ -539,6 +587,8 @@ def clean(
         # Remove runs older than 30 days
         themis clean --older-than 30
     """
+    logging_utils.configure_logging(level="info")
+
     from themis.storage import ExperimentStorage
 
     storage_root = _resolve_storage_root(storage)
@@ -788,9 +838,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 130
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
-        import traceback
+        import logging
 
-        traceback.print_exc()
+        # If logger is configured, this will show up. If not, it might be lost if no handler.
+        # But we configure logging in commands. If it fails before command execution (e.g. parsing),
+        # we might not have logging configured.
+        # Let's try to get logger anyway.
+        logger = logging.getLogger(__name__)
+        logger.error("Unexpected error", exc_info=True)
         return 1
     return int(result) if isinstance(result, int) else 0
 

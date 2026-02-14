@@ -78,6 +78,10 @@ class GenerationRunner:
             "Runner: Starting execution with %s workers (max_in_flight=%s)",
             self._max_parallel,
             self._max_in_flight_tasks,
+            extra={
+                "workers": self._max_parallel,
+                "max_in_flight": self._max_in_flight_tasks,
+            },
         )
 
         if self._execution_backend is not None:
@@ -88,19 +92,23 @@ class GenerationRunner:
                     self._execute_task, task_stream, max_workers=self._max_parallel
                 ):
                     yield result
-            except Exception as e:
-                logger.error(f"Runner: Execution backend failed: {e}")
+            except Exception:
+                logger.error("Runner: Execution backend failed", exc_info=True)
                 raise
             return
 
         if self._max_parallel <= 1:
             logger.info("Runner: Using sequential execution (1 worker)")
             for i, task in enumerate(task_stream, 1):
-                logger.debug("Runner: Processing task %s", i)
+                logger.debug("Runner: Processing task", extra={"task_index": i})
                 yield self._execute_task(task)
             return
 
-        logger.info(f"Runner: Using parallel execution ({self._max_parallel} workers)")
+        logger.info(
+            "Runner: Using parallel execution (%s workers)",
+            self._max_parallel,
+            extra={"workers": self._max_parallel},
+        )
         yield from self._run_parallel_streaming(task_stream)
 
     def _run_parallel_streaming(
@@ -128,8 +136,8 @@ class GenerationRunner:
                     futures.remove(future)
                     try:
                         result = future.result()
-                    except Exception as e:
-                        logger.error(f"Runner: Task execution failed: {e}")
+                    except Exception:
+                        logger.error("Runner: Task execution failed", exc_info=True)
                         raise
                     completed += 1
                     if completed % max(1, self._max_parallel) == 0:
@@ -137,6 +145,7 @@ class GenerationRunner:
                             "Runner: Completed %s task(s), %s in-flight",
                             completed,
                             len(futures),
+                            extra={"completed": completed, "in_flight": len(futures)},
                         )
                     yield result
                     _submit_until_full()
@@ -156,6 +165,11 @@ class GenerationRunner:
                     task_label,
                     attempt,
                     self._max_retries,
+                    extra={
+                        "task": task_label,
+                        "attempt": attempt,
+                        "max_retries": self._max_retries,
+                    },
                 )
                 record = self._invoke_provider(task)
                 if record.error is not None:
@@ -167,11 +181,17 @@ class GenerationRunner:
                             record.metrics.setdefault("retry_errors", attempt_errors)
                         return record
                     logger.warning(
-                        "Runner: ⚠️  Attempt %s/%s for %s returned retryable provider error: %s",
+                        "Runner: Retryable provider error (attempt %s/%s) for %s: %s",
                         attempt,
                         self._max_retries,
                         task_label,
                         error_message[:100],
+                        extra={
+                            "task": task_label,
+                            "attempt": attempt,
+                            "max_retries": self._max_retries,
+                            "error": error_message,
+                        },
                     )
                     attempt_errors.append(
                         {
@@ -192,17 +212,26 @@ class GenerationRunner:
                 if attempt_errors:
                     record.metrics.setdefault("retry_errors", attempt_errors)
                 logger.debug(
-                    "Runner: ✅ Completed %s in %s attempt(s)", task_label, attempt
+                    "Runner: Completed %s in %s attempt(s)",
+                    task_label,
+                    attempt,
+                    extra={"task": task_label, "attempts": attempt},
                 )
                 return record
             except Exception as exc:  # pragma: no cover - defensive path
                 last_error = exc
                 logger.warning(
-                    "Runner: ⚠️  Attempt %s/%s for %s failed: %s",
+                    "Runner: Attempt %s/%s for %s failed",
                     attempt,
                     self._max_retries,
                     task_label,
-                    str(exc)[:100],  # Truncate long error messages
+                    extra={
+                        "task": task_label,
+                        "attempt": attempt,
+                        "max_retries": self._max_retries,
+                        "error": str(exc),
+                    },
+                    exc_info=True,
                 )
                 attempt_errors.append(
                     {
@@ -282,6 +311,10 @@ class GenerationRunner:
             "All attempts failed for %s after %s tries",
             task.metadata.get("dataset_id") or task.prompt.template_name,
             attempts,
+            extra={
+                "task": task.metadata.get("dataset_id") or task.prompt.template_name,
+                "attempts": attempts,
+            },
             exc_info=last_error,
         )
         return core_entities.GenerationRecord(
