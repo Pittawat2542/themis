@@ -31,6 +31,7 @@ from themis.experiment.integration_manager import IntegrationManager
 from themis.experiment.pricing import calculate_cost, get_pricing_metadata
 from themis.generation import plan as generation_plan
 from themis.generation import runner as generation_runner
+from themis.utils.progress import get_progress_reporter
 
 logger = logging.getLogger(__name__)
 
@@ -165,10 +166,12 @@ class ExperimentOrchestrator:
                 dataset=dataset, dataset_loader=dataset_loader, run_id=run_id
             )
             logger.info(
-                f"Orchestrator: Dataset loaded ({len(dataset_list)} total samples)"
+                "Orchestrator: Dataset loaded (%s total samples)",
+                len(dataset_list),
+                extra={"dataset_size": len(dataset_list)},
             )
-        except Exception as e:
-            logger.error(f"Orchestrator: ❌ Failed to load dataset: {e}")
+        except Exception:
+            logger.error("Orchestrator: Failed to load dataset", exc_info=True)
             raise
 
         selected_dataset = (
@@ -183,8 +186,16 @@ class ExperimentOrchestrator:
             validate_reproducibility_manifest(manifest_payload)
             run_manifest_hash = manifest_hash(manifest_payload)
 
-        logger.info(f"Orchestrator: Processing {len(selected_dataset)} samples")
-        logger.info(f"Orchestrator: Run ID = {run_identifier}")
+        logger.info(
+            "Orchestrator: Processing %s samples",
+            len(selected_dataset),
+            extra={"samples": len(selected_dataset)},
+        )
+        logger.info(
+            "Orchestrator: Run ID = %s",
+            run_identifier,
+            extra={"run_id": run_identifier},
+        )
 
         # Initialize run in storage (if storage exists and run doesn't exist)
         if self._cache.has_storage:
@@ -208,7 +219,7 @@ class ExperimentOrchestrator:
             task_iterator = iter(self._plan.expand(selected_dataset))
         except Exception as e:
             self._cache.fail_run(run_identifier, str(e))
-            logger.error(f"Orchestrator: ❌ Failed to expand dataset: {e}")
+            logger.error("Orchestrator: Failed to expand dataset", exc_info=True)
             raise
 
         # Build evaluation configuration for cache invalidation
@@ -227,11 +238,15 @@ class ExperimentOrchestrator:
         )
         if resume and cached_records:
             logger.info(
-                f"Orchestrator: Found {len(cached_records)} cached generation records"
+                "Orchestrator: Found %s cached generation records",
+                len(cached_records),
+                extra={"cached_records": len(cached_records)},
             )
         if resume and cached_evaluations:
             logger.info(
-                f"Orchestrator: Found {len(cached_evaluations)} cached evaluation records"
+                "Orchestrator: Found %s cached evaluation records",
+                len(cached_evaluations),
+                extra={"cached_evaluations": len(cached_evaluations)},
             )
 
         # Process tasks: use cached or run new generations
@@ -278,6 +293,7 @@ class ExperimentOrchestrator:
             logger.info(
                 "Orchestrator: Evaluating batch of %s records...",
                 len(eval_batch),
+                extra={"batch_size": len(eval_batch)},
             )
             batch_report = self._evaluation.evaluate(eval_batch)
             expected_metric_names.update(batch_report.metrics.keys())
@@ -341,6 +357,9 @@ class ExperimentOrchestrator:
 
         # Run pending generation tasks without pre-materializing task lists.
         completed = 0
+        progress = get_progress_reporter(self._integrations)
+        progress.__enter__()
+        progress_task_id = progress.add_task("Running experiment...", total=None)
         try:
             for record in self._runner.run(_iter_pending_tasks()):
                 logger.debug("Orchestrator: Received generation record")
@@ -351,16 +370,16 @@ class ExperimentOrchestrator:
                     successful_generations_total += 1
                 completed += 1
 
-                # Log progress every 10 samples or at key milestones
-                if pending_tasks_total and (
-                    completed % 10 == 0 or completed == pending_tasks_total
-                ):
-                    logger.info(
-                        "Orchestrator: Generation progress: %s/%s (%s%%)",
-                        completed,
-                        pending_tasks_total,
-                        (100 * completed // pending_tasks_total),
-                    )
+                # Update progress
+                progress.update(
+                    progress_task_id,
+                    advance=1,
+                    completed=completed,
+                    total=None,
+                    pending=pending_tasks_total,
+                    successful=successful_generations_total,
+                    failed=failed_generations_total,
+                )
 
                 logger.debug("Orchestrator: Processing record (cost tracking...)")
                 # Track cost for successful generations
@@ -407,18 +426,26 @@ class ExperimentOrchestrator:
         except Exception as exc:
             self._cache.fail_run(run_identifier, str(exc))
             raise
+        finally:
+            progress.__exit__(None, None, None)
 
         logger.info(
             "Orchestrator: Task scan complete (%s total, %s pending, %s cached)",
             discovered_tasks_total,
             pending_tasks_total,
             discovered_tasks_total - pending_tasks_total,
+            extra={
+                "total": discovered_tasks_total,
+                "pending": pending_tasks_total,
+                "cached": discovered_tasks_total - pending_tasks_total,
+            },
         )
 
         # Evaluate remaining queued records
         logger.info(
             "Orchestrator: Flushing final evaluation batch (%s queued)...",
             len(eval_batch),
+            extra={"queued": len(eval_batch)},
         )
         try:
             _flush_eval_batch()
@@ -446,14 +473,20 @@ class ExperimentOrchestrator:
             self._cache.fail_run(run_identifier, str(exc))
             raise
         logger.info(
-            f"Orchestrator: Total evaluation records: {len(evaluation_report.records)}"
+            "Orchestrator: Total evaluation records: %s",
+            len(evaluation_report.records),
+            extra={"total_records": len(evaluation_report.records)},
         )
 
         # Get cost breakdown
         cost_breakdown = self._cost_tracker.get_breakdown()
         pricing_metadata = get_pricing_metadata()
         if cost_breakdown.total_cost > 0:
-            logger.info(f"Orchestrator: Total cost: ${cost_breakdown.total_cost:.4f}")
+            logger.info(
+                "Orchestrator: Total cost: $%s",
+                f"{cost_breakdown.total_cost:.4f}",
+                extra={"cost": cost_breakdown.total_cost},
+            )
 
         # Build metadata
         evaluation_truncation = evaluation_report.metadata.get(
