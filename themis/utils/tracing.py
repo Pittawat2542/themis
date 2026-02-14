@@ -306,6 +306,15 @@ def get_summary() -> dict[str, Any]:
     return trace.get_summary()
 
 
+def get_current_span() -> Span | None:
+    """Get the currently active span for the current thread.
+
+    Returns:
+        Current span, or None if no span is active
+    """
+    return _global_context.get_current()
+
+
 __all__ = [
     "Span",
     "TracingContext",
@@ -314,6 +323,7 @@ __all__ = [
     "is_enabled",
     "span",
     "get_trace",
+    "get_current_span",
     "reset",
     "export_json",
     "get_summary",
