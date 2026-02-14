@@ -72,6 +72,16 @@ class IntegrationManager:
         if self._wandb_tracker:
             self._wandb_tracker.log_results(report)
 
+    def log_metrics(self, metrics: dict[str, Any], step: int | None = None) -> None:
+        """Log real-time metrics to integrations.
+
+        Args:
+            metrics: Dictionary of metric names and values
+            step: Optional step count
+        """
+        if self._wandb_tracker:
+            self._wandb_tracker.log_metrics(metrics, step)
+
     def upload_results(
         self,
         report: ExperimentReport,

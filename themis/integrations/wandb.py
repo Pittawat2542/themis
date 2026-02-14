@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import wandb
@@ -17,9 +17,7 @@ from themis.core.entities import ExperimentReport
 class WandbTracker:
     def __init__(self, config: WandbConfig):
         if wandb is None:
-            raise ImportError(
-                "wandb is not installed. Install with: pip install wandb"
-            )
+            raise ImportError("wandb is not installed. Install with: pip install wandb")
         self.config = config
 
     def init(self, experiment_config: dict) -> None:
@@ -31,6 +29,17 @@ class WandbTracker:
             tags=self.config.tags,
             config=experiment_config,
         )
+
+    def log_metrics(self, metrics: dict[str, Any], step: int | None = None) -> None:
+        """Log metrics to WandB.
+
+        Args:
+            metrics: Dictionary of metric names and values
+            step: Optional step number
+        """
+        if not self.config.enable:
+            return
+        wandb.log(metrics, step=step)
 
     def log_results(self, report: ExperimentReport) -> None:
         if not self.config.enable:
