@@ -81,7 +81,7 @@ flowchart LR
 
 - [Getting Started](getting-started/installation.md): installation, quickstart, and core concepts.
 - [Guides](guides/evaluation.md): evaluation design, storage, providers, comparison, and interoperability.
-- [Reference](reference/session.md): session, specs, benchmarks, and API server details.
+- [Reference](reference/benchmarks.md): benchmarks and API server details.
 - [Python API](api/overview.md): function/class-level API behavior.
 - [Architecture](ARCHITECTURE.md): module boundaries and design decisions.
 

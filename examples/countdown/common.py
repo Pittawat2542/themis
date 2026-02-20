@@ -12,10 +12,8 @@ import themis
 from datasets import load_dataset
 from themis.core import entities as core
 from themis.evaluation.extractors import IdentityExtractor
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.interfaces import Metric as MetricInterface, ModelProvider
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 DEFAULT_API_BASE = "http://localhost:1234/api/v1/chat"
 DEFAULT_MODEL = "localchat:qwen/qwen3-1.7b"
@@ -291,58 +289,8 @@ def register_countdown_extensions() -> None:
     themis.register_metric("countdown_validity", CountdownValidity)
 
 
-def build_pipeline() -> MetricPipeline:
-    return MetricPipeline(
+def build_pipeline() -> EvaluationPipeline:
+    return EvaluationPipeline(
         extractor=IdentityExtractor(),
         metrics=[CountdownValidity()],
-    )
-
-
-def make_spec(
-    *,
-    run_id: str,
-    prompt: str,
-    dataset_limit: int,
-    provider_seed: int | None = None,
-    max_records_in_memory: int | None = None,
-) -> ExperimentSpec:
-    provider_options: dict[str, Any] = {"api_base": DEFAULT_API_BASE}
-    if provider_seed is not None:
-        provider_options["seed"] = provider_seed
-
-    sampling: dict[str, Any] = {
-        "temperature": 0.0,
-        "top_p": 1.0,
-        "max_tokens": 128,
-    }
-
-    return ExperimentSpec(
-        dataset=load_countdown_for_themis(limit=dataset_limit, split="train"),
-        prompt=prompt,
-        model=DEFAULT_MODEL,
-        provider_options=provider_options,
-        sampling=sampling,
-        pipeline=build_pipeline(),
-        run_id=run_id,
-        dataset_id_field="id",
-        reference_field="reference",
-        max_records_in_memory=max_records_in_memory,
-    )
-
-
-def run_spec(
-    spec: ExperimentSpec,
-    *,
-    workers: int = 1,
-    max_retries: int = 3,
-    storage_path: str = DEFAULT_STORAGE,
-    cache: bool = True,
-    on_result=None,
-):
-    session = ExperimentSession()
-    return session.run(
-        spec,
-        execution=ExecutionSpec(workers=workers, max_retries=max_retries),
-        storage=StorageSpec(path=storage_path, cache=cache),
-        on_result=on_result,
     )

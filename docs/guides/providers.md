@@ -84,14 +84,14 @@ report = evaluate(
 Use this when you want Themis to run vLLM directly via `AsyncLLMEngine`.
 
 ```python
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.presets import get_benchmark_preset
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 preset = get_benchmark_preset("demo")
-pipeline = MetricPipeline(extractor=preset.extractor, metrics=preset.metrics)
+pipeline = EvaluationPipeline(extractor=preset.extractor, metrics=preset.metrics)
 
 spec = ExperimentSpec(
     dataset=preset.load_dataset(limit=20),

@@ -504,14 +504,14 @@ Assume Part 1 definitions are already available in your runtime:
 ```python
 import themis
 from themis.evaluation.extractors import IdentityExtractor
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 themis.register_provider("localchat", LocalChatProvider)
 
 dataset = load_countdown_for_themis(limit=50, split="train")
-pipeline = MetricPipeline(
+pipeline = EvaluationPipeline(
     extractor=IdentityExtractor(),
     metrics=[CountdownValidity()],
 )
@@ -631,8 +631,7 @@ for row in comparison.pairwise_results:
 
 ### Learn More
 
-- [Session Reference](../reference/session.md)
-- [Specs Reference](../reference/specs.md)
+
 - [Comparison Guide](comparison.md)
 
 ---
@@ -839,9 +838,9 @@ class CountdownExpressionExtractor:
 Use it in your pipeline:
 
 ```python
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 
-pipeline = MetricPipeline(
+pipeline = EvaluationPipeline(
     extractor=CountdownExpressionExtractor(),
     metrics=[CountdownValidity()],
 )
@@ -856,11 +855,11 @@ Set `num_samples > 1` in `ExperimentSpec` and switch evaluation strategy to
 from dataclasses import replace
 
 from themis.evaluation import strategies
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
-attempt_pipeline = MetricPipeline(
+attempt_pipeline = EvaluationPipeline(
     extractor=CountdownExpressionExtractor(),
     metrics=[CountdownValidity()],
     strategy_resolver=lambda _record: strategies.AttemptAwareEvaluationStrategy(
@@ -965,7 +964,7 @@ Example candidate run script (`examples/countdown/run_countdown_candidate.py`):
 
 ```python
 from themis.evaluation.extractors import IdentityExtractor
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
@@ -974,7 +973,7 @@ import themis
 themis.register_provider("localchat", LocalChatProvider)
 
 dataset = load_countdown_for_themis(limit=50, split="train")
-pipeline = MetricPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
+pipeline = EvaluationPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
 
 spec = ExperimentSpec(
     dataset=dataset,
@@ -1188,14 +1187,14 @@ import themis
 from themis.backends.execution import LocalExecutionBackend
 from themis.backends.storage import LocalFileStorageBackend
 from themis.evaluation.extractors import IdentityExtractor
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 themis.register_provider("localchat", LocalChatProvider)
 
 dataset = load_countdown_for_themis(limit=30, split="train")
-pipeline = MetricPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
+pipeline = EvaluationPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
 
 execution_backend = LocalExecutionBackend(max_workers=2)
 storage_backend = LocalFileStorageBackend(".cache/experiments")
@@ -1363,7 +1362,7 @@ from pathlib import Path
 
 import themis
 from themis.evaluation.extractors import IdentityExtractor
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
@@ -1386,7 +1385,7 @@ def on_result(record):
     with events_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row) + "\n")
 
-pipeline = MetricPipeline(
+pipeline = EvaluationPipeline(
     extractor=IdentityExtractor(),
     metrics=[CountdownValidity()],
 )
@@ -1445,7 +1444,7 @@ print("storage_size_bytes", storage.get_storage_size())
 ### 3) Apply Retention Policy for Storage Hygiene
 
 ```python
-from themis.experiment.storage import RetentionPolicy
+from themis.storage import RetentionPolicy
 from themis.storage import ExperimentStorage
 
 storage = ExperimentStorage(".cache/experiments")
@@ -1565,7 +1564,7 @@ from dataclasses import replace
 
 import themis
 from themis.evaluation.extractors import IdentityExtractor
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
@@ -1573,7 +1572,7 @@ from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 themis.register_provider("localchat", LocalChatProvider)
 
 dataset = load_countdown_for_themis(limit=40, split="train")
-pipeline = MetricPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
+pipeline = EvaluationPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
 session = ExperimentSession()
 
 baseline_prompt = (

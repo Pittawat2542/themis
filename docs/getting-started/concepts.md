@@ -159,12 +159,12 @@ For all provider keys, model string formats, and connection recipes, see
 For advanced control, use explicit specs:
 
 ```python
-from themis.evaluation.pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.evaluation import extractors, metrics
 from themis.session import ExperimentSession
 from themis.specs import ExperimentSpec, ExecutionSpec, StorageSpec
 
-pipeline = MetricPipeline(
+pipeline = EvaluationPipeline(
     extractor=extractors.IdentityExtractor(),
     metrics=[metrics.ResponseLength()],
 )

@@ -79,13 +79,13 @@ Notes:
 Use this for explicit execution/storage configuration and reproducibility.
 
 ```python
-from themis.evaluation.metric_pipeline import MetricPipeline
+from themis.evaluation.pipeline import EvaluationPipeline
 from themis.presets import get_benchmark_preset
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 preset = get_benchmark_preset("gsm8k")
-pipeline = MetricPipeline(extractor=preset.extractor, metrics=preset.metrics)
+pipeline = EvaluationPipeline(extractor=preset.extractor, metrics=preset.metrics)
 
 spec = ExperimentSpec(
     dataset=preset.load_dataset(limit=100),
@@ -164,4 +164,4 @@ flowchart LR
 - [Metrics API](../api/metrics.md)
 - [Countdown Tutorial](countdown-tutorial.md)
 - [Comparison Guide](comparison.md)
-- [Session Reference](../reference/session.md)
+

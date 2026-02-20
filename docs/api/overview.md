@@ -13,14 +13,6 @@ Complete API documentation for Themis.
 
 The primary entry point for running evaluations. See [evaluate() documentation](evaluate.md) for details.
 
-### Sessions & Specs
-
-- **`ExperimentSession`** - Orchestrates runs with explicit specs
-- **`ExperimentSpec`** - Dataset + prompt + model + pipeline
-- **`ExecutionSpec`** - Execution backend + worker config
-- **`StorageSpec`** - Storage backend + cache config
-
-See [Session Reference](../reference/session.md) and [Specs Reference](../reference/specs.md).
 
 ## Modules
 
@@ -62,8 +54,7 @@ Pluggable backend interfaces.
 themis/
 ├── __init__.py              # Main exports
 ├── api.py                   # evaluate() function
-├── session.py               # ExperimentSession
-├── specs/                   # ExperimentSpec, ExecutionSpec, StorageSpec
+
 ├── presets/                 # Benchmark presets
 │   ├── benchmarks.py
 │   └── models.py

@@ -1,9 +1,6 @@
-"""Custom dataset example using ExperimentSpec + ExperimentSession."""
+"""Custom dataset example using themis.evaluate()."""
 
-from themis.evaluation import extractors, metrics
-from themis.evaluation.metric_pipeline import MetricPipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
+import themis
 
 DATASET = [
     {"id": "q1", "question": "What is 10 + 5?", "answer": "15"},
@@ -11,23 +8,16 @@ DATASET = [
     {"id": "q3", "question": "What is 6 * 7?", "answer": "42"},
 ]
 
-pipeline = MetricPipeline(
-    extractor=extractors.IdentityExtractor(),
-    metrics=[metrics.ExactMatch(), metrics.ResponseLength()],
-)
-
-spec = ExperimentSpec(
-    dataset=DATASET,
-    prompt="Q: {question}\nA:",
+report = themis.evaluate(
+    DATASET,
     model="fake:fake-math-llm",
-    sampling={"temperature": 0.0, "max_tokens": 128},
-    pipeline=pipeline,
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=2),
-    storage=StorageSpec(path=".cache/experiments", cache=False),
+    prompt="Q: {question}\nA:",
+    metrics=["exact_match", "response_length"],
+    temperature=0.0,
+    max_tokens=128,
+    workers=2,
+    storage=".cache/experiments",
+    resume=False,
 )
 
 print("Samples:", len(report.generation_results))

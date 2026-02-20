@@ -58,7 +58,7 @@ sequenceDiagram
 - `themis.generation.GenerationPlan`: expands dataset into tasks.
 - `themis.generation.GenerationRunner`: executes tasks against providers.
 - `themis.evaluation.EvaluationPipelineContract`: enforced evaluation interface.
-- `themis.evaluation.EvaluationPipeline` / `MetricPipeline`: standard metric execution.
+- `themis.evaluation.EvaluationPipeline` / `EvaluationPipeline`: standard metric execution.
 
 ### Persistence + Analysis Layer
 - `themis.storage.ExperimentStorage`: filesystem-backed run storage.

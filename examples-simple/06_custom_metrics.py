@@ -1,14 +1,11 @@
-"""Custom metric example with ExperimentSpec + ExperimentSession."""
+"""Custom metric example with themis.evaluate()."""
 
 from dataclasses import dataclass
 from typing import Any, Sequence
 
+import themis
 from themis.core.entities import MetricScore
-from themis.evaluation import extractors, metrics
-from themis.evaluation.metric_pipeline import MetricPipeline
 from themis.interfaces import Metric
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 
 @dataclass
@@ -40,23 +37,20 @@ DATASET = [
     {"id": "2", "question": "What is 2+2?", "answer": "4"},
 ]
 
-pipeline = MetricPipeline(
-    extractor=extractors.IdentityExtractor(),
-    metrics=[metrics.ExactMatch(), ContainsKeywordMetric(keyword="because")],
+themis.register_metric(
+    "contains_because", lambda: ContainsKeywordMetric(keyword="because")
 )
 
-spec = ExperimentSpec(
-    dataset=DATASET,
-    prompt="Q: {question}\nA:",
+report = themis.evaluate(
+    DATASET,
     model="fake:fake-math-llm",
-    sampling={"temperature": 0.0, "max_tokens": 128},
-    pipeline=pipeline,
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=2),
-    storage=StorageSpec(path=".cache/experiments", cache=False),
+    prompt="Q: {question}\nA:",
+    metrics=["exact_match", "contains_because"],
+    temperature=0.0,
+    max_tokens=128,
+    workers=2,
+    storage=".cache/experiments",
+    resume=False,
 )
 
 for name, aggregate in sorted(report.evaluation_report.metrics.items()):

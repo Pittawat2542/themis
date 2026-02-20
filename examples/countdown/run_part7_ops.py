@@ -5,7 +5,7 @@ import os
 from dataclasses import replace
 from pathlib import Path
 
-from themis.experiment.storage import RetentionPolicy
+from themis.storage import RetentionPolicy
 from themis.storage import ExperimentStorage
 
 from common import (

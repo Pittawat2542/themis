@@ -157,7 +157,7 @@ See the extension guides:
 - Getting started: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
 - Evaluation guide: [docs/guides/evaluation.md](docs/guides/evaluation.md)
 - Comparison guide: [docs/guides/comparison.md](docs/guides/comparison.md)
-- Session/spec reference: [docs/reference/session.md](docs/reference/session.md), [docs/reference/specs.md](docs/reference/specs.md)
+
 - CI/CD and release process: [docs/guides/ci-cd.md](docs/guides/ci-cd.md)
 
 ## Examples

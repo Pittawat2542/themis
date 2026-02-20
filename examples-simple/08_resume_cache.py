@@ -30,5 +30,9 @@ report_resume = evaluate(
 resume_elapsed = time.perf_counter() - start
 
 print("Run ID:", run_id)
-print(f"First run:  {first_elapsed:.3f}s ({len(report_first.generation_results)} samples)")
-print(f"Resume run: {resume_elapsed:.3f}s ({len(report_resume.generation_results)} samples)")
+print(
+    f"First run:  {first_elapsed:.3f}s ({len(report_first.generation_results)} samples)"
+)
+print(
+    f"Resume run: {resume_elapsed:.3f}s ({len(report_resume.generation_results)} samples)"
+)

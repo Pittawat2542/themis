@@ -128,14 +128,14 @@ nav:
       - Interoperability: guides/interoperability.md
       - Providers and Models: guides/providers.md
       - Storage: guides/storage.md
+      - Observability: guides/observability.md
       - CI/CD: guides/ci-cd.md
 
   - Reference:
       - CLI Reference: guides/cli.md
       - Benchmarks: reference/benchmarks.md
       - API Server: reference/api-server.md
-      - Session: reference/session.md
-      - Specs: reference/specs.md
+
       - Python API:
           - Overview: api/overview.md
           - evaluate(): api/evaluate.md
