@@ -69,9 +69,6 @@ class TypedMetric(Protocol[T]):
 
 
 # Common type aliases for better readability
-PredictionType = TypeVar("PredictionType")
-ReferenceType = TypeVar("ReferenceType")
-ExtractionType = TypeVar("ExtractionType")
 
 
 class ValidationError(ValueError):
@@ -132,9 +129,6 @@ __all__ = [
     "T_co",
     "TypedExtractor",
     "TypedMetric",
-    "PredictionType",
-    "ReferenceType",
-    "ExtractionType",
     "ValidationError",
     "validate_type",
     "validate_sequence_type",

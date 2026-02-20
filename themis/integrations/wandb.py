@@ -59,7 +59,6 @@ class WandbTracker:
                 "sample_id",
                 "prompt",
                 "raw_response",
-                "parsed_response",
                 "error",
                 "metric_scores",
             ]
@@ -77,7 +76,6 @@ class WandbTracker:
                 record.task.metadata.get("dataset_id"),
                 record.task.prompt.text,
                 [record.output.text] if record.output else [],
-                eval_record.parsed_response if eval_record else None,
                 record.error.message if record.error else None,
                 {s.metric_name: s.value for s in eval_record.scores}
                 if eval_record

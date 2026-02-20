@@ -31,7 +31,7 @@ class SamplingConfig:
 
 @dataclass
 class GenerationConfig:
-    model_identifier: str = "fake-math-llm"
+    model_identifier: str = ""
     provider: ProviderConfig = field(default_factory=ProviderConfig)
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
     runner: RunnerConfig = field(default_factory=RunnerConfig)
@@ -51,7 +51,7 @@ class DatasetConfig:
 @dataclass
 class StorageConfig:
     path: str | None = None
-    default_path: str | None = None  # New field for default storage path
+    default_path: str | None = None
 
 
 @dataclass

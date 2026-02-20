@@ -1,6 +1,6 @@
 # Observability Guide
 
-Themis provides a comprehensive observability stack designed for both interactive development and production-grade experimentation. This guid covers logging, progress reporting, distributed tracing, and external integrations.
+Themis provides a comprehensive observability stack designed for both interactive development and production-grade experimentation. This guide covers logging, progress reporting, distributed tracing, and external integrations.
 
 ## Architecture
 

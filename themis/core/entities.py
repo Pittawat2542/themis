@@ -24,7 +24,7 @@ class ModelSpec:
     identifier: str
     provider: str
     default_sampling: SamplingConfig | None = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def model_key(self) -> str:
@@ -35,15 +35,15 @@ class ModelSpec:
 class PromptSpec:
     name: str
     template: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class PromptRender:
     spec: PromptSpec
     text: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def prompt_text(self) -> str:
@@ -109,7 +109,7 @@ class ModelOutput:
 class ModelError:
     message: str
     kind: str = "model_error"
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -117,7 +117,7 @@ class GenerationTask:
     prompt: PromptRender
     model: ModelSpec
     sampling: SamplingConfig
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     reference: Reference | None = None
 
 
@@ -126,7 +126,7 @@ class GenerationRecord:
     task: GenerationTask
     output: ModelOutput | None
     error: ModelError | None
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     attempts: List["GenerationRecord"] = field(default_factory=list)
 
 
@@ -140,8 +140,8 @@ class EvaluationItem:
 class MetricScore:
     metric_name: str
     value: float
-    details: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
