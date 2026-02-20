@@ -9,16 +9,16 @@ def test_metadata_includes_all_dataset_fields():
     """Test that all dataset fields are available in metric metadata."""
 
     # Clean registry
-    themis.api._METRICS_REGISTRY.clear()
+    themis.evaluation.metric_resolver._METRICS_REGISTRY.clear()
 
-    # Simple metric that stores what it receives
     class SimpleMetric(Metric):
+        last_metadata = None
+
         def __init__(self):
             self.name = "simple"
-            self.last_metadata = None
 
         def compute(self, *, prediction, references=None, metadata=None):
-            self.last_metadata = metadata
+            SimpleMetric.last_metadata = metadata
             return MetricScore(
                 metric_name=self.name,
                 value=1.0,
@@ -26,8 +26,7 @@ def test_metadata_includes_all_dataset_fields():
                 metadata=metadata or {},
             )
 
-    metric = SimpleMetric()
-    themis.api._METRICS_REGISTRY["simple"] = lambda: metric
+    themis.evaluation.metric_resolver._METRICS_REGISTRY["simple"] = SimpleMetric
 
     # Dataset with various field types
     dataset = [
@@ -51,9 +50,9 @@ def test_metadata_includes_all_dataset_fields():
         metrics=["simple"],
     )
 
-    # Check what the metric received
-    assert metric.last_metadata is not None
-    metadata = metric.last_metadata
+    # All custom fields should be present in metadata
+    assert SimpleMetric.last_metadata is not None
+    metadata = SimpleMetric.last_metadata
 
     # All custom fields should be present
     assert "numbers" in metadata, f"Missing 'numbers' in {metadata.keys()}"
