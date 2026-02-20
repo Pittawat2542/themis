@@ -22,7 +22,9 @@ def test_local_storage_backend_round_trip_records(tmp_path):
     assert len(loaded_generations) == 1
     assert loaded_generations[0].task.metadata["dataset_id"] == "s1"
 
-    evaluation_record = make_evaluation_record(sample_id="s1", metric_name="ExactMatch", value=1.0)
+    evaluation_record = make_evaluation_record(
+        sample_id="s1", metric_name="ExactMatch", value=1.0
+    )
     backend.save_evaluation_record(run_id, generation_record, evaluation_record)
 
     loaded_evaluations = backend.load_evaluation_records(run_id)

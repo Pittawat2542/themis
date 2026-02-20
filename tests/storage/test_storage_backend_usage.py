@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from themis.core import entities as core_entities
-from themis.evaluation import extractors, metrics, pipeline as evaluation_pipeline
-from themis.session import ExperimentSession
-from themis.specs import ExperimentSpec, StorageSpec
+import themis
 
 
 class FakeStorage:
@@ -37,7 +34,9 @@ class FakeStorage:
         self.load_cached_records_calls.append(run_id)
         return {}
 
-    def load_cached_evaluations(self, run_id: str, eval_id: str = "default", evaluation_config=None):
+    def load_cached_evaluations(
+        self, run_id: str, eval_id: str = "default", evaluation_config=None
+    ):
         self.load_cached_evaluations_calls.append(
             {
                 "run_id": run_id,
@@ -56,7 +55,14 @@ class FakeStorage:
             }
         )
 
-    def append_evaluation(self, run_id: str, record, evaluation, eval_id: str = "default", evaluation_config=None):
+    def append_evaluation(
+        self,
+        run_id: str,
+        record,
+        evaluation,
+        eval_id: str = "default",
+        evaluation_config=None,
+    ):
         self.append_evaluation_calls.append(
             {
                 "run_id": run_id,
@@ -70,37 +76,30 @@ class FakeStorage:
         return None
 
 
-def test_session_uses_storage_backend(tmp_path, monkeypatch):
+def test_evaluate_uses_storage_backend(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
-    pipeline = evaluation_pipeline.EvaluationPipeline(
-        extractor=extractors.IdentityExtractor(),
-        metrics=[metrics.ResponseLength()],
-    )
-
-    spec = ExperimentSpec(
-        dataset=[{"id": "1", "question": "2+2", "answer": "4"}],
-        prompt="Solve: {question}",
-        model="fake:fake-math-llm",
-        sampling={"temperature": 0.0},
-        pipeline=pipeline,
-        run_id="session-storage-test",
-    )
-
     backend = FakeStorage()
-    session = ExperimentSession()
 
-    session.run(spec, storage=StorageSpec(backend=backend))
+    themis.evaluate(
+        [{"id": "1", "question": "2+2", "answer": "4"}],
+        model="fake:fake-math-llm",
+        prompt="Solve: {question}",
+        metrics=["response_length"],
+        temperature=0.0,
+        run_id="storage-test",
+        storage_backend=backend,
+    )
 
     assert backend.start_called is True
     assert backend.cached_dataset_calls == [
-        {"run_id": "session-storage-test", "sample_count": 1}
+        {"run_id": "storage-test", "sample_count": 1}
     ]
     assert len(backend.append_record_calls) == 1
     assert backend.append_record_calls[0]["sample_id"] == "1"
     assert len(backend.append_evaluation_calls) == 1
     assert backend.append_evaluation_calls[0]["sample_id"] == "1"
-    assert backend.load_cached_records_calls == ["session-storage-test"]
+    assert backend.load_cached_records_calls == ["storage-test"]
     assert len(backend.load_cached_evaluations_calls) == 1
-    assert backend.load_cached_evaluations_calls[0]["run_id"] == "session-storage-test"
+    assert backend.load_cached_evaluations_calls[0]["run_id"] == "storage-test"
     assert Path("None").exists() is False

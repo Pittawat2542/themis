@@ -2,12 +2,11 @@
 
 import gzip
 import json
-from pathlib import Path
 
 import pytest
 
 from themis.core import entities as core_entities
-from themis.experiment.storage import (
+from themis.storage import (
     STORAGE_FORMAT_VERSION,
     ExperimentStorage,
     StorageConfig,
@@ -49,7 +48,10 @@ def sample_record(sample_task):
         task=sample_task,
         output=core_entities.ModelOutput(
             text="The answer is 4",
-            raw={"id": "test", "choices": [{"message": {"content": "The answer is 4"}}]},
+            raw={
+                "id": "test",
+                "choices": [{"message": {"content": "The answer is 4"}}],
+            },
         ),
         error=None,
         metrics={"cost_usd": 0.001},
@@ -83,7 +85,7 @@ def test_storage_with_compression(tmp_path, sample_record):
     config = StorageConfig(compression="gzip")
     storage = ExperimentStorage(tmp_path, config=config)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 
@@ -110,7 +112,7 @@ def test_storage_without_compression(tmp_path, sample_record):
     config = StorageConfig(compression="none")
     storage = ExperimentStorage(tmp_path, config=config)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 
@@ -131,7 +133,7 @@ def test_storage_without_raw_responses(tmp_path, sample_record):
     config = StorageConfig(save_raw_responses=False)
     storage = ExperimentStorage(tmp_path, config=config)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 
@@ -149,7 +151,7 @@ def test_storage_with_raw_responses(tmp_path, sample_record):
     config = StorageConfig(save_raw_responses=True)
     storage = ExperimentStorage(tmp_path, config=config)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 
@@ -168,7 +170,7 @@ def test_template_deduplication(tmp_path, sample_task):
     config = StorageConfig(deduplicate_templates=True)
     storage = ExperimentStorage(tmp_path, config=config)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 
@@ -221,7 +223,7 @@ def test_no_template_deduplication(tmp_path, sample_task):
     """Test storage without template deduplication."""
     config = StorageConfig(deduplicate_templates=False)
     storage = ExperimentStorage(tmp_path, config=config)
-    
+
     # Initialize run first
     storage.start_run("test-run", "test-exp", config={})
     run_id = "test-run"
@@ -246,7 +248,7 @@ def test_format_versioning(tmp_path, sample_record):
     """Test that format version is written to files."""
     storage = ExperimentStorage(tmp_path)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 
@@ -285,7 +287,7 @@ def test_dataset_saving_enabled(tmp_path):
     config = StorageConfig(save_dataset=True)
     storage = ExperimentStorage(tmp_path, config=config)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 
@@ -313,7 +315,7 @@ def test_round_trip_with_all_optimizations(tmp_path, sample_task):
     )
     storage = ExperimentStorage(tmp_path, config=config)
     run_id = "test-run"
-    
+
     # Initialize run first
     storage.start_run(run_id, "test-exp", config={})
 

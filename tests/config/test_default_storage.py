@@ -14,7 +14,7 @@ def test_default_storage_path_used_when_path_is_none():
 
         config = ExperimentConfig(
             task="math500",
-            storage=StorageConfig(path=None, default_path=str(default_path))
+            storage=StorageConfig(path=None, default_path=str(default_path)),
         )
 
         # This should not raise an exception
@@ -36,7 +36,7 @@ def test_specific_path_takes_precedence_over_default():
             task="math500",
             storage=StorageConfig(
                 path=str(specific_path), default_path=str(default_path)
-            )
+            ),
         )
 
         # This should not raise an exception
@@ -50,7 +50,9 @@ def test_specific_path_takes_precedence_over_default():
 
 def test_no_storage_when_both_paths_are_none():
     """Test that no storage is created when both path and default_path are None."""
-    config = ExperimentConfig(task="math500", storage=StorageConfig(path=None, default_path=None))
+    config = ExperimentConfig(
+        task="math500", storage=StorageConfig(path=None, default_path=None)
+    )
 
     # This should not raise an exception
     experiment = _build_experiment(config)

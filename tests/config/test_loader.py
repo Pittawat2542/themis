@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from themis.config import loader
 
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from themis.core.entities import EvaluationRecord, GenerationRecord
-from themis.experiment import storage as experiment_storage
+from themis import storage as experiment_storage
 
 
 class CacheManager:

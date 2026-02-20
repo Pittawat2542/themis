@@ -6,9 +6,10 @@ import hashlib
 import json
 import platform
 import subprocess
+from collections.abc import Mapping
 from importlib import metadata as importlib_metadata
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 MANIFEST_SCHEMA_VERSION = "1"
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from themis.backends.storage import LocalFileStorageBackend
-from themis.experiment.storage import ExperimentStorage
+from themis.storage import ExperimentStorage
 from tests.factories import make_evaluation_record, make_record
 
 
@@ -26,10 +26,12 @@ def _experiment_storage_adapter(root: Path) -> _StorageAdapter:
 
     return _StorageAdapter(
         start_run=lambda run_id: storage.start_run(run_id, "exp-contract", config={}),
-        append_generation_record=lambda run_id, record: storage.append_record(run_id, record),
-        append_evaluation_record=lambda run_id, record, evaluation: storage.append_evaluation(
-            run_id, record, evaluation
+        append_generation_record=lambda run_id, record: storage.append_record(
+            run_id, record
         ),
+        append_evaluation_record=lambda run_id,
+        record,
+        evaluation: storage.append_evaluation(run_id, record, evaluation),
         complete_run=lambda run_id: storage.complete_run(run_id),
         fail_run=lambda run_id, error: storage.fail_run(run_id, error),
         run_exists=lambda run_id: storage.run_metadata_exists(run_id),
@@ -41,11 +43,14 @@ def _local_backend_adapter(root: Path) -> _StorageAdapter:
     backend = LocalFileStorageBackend(root)
 
     return _StorageAdapter(
-        start_run=lambda run_id: backend.start_run(run_id, experiment_id="exp-contract", config={}),
-        append_generation_record=lambda run_id, record: backend.append_generation_record(run_id, record),
-        append_evaluation_record=lambda run_id, record, evaluation: backend.append_evaluation_record(
-            run_id, record, evaluation
+        start_run=lambda run_id: backend.start_run(
+            run_id, experiment_id="exp-contract", config={}
         ),
+        append_generation_record=lambda run_id,
+        record: backend.append_generation_record(run_id, record),
+        append_evaluation_record=lambda run_id,
+        record,
+        evaluation: backend.append_evaluation_record(run_id, record, evaluation),
         complete_run=lambda run_id: backend.complete_run(run_id),
         fail_run=lambda run_id, error: backend.fail_run(run_id, error),
         run_exists=lambda run_id: backend.run_exists(run_id),
