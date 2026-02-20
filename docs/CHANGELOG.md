@@ -4,6 +4,10 @@ Canonical release history lives in the repository root at [`CHANGELOG.md`](https
 
 ## Current Release
 
+- Version: `1.2.0`
+- [Release Notes 1.2.0](releases/1.2.0.md)
+
+## Previous Releases
 - Version: `1.1.1.post1`
 - Date: `2026-02-06`
 - Highlights:

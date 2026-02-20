@@ -72,10 +72,10 @@ flowchart LR
 
 ## Release Spotlight
 
-!!! success "Themis 1.1.1.post1"
-    Post-release hardening: execution-metric coverage fixes, pre-commit Ruff guardrails, and CI-gated release publishing.
+!!! success "Themis 1.2.0"
+    Massive architectural cleanup: removed obsolete `MetricPipeline` and `FlexibleGenerationPlan`, unified entries into `themis.evaluate()`, stripped deprecations, and hardened `examples/`.
 
-    [Read the full 1.1.1.post1 notes](releases/1.1.1.post1.md)
+    [Read the full 1.2.0 notes](releases/1.2.0.md)
 
 ## Documentation Map
 
@@ -87,8 +87,8 @@ flowchart LR
 
 ## Runnable Examples
 
-- [examples-simple/01_quickstart.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/01_quickstart.py)
-- [examples-simple/02_custom_dataset.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/02_custom_dataset.py)
-- [examples-simple/04_comparison.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/04_comparison.py)
-- [examples-simple/08_resume_cache.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/08_resume_cache.py)
-- [examples-simple/09_research_loop.py](https://github.com/Pittawat2542/themis/blob/main/examples-simple/09_research_loop.py)
+- [examples/01_quickstart.py](https://github.com/Pittawat2542/themis/blob/main/examples/01_quickstart.py)
+- [examples/02_custom_dataset.py](https://github.com/Pittawat2542/themis/blob/main/examples/02_custom_dataset.py)
+- [examples/04_comparison.py](https://github.com/Pittawat2542/themis/blob/main/examples/04_comparison.py)
+- [examples/08_resume_cache.py](https://github.com/Pittawat2542/themis/blob/main/examples/08_resume_cache.py)
+- [examples/09_research_loop.py](https://github.com/Pittawat2542/themis/blob/main/examples/09_research_loop.py)

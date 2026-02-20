@@ -5,14 +5,18 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.1.post1] - 2026-02-06
+## [1.2.0] - 2026-02-20
+
+### Added
+- Completed rigorous architectural cleanup, removing defunct internal classes (`MetricPipeline`, `FlexibleGenerationPlan`).
+- Extracted metrics resolution from the core API gateway into `themis/evaluation/metric_resolver.py`.
+- Finalized migration to `themis.evaluate()` as the single true orchestrator entry point.
+- Hardened all built-in examples into a unified directory structure, deleting obsolete `examples-simple/`.
+- Purged legacy backward-compatibility shims across datasets, configuration structs, cache key generation, and cost tracking.
 
 ### Fixed
 - Stabilized code-execution metric error reporting so memory-limit failures emit non-empty per-case error messages.
 - Raised `themis/evaluation/metrics/code/execution.py` module coverage above gate threshold with targeted worker-path tests.
-
-### Added
-- Added a repository pre-commit hook (`.githooks/pre-commit`) plus staged-file Ruff guard script to catch format/lint regressions before commit.
 
 ### Changed
 - Updated release automation so GitHub release creation and PyPI publishing now require a successful `CI` workflow for the exact release commit SHA.
