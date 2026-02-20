@@ -44,7 +44,7 @@
 
 ```mermaid
 flowchart LR
-    A["Benchmark / Dataset"] --> B["themis.evaluate(...) or ExperimentSession.run(...)"]
+    A["Benchmark / Dataset"] --> B["themis.evaluate(...)"]
     B --> C["Generation + Evaluation"]
     C --> D["ExperimentStorage"]
     D --> E["compare_runs(...) / Export / API Server"]

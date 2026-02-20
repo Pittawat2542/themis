@@ -122,7 +122,7 @@ print("ok")
 PY
 ```
 
-If either check fails, use `demo`/`examples-simple` workflows first and treat
+If either check fails, use `demo`/`examples` workflows first and treat
 Countdown Parts 1-8 as optional until your environment is ready.
 
 ## End-to-End Script
@@ -485,15 +485,14 @@ Concept focus: explicit experiment specs, resumability, and run comparison.
 
 ```mermaid
 flowchart LR
-    A["ExperimentSpec"] --> B["ExperimentSession.run(...)"]
-    B --> C["Run A (baseline prompt)"]
-    B --> D["Run B (variant prompt)"]
-    C --> E["compare_runs(...)"]
-    D --> E
-    E --> F["Delta + significance"]
+    A["evaluate(..., run_id='baseline')"] --> B["Run A (baseline prompt)"]
+    A --> C["Run B (variant prompt)"]
+    B --> D["compare_runs(...)"]
+    C --> D
+    D --> E["Delta + significance"]
 ```
 
-### 1) Run Countdown via `ExperimentSession`
+### 1) Run Countdown Baseline and Variant via `evaluate()`
 
 Assume Part 1 definitions are already available in your runtime:
 
@@ -505,8 +504,6 @@ Assume Part 1 definitions are already available in your runtime:
 import themis
 from themis.evaluation.extractors import IdentityExtractor
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 themis.register_provider("localchat", LocalChatProvider)
 
@@ -516,10 +513,8 @@ pipeline = EvaluationPipeline(
     metrics=[CountdownValidity()],
 )
 
-session = ExperimentSession()
-
-baseline_spec = ExperimentSpec(
-    dataset=dataset,
+baseline_report = themis.evaluate(
+    dataset,
     prompt=(
         "Solve this Countdown puzzle.\n"
         "Numbers: {numbers_str}\n"
@@ -528,16 +523,14 @@ baseline_spec = ExperimentSpec(
     ),
     model="localchat:qwen/qwen3-1.7b",
     provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
-    pipeline=pipeline,
-    run_id="countdown-baseline-spec",
+    evaluation_pipeline=pipeline,
+    run_id="countdown-baseline",
     dataset_id_field="id",
     reference_field="reference",
-)
-
-baseline_report = session.run(
-    baseline_spec,
-    execution=ExecutionSpec(workers=1, max_retries=3),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+    workers=1,
+    max_retries=3,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 
 print(baseline_report.evaluation_report.metrics["CountdownValidity"].mean)
@@ -551,18 +544,44 @@ Run the same spec/run-id twice and compare elapsed time.
 import time
 
 start = time.perf_counter()
-_ = session.run(
-    baseline_spec,
-    execution=ExecutionSpec(workers=1),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+_ = themis.evaluate(
+    dataset,
+    prompt=(
+        "Solve this Countdown puzzle.\n"
+        "Numbers: {numbers_str}\n"
+        "Target: {target}\n"
+        "Return only one valid arithmetic expression using +, -, *, /."
+    ),
+    model="localchat:qwen/qwen3-1.7b",
+    provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
+    evaluation_pipeline=pipeline,
+    run_id="countdown-baseline",
+    dataset_id_field="id",
+    reference_field="reference",
+    workers=1,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 first_elapsed = time.perf_counter() - start
 
 start = time.perf_counter()
-_ = session.run(
-    baseline_spec,  # same run_id
-    execution=ExecutionSpec(workers=1),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+_ = themis.evaluate(
+    dataset,
+    prompt=(
+        "Solve this Countdown puzzle.\n"
+        "Numbers: {numbers_str}\n"
+        "Target: {target}\n"
+        "Return only one valid arithmetic expression using +, -, *, /."
+    ),
+    model="localchat:qwen/qwen3-1.7b",
+    provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
+    evaluation_pipeline=pipeline,
+    run_id="countdown-baseline",  # same run_id → resume
+    dataset_id_field="id",
+    reference_field="reference",
+    workers=1,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 second_elapsed = time.perf_counter() - start
 
@@ -577,12 +596,11 @@ Expected outcome:
 ### 3) Create a Prompt Variant and Compare Runs
 
 ```python
-from dataclasses import replace
 from themis.comparison import compare_runs
 from themis.comparison.statistics import StatisticalTest
 
-variant_spec = replace(
-    baseline_spec,
+_ = themis.evaluate(
+    dataset,
     prompt=(
         "You are solving Countdown.\n"
         "Numbers: {numbers_str}\n"
@@ -591,17 +609,20 @@ variant_spec = replace(
         "must be positive integers.\n"
         "Output ONLY a single arithmetic expression."
     ),
-    run_id="countdown-variant-spec",
-)
-
-_ = session.run(
-    variant_spec,
-    execution=ExecutionSpec(workers=1, max_retries=3),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+    model="localchat:qwen/qwen3-1.7b",
+    provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
+    evaluation_pipeline=pipeline,
+    run_id="countdown-variant",
+    dataset_id_field="id",
+    reference_field="reference",
+    workers=1,
+    max_retries=3,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 
 comparison = compare_runs(
-    run_ids=["countdown-baseline-spec", "countdown-variant-spec"],
+    run_ids=["countdown-baseline", "countdown-variant"],
     storage_path=".cache/experiments",
     metrics=["CountdownValidity"],
     statistical_test=StatisticalTest.BOOTSTRAP,
@@ -624,9 +645,7 @@ for row in comparison.pairwise_results:
 
 ### 4) What This Adds Beyond Part 1
 
-- explicit specs (`ExperimentSpec`, `ExecutionSpec`, `StorageSpec`)
-- reusable session-level orchestration (`ExperimentSession`)
-- reproducible cache behavior with stable `run_id`
+- explicit `run_id` naming for reproducible cache behavior
 - run-to-run statistical comparison on the custom metric
 
 ### Learn More
@@ -848,16 +867,12 @@ pipeline = EvaluationPipeline(
 
 ### 2) Enable Multi-Sample + Attempt-Aware Scoring
 
-Set `num_samples > 1` in `ExperimentSpec` and switch evaluation strategy to
+Set `num_samples > 1` via `evaluate()` and switch evaluation strategy to
 `AttemptAwareEvaluationStrategy`.
 
 ```python
-from dataclasses import replace
-
 from themis.evaluation import strategies
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 attempt_pipeline = EvaluationPipeline(
     extractor=CountdownExpressionExtractor(),
@@ -867,8 +882,8 @@ attempt_pipeline = EvaluationPipeline(
     ),
 )
 
-attempt_spec = ExperimentSpec(
-    dataset=load_countdown_for_themis(limit=20),
+attempt_report = themis.evaluate(
+    load_countdown_for_themis(limit=20),
     prompt=(
         "Solve this Countdown puzzle.\n"
         "Numbers: {numbers_str}\n"
@@ -877,17 +892,15 @@ attempt_spec = ExperimentSpec(
     ),
     model="localchat:qwen/qwen3-1.7b",
     provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
-    pipeline=attempt_pipeline,
+    evaluation_pipeline=attempt_pipeline,
     run_id="countdown-attempt-aware",
-    num_samples=3,  # generates 3 attempts per sample
+    num_samples=3,
     dataset_id_field="id",
     reference_field="reference",
-)
-
-attempt_report = ExperimentSession().run(
-    attempt_spec,
-    execution=ExecutionSpec(workers=1, max_retries=3),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+    workers=1,
+    max_retries=3,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 
 print(attempt_report.evaluation_report.metrics["CountdownValidity"].mean)
@@ -910,7 +923,7 @@ themis list runs --storage .cache/experiments --verbose
 themis list benchmarks
 
 # Compare two run IDs produced in this tutorial
-themis compare countdown-baseline-spec countdown-variant-spec --storage .cache/experiments
+themis compare countdown-baseline countdown-variant --storage .cache/experiments
 
 # Generate share artifacts for a run
 themis share countdown-part3-benchmark-run --storage .cache/experiments
@@ -965,8 +978,6 @@ Example candidate run script (`examples/countdown/run_countdown_candidate.py`):
 ```python
 from themis.evaluation.extractors import IdentityExtractor
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 # assumes LocalChatProvider, CountdownValidity, load_countdown_for_themis are defined
 import themis
@@ -975,8 +986,8 @@ themis.register_provider("localchat", LocalChatProvider)
 dataset = load_countdown_for_themis(limit=50, split="train")
 pipeline = EvaluationPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
 
-spec = ExperimentSpec(
-    dataset=dataset,
+report = themis.evaluate(
+    dataset,
     prompt=(
         "You are solving Countdown.\n"
         "Numbers: {numbers_str}\n"
@@ -986,19 +997,18 @@ spec = ExperimentSpec(
     model="localchat:qwen/qwen3-1.7b",
     provider_options={
         "api_base": "http://localhost:1234/api/v1/chat",
-        "seed": 42,  # effective only if provider honors it
+        "seed": 42,
     },
-    sampling={"temperature": 0.0, "top_p": 1.0, "max_tokens": 128},
-    pipeline=pipeline,
+    temperature=0.0,
+    max_tokens=128,
+    evaluation_pipeline=pipeline,
     run_id="countdown-candidate-v1",
     dataset_id_field="id",
     reference_field="reference",
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=1, max_retries=3),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+    workers=1,
+    max_retries=3,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 
 print(report.evaluation_report.metrics["CountdownValidity"].mean)
@@ -1164,9 +1174,9 @@ Concept focus: architecture boundaries between execution, storage, and reporting
 
 ```mermaid
 flowchart LR
-    A["Countdown ExperimentSpec"] --> B["ExecutionBackend (parallel/sequential/custom)"]
+    A["Countdown evaluate()"] --> B["ExecutionBackend (parallel/sequential/custom)"]
     A --> C["Storage backend adapter"]
-    B --> D["ExperimentSession.run(...)"]
+    B --> D["ExperimentOrchestrator"]
     C --> D
     D --> E["ExperimentReport"]
     E --> F["Export bundle (JSON/CSV/HTML)"]
@@ -1188,8 +1198,6 @@ from themis.backends.execution import LocalExecutionBackend
 from themis.backends.storage import LocalFileStorageBackend
 from themis.evaluation.extractors import IdentityExtractor
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 themis.register_provider("localchat", LocalChatProvider)
 
@@ -1199,8 +1207,8 @@ pipeline = EvaluationPipeline(extractor=IdentityExtractor(), metrics=[CountdownV
 execution_backend = LocalExecutionBackend(max_workers=2)
 storage_backend = LocalFileStorageBackend(".cache/experiments")
 
-spec = ExperimentSpec(
-    dataset=dataset,
+report = themis.evaluate(
+    dataset,
     prompt=(
         "Solve this Countdown puzzle.\n"
         "Numbers: {numbers_str}\n"
@@ -1209,16 +1217,15 @@ spec = ExperimentSpec(
     ),
     model="localchat:qwen/qwen3-1.7b",
     provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
-    pipeline=pipeline,
+    evaluation_pipeline=pipeline,
     run_id="countdown-part6-backends",
     dataset_id_field="id",
     reference_field="reference",
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(backend=execution_backend, workers=2, max_retries=3),
-    storage=StorageSpec(backend=storage_backend, cache=True),
+    execution_backend=execution_backend,
+    storage_backend=storage_backend,
+    workers=2,
+    max_retries=3,
+    resume=True,
 )
 
 print(report.evaluation_report.metrics["CountdownValidity"].mean)
@@ -1344,7 +1351,7 @@ Concept focus: operating experiments reliably at larger scale.
 
 ```mermaid
 flowchart TD
-    A["ExperimentSession.run(..., on_result=...)"] --> B["events.jsonl telemetry"]
+    A["evaluate(..., on_result=...)"] --> B["events.jsonl telemetry"]
     A --> C["ExperimentReport (bounded retention)"]
     C --> D["ExperimentStorage.list_runs()"]
     D --> E["validate_integrity(run_id)"]
@@ -1363,8 +1370,6 @@ from pathlib import Path
 import themis
 from themis.evaluation.extractors import IdentityExtractor
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 # assumes LocalChatProvider, CountdownValidity, load_countdown_for_themis are defined
 themis.register_provider("localchat", LocalChatProvider)
@@ -1390,8 +1395,8 @@ pipeline = EvaluationPipeline(
     metrics=[CountdownValidity()],
 )
 
-spec = ExperimentSpec(
-    dataset=load_countdown_for_themis(limit=40, split="train"),
+report = themis.evaluate(
+    load_countdown_for_themis(limit=40, split="train"),
     prompt=(
         "Solve this Countdown puzzle.\n"
         "Numbers: {numbers_str}\n"
@@ -1400,18 +1405,16 @@ spec = ExperimentSpec(
     ),
     model="localchat:qwen/qwen3-1.7b",
     provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
-    pipeline=pipeline,
+    evaluation_pipeline=pipeline,
     run_id="countdown-part7-ops",
     dataset_id_field="id",
     reference_field="reference",
-    max_records_in_memory=20,  # keep memory bounded for large runs
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=1, max_retries=2),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+    max_records_in_memory=20,
     on_result=on_result,
+    workers=1,
+    max_retries=2,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 
 print("retained_generation_records", len(report.generation_results))
@@ -1560,20 +1563,15 @@ flowchart LR
 Use multiple runs per prompt variant so you can measure stability.
 
 ```python
-from dataclasses import replace
-
 import themis
 from themis.evaluation.extractors import IdentityExtractor
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 # assumes LocalChatProvider, CountdownValidity, load_countdown_for_themis are defined
 themis.register_provider("localchat", LocalChatProvider)
 
 dataset = load_countdown_for_themis(limit=40, split="train")
 pipeline = EvaluationPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
-session = ExperimentSession()
 
 baseline_prompt = (
     "Solve this Countdown puzzle.\n"
@@ -1590,28 +1588,21 @@ candidate_prompt = (
     "Output ONLY one arithmetic expression."
 )
 
-base_spec = ExperimentSpec(
-    dataset=dataset,
-    prompt=baseline_prompt,
+common_kwargs = dict(
     model="localchat:qwen/qwen3-1.7b",
     provider_options={"api_base": "http://localhost:1234/api/v1/chat"},
-    pipeline=pipeline,
-    run_id="countdown-part8-baseline-r1",
+    evaluation_pipeline=pipeline,
     dataset_id_field="id",
     reference_field="reference",
+    workers=1,
+    max_retries=2,
+    storage_path=".cache/experiments",
+    resume=True,
 )
 
 for i in range(1, 4):
-    session.run(
-        replace(base_spec, run_id=f"countdown-part8-baseline-r{i}"),
-        execution=ExecutionSpec(workers=1, max_retries=2),
-        storage=StorageSpec(path=".cache/experiments", cache=True),
-    )
-    session.run(
-        replace(base_spec, prompt=candidate_prompt, run_id=f"countdown-part8-candidate-r{i}"),
-        execution=ExecutionSpec(workers=1, max_retries=2),
-        storage=StorageSpec(path=".cache/experiments", cache=True),
-    )
+    themis.evaluate(dataset, prompt=baseline_prompt,  run_id=f"countdown-part8-baseline-r{i}",  **common_kwargs)
+    themis.evaluate(dataset, prompt=candidate_prompt, run_id=f"countdown-part8-candidate-r{i}", **common_kwargs)
 ```
 
 ### 2) Compare with Corrected Hypothesis Tests

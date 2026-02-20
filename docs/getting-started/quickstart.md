@@ -10,7 +10,7 @@ exact_match = report.evaluation_report.metrics["ExactMatch"].mean
 print(f"ExactMatch: {exact_match:.2%}")
 ```
 
-## 2) Run a Hosted Benchmark (Optional)
+## 2) Run a Hosted Benchmark
 
 ```python
 from themis import evaluate
@@ -20,29 +20,20 @@ accuracy = report.evaluation_report.metrics["ExactMatch"].mean
 print(f"Accuracy: {accuracy:.2%}")
 ```
 
-## 3) Use Specs + Session
+## 3) Use the Full `evaluate()` API
 
 ```python
-from themis.evaluation.pipeline import EvaluationPipeline
-from themis.presets import get_benchmark_preset
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
+from themis import evaluate
 
-preset = get_benchmark_preset("demo")
-pipeline = EvaluationPipeline(extractor=preset.extractor, metrics=preset.metrics)
-
-spec = ExperimentSpec(
-    dataset=preset.load_dataset(limit=5),
-    prompt=preset.prompt_template.template,
-    model="fake:fake-math-llm",
-    sampling={"temperature": 0.0, "max_tokens": 128},
-    pipeline=pipeline,
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=2),
-    storage=StorageSpec(path=".cache/experiments"),
+report = evaluate(
+    "demo",
+    model="fake-math-llm",
+    limit=5,
+    temperature=0.0,
+    max_tokens=128,
+    workers=2,
+    run_id="my-run",
+    storage_path=".cache/experiments",
 )
 ```
 
@@ -56,9 +47,9 @@ uv run python -m themis.cli compare run-a run-b
 
 ## 5) Explore Examples
 
-- `examples-simple/01_quickstart.py`
-- `examples-simple/02_custom_dataset.py`
-- `examples-simple/04_comparison.py`
-- `examples-simple/07_provider_ready.py`
-- `examples-simple/08_resume_cache.py`
-- `examples-simple/09_research_loop.py`
+- `examples/01_quickstart.py`
+- `examples/02_custom_dataset.py`
+- `examples/04_comparison.py`
+- `examples/07_provider_ready.py`
+- `examples/08_resume_cache.py`
+- `examples/09_research_loop.py`

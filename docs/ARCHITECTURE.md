@@ -1,21 +1,19 @@
 # Architecture Overview
 
-Themis has two public evaluation surfaces built on the same orchestration core:
+Themis has a single public evaluation surface built on a layered orchestration core:
 
-- `themis.evaluate(...)`: high-level API for benchmark and dataset workflows.
-- `ExperimentSession().run(spec, ...)`: explicit spec/session API for advanced control.
+- `themis.evaluate(...)`: high-level API for all benchmark and dataset workflows.
 
 ## Layered Design
 
 ```mermaid
 flowchart TD
-    A["themis.evaluate(...) / CLI commands"] --> B["ExperimentSession.run(...)"]
-    B --> C["ExperimentSpec / ExecutionSpec / StorageSpec"]
-    C --> D["GenerationPlan"]
-    D --> E["GenerationRunner"]
-    E --> F["EvaluationPipelineContract"]
-    F --> G["ExperimentStorage"]
-    G --> H["comparison / server / export"]
+    A["themis.evaluate(...) / CLI commands"] --> B["ExperimentOrchestrator"]
+    B --> C["GenerationPlan"]
+    C --> D["GenerationRunner"]
+    D --> E["EvaluationPipeline"]
+    E --> F["ExperimentStorage"]
+    F --> G["comparison / server / export"]
 ```
 
 ## Run Lifecycle
@@ -23,14 +21,14 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant U as "User Code"
-    participant S as "ExperimentSession"
+    participant A as "themis.evaluate()"
     participant O as "ExperimentOrchestrator"
     participant R as "GenerationRunner"
     participant P as "EvaluationPipeline"
     participant T as "ExperimentStorage"
 
-    U->>S: "run(spec, execution, storage)"
-    S->>O: "build plan + runner + cache manager"
+    U->>A: "evaluate(benchmark, model=..., run_id=...)"
+    A->>O: "build plan + runner + cache manager"
     O->>T: "start_run(run_id)"
     O->>R: "generate(records)"
     R-->>O: "GenerationRecord*"
@@ -38,21 +36,19 @@ sequenceDiagram
     P-->>O: "EvaluationReport"
     O->>T: "append record/evaluation"
     O->>T: "complete_run(run_id)"
-    O-->>S: "ExperimentReport"
-    S-->>U: "ExperimentReport"
+    O-->>A: "ExperimentReport"
+    A-->>U: "ExperimentReport"
 ```
 
 ## Primary Components
 
 ### Public API Layer
-- `themis.api.evaluate`: convenience wrapper that resolves presets, metrics, and defaults.
-- `themis.session.ExperimentSession`: explicit orchestrator entrypoint.
+- `themis.api.evaluate`: resolves presets, metrics, storage and runs the orchestrator.
 - `themis.cli.main`: `demo`, `eval`, `compare`, `share`, `serve`, `list`, `clean`.
 
-### Spec Layer
-- `themis.specs.ExperimentSpec`: dataset, prompt, model, sampling, pipeline, run id.
-- `themis.specs.ExecutionSpec`: worker/retry policy and optional execution backend.
-- `themis.specs.StorageSpec`: storage path/backend and caching toggle.
+### Orchestration Layer
+- `themis.experiment.orchestrator.ExperimentOrchestrator`: drives the generation + evaluation loop.
+- `themis.experiment.cache_manager.CacheManager`: handles run caching and resumption.
 
 ### Generation + Evaluation Layer
 - `themis.generation.GenerationPlan`: expands dataset into tasks.

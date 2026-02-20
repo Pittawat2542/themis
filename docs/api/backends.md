@@ -27,22 +27,22 @@ report = evaluate(
 - `themis.backends.execution.LocalExecutionBackend`
 - `themis.backends.execution.SequentialExecutionBackend`
 
-Example with specs:
+Example with `evaluate()`:
 
 ```python
+from themis import evaluate
 from themis.backends.execution import LocalExecutionBackend
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec
 
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(backend=LocalExecutionBackend(max_workers=8), workers=8),
+report = evaluate(
+    "demo",
+    model="fake-math-llm",
+    execution_backend=LocalExecutionBackend(max_workers=8),
+    workers=8,
 )
 ```
 
 ## Notes
 
-- `evaluate()` and `ExperimentSession` currently require storage backends that are
-  ExperimentStorage-compatible.
+- `evaluate()` accepts both `storage_backend` and `execution_backend` directly.
 - Custom backend interfaces are stable, but full custom storage integration into
   the high-level API is still evolving.

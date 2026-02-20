@@ -8,10 +8,10 @@ Themis is built on a layered architecture:
 
 ```mermaid
 flowchart TD
-    A["themis.evaluate(...)"] --> B["ExperimentSession.run(...)"]
-    B --> C["ExperimentSpec"]
-    C --> D["Generation + Evaluation pipeline"]
-    B --> E["StorageSpec + ExperimentStorage"]
+    A["themis.evaluate(...)"] --> B["ExperimentOrchestrator"]
+    B --> C["GenerationPlan + EvaluationPipeline"]
+    C --> D["Generation + Evaluation loop"]
+    B --> E["ExperimentStorage (optional)"]
     D --> E
 ```
 
@@ -119,7 +119,7 @@ report2 = evaluate(
 )
 ```
 
-Under the hood, caching uses `ExperimentStorage` and `StorageSpec`.
+Under the hood, caching uses `ExperimentStorage` with a configurable path.
 
 ### 5. Comparison
 
@@ -154,32 +154,26 @@ evaluate("gsm8k", model="azure/gpt-4")
 For all provider keys, model string formats, and connection recipes, see
 [Providers and Model Connectivity](../guides/providers.md).
 
-### 7. Specs & Sessions
+### 7. Custom Pipelines
 
-For advanced control, use explicit specs:
+For advanced control you can build a custom `EvaluationPipeline` and pass it
+directly to `evaluate()`:
 
 ```python
+from themis import evaluate
 from themis.evaluation.pipeline import EvaluationPipeline
 from themis.evaluation import extractors, metrics
-from themis.session import ExperimentSession
-from themis.specs import ExperimentSpec, ExecutionSpec, StorageSpec
 
 pipeline = EvaluationPipeline(
     extractor=extractors.IdentityExtractor(),
     metrics=[metrics.ResponseLength()],
 )
 
-spec = ExperimentSpec(
-    dataset=[{"id": "1", "question": "2+2", "answer": "4"}],
-    prompt="Solve: {question}",
-    model="fake:fake-math-llm",
-    sampling={"temperature": 0.0, "max_tokens": 128},
-    pipeline=pipeline,
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=2),
-    storage=StorageSpec(path=".cache/experiments"),
+report = evaluate(
+    "demo",
+    model="fake-math-llm",
+    evaluation_pipeline=pipeline,
+    workers=2,
+    storage_path=".cache/experiments",
 )
 ```

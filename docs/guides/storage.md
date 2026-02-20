@@ -27,15 +27,6 @@ report = evaluate(
 )
 ```
 
-### Spec API
-
-```python
-report = ExperimentSession().run(
-    spec,
-    storage=StorageSpec(path=".cache/experiments", cache=True),
-)
-```
-
 ### CLI
 
 ```bash

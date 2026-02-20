@@ -19,9 +19,8 @@ Themis registers these provider keys:
 
 ## Model Routing Rules
 
-- `evaluate(...)` can auto-detect many hosted models and route to `litellm`.
-- `ExperimentSpec.model` supports explicit routing with `"provider:model_id"`.
-- For reproducibility, prefer explicit `"provider:model_id"` in specs.
+- `evaluate(...)` auto-detects many hosted models and routes to `litellm`.
+- For reproducibility prefer explicit `"provider:model_id"` format.
 
 ## Provider Matrix
 
@@ -35,9 +34,7 @@ Themis registers these provider keys:
 | `bedrock` | `LiteLLMProvider` | `bedrock:bedrock/anthropic.claude-3-sonnet-20240229-v1:0` | Yes (explicit key) | Alias of `litellm` |
 | `gemini` | `LiteLLMProvider` | `gemini:gemini/gemini-1.5-pro` | Yes (explicit key) | Alias of `litellm` |
 | `cohere` | `LiteLLMProvider` | `cohere:cohere/command-r-plus` | Yes (explicit key) | Alias of `litellm` |
-| `vllm` | `VLLMProvider` | `vllm:meta-llama/Meta-Llama-3.1-8B-Instruct` | Use `ExperimentSession` | In-process `AsyncLLMEngine`; requires `provider_options.model` |
-
-`Specs/session` in the table means use `ExperimentSpec(..., model="provider:model_id", ...)`.
+| `vllm` | `VLLMProvider` | `vllm:meta-llama/Meta-Llama-3.1-8B-Instruct` | Pass `model` in `provider_options` | In-process `AsyncLLMEngine`; requires `provider_options.model` |
 
 ## Connectivity Recipes
 
@@ -79,58 +76,40 @@ report = evaluate(
 )
 ```
 
-### 3) In-process vLLM provider (`ExperimentSession`)
+### 3) In-process vLLM provider
 
 Use this when you want Themis to run vLLM directly via `AsyncLLMEngine`.
 
 ```python
-from themis.evaluation.pipeline import EvaluationPipeline
-from themis.presets import get_benchmark_preset
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
+from themis import evaluate
 
 model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-preset = get_benchmark_preset("demo")
-pipeline = EvaluationPipeline(extractor=preset.extractor, metrics=preset.metrics)
 
-spec = ExperimentSpec(
-    dataset=preset.load_dataset(limit=20),
-    prompt=preset.prompt_template.template,
+report = evaluate(
+    "demo",
     model=f"vllm:{model_id}",
     provider_options={
         "model": model_id,               # required
         "tensor_parallel_size": 1,       # optional
         "max_parallel": 2,               # optional
-        "engine_kwargs": {},             # optional
     },
-    sampling={"temperature": 0.0, "top_p": 0.95, "max_tokens": 256},
-    pipeline=pipeline,
+    limit=20,
     run_id="demo-vllm-inprocess",
-    dataset_id_field=preset.dataset_id_field,
-    reference_field=preset.reference_field,
-    metadata_fields=preset.metadata_fields,
-)
-
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=2),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+    storage_path=".cache/experiments",
 )
 ```
 
-## Provider Options by Entry Point
+## Provider Options
 
-- `evaluate(...)` accepts a limited set of provider kwargs (primarily endpoint/auth
-  and retry/timeout fields).
-- `ExperimentSpec.provider_options` passes kwargs directly to the provider
-  constructor, which is the recommended path for provider-specific tuning
-  (for example vLLM `engine_kwargs`).
+- `evaluate(...)` accepts provider kwargs directly (endpoint, auth, retry/timeout).
+- For provider-specific constructor tuning (e.g. vLLM `engine_kwargs`) pass them
+  via `provider_options`.
 
 ## Quick Troubleshooting
 
 - `RuntimeError: vLLM is not installed`:
   - install vLLM in your environment (for example `uv add vllm`)
 - `TypeError: ... missing required keyword-only argument: 'model'` with `vllm`:
-  - add `provider_options={"model": "<your-model-id>"}` in `ExperimentSpec`
+  - add `provider_options={"model": "<your-model-id>"}` to `evaluate()`
 - Hosted model auth errors:
   - confirm `api_key`/env vars and endpoint (`api_base`) are correct

@@ -11,20 +11,18 @@ not duplicate benchmark catalogs or full API signatures.
 
 ## Choose the Entry Point
 
-| Entry point | Best for | Trade-off |
-| --- | --- | --- |
-| `themis.evaluate(...)` | Fast experiments, benchmark runs, quick custom datasets | Less explicit wiring |
-| `ExperimentSession().run(spec, ...)` | Reproducible research workflows, explicit orchestration | More setup code |
+| Entry point | Best for |
+| --- | --- |
+| `themis.evaluate(...)` | All evaluations — benchmarks, custom datasets, advanced pipelines |
+| CLI (`themis eval ...`) | Scripted / CI pipelines |
 
 ```mermaid
 flowchart TD
-    A["Start evaluation"] --> B{"Need explicit execution/storage control?"}
-    B -- "No" --> C["Use themis.evaluate(...)"]
-    B -- "Yes" --> D["Use ExperimentSession.run(...)"]
-    C --> E{"Built-in benchmark?"}
-    E -- "Yes" --> F["Pass benchmark name"]
-    E -- "No" --> G["Pass dataset + prompt (+ reference_field if needed)"]
-    D --> H["Define ExperimentSpec / ExecutionSpec / StorageSpec"]
+    A["Start evaluation"] --> B{"Built-in benchmark?"}
+    B -- "Yes" --> C["evaluate('gsm8k', model=...)"]
+    B -- "No" --> D{"Custom dataset?"}
+    D -- "Yes" --> E["evaluate(dataset, prompt=..., model=...)"]
+    D -- "No" --> F["evaluate(..., evaluation_pipeline=custom_pipeline)"]
 ```
 
 ## Workflow 1: Quick Benchmark Run
@@ -74,36 +72,30 @@ Notes:
 - Mixed/partial reference columns fail fast by design.
 - Keep `id` (or equivalent) stable for reliable comparisons across runs.
 
-## Workflow 3: Spec-Driven Session (Full Control)
+## Workflow 3: Evaluate with a Custom Pipeline
 
-Use this for explicit execution/storage configuration and reproducibility.
+Build a custom `EvaluationPipeline` and pass it directly to `evaluate()`.
 
 ```python
+from themis import evaluate
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.presets import get_benchmark_preset
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
+from themis.evaluation import extractors, metrics
 
-preset = get_benchmark_preset("gsm8k")
-pipeline = EvaluationPipeline(extractor=preset.extractor, metrics=preset.metrics)
-
-spec = ExperimentSpec(
-    dataset=preset.load_dataset(limit=100),
-    prompt=preset.prompt_template.template,
-    model="litellm:gpt-4o-mini",
-    sampling={"temperature": 0.0, "top_p": 0.95, "max_tokens": 512},
-    provider_options={"seed": 42},
-    pipeline=pipeline,
-    run_id="gsm8k-spec-baseline",
-    dataset_id_field=preset.dataset_id_field,
-    reference_field=preset.reference_field,
-    metadata_fields=preset.metadata_fields,
+pipeline = EvaluationPipeline(
+    extractor=extractors.JsonFieldExtractor(field_path="answer"),
+    metrics=[metrics.ExactMatch(), metrics.ResponseLength()],
 )
 
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=8, max_retries=3),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
+report = evaluate(
+    "gsm8k",
+    model="gpt-4o-mini",
+    limit=100,
+    evaluation_pipeline=pipeline,
+    workers=8,
+    max_retries=3,
+    storage_path=".cache/experiments",
+    run_id="gsm8k-custom-pipeline",
+    resume=True,
 )
 ```
 
