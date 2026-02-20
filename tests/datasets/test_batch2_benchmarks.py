@@ -1,6 +1,6 @@
 """Tests for batch 2 benchmarks."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from themis.datasets import (

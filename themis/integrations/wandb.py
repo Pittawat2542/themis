@@ -75,8 +75,8 @@ class WandbTracker:
             )
             records_table.add_data(
                 record.task.metadata.get("dataset_id"),
-                record.task.prompt,
-                [resp.text for resp in record.responses],
+                record.task.prompt.text,
+                [record.output.text] if record.output else [],
                 eval_record.parsed_response if eval_record else None,
                 record.error.message if record.error else None,
                 {s.metric_name: s.value for s in eval_record.scores}
@@ -84,3 +84,9 @@ class WandbTracker:
                 else None,
             )
         wandb.log({"generation_results": records_table})
+
+    def finalize(self) -> None:
+        """Finalize the WandB run."""
+        if not self.config.enable:
+            return
+        wandb.finish()

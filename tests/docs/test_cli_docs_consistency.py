@@ -4,12 +4,13 @@ import inspect
 from pathlib import Path
 
 from themis.cli import main as cli_main
+from themis.cli.commands.eval_commands import eval_command
 
 
 def test_eval_cli_docs_match_current_signature():
     docs_path = Path("docs/guides/cli.md")
     text = docs_path.read_text(encoding="utf-8")
-    signature = inspect.signature(cli_main.eval)
+    signature = inspect.signature(eval_command)
 
     assert "distributed" not in signature.parameters
     assert "--distributed" not in text
@@ -26,4 +27,7 @@ def test_cli_docs_cover_source_checkout_and_server_extra_name():
 
 
 def test_compare_help_command_is_callable():
-    assert cli_main.main(["compare", "--help"]) == 0
+    try:
+        cli_main.app(["compare", "--help"])
+    except SystemExit as e:
+        assert e.code == 0

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import string
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
@@ -66,7 +67,7 @@ def load_gpqa(
     source: str = "huggingface",
     data_dir: str | Path | None = None,
     subset: str = "gpqa_diamond",
-) -> List[GpqaSample]:
+) -> list[GpqaSample]:
     """Load GPQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -94,32 +95,28 @@ def load_gpqa(
 
 
 def _row_to_sample(row: dict[str, Any], *, index: int) -> GpqaSample:
-    unique_id = (
-        row.get("id")
-        or row.get("unique_id")
-        or f"gpqa-{index:05d}"
-    )
+    unique_id = row.get("id") or row.get("unique_id") or f"gpqa-{index:05d}"
     question = row.get("Question") or row.get("question") or ""
-    
+
     # GPQA usually has 'Correct Answer', 'Incorrect Answer 1', 'Incorrect Answer 2', 'Incorrect Answer 3'
     # We need to shuffle them or just present them. For simplicity, we'll just collect them.
     # However, standard GPQA format in HF might be different.
     # Let's assume the HF format: 'Question', 'Correct Answer', 'Incorrect Answer 1', ...
-    
+
     correct_answer = row.get("Correct Answer") or row.get("correct_answer") or ""
     incorrect_answers = []
     for i in range(1, 4):
         inc = row.get(f"Incorrect Answer {i}") or row.get(f"incorrect_answer_{i}")
         if inc:
             incorrect_answers.append(str(inc))
-            
+
     # If choices are already present (e.g. processed version), use them
     choices = row.get("choices") or row.get("options")
     if not choices:
         # We need to form choices. For now, let's put correct answer first (should be shuffled in real eval)
         # But wait, if we put correct answer first always, the model might learn.
         # Ideally, we should shuffle. But to keep it deterministic for now without extra deps,
-        # let's just list them. The evaluator should handle permutation if needed, 
+        # let's just list them. The evaluator should handle permutation if needed,
         # or we should shuffle here if we want to present them as A, B, C, D.
         # For this implementation, I will just append them.
         choices = [correct_answer] + incorrect_answers
@@ -127,23 +124,30 @@ def _row_to_sample(row: dict[str, Any], *, index: int) -> GpqaSample:
         # But since we are just loading, we'll leave it as is.
         # Actually, let's sort them to be deterministic if we can't shuffle safely.
         choices.sort()
-        
+
     # Determine the answer label
     try:
         answer_idx = choices.index(correct_answer)
         answer = _CHOICE_LABELS[answer_idx]
     except ValueError:
-        answer = "" # Should not happen if correct_answer is in choices
+        answer = ""  # Should not happen if correct_answer is in choices
 
     metadata_keys = {
-        "Question", "question", "Correct Answer", "correct_answer", 
-        "Incorrect Answer 1", "incorrect_answer_1",
-        "Incorrect Answer 2", "incorrect_answer_2",
-        "Incorrect Answer 3", "incorrect_answer_3",
-        "choices", "options"
+        "Question",
+        "question",
+        "Correct Answer",
+        "correct_answer",
+        "Incorrect Answer 1",
+        "incorrect_answer_1",
+        "Incorrect Answer 2",
+        "incorrect_answer_2",
+        "Incorrect Answer 3",
+        "incorrect_answer_3",
+        "choices",
+        "options",
     }
     metadata = {key: value for key, value in row.items() if key not in metadata_keys}
-    
+
     return GpqaSample(
         unique_id=str(unique_id),
         question=str(question),

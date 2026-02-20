@@ -4,8 +4,6 @@ This module verifies that dataset classes properly implement the DatasetAdapter
 protocol, both structurally and at runtime.
 """
 
-import pytest
-
 from themis.datasets.base import BaseDataset
 from themis.datasets.schema import DatasetMetadata, DatasetSchema
 from themis.interfaces import DatasetAdapter

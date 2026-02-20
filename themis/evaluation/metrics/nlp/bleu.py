@@ -9,7 +9,8 @@ References:
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
@@ -17,17 +18,17 @@ from themis.interfaces import Metric
 
 class BLEU(Metric):
     """BLEU metric using sacrebleu library.
-    
+
     BLEU is a precision-based metric that computes n-gram overlap between
     generated text and reference translations. It includes a brevity penalty
     to penalize short translations.
-    
+
     Attributes:
         name: Metric identifier ("bleu")
         lowercase: Whether to lowercase text before scoring
         tokenize: Tokenization method ("13a", "intl", "zh", "ja-mecab", etc.)
         max_ngram_order: Maximum n-gram order (default: 4)
-    
+
     Example:
         >>> from themis.evaluation.metrics.nlp import BLEU
         >>> metric = BLEU()
@@ -38,9 +39,9 @@ class BLEU(Metric):
         >>> print(f"BLEU: {score.value:.4f}")
         BLEU: 0.4523
     """
-    
+
     requires_reference = True
-    
+
     def __init__(
         self,
         lowercase: bool = False,
@@ -48,7 +49,7 @@ class BLEU(Metric):
         max_ngram_order: int = 4,
     ):
         """Initialize BLEU metric.
-        
+
         Args:
             lowercase: Convert text to lowercase before scoring
             tokenize: Tokenization method:
@@ -63,10 +64,11 @@ class BLEU(Metric):
         self.lowercase = lowercase
         self.tokenize = tokenize
         self.max_ngram_order = max_ngram_order
-        
+
         # Lazy import sacrebleu (not required for all users)
         try:
             from sacrebleu import BLEU as SacreBLEU
+
             self._scorer = SacreBLEU(
                 lowercase=lowercase,
                 tokenize=tokenize,
@@ -77,7 +79,7 @@ class BLEU(Metric):
                 "sacrebleu is required for BLEU metric. "
                 "Install it with: pip install sacrebleu"
             )
-    
+
     def compute(
         self,
         *,
@@ -86,28 +88,28 @@ class BLEU(Metric):
         metadata: dict[str, Any] | None = None,
     ) -> MetricScore:
         """Compute BLEU score.
-        
+
         Args:
             prediction: Generated text (already extracted by pipeline)
             references: List of reference translations
             metadata: Optional metadata dict
-        
+
         Returns:
             MetricScore with BLEU value (0.0-1.0) and detailed scores
         """
         # Convert to strings
         pred_str = str(prediction)
         ref_strs = [str(ref) for ref in references]
-        
+
         # Compute BLEU score
         score_obj = self._scorer.sentence_score(pred_str, ref_strs)
-        
+
         # Extract scores (sacrebleu returns 0-100, we normalize to 0-1)
         bleu_score = score_obj.score / 100.0
-        
+
         # Extract precision scores for each n-gram
         precisions = [p / 100.0 for p in score_obj.precisions]
-        
+
         return MetricScore(
             metric_name=self.name,
             value=bleu_score,
@@ -118,7 +120,9 @@ class BLEU(Metric):
                 "precision_3": precisions[2] if len(precisions) > 2 else 0.0,
                 "precision_4": precisions[3] if len(precisions) > 3 else 0.0,
                 "brevity_penalty": score_obj.bp,
-                "length_ratio": score_obj.sys_len / score_obj.ref_len if score_obj.ref_len > 0 else 0.0,
+                "length_ratio": score_obj.sys_len / score_obj.ref_len
+                if score_obj.ref_len > 0
+                else 0.0,
                 "sys_len": score_obj.sys_len,
                 "ref_len": score_obj.ref_len,
             },

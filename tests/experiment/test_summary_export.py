@@ -1,7 +1,6 @@
 """Tests for summary export functionality."""
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -63,9 +62,7 @@ def sample_experiment_report():
 
     # Create evaluation report
     eval_report = EvaluationReport(
-        metrics={
-            "accuracy": MetricAggregate.from_scores("accuracy", metric_scores)
-        },
+        metrics={"accuracy": MetricAggregate.from_scores("accuracy", metric_scores)},
         failures=[],
         records=eval_records,
     )
@@ -81,20 +78,20 @@ def sample_experiment_report():
 def test_summary_export_basic(tmp_path, sample_experiment_report):
     """Test basic summary export."""
     output_path = tmp_path / "summary.json"
-    
+
     result_path = export_summary_json(
         sample_experiment_report,
         output_path,
         run_id="test-run-123",
     )
-    
+
     assert result_path == output_path
     assert output_path.exists()
-    
+
     # Load and verify structure
     with output_path.open("r") as f:
         summary = json.load(f)
-    
+
     assert summary["run_id"] == "test-run-123"
     assert summary["total_samples"] == 10
     assert "metrics" in summary
@@ -106,16 +103,16 @@ def test_summary_export_basic(tmp_path, sample_experiment_report):
 def test_summary_contains_metrics(tmp_path, sample_experiment_report):
     """Test that summary contains metric aggregates."""
     output_path = tmp_path / "summary.json"
-    
+
     export_summary_json(
         sample_experiment_report,
         output_path,
         run_id="test-run",
     )
-    
+
     with output_path.open("r") as f:
         summary = json.load(f)
-    
+
     assert "accuracy" in summary["metrics"]
     accuracy = summary["metrics"]["accuracy"]
     assert "mean" in accuracy
@@ -127,16 +124,16 @@ def test_summary_contains_metrics(tmp_path, sample_experiment_report):
 def test_summary_contains_metadata(tmp_path, sample_experiment_report):
     """Test that summary contains model metadata."""
     output_path = tmp_path / "summary.json"
-    
+
     export_summary_json(
         sample_experiment_report,
         output_path,
         run_id="test-run",
     )
-    
+
     with output_path.open("r") as f:
         summary = json.load(f)
-    
+
     metadata = summary["metadata"]
     assert metadata["model"] == "test-model"
     assert metadata["prompt_template"] == "test-prompt"
@@ -149,16 +146,16 @@ def test_summary_contains_metadata(tmp_path, sample_experiment_report):
 def test_summary_contains_cost(tmp_path, sample_experiment_report):
     """Test that summary contains total cost."""
     output_path = tmp_path / "summary.json"
-    
+
     export_summary_json(
         sample_experiment_report,
         output_path,
         run_id="test-run",
     )
-    
+
     with output_path.open("r") as f:
         summary = json.load(f)
-    
+
     # 10 samples * 0.01 each = 0.1
     assert summary["cost_usd"] == 0.1
 
@@ -166,13 +163,13 @@ def test_summary_contains_cost(tmp_path, sample_experiment_report):
 def test_summary_file_size(tmp_path, sample_experiment_report):
     """Test that summary file is small."""
     output_path = tmp_path / "summary.json"
-    
+
     export_summary_json(
         sample_experiment_report,
         output_path,
         run_id="test-run",
     )
-    
+
     file_size = output_path.stat().st_size
     # Summary should be < 2KB (typically ~1KB)
     assert file_size < 2000, f"Summary file too large: {file_size} bytes"
@@ -197,7 +194,7 @@ def test_summary_with_failures(tmp_path):
             error=None,
         )
     ]
-    
+
     eval_report = EvaluationReport(
         metrics={},
         failures=[
@@ -206,20 +203,20 @@ def test_summary_with_failures(tmp_path):
         ],
         records=[],
     )
-    
+
     report = ExperimentReport(
         generation_results=gen_records,
         evaluation_report=eval_report,
         failures=[],
         metadata={},
     )
-    
+
     output_path = tmp_path / "summary.json"
     export_summary_json(report, output_path, run_id="test")
-    
+
     with output_path.open("r") as f:
         summary = json.load(f)
-    
+
     assert summary["failures"] == 2
     assert summary["failure_rate"] == 2.0  # 2 failures / 1 sample
 
@@ -227,13 +224,13 @@ def test_summary_with_failures(tmp_path):
 def test_summary_without_run_id(tmp_path, sample_experiment_report):
     """Test summary export without run_id."""
     output_path = tmp_path / "summary.json"
-    
+
     export_summary_json(
         sample_experiment_report,
         output_path,
     )
-    
+
     with output_path.open("r") as f:
         summary = json.load(f)
-    
+
     assert summary["run_id"] is None

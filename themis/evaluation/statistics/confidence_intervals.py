@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from statistics import mean, stdev
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from themis.core import entities as core_entities
 
@@ -76,7 +76,7 @@ def compute_confidence_interval(
 
 
 def compute_statistical_summary(
-    scores: List[core_entities.MetricScore],
+    scores: list[core_entities.MetricScore],
 ) -> StatisticalSummary:
     """Compute comprehensive statistical summary for metric scores.
 

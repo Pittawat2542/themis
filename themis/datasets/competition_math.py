@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -55,7 +56,7 @@ def load_competition_math(
     data_dir: str | Path | None = None,
     subjects: Sequence[str] | None = None,
     subset: str | None = None,
-) -> List[CompetitionMathSample]:
+) -> list[CompetitionMathSample]:
     """Load math competition samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:

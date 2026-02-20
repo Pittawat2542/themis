@@ -7,7 +7,6 @@ for the DatasetRegistry to ensure robust operation.
 import pytest
 
 from themis.datasets.registry import (
-    DatasetFactory,
     DatasetRegistry,
     create_dataset,
     is_dataset_registered,

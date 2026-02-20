@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -41,11 +42,11 @@ class SocialIQaSample(BaseModel):
 
 def load_social_i_qa(
     *,
-    split: str = "validation", # Test set usually has no labels
+    split: str = "validation",  # Test set usually has no labels
     limit: int | None = None,
     source: str = "huggingface",
     data_dir: str | Path | None = None,
-) -> List[SocialIQaSample]:
+) -> list[SocialIQaSample]:
     """Load Social IQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -73,21 +74,17 @@ def load_social_i_qa(
 
 
 def _row_to_sample(row: dict[str, Any], *, index: int) -> SocialIQaSample:
-    unique_id = (
-        row.get("id")
-        or row.get("unique_id")
-        or f"social-iqa-{index:05d}"
-    )
+    unique_id = row.get("id") or row.get("unique_id") or f"social-iqa-{index:05d}"
     context = row.get("context") or ""
     question = row.get("question") or ""
-    
+
     # Social IQA has 'answerA', 'answerB', 'answerC'
     choices = [
         str(row.get("answerA") or ""),
         str(row.get("answerB") or ""),
         str(row.get("answerC") or ""),
     ]
-    
+
     # label is '1', '2', '3' (strings)
     label = row.get("label")
     answer = ""
@@ -100,10 +97,16 @@ def _row_to_sample(row: dict[str, Any], *, index: int) -> SocialIQaSample:
             pass
 
     metadata_keys = {
-        "context", "question", "answerA", "answerB", "answerC", "label", "id"
+        "context",
+        "question",
+        "answerA",
+        "answerB",
+        "answerC",
+        "label",
+        "id",
     }
     metadata = {key: value for key, value in row.items() if key not in metadata_keys}
-    
+
     return SocialIQaSample(
         unique_id=str(unique_id),
         context=str(context),

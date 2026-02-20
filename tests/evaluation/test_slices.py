@@ -2,9 +2,13 @@ from themis.core import entities as core_entities
 from themis.evaluation import extractors, metrics, pipeline, reports
 
 
-def make_generation_record(sample_id: str, raw_output: str, reference_value: str) -> core_entities.GenerationRecord:
+def make_generation_record(
+    sample_id: str, raw_output: str, reference_value: str
+) -> core_entities.GenerationRecord:
     sampling = core_entities.SamplingConfig(temperature=0.5, top_p=0.9, max_tokens=128)
-    prompt_spec = core_entities.PromptSpec(name="qa", template="Answer the question: {question}")
+    prompt_spec = core_entities.PromptSpec(
+        name="qa", template="Answer the question: {question}"
+    )
     prompt_render = core_entities.PromptRender(
         spec=prompt_spec,
         text="Answer the question: Capital?",
@@ -51,12 +55,16 @@ def test_pipeline_slices_aggregate_correctly():
     assert exact_slice.mean == 1.0
 
     # CI for slice
-    ci = reports.ci_for_slice_metric(report, "only_sample_1", "ExactMatch", n_bootstrap=500)
+    ci = reports.ci_for_slice_metric(
+        report, "only_sample_1", "ExactMatch", n_bootstrap=500
+    )
     assert ci.statistic == 1.0
     assert ci.ci_lower <= ci.statistic <= ci.ci_upper
 
     # Confusion matrix utility
-    cm = reports.confusion_matrix(["correct", "wrong", "correct"], ["correct", "wrong", "wrong"])
+    cm = reports.confusion_matrix(
+        ["correct", "wrong", "correct"], ["correct", "wrong", "wrong"]
+    )
     assert cm["correct"]["correct"] == 1
     assert cm["correct"]["wrong"] == 1
     assert cm["wrong"]["wrong"] == 1

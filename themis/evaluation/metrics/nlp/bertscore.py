@@ -9,7 +9,8 @@ References:
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
@@ -17,20 +18,20 @@ from themis.interfaces import Metric
 
 class BERTScore(Metric):
     """BERTScore metric using bert-score library.
-    
+
     BERTScore leverages contextual embeddings from pre-trained models (BERT, RoBERTa, etc.)
     to compute semantic similarity between generated and reference texts. It's more
     robust to paraphrasing than exact n-gram matching methods.
-    
+
     The metric computes token-level cosine similarity between embeddings and aggregates
     using precision, recall, and F1.
-    
+
     Attributes:
         name: Metric identifier ("bertscore")
         model_type: Pre-trained model to use for embeddings
         lang: Language code for automatic model selection
         rescale_with_baseline: Whether to rescale scores using baseline
-    
+
     Example:
         >>> from themis.evaluation.metrics.nlp import BERTScore
         >>> metric = BERTScore(model_type="microsoft/deberta-xlarge-mnli")
@@ -41,9 +42,9 @@ class BERTScore(Metric):
         >>> print(f"BERTScore F1: {score.value:.4f}")
         BERTScore F1: 0.9234
     """
-    
+
     requires_reference = True
-    
+
     def __init__(
         self,
         model_type: str | None = None,
@@ -52,7 +53,7 @@ class BERTScore(Metric):
         device: str | None = None,
     ):
         """Initialize BERTScore metric.
-        
+
         Args:
             model_type: Pre-trained model identifier. Popular choices:
                 - "microsoft/deberta-xlarge-mnli" (recommended, large)
@@ -70,17 +71,18 @@ class BERTScore(Metric):
         self.lang = lang
         self.rescale_with_baseline = rescale_with_baseline
         self.device = device
-        
+
         # Lazy import bert-score (not required for all users)
         try:
             import bert_score
+
             self._bert_score = bert_score
         except ImportError:
             raise ImportError(
                 "bert-score is required for BERTScore metric. "
                 "Install it with: pip install bert-score"
             )
-    
+
     def compute(
         self,
         *,
@@ -89,19 +91,19 @@ class BERTScore(Metric):
         metadata: dict[str, Any] | None = None,
     ) -> MetricScore:
         """Compute BERTScore.
-        
+
         Args:
             prediction: Generated text (already extracted by pipeline)
             references: List of reference texts
             metadata: Optional metadata dict
-        
+
         Returns:
             MetricScore with BERTScore F1 and precision/recall details
         """
         # Convert to strings
         pred_str = str(prediction)
         ref_strs = [str(ref) for ref in references]
-        
+
         # Compute BERTScore
         # Note: bert_score.score expects lists of predictions and references
         P, R, F1 = self._bert_score.score(
@@ -113,13 +115,13 @@ class BERTScore(Metric):
             device=self.device,
             verbose=False,
         )
-        
+
         # Take maximum F1 across references
         max_idx = F1.argmax().item()
         max_precision = P[max_idx].item()
         max_recall = R[max_idx].item()
         max_f1 = F1[max_idx].item()
-        
+
         return MetricScore(
             metric_name=self.name,
             value=max_f1,  # Use F1 as primary score

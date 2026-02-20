@@ -7,11 +7,9 @@ from themis.evaluation.pipelines.composable_pipeline import (
     EvaluationStep,
 )
 from themis.evaluation.pipelines.standard_pipeline import EvaluationPipeline
-from themis.evaluation.metric_pipeline import MetricPipeline
 
 __all__ = [
     "EvaluationPipeline",
-    "MetricPipeline",
     "ComposableEvaluationPipeline",
     "ComposableEvaluationReportPipeline",
     "EvaluationStep",

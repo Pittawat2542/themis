@@ -11,7 +11,7 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 from statistics import mean
-from typing import Sequence
+from collections.abc import Callable, Sequence
 
 from themis.evaluation.statistics.distributions import t_critical_value, t_to_p_value
 from themis.evaluation.statistics.bootstrap import (
@@ -27,7 +27,7 @@ from themis.core import entities as core_entities
 
 class StatisticalTest(str, Enum):
     """Available statistical tests."""
-    
+
     T_TEST = "t_test"
     BOOTSTRAP = "bootstrap"
     PERMUTATION = "permutation"
@@ -37,7 +37,7 @@ class StatisticalTest(str, Enum):
 @dataclass
 class StatisticalTestResult:
     """Result of a statistical test.
-    
+
     Attributes:
         test_name: Name of the test performed
         statistic: Test statistic value
@@ -49,7 +49,7 @@ class StatisticalTestResult:
         inference_mode: Whether this result supports hypothesis testing (`hypothesis_test`)
             or only uncertainty estimation (`ci_only`)
     """
-    
+
     test_name: str
     statistic: float
     p_value: float | None
@@ -58,20 +58,20 @@ class StatisticalTestResult:
     effect_size: float | None = None
     confidence_interval: tuple[float, float] | None = None
     inference_mode: str = "hypothesis_test"
-    
+
     def __str__(self) -> str:
         """Human-readable summary."""
         sig_str = "significant" if self.significant else "not significant"
         p_text = f"{self.p_value:.4f}" if self.p_value is not None else "n/a"
         result = f"{self.test_name}: p={p_text} ({sig_str})"
-        
+
         if self.effect_size is not None:
             result += f", effect_size={self.effect_size:.3f}"
-        
+
         if self.confidence_interval is not None:
             low, high = self.confidence_interval
             result += f", CI=[{low:.3f}, {high:.3f}]"
-        
+
         return result
 
 
@@ -83,35 +83,35 @@ def t_test(
     paired: bool = True,
 ) -> StatisticalTestResult:
     """Perform a t-test to compare two sets of samples.
-    
+
     Args:
         samples_a: First set of samples
         samples_b: Second set of samples
         alpha: Significance level (default: 0.05 for 95% confidence)
         paired: Whether to use paired t-test (default: True)
-    
+
     Returns:
         StatisticalTestResult with test statistics and significance
-    
+
     Raises:
         ValueError: If samples are empty or have mismatched lengths (for paired test)
     """
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform t-test on empty samples")
-    
+
     if paired and len(samples_a) != len(samples_b):
         raise ValueError(
             f"Paired t-test requires equal sample sizes. "
             f"Got {len(samples_a)} and {len(samples_b)}"
         )
-    
+
     n_a = len(samples_a)
     n_b = len(samples_b)
-    
+
     # Calculate means
     mean_a = sum(samples_a) / n_a
     mean_b = sum(samples_b) / n_b
-    
+
     if paired:
         # Delegate core paired test inference to evaluation statistics.
         paired_result = evaluation_paired_t_test(
@@ -123,17 +123,25 @@ def t_test(
         # Paired t-test effect size/CI on (a-b) differences.
         diffs = [a - b for a, b in zip(samples_a, samples_b)]
         mean_diff = sum(diffs) / len(diffs)
-        
+
         # Standard deviation of differences
-        var_diff = sum((d - mean_diff) ** 2 for d in diffs) / (len(diffs) - 1) if len(diffs) > 1 else 0
+        var_diff = (
+            sum((d - mean_diff) ** 2 for d in diffs) / (len(diffs) - 1)
+            if len(diffs) > 1
+            else 0
+        )
         se_diff = math.sqrt(var_diff / len(diffs))
-        
+
         df = len(diffs) - 1
-        
+
         # Effect size (Cohen's d for paired samples)
         sd_diff = math.sqrt(var_diff)
-        effect_size = mean_diff / sd_diff if sd_diff > 1e-10 else (1.0 if abs(mean_diff) > 1e-10 else 0.0)
-        
+        effect_size = (
+            mean_diff / sd_diff
+            if sd_diff > 1e-10
+            else (1.0 if abs(mean_diff) > 1e-10 else 0.0)
+        )
+
     else:
         # Independent samples: delegate core test inference to evaluation stack.
         baseline_scores = [
@@ -153,20 +161,20 @@ def t_test(
         # Cohen's d on pooled variance for interpretability.
         var_a = sum((x - mean_a) ** 2 for x in samples_a) / (n_a - 1) if n_a > 1 else 0
         var_b = sum((x - mean_b) ** 2 for x in samples_b) / (n_b - 1) if n_b > 1 else 0
-        
+
         pooled_sd = math.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2))
         se = pooled_sd * math.sqrt(1 / n_a + 1 / n_b)
         df = max(1, n_a + n_b - 2)
-        
+
         # Effect size (Cohen's d)
         effect_size = (mean_a - mean_b) / pooled_sd if pooled_sd > 0 else 0.0
-    
+
     # Confidence interval with t critical value helper (SciPy-backed when available).
     confidence_level = 1 - alpha
     t_crit = t_critical_value(df=max(1, df), confidence_level=confidence_level)
     margin = t_crit * (se_diff if paired else se)
     ci = (mean_a - mean_b - margin, mean_a - mean_b + margin)
-    
+
     return StatisticalTestResult(
         test_name="t-test (paired)" if paired else "t-test (independent)",
         statistic=t_stat,
@@ -196,14 +204,14 @@ def bootstrap_confidence_interval(
     *,
     n_bootstrap: int = 10000,
     confidence_level: float = 0.95,
-    statistic_fn: callable = None,
+    statistic_fn: Callable = None,
     seed: int | None = None,
 ) -> StatisticalTestResult:
     """Compute bootstrap confidence interval for difference between two samples.
-    
+
     Uses bootstrap resampling to estimate the confidence interval for the
     difference in means (or other statistic) between two samples.
-    
+
     Args:
         samples_a: First set of samples
         samples_b: Second set of samples
@@ -211,7 +219,7 @@ def bootstrap_confidence_interval(
         confidence_level: Confidence level (default: 0.95)
         statistic_fn: Function to compute statistic (default: mean difference)
         seed: Random seed for reproducibility
-    
+
     Returns:
         StatisticalTestResult with bootstrap confidence interval.
 
@@ -220,7 +228,7 @@ def bootstrap_confidence_interval(
     """
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform bootstrap on empty samples")
-    
+
     # Default statistic: difference in means (delegate to evaluation stack for paired samples)
     if statistic_fn is None and len(samples_a) == len(samples_b):
         diffs = [a - b for a, b in zip(samples_a, samples_b)]
@@ -245,35 +253,36 @@ def bootstrap_confidence_interval(
 
     rng = random.Random(seed)
     if statistic_fn is None:
+
         def statistic_fn(a, b):
             return sum(a) / len(a) - sum(b) / len(b)
-    
+
     # Observed difference
     observed_diff = statistic_fn(samples_a, samples_b)
-    
+
     # Bootstrap resampling
     bootstrap_diffs = []
     for _ in range(n_bootstrap):
         # Resample with replacement
         resampled_a = [rng.choice(samples_a) for _ in range(len(samples_a))]
         resampled_b = [rng.choice(samples_b) for _ in range(len(samples_b))]
-        
+
         diff = statistic_fn(resampled_a, resampled_b)
         bootstrap_diffs.append(diff)
-    
+
     # Sort for percentile method
     bootstrap_diffs.sort()
-    
+
     # Compute confidence interval
     alpha = 1 - confidence_level
     lower_idx = int(n_bootstrap * (alpha / 2))
     upper_idx = int(n_bootstrap * (1 - alpha / 2))
-    
+
     ci = (bootstrap_diffs[lower_idx], bootstrap_diffs[upper_idx])
-    
+
     # Check if 0 is in the confidence interval
     significant = not (ci[0] <= 0 <= ci[1])
-    
+
     return StatisticalTestResult(
         test_name=f"bootstrap (n={n_bootstrap})",
         statistic=observed_diff,
@@ -291,15 +300,15 @@ def permutation_test(
     *,
     n_permutations: int = 10000,
     alpha: float = 0.05,
-    statistic_fn: callable = None,
+    statistic_fn: Callable = None,
     seed: int | None = None,
 ) -> StatisticalTestResult:
     """Perform permutation test to compare two samples.
-    
+
     Tests the null hypothesis that the two samples come from the same
     distribution by randomly permuting the labels and computing the test
     statistic.
-    
+
     Args:
         samples_a: First set of samples
         samples_b: Second set of samples
@@ -307,13 +316,13 @@ def permutation_test(
         alpha: Significance level (default: 0.05)
         statistic_fn: Function to compute statistic (default: difference in means)
         seed: Random seed for reproducibility
-    
+
     Returns:
         StatisticalTestResult with permutation test results
     """
     if not samples_a or not samples_b:
         raise ValueError("Cannot perform permutation test on empty samples")
-    
+
     if statistic_fn is None:
         perm = evaluation_permutation_test(
             samples_a,
@@ -333,10 +342,10 @@ def permutation_test(
         )
 
     rng = random.Random(seed)
-    
+
     # Observed statistic
     observed_stat = statistic_fn(samples_a, samples_b)
-    
+
     # Combine all samples
     combined = list(samples_a) + list(samples_b)
     n_a = len(samples_a)
@@ -346,18 +355,18 @@ def permutation_test(
         # Shuffle and split
         shuffled = combined.copy()
         rng.shuffle(shuffled)
-        
+
         perm_a = shuffled[:n_a]
         perm_b = shuffled[n_a:]
-        
+
         perm_stat = statistic_fn(perm_a, perm_b)
-        
+
         if perm_stat >= observed_stat:
             more_extreme += 1
-    
+
     # P-value: proportion of permutations as extreme as observed
     p_value = more_extreme / n_permutations
-    
+
     return StatisticalTestResult(
         test_name=f"permutation (n={n_permutations})",
         statistic=observed_stat,
@@ -373,25 +382,25 @@ def mcnemar_test(
     alpha: float = 0.05,
 ) -> StatisticalTestResult:
     """Perform McNemar's test for paired nominal data.
-    
+
     Useful for comparing two models on the same test set, where you want to
     know if one model consistently outperforms the other.
-    
+
     Args:
         contingency_table: 2x2 contingency table as (n_00, n_01, n_10, n_11)
             where n_ij = number of samples where model A predicts i and model B predicts j
             (0 = incorrect, 1 = correct)
         alpha: Significance level
-    
+
     Returns:
         StatisticalTestResult with McNemar's test results
     """
     n_00, n_01, n_10, n_11 = contingency_table
-    
+
     # Only discordant pairs matter
     b = n_01  # A wrong, B correct
     c = n_10  # A correct, B wrong
-    
+
     if b + c == 0:
         # No discordant pairs
         return StatisticalTestResult(
@@ -401,14 +410,14 @@ def mcnemar_test(
             significant=False,
             confidence_level=1 - alpha,
         )
-    
+
     # McNemar's statistic with continuity correction
     chi_square = ((abs(b - c) - 1) ** 2) / (b + c)
-    
+
     # Use exact two-sided binomial test for discordant pairs:
     # X ~ Binomial(n=b+c, p=0.5), p = 2 * P(X <= min(b, c))
     p_value = _exact_mcnemar_p_value(b, c)
-    
+
     return StatisticalTestResult(
         test_name="McNemar's test",
         statistic=chi_square,

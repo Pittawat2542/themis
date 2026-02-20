@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from themis.experiment.storage import ExperimentStorage
+from themis.storage import ExperimentStorage
 
 
 @dataclass(frozen=True)
@@ -113,9 +113,7 @@ def _load_share_summary(*, run_id: str, storage_root: Path) -> ShareSummary:
         samples = report.get("samples", [])
         if samples:
             metadata = samples[0].get("metadata", {}) or {}
-            model = _safe_str(
-                metadata.get("model_identifier") or metadata.get("model")
-            )
+            model = _safe_str(metadata.get("model_identifier") or metadata.get("model"))
         cost_usd = None
         cost = summary.get("cost")
         if isinstance(cost, dict):
@@ -169,7 +167,9 @@ def _render_share_svg(
     )
     meta_lines = []
     meta_lines.append(f"Model: {model or 'unknown'}")
-    meta_lines.append(f"Samples: {total_samples if total_samples is not None else 'N/A'}")
+    meta_lines.append(
+        f"Samples: {total_samples if total_samples is not None else 'N/A'}"
+    )
     if cost_usd is not None:
         meta_lines.append(f"Cost: ${cost_usd:.4f}")
 
@@ -184,8 +184,7 @@ def _render_share_svg(
         for idx, line in enumerate(meta_lines)
     )
 
-    return (
-        f"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="{height}" viewBox="0 0 640 {height}">
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="{height}" viewBox="0 0 640 {height}">
   <defs>
     <style>
       .title {{ font: 600 18px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; fill: #0f172a; }}
@@ -205,7 +204,6 @@ def _render_share_svg(
   {meta_svg}
   <text class="run" x="24" y="{run_line_y}">Run: {html.escape(run_id)}</text>
 </svg>"""
-    )
 
 
 def _log_share_event(

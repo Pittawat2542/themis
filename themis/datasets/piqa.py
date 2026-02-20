@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -39,11 +40,11 @@ class PiqaSample(BaseModel):
 
 def load_piqa(
     *,
-    split: str = "validation", # Test set usually has no labels
+    split: str = "validation",  # Test set usually has no labels
     limit: int | None = None,
     source: str = "huggingface",
     data_dir: str | Path | None = None,
-) -> List[PiqaSample]:
+) -> list[PiqaSample]:
     """Load PIQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -71,19 +72,15 @@ def load_piqa(
 
 
 def _row_to_sample(row: dict[str, Any], *, index: int) -> PiqaSample:
-    unique_id = (
-        row.get("id")
-        or row.get("unique_id")
-        or f"piqa-{index:05d}"
-    )
+    unique_id = row.get("id") or row.get("unique_id") or f"piqa-{index:05d}"
     goal = row.get("goal") or ""
-    
+
     # PIQA has 'sol1', 'sol2'
     choices = [
         str(row.get("sol1") or ""),
         str(row.get("sol2") or ""),
     ]
-    
+
     # label is integer 0 or 1
     label = row.get("label")
     answer = ""
@@ -95,11 +92,9 @@ def _row_to_sample(row: dict[str, Any], *, index: int) -> PiqaSample:
         except (ValueError, TypeError):
             pass
 
-    metadata_keys = {
-        "goal", "sol1", "sol2", "label", "id"
-    }
+    metadata_keys = {"goal", "sol1", "sol2", "label", "id"}
     metadata = {key: value for key, value in row.items() if key not in metadata_keys}
-    
+
     return PiqaSample(
         unique_id=str(unique_id),
         goal=str(goal),

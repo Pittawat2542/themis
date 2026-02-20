@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import string
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
@@ -61,11 +62,11 @@ class CommonsenseQaSample(BaseModel):
 
 def load_commonsense_qa(
     *,
-    split: str = "validation", # Test set usually has no labels
+    split: str = "validation",  # Test set usually has no labels
     limit: int | None = None,
     source: str = "huggingface",
     data_dir: str | Path | None = None,
-) -> List[CommonsenseQaSample]:
+) -> list[CommonsenseQaSample]:
     """Load CommonsenseQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -93,39 +94,33 @@ def load_commonsense_qa(
 
 
 def _row_to_sample(row: dict[str, Any], *, index: int) -> CommonsenseQaSample:
-    unique_id = (
-        row.get("id")
-        or row.get("unique_id")
-        or f"csqa-{index:05d}"
-    )
+    unique_id = row.get("id") or row.get("unique_id") or f"csqa-{index:05d}"
     question = row.get("question") or ""
-    
+
     # CommonsenseQA format:
     # choices: {'label': ['A', 'B', ...], 'text': ['text1', 'text2', ...]}
     # answerKey: 'A'
-    
+
     choices_data = row.get("choices") or {}
     choices = []
     choice_labels = []
-    
+
     if isinstance(choices_data, dict):
         labels = choices_data.get("label") or []
         texts = choices_data.get("text") or []
-        
+
         # Zip and sort by label
         zipped = sorted(zip(labels, texts), key=lambda x: x[0])
         for label, text in zipped:
             choices.append(str(text))
             choice_labels.append(str(label))
-            
+
     answer = str(row.get("answerKey") or "")
     concept = str(row.get("question_concept") or "")
 
-    metadata_keys = {
-        "question", "choices", "answerKey", "question_concept", "id"
-    }
+    metadata_keys = {"question", "choices", "answerKey", "question_concept", "id"}
     metadata = {key: value for key, value in row.items() if key not in metadata_keys}
-    
+
     return CommonsenseQaSample(
         unique_id=str(unique_id),
         question=str(question),

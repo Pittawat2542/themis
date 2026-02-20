@@ -17,7 +17,7 @@ from themis.interfaces import Extractor, Metric
 @dataclass
 class BenchmarkPreset:
     """Configuration preset for a benchmark.
-    
+
     Attributes:
         name: Benchmark name
         prompt_template: Default prompt template
@@ -29,7 +29,7 @@ class BenchmarkPreset:
         dataset_id_field: Field containing the sample ID
         description: Human-readable description
     """
-    
+
     name: str
     prompt_template: PromptTemplate
     metrics: list[Metric]
@@ -39,13 +39,13 @@ class BenchmarkPreset:
     reference_field: str = "answer"
     dataset_id_field: str = "id"
     description: str = ""
-    
+
     def load_dataset(self, limit: int | None = None) -> Sequence[dict[str, Any]]:
         """Load the benchmark dataset.
-        
+
         Args:
             limit: Maximum number of samples to load
-        
+
         Returns:
             List of dataset samples
         """
@@ -67,9 +67,7 @@ def _to_dict_samples(samples: Sequence[Any]) -> list[dict[str, Any]]:
 
 
 def _format_mcq_options(choices: Sequence[str], labels: Sequence[str]) -> str:
-    return "\n".join(
-        f"{label}. {choice}" for label, choice in zip(labels, choices)
-    )
+    return "\n".join(f"{label}. {choice}" for label, choice in zip(labels, choices))
 
 
 def _normalize_mcq_answer(
@@ -146,7 +144,7 @@ def _ensure_registry_initialized() -> None:
 
 def register_benchmark(preset: BenchmarkPreset) -> None:
     """Register a benchmark preset.
-    
+
     Args:
         preset: Benchmark preset configuration
     """
@@ -155,31 +153,30 @@ def register_benchmark(preset: BenchmarkPreset) -> None:
 
 def get_benchmark_preset(name: str) -> BenchmarkPreset:
     """Get a benchmark preset by name.
-    
+
     Args:
         name: Benchmark name (case-insensitive)
-    
+
     Returns:
         Benchmark preset
-    
+
     Raises:
         ValueError: If benchmark is not found
     """
     _ensure_registry_initialized()
-    
+
     name_lower = name.lower()
     if name_lower not in _BENCHMARK_REGISTRY:
         available = ", ".join(sorted(_BENCHMARK_REGISTRY.keys()))
         raise ValueError(
-            f"Unknown benchmark: {name}. "
-            f"Available benchmarks: {available}"
+            f"Unknown benchmark: {name}. Available benchmarks: {available}"
         )
     return _BENCHMARK_REGISTRY[name_lower]
 
 
 def list_benchmarks() -> list[str]:
     """List all registered benchmark names.
-    
+
     Returns:
         Sorted list of benchmark names
     """
@@ -191,16 +188,17 @@ def list_benchmarks() -> list[str]:
 # Math Benchmarks
 # ============================================================================
 
+
 def _create_math500_preset() -> BenchmarkPreset:
     """Create MATH-500 benchmark preset."""
     from themis.datasets.math500 import load_math500 as load_math500_dataset
     from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
     from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-    
+
     def load_math500(limit: int | None = None) -> Sequence[dict[str, Any]]:
         samples = load_math500_dataset(source="huggingface", limit=limit)
         return _to_dict_samples(samples)
-    
+
     prompt_template = PromptTemplate(
         name="math500-zero-shot",
         template=(
@@ -210,7 +208,7 @@ def _create_math500_preset() -> BenchmarkPreset:
             "Solution:"
         ),
     )
-    
+
     return BenchmarkPreset(
         name="math500",
         prompt_template=prompt_template,
@@ -229,20 +227,16 @@ def _create_gsm8k_preset() -> BenchmarkPreset:
     from themis.datasets.gsm8k import load_gsm8k as load_gsm8k_dataset
     from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
     from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-    
+
     def load_gsm8k(limit: int | None = None) -> Sequence[dict[str, Any]]:
         samples = load_gsm8k_dataset(source="huggingface", split="test", limit=limit)
         return _to_dict_samples(samples)
-    
+
     prompt_template = PromptTemplate(
         name="gsm8k-zero-shot",
-        template=(
-            "Solve this math problem step by step.\n\n"
-            "Q: {question}\n"
-            "A:"
-        ),
+        template=("Solve this math problem step by step.\n\nQ: {question}\nA:"),
     )
-    
+
     return BenchmarkPreset(
         name="gsm8k",
         prompt_template=prompt_template,
@@ -261,7 +255,7 @@ def _create_aime24_preset() -> BenchmarkPreset:
     from themis.datasets.competition_math import load_competition_math
     from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
     from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-    
+
     def load_aime24(limit: int | None = None) -> Sequence[dict[str, Any]]:
         samples = load_competition_math(
             dataset="math-ai/aime24",
@@ -270,7 +264,7 @@ def _create_aime24_preset() -> BenchmarkPreset:
             limit=limit,
         )
         return _to_dict_samples(samples)
-    
+
     prompt_template = PromptTemplate(
         name="aime24-zero-shot",
         template=(
@@ -280,7 +274,7 @@ def _create_aime24_preset() -> BenchmarkPreset:
             "Solution:"
         ),
     )
-    
+
     return BenchmarkPreset(
         name="aime24",
         prompt_template=prompt_template,
@@ -312,11 +306,7 @@ def _create_gsm_symbolic_preset() -> BenchmarkPreset:
 
     prompt_template = PromptTemplate(
         name="gsm-symbolic-zero-shot",
-        template=(
-            "Solve this math problem step by step.\n\n"
-            "Q: {question}\n"
-            "A:"
-        ),
+        template=("Solve this math problem step by step.\n\nQ: {question}\nA:"),
     )
 
     return BenchmarkPreset(
@@ -488,16 +478,17 @@ def _create_beyondaime_preset() -> BenchmarkPreset:
 # MCQ Benchmarks
 # ============================================================================
 
+
 def _create_mmlu_pro_preset() -> BenchmarkPreset:
     """Create MMLU-Pro benchmark preset."""
     from themis.datasets.mmlu_pro import load_mmlu_pro as load_mmlu_pro_dataset
     from themis.evaluation.extractors.identity_extractor import IdentityExtractor
     from themis.evaluation.metrics.exact_match import ExactMatch
-    
+
     def load_mmlu_pro(limit: int | None = None) -> Sequence[dict[str, Any]]:
         samples = load_mmlu_pro_dataset(source="huggingface", split="test", limit=limit)
         return _normalize_mcq_samples(_to_dict_samples(samples))
-    
+
     prompt_template = PromptTemplate(
         name="mmlu-pro-zero-shot",
         template=(
@@ -507,7 +498,7 @@ def _create_mmlu_pro_preset() -> BenchmarkPreset:
             "Answer (letter):"
         ),
     )
-    
+
     return BenchmarkPreset(
         name="mmlu-pro",
         prompt_template=prompt_template,
@@ -526,7 +517,7 @@ def _create_supergpqa_preset() -> BenchmarkPreset:
     from themis.datasets.super_gpqa import load_super_gpqa as load_supergpqa_dataset
     from themis.evaluation.extractors.identity_extractor import IdentityExtractor
     from themis.evaluation.metrics.exact_match import ExactMatch
-    
+
     def load_supergpqa(limit: int | None = None) -> Sequence[dict[str, Any]]:
         samples = load_supergpqa_dataset(
             source="huggingface",
@@ -534,7 +525,7 @@ def _create_supergpqa_preset() -> BenchmarkPreset:
             limit=limit,
         )
         return _normalize_mcq_samples(_to_dict_samples(samples))
-    
+
     prompt_template = PromptTemplate(
         name="supergpqa-zero-shot",
         template=(
@@ -544,7 +535,7 @@ def _create_supergpqa_preset() -> BenchmarkPreset:
             "Answer (letter):"
         ),
     )
-    
+
     return BenchmarkPreset(
         name="supergpqa",
         prompt_template=prompt_template,
@@ -862,26 +853,31 @@ def _create_coqa_preset() -> BenchmarkPreset:
 # Demo/Test Benchmarks
 # ============================================================================
 
+
 def _create_demo_preset() -> BenchmarkPreset:
     """Create demo benchmark preset for testing."""
     from themis.evaluation.extractors.identity_extractor import IdentityExtractor
     from themis.evaluation.metrics.exact_match import ExactMatch
-    
+
     def load_demo(limit: int | None = None) -> Sequence[dict[str, Any]]:
         samples = [
             {"id": "demo-1", "question": "What is 2 + 2?", "answer": "4"},
-            {"id": "demo-2", "question": "What is the capital of France?", "answer": "Paris"},
+            {
+                "id": "demo-2",
+                "question": "What is the capital of France?",
+                "answer": "Paris",
+            },
             {"id": "demo-3", "question": "What is 10 * 5?", "answer": "50"},
         ]
         if limit is not None:
             samples = samples[:limit]
         return samples
-    
+
     prompt_template = PromptTemplate(
         name="demo",
         template="Q: {question}\nA:",
     )
-    
+
     return BenchmarkPreset(
         name="demo",
         prompt_template=prompt_template,
@@ -899,9 +895,10 @@ def _create_demo_preset() -> BenchmarkPreset:
 # Register all benchmarks (lazy initialization)
 # ============================================================================
 
+
 def _register_all_benchmarks() -> None:
     """Register all built-in benchmarks.
-    
+
     This is called lazily on first use to avoid importing heavy dependencies
     (datasets, models, etc.) until actually needed.
     """
@@ -914,7 +911,7 @@ def _register_all_benchmarks() -> None:
     register_benchmark(_create_olympiadbench_preset())
     register_benchmark(_create_beyondaime_preset())
     register_benchmark(_create_gsm_symbolic_preset())
-    
+
     # MCQ benchmarks
     register_benchmark(_create_mmlu_pro_preset())
     register_benchmark(_create_supergpqa_preset())
@@ -926,7 +923,7 @@ def _register_all_benchmarks() -> None:
     register_benchmark(_create_piqa_preset())
     register_benchmark(_create_social_i_qa_preset())
     register_benchmark(_create_coqa_preset())
-    
+
     # Demo
     register_benchmark(_create_demo_preset())
 

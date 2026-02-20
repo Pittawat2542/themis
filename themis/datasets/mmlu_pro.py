@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import string
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
@@ -109,7 +110,7 @@ def load_mmlu_pro(
     source: str = "huggingface",
     data_dir: str | Path | None = None,
     subjects: Sequence[str] | None = None,
-) -> List[MmluProSample]:
+) -> list[MmluProSample]:
     """Load MMLU-Pro samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:

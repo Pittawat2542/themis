@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-import random
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -46,7 +46,7 @@ def load_sciq(
     limit: int | None = None,
     source: str = "huggingface",
     data_dir: str | Path | None = None,
-) -> List[SciQSample]:
+) -> list[SciQSample]:
     """Load SciQ samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -74,13 +74,9 @@ def load_sciq(
 
 
 def _row_to_sample(row: dict[str, Any], *, index: int) -> SciQSample:
-    unique_id = (
-        row.get("id")
-        or row.get("unique_id")
-        or f"sciq-{index:05d}"
-    )
+    unique_id = row.get("id") or row.get("unique_id") or f"sciq-{index:05d}"
     question = row.get("question") or ""
-    
+
     # SciQ has 'correct_answer', 'distractor1', 'distractor2', 'distractor3'
     correct = str(row.get("correct_answer") or "")
     distractors = [
@@ -88,21 +84,27 @@ def _row_to_sample(row: dict[str, Any], *, index: int) -> SciQSample:
         str(row.get("distractor2") or ""),
         str(row.get("distractor3") or ""),
     ]
-    
+
     # Filter empty distractors just in case
     distractors = [d for d in distractors if d]
-    
+
     choices = [correct] + distractors
     # Sort to be deterministic
     choices.sort()
-    
+
     support = str(row.get("support") or "")
 
     metadata_keys = {
-        "question", "correct_answer", "distractor1", "distractor2", "distractor3", "support", "id"
+        "question",
+        "correct_answer",
+        "distractor1",
+        "distractor2",
+        "distractor3",
+        "support",
+        "id",
     }
     metadata = {key: value for key, value in row.items() if key not in metadata_keys}
-    
+
     return SciQSample(
         unique_id=str(unique_id),
         question=str(question),

@@ -247,7 +247,6 @@ def _create_request_model(
             default = param.default
 
         # Get description from docstring
-        description = param_docs.get(param_name, "")
 
         # Create field with description
         fields[param_name] = (param_type, default)

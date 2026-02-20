@@ -10,7 +10,8 @@ References:
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
@@ -18,22 +19,22 @@ from themis.interfaces import Metric
 
 class METEOR(Metric):
     """METEOR metric using nltk library.
-    
+
     METEOR compares generated text to references using:
     - Exact word matching
     - Stemming (using Porter stemmer)
     - Synonymy (using WordNet)
     - Word order (using chunk matching)
-    
+
     It computes a weighted F-score with emphasis on recall and applies a penalty
     for word order differences.
-    
+
     Attributes:
         name: Metric identifier ("meteor")
         alpha: Weight for precision vs recall (default: 0.9, favors recall)
         beta: Weight for fragmentation penalty (default: 3.0)
         gamma: Fragmentation penalty coefficient (default: 0.5)
-    
+
     Example:
         >>> from themis.evaluation.metrics.nlp import METEOR
         >>> metric = METEOR()
@@ -44,9 +45,9 @@ class METEOR(Metric):
         >>> print(f"METEOR: {score.value:.4f}")
         METEOR: 0.8234
     """
-    
+
     requires_reference = True
-    
+
     def __init__(
         self,
         alpha: float = 0.9,
@@ -54,7 +55,7 @@ class METEOR(Metric):
         gamma: float = 0.5,
     ):
         """Initialize METEOR metric.
-        
+
         Args:
             alpha: Weight for precision vs recall (0-1). Higher values favor recall.
                 Default 0.9 emphasizes recall like original METEOR.
@@ -65,32 +66,33 @@ class METEOR(Metric):
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
-        
+
         # Lazy import nltk (not required for all users)
         try:
             from nltk.translate import meteor_score as meteor
+
             self._meteor = meteor
-            
+
             # Download required NLTK data if not present
             import nltk
+
             try:
-                nltk.data.find('corpora/wordnet')
+                nltk.data.find("corpora/wordnet")
             except LookupError:
                 print("Downloading WordNet data for METEOR...")
-                nltk.download('wordnet', quiet=True)
-            
+                nltk.download("wordnet", quiet=True)
+
             try:
-                nltk.data.find('omw-1.4')
+                nltk.data.find("omw-1.4")
             except LookupError:
                 print("Downloading OMW data for METEOR...")
-                nltk.download('omw-1.4', quiet=True)
-                
+                nltk.download("omw-1.4", quiet=True)
+
         except ImportError:
             raise ImportError(
-                "nltk is required for METEOR metric. "
-                "Install it with: pip install nltk"
+                "nltk is required for METEOR metric. Install it with: pip install nltk"
             )
-    
+
     def compute(
         self,
         *,
@@ -99,33 +101,33 @@ class METEOR(Metric):
         metadata: dict[str, Any] | None = None,
     ) -> MetricScore:
         """Compute METEOR score.
-        
+
         Args:
             prediction: Generated text (already extracted by pipeline)
             references: List of reference texts
             metadata: Optional metadata dict
-        
+
         Returns:
             MetricScore with METEOR value (0.0-1.0)
         """
         # Convert to strings and tokenize
         pred_str = str(prediction)
         ref_strs = [str(ref) for ref in references]
-        
+
         # Tokenize (simple whitespace tokenization)
         pred_tokens = pred_str.split()
         ref_tokens_list = [ref.split() for ref in ref_strs]
-        
+
         # Compute METEOR score
         # Note: nltk's meteor_score takes one reference at a time
         # We compute for each reference and take the maximum
         max_score = 0.0
-        
+
         for ref_tokens in ref_tokens_list:
             try:
                 score = self._meteor.meteor_score(
                     [ref_tokens],  # References should be list of tokenized references
-                    pred_tokens,   # Hypothesis is tokenized prediction
+                    pred_tokens,  # Hypothesis is tokenized prediction
                     alpha=self.alpha,
                     beta=self.beta,
                     gamma=self.gamma,
@@ -135,7 +137,7 @@ class METEOR(Metric):
                 # Handle edge cases (empty strings, etc.)
                 print(f"Warning: METEOR computation failed: {e}")
                 continue
-        
+
         return MetricScore(
             metric_name=self.name,
             value=max_score,

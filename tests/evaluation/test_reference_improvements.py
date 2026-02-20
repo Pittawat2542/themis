@@ -2,10 +2,8 @@
 
 import warnings
 
-import pytest
 
 from themis.core import entities as core_entities
-from themis.evaluation import extractors
 from themis.evaluation.pipelines.standard_pipeline import (
     EvaluationPipeline,
     _normalize_references,
@@ -76,7 +74,7 @@ def test_normalize_references_with_scalar():
     """Test reference normalization with scalar value."""
     normalized = _normalize_references("42")
     assert normalized == ["42"]
-    
+
     normalized = _normalize_references(42)
     assert normalized == [42]
 
@@ -96,19 +94,19 @@ def test_reference_selector_precedence():
         reference=core_entities.Reference(kind="default", value="default_ref"),
         metadata={"custom_ref": "custom_value"},
     )
-    
+
     record = core_entities.GenerationRecord(
         task=task,
         output=core_entities.ModelOutput(text="output"),
         error=None,
     )
-    
+
     # Custom reference selector that returns different value
     def custom_selector(rec):
         return rec.task.metadata["custom_ref"]
-    
+
     metric = DummyMetric()
-    
+
     # Create pipeline with custom selector (should warn)
     with warnings.catch_warnings(record=True) as w:
         pipeline = EvaluationPipeline(
@@ -118,10 +116,10 @@ def test_reference_selector_precedence():
         )
         assert len(w) == 1
         assert "reference_selector" in str(w[0].message)
-    
+
     # Evaluate
     pipeline.evaluate([record])
-    
+
     # Verify custom selector was used (not default)
     assert metric.last_references == ["custom_value"]
 
@@ -142,22 +140,22 @@ def test_reference_selector_with_dict_return():
             "numbers": [25, 50, 75, 100],
         },
     )
-    
+
     record = core_entities.GenerationRecord(
         task=task,
         output=core_entities.ModelOutput(text="output"),
         error=None,
     )
-    
+
     # Reference selector that returns dict
     def multi_value_selector(rec):
         return {
             "target": rec.task.metadata["target"],
             "numbers": rec.task.metadata["numbers"],
         }
-    
+
     metric = DummyMetric()
-    
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         pipeline = EvaluationPipeline(
@@ -165,9 +163,9 @@ def test_reference_selector_with_dict_return():
             metrics=[metric],
             reference_selector=multi_value_selector,
         )
-    
+
     pipeline.evaluate([record])
-    
+
     # Verify dict reference is preserved
     assert len(metric.last_references) == 1
     ref = metric.last_references[0]
@@ -193,11 +191,11 @@ def test_dict_value_in_reference_object():
         kind="countdown_task",
         value={"target": 122, "numbers": [25, 50, 75, 100]},
     )
-    
+
     # Access dict fields
     assert ref.value["target"] == 122
     assert ref.value["numbers"] == [25, 50, 75, 100]
-    
+
     # Normalize for metric
     normalized = _normalize_references(ref)
     assert len(normalized) == 1
@@ -206,6 +204,7 @@ def test_dict_value_in_reference_object():
 
 def test_extractor_runs_before_metric():
     """Test that extractor processes output before metric receives it."""
+
     class AnswerExtractor:
         def extract(self, raw_output: str):
             # Extract answer from tags
@@ -214,7 +213,7 @@ def test_extractor_runs_before_metric():
                 end = raw_output.index("</answer>")
                 return raw_output[start:end]
             return raw_output
-    
+
     task = core_entities.GenerationTask(
         prompt=core_entities.PromptRender(
             spec=core_entities.PromptSpec(name="test", template="Q"),
@@ -226,7 +225,7 @@ def test_extractor_runs_before_metric():
         ),
         reference=core_entities.Reference(kind="answer", value="42"),
     )
-    
+
     record = core_entities.GenerationRecord(
         task=task,
         output=core_entities.ModelOutput(
@@ -234,16 +233,16 @@ def test_extractor_runs_before_metric():
         ),
         error=None,
     )
-    
+
     metric = DummyMetric()
-    
+
     pipeline = EvaluationPipeline(
         extractor=AnswerExtractor(),
         metrics=[metric],
     )
-    
+
     pipeline.evaluate([record])
-    
+
     # Metric should receive extracted answer, not raw output
     assert metric.last_prediction == "42"
     assert "<answer>" not in metric.last_prediction
@@ -264,22 +263,22 @@ def test_metadata_passed_to_metric():
         metadata={"dataset_id": "sample-123", "difficulty": "hard"},
         reference=core_entities.Reference(kind="answer", value="42"),
     )
-    
+
     record = core_entities.GenerationRecord(
         task=task,
         output=core_entities.ModelOutput(text="42"),
         error=None,
     )
-    
+
     metric = DummyMetric()
-    
+
     pipeline = EvaluationPipeline(
         extractor=SimpleExtractor(),
         metrics=[metric],
     )
-    
+
     pipeline.evaluate([record])
-    
+
     # Verify metadata contains sample_id
     assert metric.last_metadata is not None
     assert metric.last_metadata["sample_id"] == "sample-123"

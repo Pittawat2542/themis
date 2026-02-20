@@ -14,11 +14,11 @@ The server is optional and requires the 'server' extra:
 Usage:
     # Start the server
     themis serve --port 8080
-    
+
     # Or programmatically
     from themis.server import create_app
     app = create_app(storage_path=".cache/experiments")
-    
+
     # Run with uvicorn
     uvicorn themis.server:app --host 0.0.0.0 --port 8080
 """

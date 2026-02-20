@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -49,7 +50,7 @@ def load_math500(
     subjects: Sequence[str] | None = None,
     source: str = "huggingface",
     data_dir: str | Path | None = None,
-) -> List[MathSample]:
+) -> list[MathSample]:
     """Load MATH-500 samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:

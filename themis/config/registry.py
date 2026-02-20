@@ -14,7 +14,9 @@ ExperimentBuilder = Callable[
 _EXPERIMENT_BUILDERS: dict[str, ExperimentBuilder] = {}
 
 
-def register_experiment_builder(task: str) -> Callable[[ExperimentBuilder], ExperimentBuilder]:
+def register_experiment_builder(
+    task: str,
+) -> Callable[[ExperimentBuilder], ExperimentBuilder]:
     """Decorator to register an experiment builder for a specific task."""
 
     def decorator(builder: ExperimentBuilder) -> ExperimentBuilder:

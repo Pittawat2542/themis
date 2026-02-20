@@ -225,9 +225,10 @@ def test_get_pricing_summary():
     assert "models" in summary
 
     assert summary["total_models"] > 0
-    assert summary["cheapest_avg_cost_per_token"] < summary[
-        "most_expensive_avg_cost_per_token"
-    ]
+    assert (
+        summary["cheapest_avg_cost_per_token"]
+        < summary["most_expensive_avg_cost_per_token"]
+    )
 
 
 def test_pricing_consistency():
@@ -236,9 +237,10 @@ def test_pricing_consistency():
     direct_pricing = get_provider_pricing("gpt-4")
 
     # Calculate cost manually
-    manual_cost = 1000 * direct_pricing["prompt_tokens"] + 500 * direct_pricing[
-        "completion_tokens"
-    ]
+    manual_cost = (
+        1000 * direct_pricing["prompt_tokens"]
+        + 500 * direct_pricing["completion_tokens"]
+    )
 
     # Calculate using helper
     helper_cost = calculate_cost("gpt-4", 1000, 500)

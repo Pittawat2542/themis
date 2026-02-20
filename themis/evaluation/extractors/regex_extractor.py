@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Dict
 
 from .exceptions import FieldExtractionError
 
@@ -22,7 +21,7 @@ class RegexExtractor:
     def __post_init__(self) -> None:
         self._compiled = re.compile(self.pattern)
 
-    def extract(self, text: str) -> Dict[str, str]:
+    def extract(self, text: str) -> dict[str, str]:
         """Extract fields from text using regex pattern.
 
         Args:

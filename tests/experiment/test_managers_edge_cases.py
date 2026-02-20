@@ -6,12 +6,11 @@ without requiring complex entity construction.
 
 import tempfile
 
-import pytest
 
 from themis.config.schema import HuggingFaceHubConfig, IntegrationsConfig, WandbConfig
 from themis.experiment.cache_manager import CacheManager
 from themis.experiment.integration_manager import IntegrationManager
-from themis.experiment.storage import ExperimentStorage
+from themis.storage import ExperimentStorage
 
 
 # ==== CacheManager Edge Cases ====
@@ -100,9 +99,7 @@ def test_cache_manager_with_both_flags_disabled():
         storage = ExperimentStorage(tmpdir)
 
         # Create manager with everything disabled
-        manager = CacheManager(
-            storage=storage, enable_resume=False, enable_cache=False
-        )
+        manager = CacheManager(storage=storage, enable_resume=False, enable_cache=False)
 
         # Should still have storage
         assert manager.has_storage

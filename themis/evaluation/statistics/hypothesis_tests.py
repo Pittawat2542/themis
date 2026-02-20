@@ -5,7 +5,8 @@ from __future__ import annotations
 import math
 import random
 from statistics import mean, stdev
-from typing import List, Literal, Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 from themis.core import entities as core_entities
 
@@ -15,8 +16,8 @@ from .types import ComparisonResult, PermutationTestResult
 
 
 def compare_metrics(
-    baseline_scores: List[core_entities.MetricScore],
-    treatment_scores: List[core_entities.MetricScore],
+    baseline_scores: list[core_entities.MetricScore],
+    treatment_scores: list[core_entities.MetricScore],
     significance_level: float = 0.05,
 ) -> ComparisonResult:
     """Perform two-sample t-test to compare baseline vs treatment metrics.
@@ -242,7 +243,9 @@ def paired_t_test(
     baseline_mean = mean(group_a)
     treatment_mean = mean(group_b)
     difference = treatment_mean - baseline_mean
-    relative_change = (difference / baseline_mean * 100.0) if baseline_mean != 0 else float("inf")
+    relative_change = (
+        (difference / baseline_mean * 100.0) if baseline_mean != 0 else float("inf")
+    )
 
     baseline_ci = compute_confidence_interval(group_a)
     treatment_ci = compute_confidence_interval(group_b)
@@ -261,7 +264,7 @@ def paired_t_test(
     )
 
 
-def holm_bonferroni(p_values: Sequence[float], *, alpha: float = 0.05) -> List[bool]:
+def holm_bonferroni(p_values: Sequence[float], *, alpha: float = 0.05) -> list[bool]:
     """Apply Holm-Bonferroni correction for multiple comparisons.
 
     This method controls the family-wise error rate (FWER) while being

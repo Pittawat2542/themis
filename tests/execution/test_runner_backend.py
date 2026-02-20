@@ -1,9 +1,7 @@
 from __future__ import annotations
 
+import themis
 from themis.backends.execution import ExecutionBackend
-from themis.evaluation import extractors, metrics, pipeline as evaluation_pipeline
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
 
 class RecordingBackend(ExecutionBackend):
@@ -20,27 +18,18 @@ class RecordingBackend(ExecutionBackend):
         self.shutdown_called = True
 
 
-def test_session_uses_execution_backend(tmp_path):
+def test_evaluate_uses_execution_backend(tmp_path):
     backend = RecordingBackend()
-    pipeline = evaluation_pipeline.EvaluationPipeline(
-        extractor=extractors.IdentityExtractor(),
-        metrics=[metrics.ResponseLength()],
-    )
-
-    spec = ExperimentSpec(
-        dataset=[{"id": "1", "question": "2+2", "answer": "4"}],
-        prompt="Solve: {question}",
+    themis.evaluate(
+        [{"id": "1", "question": "2+2", "answer": "4"}],
         model="fake:fake-math-llm",
-        sampling={"temperature": 0.0},
-        pipeline=pipeline,
-        run_id="session-backend-test",
-    )
-
-    session = ExperimentSession()
-    session.run(
-        spec,
-        execution=ExecutionSpec(backend=backend, workers=2),
-        storage=StorageSpec(path=tmp_path),
+        prompt="Solve: {question}",
+        metrics=["response_length"],
+        temperature=0.0,
+        run_id="backend-test",
+        execution_backend=backend,
+        workers=2,
+        storage=str(tmp_path),
     )
 
     assert backend.called is True

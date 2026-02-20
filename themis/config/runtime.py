@@ -11,12 +11,10 @@ from themis.datasets import create_dataset
 from themis.experiment import math as math_experiment
 from themis.experiment import mcq as mcq_experiment
 from themis.experiment import orchestrator as experiment_orchestrator
-from themis.experiment import storage as experiment_storage
+from themis import storage as experiment_storage
 from themis.providers import registry as provider_registry
 
 from . import registry, schema
-
-
 
 
 def run_experiment_from_config(

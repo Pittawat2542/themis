@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterable, Protocol, Sequence, runtime_checkable
+from collections.abc import Iterable, Sequence
+from typing import Any, Protocol, runtime_checkable
 
 from themis.core import entities
 

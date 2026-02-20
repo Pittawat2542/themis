@@ -12,10 +12,9 @@ Extension APIs for registering custom components:
     - themis.register_benchmark() - Register custom benchmark presets
 """
 
-from themis import config, core, evaluation, generation, project, session
+from themis import config, core, evaluation, generation
 from themis._version import __version__
 from themis.api import evaluate, get_registered_metrics, register_metric
-from themis.session import ExperimentSession
 from themis.datasets import register_dataset, list_datasets, is_dataset_registered
 from themis.presets import register_benchmark, list_benchmarks, get_benchmark_preset
 from themis.providers import register_provider
@@ -41,10 +40,6 @@ __all__ = [
     "core",
     "evaluation",
     "generation",
-    "project",
-    "session",
-    # Session API
-    "ExperimentSession",
     # Version
     "__version__",
 ]

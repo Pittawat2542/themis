@@ -1,10 +1,8 @@
 """Tests for the new configuration system."""
 
 from pathlib import Path
-from typing import Any
 
 import pytest
-from omegaconf import OmegaConf
 
 from themis.config import registry, runtime, schema
 from themis.experiment import orchestrator
@@ -78,7 +76,9 @@ def test_missing_task_raises_error():
         dataset=schema.DatasetConfig(source="huggingface", dataset_id="math500"),
     )
 
-    with pytest.raises(ValueError, match="Experiment configuration must specify a 'task'"):
+    with pytest.raises(
+        ValueError, match="Experiment configuration must specify a 'task'"
+    ):
         runtime._build_experiment(config)
 
 
@@ -93,7 +93,7 @@ def test_missing_dataset_id_raises_error():
     # We need to mock _build_experiment to call _load_dataset or test _load_dataset directly
     # But runtime.run_experiment_from_config calls both.
     # Let's test _load_dataset directly as it's easier.
-    
+
     with pytest.raises(ValueError, match="dataset.dataset_id must be provided"):
         runtime._load_dataset(config.dataset, experiment_name=config.name)
 
@@ -109,6 +109,6 @@ def test_task_override_via_options():
             model_identifier="test", provider=schema.ProviderConfig(name="fake")
         ),
     )
-    
+
     orchestrator_obj = runtime._build_experiment(config)
     assert orchestrator_obj._plan.templates[0].metadata["task"] == "aime24"

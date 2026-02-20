@@ -7,8 +7,6 @@ from typing import Any
 
 from themis.config.schema import IntegrationsConfig
 from themis.core.entities import ExperimentReport
-from themis.integrations.huggingface import HuggingFaceHubUploader
-from themis.integrations.wandb import WandbTracker
 
 
 class IntegrationManager:
@@ -32,16 +30,20 @@ class IntegrationManager:
         self._config = config or IntegrationsConfig()
 
         # Initialize WandB tracker if enabled
-        self._wandb_tracker = (
-            WandbTracker(self._config.wandb) if self._config.wandb.enable else None
-        )
+        if self._config.wandb.enable:
+            from themis.integrations.wandb import WandbTracker
+
+            self._wandb_tracker = WandbTracker(self._config.wandb)
+        else:
+            self._wandb_tracker = None
 
         # Initialize HuggingFace Hub uploader if enabled
-        self._hf_uploader = (
-            HuggingFaceHubUploader(self._config.huggingface_hub)
-            if self._config.huggingface_hub.enable
-            else None
-        )
+        if self._config.huggingface_hub.enable:
+            from themis.integrations.huggingface import HuggingFaceHubUploader
+
+            self._hf_uploader = HuggingFaceHubUploader(self._config.huggingface_hub)
+        else:
+            self._hf_uploader = None
 
     @property
     def has_wandb(self) -> bool:
@@ -103,8 +105,7 @@ class IntegrationManager:
         close connections and clean up resources.
         """
         if self._wandb_tracker:
-            # WandB tracker handles finalization in log_results
-            pass
+            self._wandb_tracker.finalize()
 
         if self._hf_uploader:
             # HuggingFace uploader is stateless, no finalization needed

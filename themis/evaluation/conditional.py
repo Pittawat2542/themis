@@ -28,7 +28,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from themis.core import entities as core_entities
 from themis.evaluation import pipeline, reports

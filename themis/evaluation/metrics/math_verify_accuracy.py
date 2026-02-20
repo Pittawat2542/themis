@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from themis.core import entities as core_entities
 from themis.evaluation import math_verify_utils

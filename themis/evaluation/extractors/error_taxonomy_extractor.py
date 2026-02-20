@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Dict
 
 
 class ErrorTaxonomyExtractor:
@@ -14,7 +13,7 @@ class ErrorTaxonomyExtractor:
     - reasoning_gap: Final answer given without common justification keywords
     """
 
-    def extract(self, text: str) -> Dict[str, bool]:
+    def extract(self, text: str) -> dict[str, bool]:
         labels = {
             "format_parse_failure": False,
             "arithmetic_slip": False,

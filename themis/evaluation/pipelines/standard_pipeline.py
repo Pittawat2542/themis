@@ -6,7 +6,7 @@ import logging
 import re
 import time
 import warnings
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from themis.core import entities as core_entities
 from themis.evaluation import extractors

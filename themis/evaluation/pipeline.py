@@ -26,7 +26,8 @@ Example (Composable):
 from __future__ import annotations
 
 # vNext: protocol definition for evaluation pipelines
-from typing import Protocol, Sequence, runtime_checkable
+from collections.abc import Sequence
+from typing import Protocol, runtime_checkable
 
 # Re-export pipeline implementations from canonical modules.
 from themis.evaluation.pipelines.composable_pipeline import (
@@ -36,7 +37,6 @@ from themis.evaluation.pipelines.composable_pipeline import (
     EvaluationStep,
 )
 from themis.evaluation.pipelines.standard_pipeline import EvaluationPipeline
-from themis.evaluation.metric_pipeline import MetricPipeline
 from themis.evaluation.reports import (
     EvaluationFailure,
     EvaluationReport,
@@ -57,10 +57,10 @@ class EvaluationPipelineContract(Protocol):
     def evaluation_fingerprint(self) -> dict:  # pragma: no cover - protocol
         ...
 
+
 __all__ = [
     "EvaluationPipeline",
     "EvaluationPipelineContract",
-    "MetricPipeline",
     "ComposableEvaluationPipeline",
     "ComposableEvaluationReportPipeline",
     "EvaluationStep",

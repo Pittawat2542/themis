@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import string
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
@@ -66,7 +67,7 @@ def load_med_qa(
     source: str = "huggingface",
     data_dir: str | Path | None = None,
     subset: str = "med_qa_en_bigbio_qa",
-) -> List[MedQaSample]:
+) -> list[MedQaSample]:
     """Load MedQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -94,21 +95,17 @@ def load_med_qa(
 
 
 def _row_to_sample(row: dict[str, Any], *, index: int) -> MedQaSample:
-    unique_id = (
-        row.get("id")
-        or row.get("unique_id")
-        or f"med-qa-{index:05d}"
-    )
+    unique_id = row.get("id") or row.get("unique_id") or f"med-qa-{index:05d}"
     question = row.get("question") or ""
-    
+
     # BigBio MedQA format:
     # choices: [{'key': 'A', 'text': '...'}, {'key': 'B', 'text': '...'}]
     # answer: 'A' (or similar)
-    
+
     choices_data = row.get("choices") or []
     choices = []
     choice_labels = []
-    
+
     if isinstance(choices_data, list):
         # Sort by key to ensure order
         try:
@@ -119,19 +116,17 @@ def _row_to_sample(row: dict[str, Any], *, index: int) -> MedQaSample:
         except (TypeError, AttributeError):
             # Fallback if structure is different
             choices = [str(c) for c in choices_data]
-            
+
     answer = ""
     answer_data = row.get("answer")
     if isinstance(answer_data, list) and answer_data:
-        answer = str(answer_data[0]) # Usually a list with one element
+        answer = str(answer_data[0])  # Usually a list with one element
     elif isinstance(answer_data, str):
         answer = answer_data
 
-    metadata_keys = {
-        "question", "choices", "answer", "id"
-    }
+    metadata_keys = {"question", "choices", "answer", "id"}
     metadata = {key: value for key, value in row.items() if key not in metadata_keys}
-    
+
     return MedQaSample(
         unique_id=str(unique_id),
         question=str(question),

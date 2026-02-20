@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Protocol
+from collections.abc import Iterable
+from typing import Protocol
 
 from themis.core import entities as core_entities
 
@@ -16,8 +17,8 @@ class EvaluationStrategy(Protocol):
     def aggregate(
         self,
         record: core_entities.GenerationRecord,
-        scores: List[core_entities.MetricScore],
-    ) -> List[core_entities.MetricScore]:  # pragma: no cover - interface
+        scores: list[core_entities.MetricScore],
+    ) -> list[core_entities.MetricScore]:  # pragma: no cover - interface
         ...
 
 

@@ -9,7 +9,7 @@ def test_error_taxonomy_arithmetic_slip_detected():
 
 def test_error_taxonomy_format_parse_failure_detected():
     ext = extractors.ErrorTaxonomyExtractor()
-    labels = ext.extract("{\"answer\": \"Paris\"")  # unbalanced brace
+    labels = ext.extract('{"answer": "Paris"')  # unbalanced brace
     assert labels["format_parse_failure"] is True
 
 

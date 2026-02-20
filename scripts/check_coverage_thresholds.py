@@ -34,13 +34,10 @@ def main(argv: list[str]) -> int:
             continue
         percent = float(summary.get("percent_covered", 0.0))
         if percent < threshold:
-            failures.append(
-                f"{module}: {percent:.2f}% < required {threshold:.2f}%"
-            )
+            failures.append(f"{module}: {percent:.2f}% < required {threshold:.2f}%")
         else:
             print(
-                f"[coverage-gate] {module}: {percent:.2f}% "
-                f"(threshold {threshold:.2f}%)"
+                f"[coverage-gate] {module}: {percent:.2f}% (threshold {threshold:.2f}%)"
             )
 
     if failures:

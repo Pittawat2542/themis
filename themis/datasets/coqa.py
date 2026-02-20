@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -35,11 +36,11 @@ class CoQaSample(BaseModel):
 
 def load_coqa(
     *,
-    split: str = "validation", # Test set usually has no labels
+    split: str = "validation",  # Test set usually has no labels
     limit: int | None = None,
     source: str = "huggingface",
     data_dir: str | Path | None = None,
-) -> List[CoQaSample]:
+) -> list[CoQaSample]:
     """Load CoQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -65,19 +66,19 @@ def load_coqa(
         # Or maybe just take the first one? No, that's wasteful.
         # Let's see the structure:
         # 'questions': ['q1', 'q2'], 'answers': {'input_text': ['a1', 'a2'], ...}
-        
+
         story = row.get("story") or ""
         questions = row.get("questions") or []
         answers_data = row.get("answers") or {}
         answers = answers_data.get("input_text") or []
-        
+
         if len(questions) != len(answers):
             # Mismatch, skip or warn?
             # Let's just take the minimum length
             min_len = min(len(questions), len(answers))
             questions = questions[:min_len]
             answers = answers[:min_len]
-            
+
         for i, (q, a) in enumerate(zip(questions, answers)):
             sample = CoQaSample(
                 unique_id=f"coqa-{index:05d}-{i:02d}",
@@ -89,10 +90,10 @@ def load_coqa(
             samples.append(sample)
             if limit is not None and len(samples) >= limit:
                 break
-        
+
         if limit is not None and len(samples) >= limit:
             break
-            
+
     return samples
 
 

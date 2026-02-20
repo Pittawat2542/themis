@@ -60,8 +60,7 @@ def test_run_experiment_from_inline_config():
 
 def test_inline_dataset_requires_rows():
     config = schema.ExperimentConfig(
-        task="math500",
-        dataset=schema.DatasetConfig(source="inline", inline_samples=[])
+        task="math500", dataset=schema.DatasetConfig(source="inline", inline_samples=[])
     )
 
     with pytest.raises(
@@ -177,7 +176,7 @@ def test_run_competition_math_configs(tmp_path, experiment_name):
 
     # Map experiment name to task name (remove _zero_shot suffix)
     task_name = experiment_name.replace("_zero_shot", "")
-    
+
     config = schema.ExperimentConfig(
         name=experiment_name,
         task=task_name,

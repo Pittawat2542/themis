@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, Sequence, TypeVar
+from collections.abc import Callable, Sequence
+from typing import Any, Generic, TypeVar
 
 from themis.core import entities as core_entities
-from themis.evaluation.reports import EvaluationFailure, EvaluationReport, MetricAggregate
+from themis.evaluation.reports import (
+    EvaluationFailure,
+    EvaluationReport,
+    MetricAggregate,
+)
 from themis.interfaces import Metric as MetricInterface
 from themis.utils import tracing
 
@@ -377,13 +382,15 @@ class ComposableEvaluationReportPipeline:
 
         for record in records:
             result = self._pipeline.evaluate(record)
-            sample_id = record.task.metadata.get("dataset_id") or record.task.metadata.get(
-                "sample_id"
-            )
+            sample_id = record.task.metadata.get(
+                "dataset_id"
+            ) or record.task.metadata.get("sample_id")
 
             if result.errors:
                 for error in result.errors:
-                    failures.append(EvaluationFailure(sample_id=sample_id, message=error))
+                    failures.append(
+                        EvaluationFailure(sample_id=sample_id, message=error)
+                    )
 
             for score in result.scores:
                 per_metric.setdefault(score.metric_name, []).append(score)

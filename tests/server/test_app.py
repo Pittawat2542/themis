@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 pytest.importorskip("fastapi")
 
-from themis.experiment import storage as experiment_storage
+from themis import storage as experiment_storage
 from themis.server.app import create_app
 from tests.factories import make_evaluation_record, make_record
 

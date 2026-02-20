@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -39,7 +40,7 @@ def load_gsm_symbolic(
     source: str = "huggingface",
     data_dir: str | Path | None = None,
     subset: str = "main",
-) -> List[GsmSymbolicSample]:
+) -> list[GsmSymbolicSample]:
     """Load GSM-Symbolic samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
@@ -67,17 +68,13 @@ def load_gsm_symbolic(
 
 
 def _row_to_sample(row: dict[str, Any], *, index: int) -> GsmSymbolicSample:
-    unique_id = (
-        row.get("id")
-        or row.get("unique_id")
-        or f"gsm-symbolic-{index:05d}"
-    )
+    unique_id = row.get("id") or row.get("unique_id") or f"gsm-symbolic-{index:05d}"
     question = row.get("question") or row.get("problem") or ""
     answer = row.get("answer") or ""
-    
+
     core_keys = {"id", "unique_id", "question", "problem", "answer"}
     metadata = {key: value for key, value in row.items() if key not in core_keys}
-    
+
     return GsmSymbolicSample(
         unique_id=str(unique_id),
         question=str(question),

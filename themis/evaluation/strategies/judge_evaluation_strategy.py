@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List
+from collections.abc import Iterable
 
 from themis.core import entities as core_entities
 
@@ -25,8 +25,8 @@ class JudgeEvaluationStrategy:
     def aggregate(
         self,
         record: core_entities.GenerationRecord,
-        scores: List[core_entities.MetricScore],
-    ) -> List[core_entities.MetricScore]:
+        scores: list[core_entities.MetricScore],
+    ) -> list[core_entities.MetricScore]:
         if not scores:
             return []
         grouped: dict[str, list[core_entities.MetricScore]] = {}

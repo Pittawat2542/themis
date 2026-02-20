@@ -3,13 +3,11 @@
 import pytest
 
 from themis.experiment.comparison import ComparisonRow, MultiExperimentComparison
-from themis.experiment.cost import CostBreakdown, CostTracker
+from themis.experiment.cost import CostTracker
 from themis.experiment.visualization import PLOTLY_AVAILABLE
 
 # Skip all tests if plotly is not available
-pytestmark = pytest.mark.skipif(
-    not PLOTLY_AVAILABLE, reason="Plotly not installed"
-)
+pytestmark = pytest.mark.skipif(not PLOTLY_AVAILABLE, reason="Plotly not installed")
 
 
 @pytest.fixture
@@ -104,9 +102,7 @@ def test_plot_pareto_frontier(sample_comparison):
     visualizer = InteractiveVisualizer()
 
     # Compute Pareto frontier
-    pareto_ids = sample_comparison.pareto_frontier(
-        ["accuracy", "cost"], [True, False]
-    )
+    pareto_ids = sample_comparison.pareto_frontier(["accuracy", "cost"], [True, False])
 
     # Create visualization
     fig = visualizer.plot_pareto_frontier(

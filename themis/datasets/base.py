@@ -9,7 +9,8 @@ from __future__ import annotations
 import logging
 import random
 from collections import defaultdict
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from themis.datasets import schema as dataset_schema
 

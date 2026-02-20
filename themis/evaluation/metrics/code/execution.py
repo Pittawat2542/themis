@@ -14,7 +14,8 @@ import tracemalloc
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
