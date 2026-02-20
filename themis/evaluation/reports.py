@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from statistics import mean
-from typing import Dict, List, Literal, Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 from themis.core import entities as core_entities
 from themis.evaluation.statistics import (
@@ -35,13 +36,13 @@ class MetricAggregate:
     name: str
     count: int
     mean: float
-    per_sample: List[core_entities.MetricScore]
+    per_sample: list[core_entities.MetricScore]
     per_sample_complete: bool = True
     truncated_count: int = 0
 
     @classmethod
     def from_scores(
-        cls, name: str, scores: List[core_entities.MetricScore]
+        cls, name: str, scores: list[core_entities.MetricScore]
     ) -> "MetricAggregate":
         if not scores:
             return cls(name=name, count=0, mean=0.0, per_sample=[])
@@ -58,8 +59,8 @@ class MetricAggregate:
 @dataclass
 class EvaluationReport:
     metrics: dict[str, MetricAggregate]
-    failures: List[EvaluationFailure]
-    records: List[core_entities.EvaluationRecord]
+    failures: list[EvaluationFailure]
+    records: list[core_entities.EvaluationRecord]
     slices: dict[str, dict[str, MetricAggregate]] = field(default_factory=dict)
     metadata: dict[str, object] = field(default_factory=dict)
 
@@ -292,9 +293,9 @@ def compare_reports_with_holm(
     seed: int | None = None,
     paired: bool = True,
     alpha: float = 0.05,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     p_values: list[float] = []
-    pt_results: Dict[str, PermutationTestResult] = {}
+    pt_results: dict[str, PermutationTestResult] = {}
     for name in metric_names:
         if paired:
             pt = paired_permutation_test_for_metric(
@@ -326,10 +327,10 @@ def compare_reports_with_holm(
 
 def confusion_matrix(
     labels_true: Sequence[str], labels_pred: Sequence[str]
-) -> Dict[str, Dict[str, int]]:
+) -> dict[str, dict[str, int]]:
     if len(labels_true) != len(labels_pred):
         raise ValueError("labels_true and labels_pred must have same length")
-    cm: Dict[str, Dict[str, int]] = {}
+    cm: dict[str, dict[str, int]] = {}
     for t, p in zip(labels_true, labels_pred):
         cm.setdefault(t, {})
         cm[t][p] = cm[t].get(p, 0) + 1

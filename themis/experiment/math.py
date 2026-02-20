@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from textwrap import dedent
-from typing import Sequence
+from collections.abc import Sequence
 
 from themis.core import entities as core_entities
 from themis.evaluation import extractors, math_verify_utils, metrics, pipeline
 from themis.experiment import orchestrator
-from themis.experiment import storage as experiment_storage
+from themis import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
 from themis.generation import clients, plan, runner, templates
 from themis.interfaces import ModelProvider

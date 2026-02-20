@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from themis.evaluation import extractors, metrics
-from themis.evaluation.metric_pipeline import MetricPipeline
-from themis.evaluation.pipeline import EvaluationPipelineContract
+from themis.evaluation.pipeline import EvaluationPipeline, EvaluationPipelineContract
 from tests.factories import make_record
 
 
 def test_metric_pipeline_evaluates_records():
-    pipeline = MetricPipeline(
+    pipeline = EvaluationPipeline(
         extractor=extractors.IdentityExtractor(),
         metrics=[metrics.ResponseLength()],
     )

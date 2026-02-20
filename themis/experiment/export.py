@@ -6,8 +6,9 @@ import csv
 import html
 import json
 from collections import OrderedDict
+from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import Mapping, MutableMapping, Protocol, Sequence
+from typing import Protocol
 
 from themis.core import entities as core_entities
 from themis.experiment import orchestrator
@@ -544,9 +545,7 @@ def _metadata_from_task(record: core_entities.GenerationRecord) -> dict[str, obj
 
 def _render_summary(report: orchestrator.ExperimentReport) -> str:
     # Filter out cost from main summary (we'll show it separately)
-    metadata_items = sorted(
-        (k, v) for k, v in report.metadata.items() if k != "cost"
-    )
+    metadata_items = sorted((k, v) for k, v in report.metadata.items() if k != "cost")
     failures = len(report.failures)
     metadata_html = "\n".join(
         f'<li class="summary-item"><strong>{html.escape(str(key))}</strong><br /><span class="subtle">{html.escape(str(value))}</span></li>'
