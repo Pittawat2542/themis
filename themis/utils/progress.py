@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
+from rich.console import Console
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -57,6 +59,16 @@ class RichProgressReporter(ProgressReporter):
     """Progress reporter using Rich's dynamic progress bars."""
 
     def __init__(self) -> None:
+        # On Windows, Rich may fall back to a legacy renderer that uses the
+        # current code page (typically CP1252) and cannot encode the braille
+        # spinner characters.  Passing legacy_windows=False forces Rich to use
+        # the VT-compatible path, which supports full Unicode on modern Windows
+        # terminals and all CI runners.
+        _console = Console(
+            file=sys.stdout,
+            legacy_windows=False,
+            highlight=False,
+        )
         self._progress = Progress(
             SpinnerColumn(spinner_name="dots", style="cyan"),
             TextColumn("[bold cyan]{task.description}"),
@@ -73,6 +85,7 @@ class RichProgressReporter(ProgressReporter):
             TimeElapsedColumn(),
             TextColumn("•", style="dim"),
             TimeRemainingColumn(),
+            console=_console,
         )
 
     def __enter__(self) -> ProgressReporter:
