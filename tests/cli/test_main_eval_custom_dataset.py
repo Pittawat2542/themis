@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
-from themis.cli import main as cli_main
+from themis.cli.commands.eval_commands import eval_command
+from themis.cli import utils as cli_utils
 
 
 def test_eval_cli_runs_with_jsonl_custom_dataset(tmp_path):
@@ -21,7 +21,7 @@ def test_eval_cli_runs_with_jsonl_custom_dataset(tmp_path):
         encoding="utf-8",
     )
 
-    exit_code = cli_main.eval(
+    exit_code = eval_command(
         str(dataset_path),
         model="fake:fake-math-llm",
         prompt="Solve: {question}",
@@ -35,10 +35,12 @@ def test_eval_cli_runs_with_jsonl_custom_dataset(tmp_path):
 
 def test_custom_dataset_loader_rejects_non_object_rows(tmp_path):
     dataset_path = tmp_path / "bad.jsonl"
-    dataset_path.write_text(json.dumps(["not", "an", "object"]) + "\n", encoding="utf-8")
+    dataset_path.write_text(
+        json.dumps(["not", "an", "object"]) + "\n", encoding="utf-8"
+    )
 
     with pytest.raises(ValueError, match="must be a JSON object"):
-        cli_main._load_custom_dataset_file(dataset_path)
+        cli_utils.load_custom_dataset_file(dataset_path)
 
 
 def test_custom_dataset_loader_requires_prompt_and_reference_fields(tmp_path):
@@ -49,7 +51,7 @@ def test_custom_dataset_loader_requires_prompt_and_reference_fields(tmp_path):
     )
 
     with pytest.raises(ValueError, match="Could not detect prompt field"):
-        cli_main._load_custom_dataset_file(dataset_path)
+        cli_utils.load_custom_dataset_file(dataset_path)
 
 
 def test_custom_dataset_loader_requires_reference_field(tmp_path):
@@ -60,7 +62,7 @@ def test_custom_dataset_loader_requires_reference_field(tmp_path):
     )
 
     with pytest.raises(ValueError, match="Could not detect reference field"):
-        cli_main._load_custom_dataset_file(dataset_path)
+        cli_utils.load_custom_dataset_file(dataset_path)
 
 
 def test_custom_dataset_loader_normalizes_reference_alias(tmp_path):
@@ -70,7 +72,9 @@ def test_custom_dataset_loader_normalizes_reference_alias(tmp_path):
         encoding="utf-8",
     )
 
-    rows, prompt_field, reference_field = cli_main._load_custom_dataset_file(dataset_path)
+    rows, prompt_field, reference_field = cli_utils.load_custom_dataset_file(
+        dataset_path
+    )
     assert prompt_field == "question"
     assert reference_field == "expected"
     assert rows[0]["id"] == "a"

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from themis.cli import main as cli_main
+from themis.cli.commands.server_commands import serve_command
 
 
 def test_serve_resolves_storage_path_and_invokes_uvicorn(tmp_path, monkeypatch):
@@ -24,7 +24,7 @@ def test_serve_resolves_storage_path_and_invokes_uvicorn(tmp_path, monkeypatch):
     monkeypatch.setattr("themis.server.create_app", _fake_create_app)
     monkeypatch.setattr(uvicorn, "run", _fake_run)
 
-    exit_code = cli_main.serve(
+    exit_code = serve_command(
         storage=str(tmp_path),
         host="127.0.0.1",
         port=9123,

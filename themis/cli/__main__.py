@@ -1,6 +1,6 @@
 """Entry point for running themis.cli as a module."""
 
-from .main import main
+from .main import app
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())
