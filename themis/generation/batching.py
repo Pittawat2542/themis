@@ -23,7 +23,8 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any
 
 from themis.core import entities as core_entities
 

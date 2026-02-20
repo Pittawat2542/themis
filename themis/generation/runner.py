@@ -5,8 +5,8 @@ from __future__ import annotations
 import itertools
 import logging
 import time
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, Iterable, Iterator, List
 
 from themis.core import entities as core_entities
 from themis.generation import strategies
@@ -154,7 +154,7 @@ class GenerationRunner:
     def _run_single_attempt(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:
-        attempt_errors: List[dict[str, object]] = []
+        attempt_errors: list[dict[str, object]] = []
         last_error: Exception | None = None
         delay = self._retry_initial_delay
         task_label = task.metadata.get("dataset_id") or task.prompt.template_name
@@ -298,7 +298,7 @@ class GenerationRunner:
     def _build_failure_record(
         self,
         task: core_entities.GenerationTask,
-        attempt_errors: List[dict[str, object]],
+        attempt_errors: list[dict[str, object]],
         last_error: Exception | None,
     ) -> core_entities.GenerationRecord:
         attempts = len(attempt_errors) or 1
@@ -340,7 +340,7 @@ class GenerationRunner:
 
         with tracing.span("execute_task", task_id=task_id, model=model_id):
             strategy = self._strategy_resolver(task)
-            attempt_records: List[core_entities.GenerationRecord] = []
+            attempt_records: list[core_entities.GenerationRecord] = []
 
             with tracing.span("expand_strategy"):
                 expansion = list(strategy.expand(task))

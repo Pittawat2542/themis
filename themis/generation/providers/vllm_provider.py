@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from themis.core import entities as core_entities
 from themis.interfaces import ModelProvider
@@ -19,7 +19,7 @@ class VLLMProvider(ModelProvider):
         model: str,
         tensor_parallel_size: int = 1,
         max_parallel: int = 2,
-        engine_kwargs: Dict[str, Any] | None = None,
+        engine_kwargs: dict[str, Any] | None = None,
     ) -> None:
         self._model_name = model
         self._tp_size = max(1, tensor_parallel_size)
@@ -68,7 +68,7 @@ class VLLMProvider(ModelProvider):
                 lora_path=lora_path,
             )
 
-        chunks: List[str] = []
+        chunks: list[str] = []
         tokenizer = getattr(engine, "tokenizer", None)
 
         # Prepare generation kwargs

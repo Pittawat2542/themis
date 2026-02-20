@@ -44,6 +44,14 @@ def fake_vllm_module(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "vllm", module)
 
+    # Mock vllm.lora.request
+    lora_request_module = types.SimpleNamespace(
+        LoraRequest=lambda *args, **kwargs: None
+    )
+    lora_module = types.SimpleNamespace(request=lora_request_module)
+    monkeypatch.setitem(sys.modules, "vllm.lora", lora_module)
+    monkeypatch.setitem(sys.modules, "vllm.lora.request", lora_request_module)
+
 
 def fake_torch_module(monkeypatch):
     class FakeCuda:

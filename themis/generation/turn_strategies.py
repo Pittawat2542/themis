@@ -23,8 +23,10 @@ Examples:
 
 from __future__ import annotations
 
+import random
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 from themis.core import conversation as conv
 from themis.core import entities as core_entities
@@ -346,8 +348,6 @@ def create_keyword_stop_strategy(
 
 
 # Prompt perturbation and seed helpers for robustness sweeps
-
-import random
 
 
 def set_sampling_seed(task_metadata: dict[str, object], seed: int) -> dict[str, object]:

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, List, Protocol
+from typing import Protocol
 
 from themis.core import entities as core_entities
 
@@ -19,7 +20,7 @@ class GenerationStrategy(Protocol):
     def aggregate(
         self,
         task: core_entities.GenerationTask,
-        records: List[core_entities.GenerationRecord],
+        records: list[core_entities.GenerationRecord],
     ) -> core_entities.GenerationRecord:  # pragma: no cover - interface
         ...
 
@@ -36,7 +37,7 @@ class SingleAttemptStrategy:
     def aggregate(
         self,
         task: core_entities.GenerationTask,
-        records: List[core_entities.GenerationRecord],
+        records: list[core_entities.GenerationRecord],
     ) -> core_entities.GenerationRecord:
         record = records[0]
         return core_entities.GenerationRecord(
@@ -71,7 +72,7 @@ class RepeatedSamplingStrategy:
     def aggregate(
         self,
         task: core_entities.GenerationTask,
-        records: List[core_entities.GenerationRecord],
+        records: list[core_entities.GenerationRecord],
     ) -> core_entities.GenerationRecord:
         best = next((record for record in records if not record.error), records[0])
         aggregated = core_entities.GenerationRecord(

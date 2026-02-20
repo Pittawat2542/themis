@@ -6,7 +6,6 @@ import json
 import math
 import random
 import re
-from typing import Tuple
 
 from themis.core import entities as core_entities
 from themis.interfaces import ModelProvider
@@ -50,7 +49,7 @@ class FakeMathModelClient(ModelProvider):
             metrics={"latency_ms": latency},
         )
 
-    def _solve(self, prompt: str) -> Tuple[str, str]:
+    def _solve(self, prompt: str) -> tuple[str, str]:
         prompt_lower = prompt.lower()
         polar = self._solve_polar_coordinates(prompt_lower)
         if polar is not None:
@@ -62,7 +61,7 @@ class FakeMathModelClient(ModelProvider):
 
         return self._default_answer, "Unable to derive answer with heuristic solver."
 
-    def _solve_polar_coordinates(self, prompt_lower: str) -> Tuple[str, str] | None:
+    def _solve_polar_coordinates(self, prompt_lower: str) -> tuple[str, str] | None:
         if "polar" not in prompt_lower:
             return None
         match = self._POINT_PATTERN.search(prompt_lower)
@@ -105,7 +104,7 @@ class FakeMathModelClient(ModelProvider):
             return "\\frac{4\\pi}{3}"
         return f"{theta:.3f}"
 
-    def _solve_arithmetic(self, prompt_lower: str) -> Tuple[str, str] | None:
+    def _solve_arithmetic(self, prompt_lower: str) -> tuple[str, str] | None:
         if "what is" not in prompt_lower and "compute" not in prompt_lower:
             return None
         match = self._ARITHMETIC_PATTERN.search(prompt_lower)

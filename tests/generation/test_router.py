@@ -7,7 +7,9 @@ from tests.factories import make_task
 
 
 class ProviderA(ModelProvider):
-    def generate(self, task: core_entities.GenerationTask) -> core_entities.GenerationRecord:
+    def generate(
+        self, task: core_entities.GenerationTask
+    ) -> core_entities.GenerationRecord:
         return core_entities.GenerationRecord(
             task=task,
             output=core_entities.ModelOutput(text="A"),
@@ -16,7 +18,9 @@ class ProviderA(ModelProvider):
 
 
 class ProviderB(ModelProvider):
-    def generate(self, task: core_entities.GenerationTask) -> core_entities.GenerationRecord:
+    def generate(
+        self, task: core_entities.GenerationTask
+    ) -> core_entities.GenerationRecord:
         return core_entities.GenerationRecord(
             task=task,
             output=core_entities.ModelOutput(text="B"),

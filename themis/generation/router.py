@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Mapping, Tuple, Union
+from collections.abc import Mapping
 
 from themis.core import entities as core_entities
 from themis.interfaces import ModelProvider
 
 
-ProviderKey = Union[str, Tuple[str, str]]
+ProviderKey = str | tuple[str, str]
 
 
 def _model_key(provider: str, identifier: str) -> str:
@@ -33,7 +33,9 @@ class ProviderRouter(ModelProvider):
     def generate(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:  # type: ignore[override]
-        provider = self._providers.get(_model_key(task.model.provider, task.model.identifier))
+        provider = self._providers.get(
+            _model_key(task.model.provider, task.model.identifier)
+        )
         if provider is None:
             provider = self._providers.get(task.model.identifier)
         if provider is None:

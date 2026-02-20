@@ -31,8 +31,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from themis.core import conversation as conv
 from themis.core import entities as core_entities

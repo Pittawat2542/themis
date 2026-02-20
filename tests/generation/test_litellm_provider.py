@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, MagicMock
 import sys
 import pytest
 

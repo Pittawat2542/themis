@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Any, Dict, Iterable, List
+from collections.abc import Iterable
+from typing import Any
 
 from themis.core import entities as core_entities
 
@@ -19,7 +20,7 @@ class PromptTemplate:
 
     name: str
     template: str
-    metadata: Dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self._spec = core_entities.PromptSpec(
@@ -40,9 +41,9 @@ class PromptTemplate:
     def expand_variants(
         self,
         *,
-        base_context: Dict[str, Any],
-        variant_values: Dict[str, Iterable[Any]],
-    ) -> List[core_entities.PromptRender]:
+        base_context: dict[str, Any],
+        variant_values: dict[str, Iterable[Any]],
+    ) -> list[core_entities.PromptRender]:
         """Generate prompts for the cross-product of variant fields."""
 
         if not variant_values:
@@ -56,11 +57,11 @@ class PromptTemplate:
             prompts.append(self._render_context(combo_context))
         return prompts
 
-    def render_prompt(self, context: Dict[str, Any]) -> core_entities.PromptRender:
+    def render_prompt(self, context: dict[str, Any]) -> core_entities.PromptRender:
         """Render the template to a core PromptRender."""
         return self._render_context(context)
 
-    def _render_context(self, context: Dict[str, Any]) -> core_entities.PromptRender:
+    def _render_context(self, context: dict[str, Any]) -> core_entities.PromptRender:
         prompt_text = self.render(**context)
         metadata = dict(self.metadata or {})
         return core_entities.PromptRender(
