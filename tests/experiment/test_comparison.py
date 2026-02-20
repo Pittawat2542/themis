@@ -7,7 +7,6 @@ import pytest
 
 from themis.experiment.comparison import (
     ComparisonRow,
-    ConfigDiff,
     MultiExperimentComparison,
     compare_experiments,
     diff_configs,
@@ -99,15 +98,9 @@ def test_comparison_row_get_metric():
 def test_multi_experiment_comparison_rank_by_metric():
     """Test ranking experiments by metric value."""
     experiments = [
-        ComparisonRow(
-            run_id="run-1", metric_values={"accuracy": 0.85, "cost": 0.05}
-        ),
-        ComparisonRow(
-            run_id="run-2", metric_values={"accuracy": 0.90, "cost": 0.10}
-        ),
-        ComparisonRow(
-            run_id="run-3", metric_values={"accuracy": 0.75, "cost": 0.02}
-        ),
+        ComparisonRow(run_id="run-1", metric_values={"accuracy": 0.85, "cost": 0.05}),
+        ComparisonRow(run_id="run-2", metric_values={"accuracy": 0.90, "cost": 0.10}),
+        ComparisonRow(run_id="run-3", metric_values={"accuracy": 0.75, "cost": 0.02}),
     ]
 
     comparison = MultiExperimentComparison(
@@ -126,15 +119,9 @@ def test_multi_experiment_comparison_rank_by_metric():
 def test_multi_experiment_comparison_highlight_best():
     """Test finding best experiment for a metric."""
     experiments = [
-        ComparisonRow(
-            run_id="run-1", metric_values={"accuracy": 0.85, "cost": 0.05}
-        ),
-        ComparisonRow(
-            run_id="run-2", metric_values={"accuracy": 0.90, "cost": 0.10}
-        ),
-        ComparisonRow(
-            run_id="run-3", metric_values={"accuracy": 0.75, "cost": 0.02}
-        ),
+        ComparisonRow(run_id="run-1", metric_values={"accuracy": 0.85, "cost": 0.05}),
+        ComparisonRow(run_id="run-2", metric_values={"accuracy": 0.90, "cost": 0.10}),
+        ComparisonRow(run_id="run-3", metric_values={"accuracy": 0.75, "cost": 0.02}),
     ]
 
     comparison = MultiExperimentComparison(
@@ -155,18 +142,10 @@ def test_multi_experiment_comparison_highlight_best():
 def test_multi_experiment_comparison_pareto_frontier():
     """Test Pareto frontier computation."""
     experiments = [
-        ComparisonRow(
-            run_id="run-1", metric_values={"accuracy": 0.85, "cost": 0.05}
-        ),
-        ComparisonRow(
-            run_id="run-2", metric_values={"accuracy": 0.90, "cost": 0.10}
-        ),
-        ComparisonRow(
-            run_id="run-3", metric_values={"accuracy": 0.75, "cost": 0.02}
-        ),
-        ComparisonRow(
-            run_id="run-4", metric_values={"accuracy": 0.80, "cost": 0.08}
-        ),
+        ComparisonRow(run_id="run-1", metric_values={"accuracy": 0.85, "cost": 0.05}),
+        ComparisonRow(run_id="run-2", metric_values={"accuracy": 0.90, "cost": 0.10}),
+        ComparisonRow(run_id="run-3", metric_values={"accuracy": 0.75, "cost": 0.02}),
+        ComparisonRow(run_id="run-4", metric_values={"accuracy": 0.80, "cost": 0.08}),
     ]
 
     comparison = MultiExperimentComparison(
@@ -221,6 +200,7 @@ def test_compare_experiments_specific_metrics(mock_report_dir: Path):
 def test_compare_experiments_missing_run(mock_report_dir: Path):
     """Test handling missing run IDs."""
     import warnings
+
     # Suppress expected warning about missing run
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
@@ -250,12 +230,8 @@ def test_config_diff(mock_report_dir: Path):
 def test_latex_export_booktabs():
     """Test LaTeX export with booktabs style."""
     experiments = [
-        ComparisonRow(
-            run_id="run-1", metric_values={"accuracy": 0.85, "f1": 0.82}
-        ),
-        ComparisonRow(
-            run_id="run-2", metric_values={"accuracy": 0.90, "f1": 0.88}
-        ),
+        ComparisonRow(run_id="run-1", metric_values={"accuracy": 0.85, "f1": 0.82}),
+        ComparisonRow(run_id="run-2", metric_values={"accuracy": 0.90, "f1": 0.88}),
     ]
 
     comparison = MultiExperimentComparison(
@@ -263,9 +239,7 @@ def test_latex_export_booktabs():
     )
 
     latex = comparison.to_latex(
-        style="booktabs",
-        caption="Test results",
-        label="tab:test"
+        style="booktabs", caption="Test results", label="tab:test"
     )
 
     assert "\\begin{table}" in latex
@@ -281,9 +255,7 @@ def test_latex_export_booktabs():
 def test_latex_export_basic():
     """Test LaTeX export with basic style."""
     experiments = [
-        ComparisonRow(
-            run_id="run-1", metric_values={"accuracy": 0.85}
-        ),
+        ComparisonRow(run_id="run-1", metric_values={"accuracy": 0.85}),
     ]
 
     comparison = MultiExperimentComparison(
@@ -303,12 +275,12 @@ def test_latex_export_with_cost():
         ComparisonRow(
             run_id="run-1",
             metric_values={"accuracy": 0.85},
-            metadata={"cost": {"total_cost": 0.05}}
+            metadata={"cost": {"total_cost": 0.05}},
         ),
         ComparisonRow(
             run_id="run-2",
             metric_values={"accuracy": 0.90},
-            metadata={"cost": {"total_cost": 0.10}}
+            metadata={"cost": {"total_cost": 0.10}},
         ),
     ]
 
@@ -326,9 +298,7 @@ def test_latex_export_with_cost():
 def test_latex_export_escapes_underscores():
     """Test that underscores in run IDs are escaped."""
     experiments = [
-        ComparisonRow(
-            run_id="my_run_id", metric_values={"accuracy": 0.85}
-        ),
+        ComparisonRow(run_id="my_run_id", metric_values={"accuracy": 0.85}),
     ]
 
     comparison = MultiExperimentComparison(
@@ -344,9 +314,7 @@ def test_latex_export_escapes_underscores():
 def test_latex_export_to_file(tmp_path):
     """Test LaTeX export to file."""
     experiments = [
-        ComparisonRow(
-            run_id="run-1", metric_values={"accuracy": 0.85}
-        ),
+        ComparisonRow(run_id="run-1", metric_values={"accuracy": 0.85}),
     ]
 
     comparison = MultiExperimentComparison(

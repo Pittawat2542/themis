@@ -7,7 +7,7 @@ loading runs, computing statistics, and generating comparison reports.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from themis.comparison import reports, statistics
 from themis.comparison.statistics import StatisticalTest

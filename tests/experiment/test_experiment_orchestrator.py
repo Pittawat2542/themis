@@ -4,7 +4,8 @@ import pytest
 
 from themis.core import entities as core_entities
 from themis.evaluation import extractors, metrics, pipeline as evaluation_pipeline
-from themis.experiment import orchestrator, storage as experiment_storage
+from themis import storage as experiment_storage
+from themis.experiment import orchestrator
 from themis.experiment.cache_manager import CacheManager
 from themis.generation import plan as generation_plan
 from themis.generation import templates
@@ -258,7 +259,7 @@ def test_experiment_skips_evaluation_when_cached(tmp_path):
         cache_manager=CacheManager(storage=storage),
     )
 
-    experiment_runner.run(dataset=None, run_id="cached", resume=True)
+    experiment_runner.run(dataset=dataset, run_id="cached", resume=True)
     assert counter[0] == 0
 
 
@@ -395,7 +396,14 @@ def test_experiment_bounded_memory_mode_rejects_invalid_limit():
 
     with pytest.raises(ValueError, match="max_records_in_memory"):
         experiment_runner.run(
-            [{"id": "sample-1", "topic": "France", "expected": "Paris", "subject": "geo"}],
+            [
+                {
+                    "id": "sample-1",
+                    "topic": "France",
+                    "expected": "Paris",
+                    "subject": "geo",
+                }
+            ],
             max_records_in_memory=0,
         )
 
@@ -475,7 +483,7 @@ def test_experiment_can_resume_from_storage(tmp_path):
         cache_manager=CacheManager(storage=storage),
     )
 
-    report = resume_orchestrator.run(dataset=None, run_id=run_id, resume=True)
+    report = resume_orchestrator.run(dataset=dataset, run_id=run_id, resume=True)
 
     assert report.metadata["successful_generations"] == len(dataset)
     assert noop_runner.seen_requests == []

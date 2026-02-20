@@ -6,7 +6,12 @@ from themis.evaluation import reports as evaluation_reports
 from themis.experiment import export as experiment_export
 from themis.experiment import orchestrator
 from themis.generation import templates
-from themis.project import AblationChart, AblationChartPoint
+from collections import namedtuple
+
+Chart = namedtuple("Chart", ["title", "x_label", "y_label", "metric_name", "points"])
+Point = namedtuple(
+    "Point", ["label", "x_value", "metric_value", "metric_name", "count"]
+)
 
 
 def _sample_report() -> orchestrator.ExperimentReport:
@@ -74,20 +79,20 @@ def test_export_report_csv_writes_expected_columns(tmp_path):
 
 def test_render_html_report_includes_chart_and_tables():
     report = _sample_report()
-    chart = AblationChart(
+    chart = Chart(
         title="Temperature sweep",
         x_label="temp",
         y_label="score",
         metric_name="ExactMatch",
         points=(
-            AblationChartPoint(
+            Point(
                 x_value=0.0,
                 label="0.0",
                 metric_value=0.4,
                 metric_name="ExactMatch",
                 count=2,
             ),
-            AblationChartPoint(
+            Point(
                 x_value=0.2,
                 label="0.2",
                 metric_value=0.8,
@@ -109,13 +114,13 @@ def test_render_html_report_includes_chart_and_tables():
 
 def test_export_report_json_serializes_samples_and_charts(tmp_path):
     report = _sample_report()
-    chart = AblationChart(
+    chart = Chart(
         title="Temperature sweep",
         x_label="temp",
         y_label="score",
         metric_name="ExactMatch",
         points=(
-            AblationChartPoint(
+            Point(
                 x_value=0.0,
                 label="0.0",
                 metric_value=0.4,

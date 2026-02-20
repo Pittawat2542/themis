@@ -113,12 +113,14 @@ class TestEvaluateAPI:
 
     def test_evaluate_custom_dataset(self, tmp_path):
         """Test evaluation with custom dataset runs end-to-end."""
-        dataset = [
+        [
             {"id": "1", "question": "What is 2+2?", "answer": "4"},
         ]
 
         report = evaluate(
-            dataset,
+            [
+                {"id": "1", "question": "What is 2+2?", "answer": "4"},
+            ],
             model="fake-math-llm",
             prompt="What is {question}?",
             storage=tmp_path,
@@ -142,12 +144,14 @@ class TestEvaluateAPI:
 
     def test_evaluate_num_samples_generates_attempts(self, tmp_path):
         """Test that num_samples triggers real repeated sampling attempts."""
-        dataset = [
+        [
             {"id": "1", "question": "2+2", "answer": "4"},
         ]
 
         report = evaluate(
-            dataset,
+            [
+                {"id": "1", "question": "2+2", "answer": "4"},
+            ],
             model="fake-math-llm",
             prompt="What is {question}?",
             num_samples=3,
@@ -176,7 +180,7 @@ class TestEvaluateAPI:
             captured["options"] = dict(options)
             return FakeMathModelClient(seed=7)
 
-        monkeypatch.setattr("themis.session.create_provider", _fake_create_provider)
+        monkeypatch.setattr("themis.api.create_provider", _fake_create_provider)
 
         evaluate(
             [{"id": "1", "question": "2+2", "answer": "4"}],
@@ -203,7 +207,7 @@ class TestEvaluateAPI:
             captured["options"] = dict(options)
             return FakeMathModelClient(seed=7)
 
-        monkeypatch.setattr("themis.session.create_provider", _fake_create_provider)
+        monkeypatch.setattr("themis.api.create_provider", _fake_create_provider)
 
         evaluate(
             [{"id": "1", "question": "2+2", "answer": "4"}],
@@ -334,13 +338,16 @@ class TestEvaluateAPI:
         assert report.evaluation_report.metrics["ExactMatch"].count == 3
 
     def test_evaluate_reproducible_with_fixed_seed_and_manifest(self, tmp_path):
-        dataset = [
+        [
             {"id": "1", "question": "2+2", "answer": "4"},
             {"id": "2", "question": "1+1", "answer": "2"},
         ]
 
         report_a = evaluate(
-            dataset,
+            [
+                {"id": "1", "question": "2+2", "answer": "4"},
+                {"id": "2", "question": "1+1", "answer": "2"},
+            ],
             model="fake:fake-math-llm",
             prompt="What is {question}?",
             metrics=["exact_match"],
@@ -350,7 +357,10 @@ class TestEvaluateAPI:
             seed=123,
         )
         report_b = evaluate(
-            dataset,
+            [
+                {"id": "1", "question": "2+2", "answer": "4"},
+                {"id": "2", "question": "1+1", "answer": "2"},
+            ],
             model="fake:fake-math-llm",
             prompt="What is {question}?",
             metrics=["exact_match"],

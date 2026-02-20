@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from collections import deque
+from collections.abc import Callable, Iterator, Sequence
 from datetime import datetime, timezone
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 from themis.config.schema import IntegrationsConfig
 from themis.core.entities import (
@@ -24,7 +25,7 @@ from themis.experiment.manifest import (
     manifest_hash,
     validate_reproducibility_manifest,
 )
-from themis.experiment import storage as experiment_storage
+from themis import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
 from themis.experiment.cost import CostTracker
 from themis.experiment.integration_manager import IntegrationManager
@@ -66,6 +67,30 @@ class _RetentionBuffer:
 
     def to_list(self) -> list[Any]:
         return list(self._items)
+
+
+class _ExperimentContext:
+    """Encapsulates state for a single experiment run."""
+
+    def __init__(self, max_records_in_memory: int | None) -> None:
+        self.generation_results = _RetentionBuffer(max_records_in_memory)
+        self.cached_eval_records = _RetentionBuffer(max_records_in_memory)
+        self.new_eval_records = _RetentionBuffer(max_records_in_memory)
+        self.failures: list[ExperimentFailure] = []
+        self.eval_batch: list[GenerationRecord] = []
+        self.new_eval_failures: list[EvaluationFailure] = []
+        self.cached_eval_failures: list[EvaluationFailure] = []
+        self.expected_metric_names: set[str] = set()
+        self.metric_sums: dict[str, float] = {}
+        self.metric_counts: dict[str, int] = {}
+        self.metric_samples: dict[str, _RetentionBuffer] = {}
+
+        # Counters
+        self.successful_generations_total = 0
+        self.failed_generations_total = 0
+        self.evaluation_record_failures_total = 0
+        self.discovered_tasks_total = 0
+        self.pending_tasks_total = 0
 
 
 class ExperimentOrchestrator:
@@ -114,9 +139,8 @@ class ExperimentOrchestrator:
 
     def run(
         self,
-        dataset: Sequence[dict[str, object]] | None = None,
+        dataset: Sequence[dict[str, object]],
         *,
-        dataset_loader: Callable[[], Sequence[dict[str, object]]] | None = None,
         max_samples: int | None = None,
         run_id: str | None = None,
         resume: bool = True,
@@ -129,8 +153,7 @@ class ExperimentOrchestrator:
         """Run experiment: generate responses, evaluate, and report results.
 
         Args:
-            dataset: Optional dataset samples to use
-            dataset_loader: Optional callable to load dataset
+            dataset: Dataset samples to use (must be pre-resolved)
             max_samples: Optional limit on number of samples
             run_id: Optional run identifier for caching
             resume: Whether to resume from cached results
@@ -159,20 +182,147 @@ class ExperimentOrchestrator:
             }
         )
 
+        # Initialize run resources (dataset, manifest, storage)
+        (
+            selected_dataset,
+            run_identifier,
+            manifest_payload,
+            run_manifest_hash,
+        ) = self._initialize_run_resources(
+            dataset=dataset,
+            run_id=run_id,
+            max_samples=max_samples,
+            resume=resume,
+            run_manifest=run_manifest,
+        )
+
+        # Expand dataset into generation tasks
+        logger.info("Orchestrator: Expanding dataset into generation tasks...")
+        try:
+            task_iterator = iter(self._plan.expand(selected_dataset))
+        except Exception as e:
+            self._cache.fail_run(run_identifier, str(e))
+            logger.error("Orchestrator: Failed to expand dataset", exc_info=True)
+            raise
+
+        # Build evaluation configuration and load cache
+        evaluation_config = self._build_evaluation_config()
+        cached_records, cached_evaluations = self._load_cache_state(
+            run_identifier, evaluation_config, resume
+        )
+
+        # Process tasks: use cached or run new generations
+        ctx = _ExperimentContext(max_records_in_memory)
+
+        if hasattr(self._evaluation, "_metrics"):
+            ctx.expected_metric_names.update(
+                metric.name for metric in self._evaluation._metrics
+            )
+
+        # Execute generation loop
+        self._execute_run_loop(
+            ctx=ctx,
+            task_iterator=task_iterator,
+            run_identifier=run_identifier,
+            run_manifest_hash=run_manifest_hash,
+            evaluation_config=evaluation_config,
+            cached_records=cached_records,
+            cached_evaluations=cached_evaluations,
+            evaluation_batch_size=evaluation_batch_size,
+            on_result=on_result,
+            cache_results=cache_results,
+        )
+
+        # Combine cached and new evaluations
+        logger.info("Orchestrator: Combining cached and new evaluations...")
+        try:
+            evaluation_report = self._combine_evaluations(
+                ctx.cached_eval_records.to_list(),
+                ctx.new_eval_records.to_list(),
+                ctx.new_eval_failures,
+                expected_metric_names=ctx.expected_metric_names,
+                cached_failures=ctx.cached_eval_failures,
+                metric_sums=ctx.metric_sums,
+                metric_counts=ctx.metric_counts,
+                metric_samples={
+                    name: buffer.to_list()
+                    for name, buffer in ctx.metric_samples.items()
+                },
+                max_records_in_memory=max_records_in_memory,
+            )
+        except Exception as exc:
+            self._cache.fail_run(run_identifier, str(exc))
+            raise
+        logger.info(
+            "Orchestrator: Total evaluation records: %s",
+            len(evaluation_report.records),
+            extra={"total_records": len(evaluation_report.records)},
+        )
+
+        return self._finalize_experiment_run(
+            run_identifier=run_identifier,
+            selected_dataset=selected_dataset,
+            manifest_payload=manifest_payload,
+            run_manifest_hash=run_manifest_hash,
+            generation_results=ctx.generation_results,
+            evaluation_report=evaluation_report,
+            failures=ctx.failures,
+            cached_eval_records=ctx.cached_eval_records,
+            new_eval_records=ctx.new_eval_records,
+            successful_generations_total=ctx.successful_generations_total,
+            failed_generations_total=ctx.failed_generations_total,
+            evaluation_record_failures_total=ctx.evaluation_record_failures_total,
+            cache_results=cache_results,
+        )
+
+    def _default_run_manifest(self) -> dict[str, object]:
+        model = self._plan.models[0] if self._plan.models else None
+        sampling = (
+            self._plan.sampling_parameters[0]
+            if self._plan.sampling_parameters
+            else None
+        )
+        sampling_config = {
+            "temperature": sampling.temperature if sampling else 0.0,
+            "top_p": sampling.top_p if sampling else 0.95,
+            "max_tokens": sampling.max_tokens if sampling else 512,
+        }
+        evaluation_config = self._build_evaluation_config()
+        if "metrics" not in evaluation_config:
+            evaluation_config["metrics"] = []
+        if "extractor" not in evaluation_config:
+            evaluation_config["extractor"] = "unknown"
+
+        return build_reproducibility_manifest(
+            model=model.identifier if model else "unknown",
+            provider=model.provider if model else "unknown",
+            provider_options={},
+            sampling=sampling_config,
+            num_samples=1,
+            evaluation_config=evaluation_config,
+        )
+
+    def _default_run_id(self) -> str:
+        return datetime.now(timezone.utc).strftime("run-%Y%m%d-%H%M%S")
+
+    def _initialize_run_resources(
+        self,
+        *,
+        dataset: Sequence[dict[str, object]],
+        run_id: str | None,
+        max_samples: int | None,
+        resume: bool,
+        run_manifest: dict[str, object] | None,
+    ) -> tuple[list[dict[str, object]], str, dict[str, object], str | None]:
+        """Initialize all resources needed for the run."""
         # Prepare dataset
         logger.info("Orchestrator: Loading dataset...")
-        try:
-            dataset_list = self._resolve_dataset(
-                dataset=dataset, dataset_loader=dataset_loader, run_id=run_id
-            )
-            logger.info(
-                "Orchestrator: Dataset loaded (%s total samples)",
-                len(dataset_list),
-                extra={"dataset_size": len(dataset_list)},
-            )
-        except Exception:
-            logger.error("Orchestrator: Failed to load dataset", exc_info=True)
-            raise
+        dataset_list = list(dataset)
+        logger.info(
+            "Orchestrator: Dataset loaded (%s total samples)",
+            len(dataset_list),
+            extra={"dataset_size": len(dataset_list)},
+        )
 
         selected_dataset = (
             dataset_list[:max_samples] if max_samples is not None else dataset_list
@@ -213,19 +363,12 @@ class ExperimentOrchestrator:
         if dataset_list:
             self._cache.cache_dataset(run_identifier, dataset_list)
 
-        # Expand dataset into generation tasks
-        logger.info("Orchestrator: Expanding dataset into generation tasks...")
-        try:
-            task_iterator = iter(self._plan.expand(selected_dataset))
-        except Exception as e:
-            self._cache.fail_run(run_identifier, str(e))
-            logger.error("Orchestrator: Failed to expand dataset", exc_info=True)
-            raise
+        return selected_dataset, run_identifier, manifest_payload, run_manifest_hash
 
-        # Build evaluation configuration for cache invalidation
-        evaluation_config = self._build_evaluation_config()
-
-        # Load cached results if resuming
+    def _load_cache_state(
+        self, run_identifier: str, evaluation_config: dict, resume: bool
+    ) -> tuple[dict[str, GenerationRecord], dict[str, EvaluationRecord]]:
+        """Load cached generation and evaluation records."""
         if resume:
             logger.info("Orchestrator: Loading cached results...")
         cached_records = (
@@ -248,331 +391,7 @@ class ExperimentOrchestrator:
                 len(cached_evaluations),
                 extra={"cached_evaluations": len(cached_evaluations)},
             )
-
-        # Process tasks: use cached or run new generations
-        generation_results = _RetentionBuffer(max_records_in_memory)
-        cached_eval_records = _RetentionBuffer(max_records_in_memory)
-        new_eval_records = _RetentionBuffer(max_records_in_memory)
-        failures: list[ExperimentFailure] = []
-        eval_batch: list[GenerationRecord] = []
-        new_eval_failures: list[EvaluationFailure] = []
-        cached_eval_failures: list[EvaluationFailure] = []
-        expected_metric_names: set[str] = set()
-        metric_sums: dict[str, float] = {}
-        metric_counts: dict[str, int] = {}
-        metric_samples: dict[str, _RetentionBuffer] = {}
-        successful_generations_total = 0
-        failed_generations_total = 0
-        evaluation_record_failures_total = 0
-        discovered_tasks_total = 0
-        pending_tasks_total = 0
-
-        if hasattr(self._evaluation, "_metrics"):
-            expected_metric_names.update(
-                metric.name for metric in self._evaluation._metrics
-            )
-
-        def _accumulate_evaluation_record(record: EvaluationRecord) -> None:
-            nonlocal evaluation_record_failures_total
-            evaluation_record_failures_total += len(record.failures)
-            for score in record.scores:
-                metric_name = score.metric_name
-                metric_sums[metric_name] = (
-                    metric_sums.get(metric_name, 0.0) + score.value
-                )
-                metric_counts[metric_name] = metric_counts.get(metric_name, 0) + 1
-                buffer = metric_samples.setdefault(
-                    metric_name, _RetentionBuffer(max_records_in_memory)
-                )
-                buffer.append(score)
-
-        def _flush_eval_batch() -> None:
-            nonlocal eval_batch
-            if not eval_batch:
-                return
-            logger.info(
-                "Orchestrator: Evaluating batch of %s records...",
-                len(eval_batch),
-                extra={"batch_size": len(eval_batch)},
-            )
-            batch_report = self._evaluation.evaluate(eval_batch)
-            expected_metric_names.update(batch_report.metrics.keys())
-            for record, evaluation in zip(eval_batch, batch_report.records):
-                if cache_results:
-                    self._cache.save_evaluation_record(
-                        run_identifier, record, evaluation, evaluation_config
-                    )
-                _accumulate_evaluation_record(evaluation)
-                new_eval_records.append(evaluation)
-            new_eval_failures.extend(batch_report.failures)
-            eval_batch = []
-
-        def _iter_pending_tasks() -> Iterable[GenerationTask]:
-            nonlocal discovered_tasks_total
-            nonlocal pending_tasks_total
-            nonlocal successful_generations_total
-            nonlocal failed_generations_total
-            for task in task_iterator:
-                discovered_tasks_total += 1
-                if run_manifest_hash is not None:
-                    task.metadata["manifest_hash"] = run_manifest_hash
-                task_cache_key = experiment_storage.task_cache_key(task)
-                cached = cached_records.get(task_cache_key)
-                if cached is not None:
-                    generation_results.append(cached)
-                    if cached.error:
-                        failed_generations_total += 1
-                    else:
-                        successful_generations_total += 1
-                    if cached.error:
-                        failures.append(
-                            ExperimentFailure(
-                                sample_id=cached.task.metadata.get("dataset_id"),
-                                message=cached.error.message,
-                            )
-                        )
-                    eval_cache_key = experiment_storage.evaluation_cache_key(
-                        task, evaluation_config
-                    )
-                    evaluation = cached_evaluations.get(eval_cache_key)
-                    if evaluation is not None:
-                        cached_eval_records.append(evaluation)
-                        _accumulate_evaluation_record(evaluation)
-                        for message in evaluation.failures:
-                            cached_eval_failures.append(
-                                EvaluationFailure(
-                                    sample_id=evaluation.sample_id, message=message
-                                )
-                            )
-                    else:
-                        eval_batch.append(cached)
-                        if len(eval_batch) >= evaluation_batch_size:
-                            _flush_eval_batch()
-                    if on_result:
-                        on_result(cached)
-                    continue
-
-                pending_tasks_total += 1
-                yield task
-
-        # Run pending generation tasks without pre-materializing task lists.
-        completed = 0
-        progress = get_progress_reporter(self._integrations)
-        progress.__enter__()
-        progress_task_id = progress.add_task("Running experiment...", total=None)
-        try:
-            for record in self._runner.run(_iter_pending_tasks()):
-                logger.debug("Orchestrator: Received generation record")
-                generation_results.append(record)
-                if record.error:
-                    failed_generations_total += 1
-                else:
-                    successful_generations_total += 1
-                completed += 1
-
-                # Update progress
-                progress.update(
-                    progress_task_id,
-                    advance=1,
-                    completed=completed,
-                    total=None,
-                    pending=pending_tasks_total,
-                    successful=successful_generations_total,
-                    failed=failed_generations_total,
-                )
-
-                logger.debug("Orchestrator: Processing record (cost tracking...)")
-                # Track cost for successful generations
-                if record.output and record.output.usage:
-                    usage = record.output.usage
-                    prompt_tokens = usage.get("prompt_tokens", 0)
-                    completion_tokens = usage.get("completion_tokens", 0)
-                    model = record.task.model.identifier
-
-                    # Calculate cost using pricing database
-                    cost = calculate_cost(model, prompt_tokens, completion_tokens)
-                    self._cost_tracker.record_generation(
-                        model=model,
-                        prompt_tokens=prompt_tokens,
-                        completion_tokens=completion_tokens,
-                        cost=cost,
-                    )
-
-                logger.debug("Orchestrator: Processing record (error handling...)")
-                if record.error:
-                    failures.append(
-                        ExperimentFailure(
-                            sample_id=record.task.metadata.get("dataset_id"),
-                            message=record.error.message,
-                        )
-                    )
-
-                logger.debug("Orchestrator: Processing record (caching...)")
-                cache_key = experiment_storage.task_cache_key(record.task)
-                if cache_results:
-                    self._cache.save_generation_record(
-                        run_identifier, record, cache_key
-                    )
-
-                logger.debug("Orchestrator: Processing record (queueing evaluation...)")
-                eval_batch.append(record)
-                if len(eval_batch) >= evaluation_batch_size:
-                    _flush_eval_batch()
-
-                logger.debug("Orchestrator: Processing record (callback...)")
-                if on_result:
-                    on_result(record)
-                logger.debug("Orchestrator: Record processing complete")
-        except Exception as exc:
-            self._cache.fail_run(run_identifier, str(exc))
-            raise
-        finally:
-            progress.__exit__(None, None, None)
-
-        logger.info(
-            "Orchestrator: Task scan complete (%s total, %s pending, %s cached)",
-            discovered_tasks_total,
-            pending_tasks_total,
-            discovered_tasks_total - pending_tasks_total,
-            extra={
-                "total": discovered_tasks_total,
-                "pending": pending_tasks_total,
-                "cached": discovered_tasks_total - pending_tasks_total,
-            },
-        )
-
-        # Evaluate remaining queued records
-        logger.info(
-            "Orchestrator: Flushing final evaluation batch (%s queued)...",
-            len(eval_batch),
-            extra={"queued": len(eval_batch)},
-        )
-        try:
-            _flush_eval_batch()
-        except Exception as exc:
-            self._cache.fail_run(run_identifier, str(exc))
-            raise
-
-        # Combine cached and new evaluations
-        logger.info("Orchestrator: Combining cached and new evaluations...")
-        try:
-            evaluation_report = self._combine_evaluations(
-                cached_eval_records.to_list(),
-                new_eval_records.to_list(),
-                new_eval_failures,
-                expected_metric_names=expected_metric_names,
-                cached_failures=cached_eval_failures,
-                metric_sums=metric_sums,
-                metric_counts=metric_counts,
-                metric_samples={
-                    name: buffer.to_list() for name, buffer in metric_samples.items()
-                },
-                max_records_in_memory=max_records_in_memory,
-            )
-        except Exception as exc:
-            self._cache.fail_run(run_identifier, str(exc))
-            raise
-        logger.info(
-            "Orchestrator: Total evaluation records: %s",
-            len(evaluation_report.records),
-            extra={"total_records": len(evaluation_report.records)},
-        )
-
-        # Get cost breakdown
-        cost_breakdown = self._cost_tracker.get_breakdown()
-        pricing_metadata = get_pricing_metadata()
-        if cost_breakdown.total_cost > 0:
-            logger.info(
-                "Orchestrator: Total cost: $%s",
-                f"{cost_breakdown.total_cost:.4f}",
-                extra={"cost": cost_breakdown.total_cost},
-            )
-
-        # Build metadata
-        evaluation_truncation = evaluation_report.metadata.get(
-            "per_sample_metrics_truncated", False
-        )
-        metadata = {
-            "total_samples": len(selected_dataset),
-            "successful_generations": successful_generations_total,
-            "failed_generations": failed_generations_total,
-            "generation_records_retained": len(generation_results.to_list()),
-            "generation_records_dropped": generation_results.dropped,
-            "evaluation_records_retained": len(evaluation_report.records),
-            "evaluation_records_dropped": cached_eval_records.dropped
-            + new_eval_records.dropped,
-            "per_sample_metrics_truncated": bool(evaluation_truncation),
-            "run_id": run_identifier,
-            "evaluation_failures": evaluation_record_failures_total
-            + len(evaluation_report.failures),
-            "manifest_hash": run_manifest_hash,
-            "reproducibility_manifest": manifest_payload,
-            # Cost tracking
-            "cost": {
-                "total_cost": cost_breakdown.total_cost,
-                "generation_cost": cost_breakdown.generation_cost,
-                "evaluation_cost": cost_breakdown.evaluation_cost,
-                "currency": cost_breakdown.currency,
-                "token_counts": cost_breakdown.token_counts,
-                "api_calls": cost_breakdown.api_calls,
-                "per_model_costs": cost_breakdown.per_model_costs,
-                "pricing_version": pricing_metadata["version"],
-                "pricing_updated_at": pricing_metadata["updated_at"],
-            },
-        }
-
-        # Create final report
-        report = ExperimentReport(
-            generation_results=generation_results.to_list(),
-            evaluation_report=evaluation_report,
-            failures=failures,
-            metadata=metadata,
-        )
-
-        # Log to integrations
-        self._integrations.log_results(report)
-
-        # Upload to HuggingFace Hub if enabled
-        run_path = self._cache.get_run_path(run_identifier)
-        self._integrations.upload_results(report, run_path)
-
-        # Save report.json for multi-experiment comparison
-        if cache_results:
-            self._save_report_json(report, run_identifier)
-
-        self._cache.complete_run(run_identifier)
-
-        return report
-
-    def _default_run_manifest(self) -> dict[str, object]:
-        model = self._plan.models[0] if self._plan.models else None
-        sampling = (
-            self._plan.sampling_parameters[0]
-            if self._plan.sampling_parameters
-            else None
-        )
-        sampling_config = {
-            "temperature": sampling.temperature if sampling else 0.0,
-            "top_p": sampling.top_p if sampling else 0.95,
-            "max_tokens": sampling.max_tokens if sampling else 512,
-        }
-        evaluation_config = self._build_evaluation_config()
-        if "metrics" not in evaluation_config:
-            evaluation_config["metrics"] = []
-        if "extractor" not in evaluation_config:
-            evaluation_config["extractor"] = "unknown"
-
-        return build_reproducibility_manifest(
-            model=model.identifier if model else "unknown",
-            provider=model.provider if model else "unknown",
-            provider_options={},
-            sampling=sampling_config,
-            num_samples=1,
-            evaluation_config=evaluation_config,
-        )
-
-    def _default_run_id(self) -> str:
-        return datetime.now(timezone.utc).strftime("run-%Y%m%d-%H%M%S")
+        return cached_records, cached_evaluations
 
     def _build_evaluation_config(self) -> dict:
         """Build evaluation configuration for cache key generation.
@@ -614,38 +433,248 @@ class ExperimentOrchestrator:
 
         return config
 
-    def _resolve_dataset(
+    def _update_metric_stats(
+        self, ctx: _ExperimentContext, record: EvaluationRecord
+    ) -> None:
+        """Update metric statistics from a single evaluation record."""
+        ctx.evaluation_record_failures_total += len(record.failures)
+        for score in record.scores:
+            metric_name = score.metric_name
+            ctx.metric_sums[metric_name] = (
+                ctx.metric_sums.get(metric_name, 0.0) + score.value
+            )
+            ctx.metric_counts[metric_name] = ctx.metric_counts.get(metric_name, 0) + 1
+            buffer = ctx.metric_samples.setdefault(
+                metric_name, _RetentionBuffer(ctx.generation_results.max_items)
+            )
+            buffer.append(score)
+
+    def _evaluate_batch(
+        self,
+        ctx: _ExperimentContext,
+        run_identifier: str,
+        evaluation_config: dict,
+        cache_results: bool,
+    ) -> None:
+        """Evaluate keyed batch of records and update context."""
+        if not ctx.eval_batch:
+            return
+
+        logger.info(
+            "Orchestrator: Evaluating batch of %s records...",
+            len(ctx.eval_batch),
+            extra={"batch_size": len(ctx.eval_batch)},
+        )
+
+        batch_report = self._evaluation.evaluate(ctx.eval_batch)
+        ctx.expected_metric_names.update(batch_report.metrics.keys())
+
+        for record, evaluation in zip(ctx.eval_batch, batch_report.records):
+            if cache_results:
+                self._cache.save_evaluation_record(
+                    run_identifier, record, evaluation, evaluation_config
+                )
+            self._update_metric_stats(ctx, evaluation)
+            ctx.new_eval_records.append(evaluation)
+
+        ctx.new_eval_failures.extend(batch_report.failures)
+        ctx.eval_batch = []
+
+    def _yield_pending_tasks(
+        self,
+        ctx: _ExperimentContext,
+        task_iterator: Iterator[GenerationTask],
+        run_identifier: str,
+        run_manifest_hash: str | None,
+        evaluation_config: dict,
+        cached_records: dict[str, GenerationRecord],
+        cached_evaluations: dict[str, EvaluationRecord],
+        evaluation_batch_size: int,
+        on_result: Callable[[GenerationRecord], None] | None,
+        cache_results: bool,
+    ) -> Iterator[GenerationTask]:
+        """Iterate tasks, handling cached results and yielding pending ones."""
+        for task in task_iterator:
+            ctx.discovered_tasks_total += 1
+            if run_manifest_hash is not None:
+                task.metadata["manifest_hash"] = run_manifest_hash
+
+            task_cache_key = experiment_storage.task_cache_key(task)
+            cached = cached_records.get(task_cache_key)
+
+            if cached is not None:
+                ctx.generation_results.append(cached)
+                if cached.error:
+                    ctx.failed_generations_total += 1
+                else:
+                    ctx.successful_generations_total += 1
+
+                if cached.error:
+                    ctx.failures.append(
+                        ExperimentFailure(
+                            sample_id=cached.task.metadata.get("dataset_id"),
+                            message=cached.error.message,
+                        )
+                    )
+
+                eval_cache_key = experiment_storage.evaluation_cache_key(
+                    task, evaluation_config
+                )
+                evaluation = cached_evaluations.get(eval_cache_key)
+
+                if evaluation is not None:
+                    ctx.cached_eval_records.append(evaluation)
+                    self._update_metric_stats(ctx, evaluation)
+                    for message in evaluation.failures:
+                        ctx.cached_eval_failures.append(
+                            EvaluationFailure(
+                                sample_id=evaluation.sample_id, message=message
+                            )
+                        )
+                else:
+                    ctx.eval_batch.append(cached)
+                    if len(ctx.eval_batch) >= evaluation_batch_size:
+                        self._evaluate_batch(
+                            ctx, run_identifier, evaluation_config, cache_results
+                        )
+
+                if on_result:
+                    on_result(cached)
+                continue
+
+            ctx.pending_tasks_total += 1
+            yield task
+
+    def _execute_run_loop(
         self,
         *,
-        dataset: Sequence[dict[str, object]] | None,
-        dataset_loader: Callable[[], Sequence[dict[str, object]]] | None,
-        run_id: str | None,
-    ) -> list[dict[str, object]]:
-        """Resolve dataset from various sources.
+        ctx: _ExperimentContext,
+        task_iterator: Iterator[GenerationTask],
+        run_identifier: str,
+        run_manifest_hash: str | None,
+        evaluation_config: dict,
+        cached_records: dict[str, GenerationRecord],
+        cached_evaluations: dict[str, EvaluationRecord],
+        evaluation_batch_size: int,
+        on_result: Callable[[GenerationRecord], None] | None,
+        cache_results: bool,
+    ) -> None:
+        """Execute the main generation and evaluation loop."""
 
-        Args:
-            dataset: Direct dataset samples
-            dataset_loader: Callable to load dataset
-            run_id: Run ID to load cached dataset
+        def _flush_eval_batch() -> None:
+            self._evaluate_batch(ctx, run_identifier, evaluation_config, cache_results)
 
-        Returns:
-            List of dataset samples
+        # Run pending generation tasks without pre-materializing task lists.
+        completed = 0
+        progress = get_progress_reporter(self._integrations)
+        progress.__enter__()
+        progress_task_id = progress.add_task("Running experiment...", total=None)
 
-        Raises:
-            ValueError: If no dataset source is available
-        """
-        if dataset is not None:
-            return list(dataset)
-        if dataset_loader is not None:
-            return list(dataset_loader())
-        if run_id is not None:
-            cached_dataset = self._cache.load_cached_dataset(run_id)
-            if cached_dataset is not None:
-                return cached_dataset
-        raise ValueError(
-            "No dataset provided. Supply `dataset=` rows, a `dataset_loader`, "
-            "or set `run_id` with storage configured so cached data can be reloaded."
+        pending_tasks = self._yield_pending_tasks(
+            ctx,
+            task_iterator,
+            run_identifier,
+            run_manifest_hash,
+            evaluation_config,
+            cached_records,
+            cached_evaluations,
+            evaluation_batch_size,
+            on_result,
+            cache_results,
         )
+
+        try:
+            for record in self._runner.run(pending_tasks):
+                logger.debug("Orchestrator: Received generation record")
+                ctx.generation_results.append(record)
+                if record.error:
+                    ctx.failed_generations_total += 1
+                else:
+                    ctx.successful_generations_total += 1
+                completed += 1
+
+                # Update progress
+                progress.update(
+                    progress_task_id,
+                    advance=1,
+                    completed=completed,
+                    total=None,
+                    pending=ctx.pending_tasks_total,
+                    successful=ctx.successful_generations_total,
+                    failed=ctx.failed_generations_total,
+                )
+
+                logger.debug("Orchestrator: Processing record (cost tracking...)")
+                # Track cost for successful generations
+                if record.output and record.output.usage:
+                    usage = record.output.usage
+                    prompt_tokens = usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("completion_tokens", 0)
+                    model = record.task.model.identifier
+
+                    # Calculate cost using pricing database
+                    cost = calculate_cost(model, prompt_tokens, completion_tokens)
+                    self._cost_tracker.record_generation(
+                        model=model,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        cost=cost,
+                    )
+
+                logger.debug("Orchestrator: Processing record (error handling...)")
+                if record.error:
+                    ctx.failures.append(
+                        ExperimentFailure(
+                            sample_id=record.task.metadata.get("dataset_id"),
+                            message=record.error.message,
+                        )
+                    )
+
+                logger.debug("Orchestrator: Processing record (caching...)")
+                cache_key = experiment_storage.task_cache_key(record.task)
+                if cache_results:
+                    self._cache.save_generation_record(
+                        run_identifier, record, cache_key
+                    )
+
+                logger.debug("Orchestrator: Processing record (queueing evaluation...)")
+                ctx.eval_batch.append(record)
+                if len(ctx.eval_batch) >= evaluation_batch_size:
+                    _flush_eval_batch()
+
+                logger.debug("Orchestrator: Processing record (callback...)")
+                if on_result:
+                    on_result(record)
+                logger.debug("Orchestrator: Record processing complete")
+        except Exception as exc:
+            self._cache.fail_run(run_identifier, str(exc))
+            raise
+        finally:
+            progress.__exit__(None, None, None)
+
+        logger.info(
+            "Orchestrator: Task scan complete (%s total, %s pending, %s cached)",
+            ctx.discovered_tasks_total,
+            ctx.pending_tasks_total,
+            ctx.discovered_tasks_total - ctx.pending_tasks_total,
+            extra={
+                "total": ctx.discovered_tasks_total,
+                "pending": ctx.pending_tasks_total,
+                "cached": ctx.discovered_tasks_total - ctx.pending_tasks_total,
+            },
+        )
+
+        # Evaluate remaining queued records
+        logger.info(
+            "Orchestrator: Flushing final evaluation batch (%s queued)...",
+            len(ctx.eval_batch),
+            extra={"queued": len(ctx.eval_batch)},
+        )
+        try:
+            _flush_eval_batch()
+        except Exception as exc:
+            self._cache.fail_run(run_identifier, str(exc))
+            raise
 
     def _combine_evaluations(
         self,
@@ -734,6 +763,92 @@ class ExperimentOrchestrator:
                 },
             },
         )
+
+    def _finalize_experiment_run(
+        self,
+        *,
+        run_identifier: str,
+        selected_dataset: Any,
+        manifest_payload: dict,
+        run_manifest_hash: str | None,
+        generation_results: _RetentionBuffer,
+        evaluation_report: evaluation_pipeline.EvaluationReport,
+        failures: list[ExperimentFailure],
+        cached_eval_records: _RetentionBuffer,
+        new_eval_records: _RetentionBuffer,
+        successful_generations_total: int,
+        failed_generations_total: int,
+        evaluation_record_failures_total: int,
+        cache_results: bool,
+    ) -> ExperimentReport:
+        """Finalize experiment run, including reporting and cleanup."""
+        # Get cost breakdown
+        cost_breakdown = self._cost_tracker.get_breakdown()
+        pricing_metadata = get_pricing_metadata()
+        if cost_breakdown.total_cost > 0:
+            logger.info(
+                "Orchestrator: Total cost: $%s",
+                f"{cost_breakdown.total_cost:.4f}",
+                extra={"cost": cost_breakdown.total_cost},
+            )
+
+        # Build metadata
+        evaluation_truncation = evaluation_report.metadata.get(
+            "per_sample_metrics_truncated", False
+        )
+        metadata = {
+            "total_samples": len(selected_dataset),
+            "successful_generations": successful_generations_total,
+            "failed_generations": failed_generations_total,
+            "generation_records_retained": len(generation_results.to_list()),
+            "generation_records_dropped": generation_results.dropped,
+            "evaluation_records_retained": len(evaluation_report.records),
+            "evaluation_records_dropped": (
+                cached_eval_records.dropped + new_eval_records.dropped
+            ),
+            "per_sample_metrics_truncated": bool(evaluation_truncation),
+            "run_id": run_identifier,
+            "evaluation_failures": (
+                evaluation_record_failures_total + len(evaluation_report.failures)
+            ),
+            "manifest_hash": run_manifest_hash,
+            "reproducibility_manifest": manifest_payload,
+            # Cost tracking
+            "cost": {
+                "total_cost": cost_breakdown.total_cost,
+                "generation_cost": cost_breakdown.generation_cost,
+                "evaluation_cost": cost_breakdown.evaluation_cost,
+                "currency": cost_breakdown.currency,
+                "token_counts": cost_breakdown.token_counts,
+                "api_calls": cost_breakdown.api_calls,
+                "per_model_costs": cost_breakdown.per_model_costs,
+                "pricing_version": pricing_metadata["version"],
+                "pricing_updated_at": pricing_metadata["updated_at"],
+            },
+        }
+
+        # Create final report
+        report = ExperimentReport(
+            generation_results=generation_results.to_list(),
+            evaluation_report=evaluation_report,
+            failures=failures,
+            metadata=metadata,
+        )
+
+        # Log to integrations
+        self._integrations.log_results(report)
+
+        # Upload to HuggingFace Hub if enabled
+        run_path = self._cache.get_run_path(run_identifier)
+        self._integrations.upload_results(report, run_path)
+
+        # Save report.json for multi-experiment comparison
+        if cache_results:
+            self._save_report_json(report, run_identifier)
+
+        self._cache.complete_run(run_identifier)
+
+        return report
 
     def _save_report_json(self, report: ExperimentReport, run_id: str) -> None:
         """Save experiment report as JSON for multi-experiment comparison.

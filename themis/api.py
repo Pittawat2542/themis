@@ -31,17 +31,33 @@ Example:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Iterable
 
-from themis.core.entities import ExperimentReport, GenerationRecord
-from themis.evaluation.pipeline import EvaluationPipeline
+from themis.core.entities import (
+    ExperimentReport,
+    GenerationRecord,
+    ModelSpec,
+    SamplingConfig,
+)
+from themis.evaluation.pipeline import EvaluationPipeline, EvaluationPipelineContract
+from themis.experiment.manifest import build_reproducibility_manifest
+from themis.experiment.cache_manager import CacheManager
+from themis.experiment.orchestrator import ExperimentOrchestrator
+from themis.generation.plan import GenerationPlan
+from themis.generation.router import ProviderRouter
+from themis.generation.runner import GenerationRunner
+from themis.generation.strategies import RepeatedSamplingStrategy
 from themis.generation.templates import PromptTemplate
+from themis.interfaces import DatasetAdapter
+from themis.presets import parse_model_name
+from themis.providers import create_provider
 from themis.providers.options import normalize_provider_options
-from themis.session import ExperimentSession
-from themis.specs import ExperimentSpec, ExecutionSpec, StorageSpec
 
 # Import provider modules to ensure they register themselves
 try:
@@ -326,40 +342,107 @@ def evaluate(
     )
     logger.info(f"Evaluation metrics: {[m.name for m in metrics_list]}")
 
-    # Compose vNext spec
-    spec = ExperimentSpec(
-        dataset=dataset,
-        prompt=prompt_template.template,
-        model=model,
+    # ========================================================================
+    # Inline session logic (previously in ExperimentSession.run())
+    # ========================================================================
+
+    if not isinstance(pipeline, EvaluationPipelineContract):
+        raise TypeError("pipeline must implement EvaluationPipelineContract.")
+
+    # Resolve storage
+    resolved_storage_backend = _resolve_storage(
+        storage, storage_backend=storage_backend
+    )
+    cache_manager = CacheManager(
+        storage=resolved_storage_backend,
+        enable_resume=resume,
+        enable_cache=resume,
+    )
+
+    # Resolve dataset with cache support
+    dataset_list = _resolve_dataset_with_cache(
+        dataset,
+        cache_manager=cache_manager,
+        run_id=run_id,
+        resume=resume,
+    )
+
+    # Parse model and build configuration
+    provider_name, model_id, resolved_provider_options = _parse_model(
+        model, provider_options=provider_options
+    )
+    model_spec = ModelSpec(identifier=model_id, provider=provider_name)
+    sampling = _build_sampling(
+        temperature=temperature,
+        top_p=kwargs.get("top_p", 0.95),
+        max_tokens=max_tokens,
+    )
+
+    # Build generation plan
+    plan = GenerationPlan(
+        templates=[PromptTemplate(name="default", template=prompt_template.template)],
+        models=[model_spec],
+        sampling_parameters=[sampling],
+        dataset_id_field=dataset_id_field,
+        reference_field=selected_reference_field,
+        metadata_fields=metadata_fields,
+    )
+
+    # Create provider and router
+    provider = create_provider(provider_name, **resolved_provider_options)
+    router = ProviderRouter({(provider_name, model_id): provider})
+
+    # Setup strategy resolver for multi-sampling
+    strategy_resolver = None
+    if num_samples > 1:
+
+        def strategy_resolver(task):  # noqa: ARG001
+            return RepeatedSamplingStrategy(attempts=num_samples)
+
+    # Build generation runner
+    runner = GenerationRunner(
+        provider=router,
+        strategy_resolver=strategy_resolver,
+        max_parallel=workers,
+        execution_backend=execution_backend,
+    )
+
+    # Build reproducibility manifest
+    manifest = build_reproducibility_manifest(
+        model=model_id,
+        provider=provider_name,
+        provider_options=resolved_provider_options,
         sampling={
             "temperature": temperature,
             "top_p": kwargs.get("top_p", 0.95),
             "max_tokens": max_tokens,
         },
-        provider_options=provider_options,
         num_samples=num_samples,
-        max_records_in_memory=max_records_in_memory,
-        dataset_id_field=dataset_id_field,
-        reference_field=selected_reference_field,
-        metadata_fields=metadata_fields,
-        pipeline=pipeline,
+        evaluation_config=_build_evaluation_config(pipeline),
+        seeds={
+            "provider_seed": resolved_provider_options.get("seed"),
+            "sampling_seed": None,
+        },
+        dataset_fingerprint=_dataset_fingerprint(dataset_list),
+        prompt_fingerprint=_prompt_fingerprint(prompt_template.template),
+    )
+
+    # Create orchestrator and run
+    orchestrator = ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=runner,
+        evaluation_pipeline=pipeline,
+        cache_manager=cache_manager,
+    )
+
+    return orchestrator.run(
+        dataset=dataset_list,
         run_id=run_id,
-    )
-
-    execution = ExecutionSpec(
-        backend=execution_backend,
-        workers=workers,
-    )
-
-    storage_spec = StorageSpec(
-        backend=storage_backend,
-        path=storage,
-        cache=resume,
-    )
-
-    session = ExperimentSession()
-    return session.run(
-        spec, execution=execution, storage=storage_spec, on_result=on_result
+        resume=resume,
+        cache_results=resume,
+        on_result=on_result,
+        run_manifest=manifest,
+        max_records_in_memory=max_records_in_memory,
     )
 
 
@@ -557,6 +640,135 @@ def _resolve_metrics(metric_names: list[str]) -> list:
             metrics.append(metric_cls())
 
     return metrics
+
+
+# ============================================================================
+# Helper functions inlined from session.py
+# ============================================================================
+
+
+def _parse_model(
+    model: str, *, provider_options: dict[str, Any] | None = None
+) -> tuple[str, str, dict[str, Any]]:
+    """Parse model string into provider, model_id, and options."""
+    options = normalize_provider_options(provider_options)
+    if ":" in model:
+        provider_name, model_id = model.split(":", 1)
+        return provider_name, model_id, options
+
+    parsed_provider, model_id, parsed_options = parse_model_name(model, **options)
+    return parsed_provider, model_id, normalize_provider_options(parsed_options)
+
+
+def _build_sampling(
+    temperature: float, top_p: float, max_tokens: int
+) -> SamplingConfig:
+    """Build SamplingConfig from individual parameters."""
+    return SamplingConfig(
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+    )
+
+
+def _resolve_dataset_with_cache(
+    dataset: object,
+    *,
+    cache_manager: CacheManager,
+    run_id: str | None,
+    resume: bool,
+) -> list[dict]:
+    """Resolve dataset, checking cache if needed."""
+    # 1. Try resolving direct dataset
+    resolved = []
+    if isinstance(dataset, DatasetAdapter):
+        resolved = list(dataset.iter_samples())
+    elif isinstance(dataset, Iterable):
+        resolved = list(dataset)  # type: ignore[arg-type]
+
+    if resolved:
+        return resolved
+
+    # 2. Try loading from cache if resume is enabled
+    if resume and run_id:
+        cached = cache_manager.load_cached_dataset(run_id)
+        if cached:
+            return cached
+
+    # 3. Fail if nothing found
+    raise ValueError(
+        "No dataset provided. Supply `dataset=` to evaluate() "
+        "or ensure `run_id` points to a cached run."
+    )
+
+
+def _resolve_storage(storage_path: str | Path | None, storage_backend: object | None):
+    """Resolve storage backend from path or explicit backend."""
+    if storage_backend is not None:
+        backend = storage_backend
+        if hasattr(backend, "experiment_storage"):
+            return backend.experiment_storage
+        if not hasattr(backend, "start_run"):
+            raise TypeError("storage_backend must be ExperimentStorage-compatible.")
+        return backend
+    root = (
+        Path(storage_path) if storage_path is not None else Path(".cache/experiments")
+    )
+    from themis.storage import ExperimentStorage
+
+    return ExperimentStorage(root)
+
+
+def _build_evaluation_config(pipeline: EvaluationPipelineContract) -> dict[str, Any]:
+    """Build evaluation config fingerprint from pipeline."""
+    if hasattr(pipeline, "evaluation_fingerprint"):
+        try:
+            fingerprint = dict(pipeline.evaluation_fingerprint())
+        except Exception:
+            fingerprint = {}
+    else:
+        fingerprint = {}
+
+    if "metrics" not in fingerprint and hasattr(pipeline, "_metrics"):
+        fingerprint["metrics"] = sorted(
+            [
+                f"{metric.__class__.__module__}.{metric.__class__.__name__}:{metric.name}"
+                for metric in pipeline._metrics
+            ]
+        )
+    if "extractor" not in fingerprint and hasattr(pipeline, "_extractor"):
+        extractor = pipeline._extractor
+        fingerprint["extractor"] = (
+            f"{extractor.__class__.__module__}.{extractor.__class__.__name__}"
+        )
+        if "extractor_field" not in fingerprint and hasattr(extractor, "field_name"):
+            fingerprint["extractor_field"] = extractor.field_name
+    fingerprint.setdefault("metrics", [])
+    fingerprint.setdefault("extractor", "unknown")
+
+    return fingerprint
+
+
+def _stable_json_hash(value: object) -> str:
+    """Create stable hash of JSON-serializable value."""
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        default=repr,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _dataset_fingerprint(dataset: Sequence[dict]) -> str:
+    """Create fingerprint for dataset."""
+    return _stable_json_hash(dataset)
+
+
+def _prompt_fingerprint(prompt: str) -> str:
+    """Create fingerprint for prompt template."""
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
 
 __all__ = ["evaluate", "register_metric", "get_registered_metrics"]

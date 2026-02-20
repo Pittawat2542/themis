@@ -1,7 +1,5 @@
 """Tests for improved logging in math experiment."""
 
-from unittest.mock import Mock
-
 from themis.core import entities as core_entities
 from themis.evaluation import pipeline as evaluation_pipeline
 from themis.experiment import math as math_experiment, orchestrator
