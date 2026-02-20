@@ -14,9 +14,9 @@ T = TypeVar("T")
 
 @dataclass(frozen=True)
 class SamplingConfig:
-    temperature: float
-    top_p: float
-    max_tokens: int
+    temperature: float = 0.0
+    top_p: float = 0.95
+    max_tokens: int = 512
 
 
 @dataclass(frozen=True)
