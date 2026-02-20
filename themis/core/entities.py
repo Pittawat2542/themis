@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-@dataclass(frozen=True)
+@dataclass
 class SamplingConfig:
     temperature: float = 0.0
     top_p: float = 0.95

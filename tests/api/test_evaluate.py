@@ -2,7 +2,8 @@
 
 import pytest
 
-from themis.api import evaluate, _resolve_metrics
+from themis.api import evaluate
+from themis.evaluation.metric_resolver import resolve_metrics
 from themis.generation.clients import FakeMathModelClient
 from themis.presets import get_benchmark_preset, list_benchmarks, parse_model_name
 
@@ -12,13 +13,13 @@ class TestResolveMetrics:
 
     def test_resolve_exact_match(self):
         """Test resolving exact_match metric."""
-        metrics = _resolve_metrics(["exact_match"])
+        metrics = resolve_metrics(["exact_match"])
         assert len(metrics) == 1
         assert metrics[0].name == "ExactMatch"
 
     def test_resolve_multiple_metrics(self):
         """Test resolving multiple metrics."""
-        metrics = _resolve_metrics(["exact_match", "response_length"])
+        metrics = resolve_metrics(["exact_match", "response_length"])
         assert len(metrics) == 2
         assert any(m.name == "ExactMatch" for m in metrics)
         assert any(m.name == "ResponseLength" for m in metrics)
@@ -26,11 +27,11 @@ class TestResolveMetrics:
     def test_resolve_unknown_metric_raises(self):
         """Test that unknown metric raises ValueError."""
         with pytest.raises(ValueError, match="Unknown metric"):
-            _resolve_metrics(["nonexistent_metric"])
+            resolve_metrics(["nonexistent_metric"])
 
     def test_resolve_metric_aliases(self):
         """Test resolving CamelCase metric names."""
-        metrics = _resolve_metrics(["ExactMatch", "ResponseLength"])
+        metrics = resolve_metrics(["ExactMatch", "ResponseLength"])
         assert len(metrics) == 2
         assert any(m.name == "ExactMatch" for m in metrics)
         assert any(m.name == "ResponseLength" for m in metrics)

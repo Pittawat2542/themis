@@ -106,6 +106,7 @@ def evaluate(
     num_samples: int = 1,
     max_records_in_memory: int | None = None,
     workers: int = 4,
+    max_retries: int = 3,
     storage: str | Path | None = None,
     storage_backend: object | None = None,
     execution_backend: object | None = None,
@@ -150,6 +151,7 @@ def evaluate(
             the returned report to bound memory for very large runs.
         workers: Number of parallel workers for generation. Higher = faster but may
             hit rate limits. Recommended: 4-16 for APIs, 32+ for local models.
+        max_retries: Number of retries for generation failures (default: 3).
         storage: Storage location for results and cache. Defaults to ".cache/experiments".
             Can be a local path or (future) cloud storage URI.
         storage_backend: Optional storage backend instance. Typically an
@@ -362,6 +364,7 @@ def evaluate(
         provider=router,
         strategy_resolver=strategy_resolver,
         max_parallel=workers,
+        max_retries=max_retries,
         execution_backend=execution_backend,
     )
 

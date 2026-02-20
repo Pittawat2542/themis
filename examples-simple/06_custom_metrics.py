@@ -37,9 +37,13 @@ DATASET = [
     {"id": "2", "question": "What is 2+2?", "answer": "4"},
 ]
 
-themis.register_metric(
-    "contains_because", lambda: ContainsKeywordMetric(keyword="because")
-)
+
+@dataclass
+class ContainsBecauseMetric(ContainsKeywordMetric):
+    keyword: str = "because"
+
+
+themis.register_metric("contains_because", ContainsBecauseMetric)
 
 report = themis.evaluate(
     DATASET,

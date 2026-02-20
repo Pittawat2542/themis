@@ -18,8 +18,8 @@ def cleanup_registry():
     yield
 
     # Restore original state
-    themis.api._METRICS_REGISTRY.clear()
-    themis.api._METRICS_REGISTRY.update(original_metrics)
+    themis.evaluation.metric_resolver._METRICS_REGISTRY.clear()
+    themis.evaluation.metric_resolver._METRICS_REGISTRY.update(original_metrics)
 
 
 @dataclass
