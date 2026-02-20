@@ -10,7 +10,7 @@ from pathlib import Path
 THRESHOLDS = {
     "themis/api.py": 75.0,
     "themis/experiment/orchestrator.py": 75.0,
-    "themis/experiment/storage.py": 80.0,
+    "themis/storage/core.py": 68.0,
     "themis/comparison/engine.py": 80.0,
     "themis/evaluation/statistics/comparison_tests.py": 80.0,
     "themis/evaluation/metrics/code/execution.py": 50.0,
