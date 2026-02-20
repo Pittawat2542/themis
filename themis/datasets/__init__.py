@@ -249,21 +249,6 @@ register_dataset("olympiadbench", _create_olympiadbench)
 register_dataset("beyondaime", _create_beyondaime)
 
 __all__ = [
-    # Legacy module exports
-    "competition_math",
-    "commonsense_qa",
-    "coqa",
-    "gpqa",
-    "gsm_symbolic",
-    "gsm8k",
-    "math500",
-    "med_qa",
-    "medmcqa",
-    "mmlu_pro",
-    "piqa",
-    "sciq",
-    "social_i_qa",
-    "super_gpqa",
     # Registry functions
     "register_dataset",
     "unregister_dataset",

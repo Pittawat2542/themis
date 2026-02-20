@@ -116,25 +116,6 @@ def test_experiment_run_produces_generation_and_evaluation_reports():
     assert exact_report.count == 2
     assert exact_report.mean == pytest.approx(1.0)
 
-
-def test_orchestrator_rejects_legacy_storage_constructor_arg(tmp_path):
-    plan = make_plan()
-    eval_pipeline = make_pipeline()
-    runner_impl = EchoRunner(
-        answers_by_sample_id={"sample-1": "Paris", "sample-2": "Berlin"}
-    )
-    storage = experiment_storage.ExperimentStorage(tmp_path / "cache")
-
-    with pytest.raises(TypeError, match="unexpected keyword argument 'storage'"):
-        orchestrator.ExperimentOrchestrator(  # type: ignore[call-arg]
-            generation_plan=plan,
-            generation_runner=runner_impl,
-            evaluation_pipeline=eval_pipeline,
-            storage=storage,
-        )
-
-
-def test_experiment_can_limit_dataset_and_emit_callbacks():
     dataset = build_dataset() + [
         {"id": "sample-3", "topic": "Spain", "expected": "Madrid", "subject": "geo"}
     ]

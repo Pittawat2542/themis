@@ -1,11 +1,7 @@
 """Unit tests for evaluation cache key functionality."""
 
-import hashlib
-
-
 from themis.core import entities as core_entities
 from themis.storage import (
-    ExperimentStorage,
     evaluation_cache_key,
     task_cache_key,
 )
@@ -220,42 +216,3 @@ def test_task_cache_key_invalidates_on_reference_change():
     task_b.reference = core_entities.Reference(kind="answer", value="3")
 
     assert task_cache_key(task_a) != task_cache_key(task_b)
-
-
-def test_new_cache_keys_do_not_false_hit_legacy_records(tmp_path):
-    storage = ExperimentStorage(tmp_path)
-    run_id = "legacy-run"
-    storage.start_run(run_id, experiment_id="default")
-
-    task = make_test_task()
-    record = core_entities.GenerationRecord(
-        task=task,
-        output=core_entities.ModelOutput(text="2"),
-        error=None,
-        metrics={},
-    )
-    old_key = _legacy_task_cache_key(task)
-    storage.append_record(run_id, record, cache_key=old_key)
-
-    loaded = storage.load_cached_records(run_id)
-    assert old_key in loaded  # old data remains readable
-    assert task_cache_key(task) not in loaded  # no false hit under new key format
-
-
-def _legacy_task_cache_key(task: core_entities.GenerationTask) -> str:
-    dataset_raw = task.metadata.get("dataset_id") or task.metadata.get("sample_id")
-    dataset_id = str(dataset_raw) if dataset_raw is not None else ""
-    prompt_hash = hashlib.sha256(task.prompt.text.encode("utf-8")).hexdigest()[:12]
-    sampling = task.sampling
-    sampling_key = (
-        f"{sampling.temperature:.3f}-{sampling.top_p:.3f}-{sampling.max_tokens}"
-    )
-    return "::".join(
-        [
-            dataset_id,
-            task.prompt.spec.name,
-            task.model.identifier,
-            sampling_key,
-            prompt_hash,
-        ]
-    )

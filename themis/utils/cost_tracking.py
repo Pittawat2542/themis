@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
-from themis.core import entities as core_entities
 from themis.experiment.cost import CostTracker as RuntimeCostTracker
 
 # Provider pricing per 1M tokens (as of 2024)
@@ -140,62 +139,6 @@ class CostTracker(RuntimeCostTracker):
             output_cost_per_1m: Cost per 1M output tokens in USD
         """
         self.pricing[model] = (input_cost_per_1m, output_cost_per_1m)
-
-    def track_generation(
-        self,
-        record: core_entities.GenerationRecord,
-        input_tokens: int | None = None,
-        output_tokens: int | None = None,
-    ) -> CostRecord:
-        """Track cost for a generation record.
-
-        Args:
-            record: Generation record to track
-            input_tokens: Number of input tokens (if None, estimated from prompt)
-            output_tokens: Number of output tokens (if None, estimated from output)
-
-        Returns:
-            CostRecord with computed costs
-        """
-        model_id = record.task.model.identifier
-        provider = record.task.model.provider
-
-        # Extract or estimate token counts
-        if input_tokens is None:
-            input_tokens = self._estimate_tokens(record.task.prompt.text)
-
-        if output_tokens is None and record.output:
-            output_tokens = self._estimate_tokens(record.output.text)
-        elif output_tokens is None:
-            output_tokens = 0
-
-        usage = TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens)
-
-        # Compute costs
-        input_cost, output_cost = self._compute_cost(model_id, usage)
-        total_cost = input_cost + output_cost
-
-        cost_record = CostRecord(
-            model_identifier=model_id,
-            provider=provider,
-            usage=usage,
-            input_cost=input_cost,
-            output_cost=output_cost,
-            total_cost=total_cost,
-            metadata={
-                "sample_id": record.task.metadata.get("sample_id"),
-                "run_id": record.task.metadata.get("run_id"),
-            },
-        )
-
-        self.record_generation(
-            model=model_id,
-            prompt_tokens=usage.input_tokens,
-            completion_tokens=usage.output_tokens,
-            cost=total_cost,
-        )
-        self.records.append(cost_record)
-        return cost_record
 
     def reset(self) -> None:
         """Reset both compatibility and runtime tracking state."""
