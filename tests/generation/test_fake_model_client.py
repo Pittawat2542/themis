@@ -22,7 +22,7 @@ def make_task(prompt: str) -> core_entities.GenerationTask:
 
 def test_fake_math_model_client_returns_structured_json():
     client = clients.FakeMathModelClient(seed=42)
-    response = client.generate(make_task("What is 2 + 2?"))
+    response = client.execute(make_task("What is 2 + 2?"))
 
     payload = json.loads(response.output.text)
     assert payload["answer"] == "4"
@@ -32,7 +32,7 @@ def test_fake_math_model_client_returns_structured_json():
 
 def test_fake_math_model_client_can_handle_polar_conversion():
     client = clients.FakeMathModelClient(seed=2)
-    response = client.generate(
+    response = client.execute(
         make_task("Convert the point (0,3) to polar coordinates.")
     )
 

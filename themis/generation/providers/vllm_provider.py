@@ -8,11 +8,11 @@ import time
 from typing import Any
 
 from themis.core import entities as core_entities
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 from themis.providers import register_provider
 
 
-class VLLMProvider(ModelProvider):
+class VLLMProvider(StatelessTaskExecutor):
     def __init__(
         self,
         *,
@@ -30,7 +30,7 @@ class VLLMProvider(ModelProvider):
         self._rr_index = 0
         self._semaphore = threading.Semaphore(self._max_parallel)
 
-    def generate(
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:  # type: ignore[override]
         with self._semaphore:

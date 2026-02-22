@@ -88,7 +88,7 @@ def test_litellm_provider_basic_generation(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task()
 
-    record = provider.generate(task)
+    record = provider.execute(task)
 
     assert record.output is not None
     assert record.output.text == "Test response"
@@ -106,7 +106,7 @@ def test_litellm_provider_with_custom_api_key(mock_litellm):
     provider = LiteLLMProvider(api_key="test-key-123")
     task = build_task()
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify API key was passed to completion
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -120,7 +120,7 @@ def test_litellm_provider_with_custom_api_base(mock_litellm):
     provider = LiteLLMProvider(api_base="https://custom.api.com/v1")
     task = build_task()
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify API base was passed to completion
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -134,7 +134,7 @@ def test_litellm_provider_with_system_prompt(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task(metadata={"system_prompt": "You are a helpful assistant."})
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify messages include system prompt
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -152,7 +152,7 @@ def test_litellm_provider_sampling_parameters(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task(temperature=0.9, top_p=0.95, max_tokens=150)
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify sampling parameters
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -168,7 +168,7 @@ def test_litellm_provider_no_max_tokens_limit(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task(max_tokens=-1)
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify max_tokens is not in kwargs when negative
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -184,7 +184,7 @@ def test_litellm_provider_with_extra_kwargs(mock_litellm):
     )
     task = build_task()
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify extra kwargs are passed
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -199,7 +199,7 @@ def test_litellm_provider_with_custom_llm_provider(mock_litellm):
     provider = LiteLLMProvider(custom_llm_provider="azure")
     task = build_task()
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify custom_llm_provider is passed
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -216,7 +216,7 @@ def test_litellm_provider_error_handling(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task()
 
-    record = provider.generate(task)
+    record = provider.execute(task)
 
     # Verify error is captured
     assert record.output is None
@@ -238,7 +238,7 @@ def test_litellm_provider_with_status_code_error(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task()
 
-    record = provider.generate(task)
+    record = provider.execute(task)
 
     # Verify error details include status code
     assert record.error is not None
@@ -263,7 +263,7 @@ def test_litellm_provider_different_models(mock_litellm):
 
     for model_id in models:
         task = build_task(model_id=model_id)
-        record = provider.generate(task)
+        record = provider.execute(task)
 
         # Verify the correct model was requested
         call_kwargs = mock_litellm.completion.call_args[1]
@@ -287,7 +287,7 @@ def test_litellm_provider_conversation_history(mock_litellm):
         metadata={"conversation_history": conversation_history},
     )
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify conversation history is included
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -306,7 +306,7 @@ def test_litellm_provider_task_metadata_override(mock_litellm):
 
     task = build_task(metadata={"litellm_kwargs": {"timeout": 60, "stream": True}})
 
-    provider.generate(task)
+    provider.execute(task)
 
     # Verify task-level overrides are applied
     call_kwargs = mock_litellm.completion.call_args[1]
@@ -334,7 +334,7 @@ def test_litellm_provider_empty_response(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task()
 
-    record = provider.generate(task)
+    record = provider.execute(task)
 
     # Verify empty string is returned
     assert record.output is not None
@@ -351,7 +351,7 @@ def test_litellm_provider_response_without_usage(mock_litellm):
     provider = LiteLLMProvider()
     task = build_task()
 
-    record = provider.generate(task)
+    record = provider.execute(task)
 
     # Verify generation succeeds without usage info
     assert record.output is not None

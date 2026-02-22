@@ -44,7 +44,7 @@ from typing import Any
 from themis.core import conversation as conv
 from themis.core import entities as core_entities
 from themis.generation import turn_strategies
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 from themis.utils import tracing
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class ConversationRunner:
     and determining next turns using a TurnStrategy.
 
     Attributes:
-        provider: Model provider for generation
+        executor: Model executor for generation
         turn_strategy: Strategy for determining next turns
         max_turns: Maximum number of conversation turns
         prompt_template: Optional template for formatting context
@@ -66,7 +66,7 @@ class ConversationRunner:
     def __init__(
         self,
         *,
-        provider: ModelProvider,
+        executor: StatelessTaskExecutor,
         turn_strategy: turn_strategies.TurnStrategy,
         max_turns: int = 10,
         prompt_template: Any | None = None,
@@ -74,12 +74,12 @@ class ConversationRunner:
         """Initialize conversation runner.
 
         Args:
-            provider: Model provider for generation
+            executor: Model executor for generation
             turn_strategy: Strategy for determining next turns
             max_turns: Maximum number of conversation turns
             prompt_template: Optional template for formatting context
         """
-        self._provider = provider
+        self._executor = executor
         self._turn_strategy = turn_strategy
         self._max_turns = max_turns
         self._prompt_template = prompt_template
@@ -114,7 +114,7 @@ class ConversationRunner:
                         generation_task = self._create_generation_task(
                             task, prompt_text, turn_num
                         )
-                        record = self._provider.generate(generation_task)
+                        record = self._executor.execute(generation_task)
 
                     # Add assistant response to context
                     if record.output:

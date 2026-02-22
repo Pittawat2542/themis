@@ -2,15 +2,15 @@ import json
 from dataclasses import dataclass
 
 from themis.core import entities as core_entities
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 from themis.evaluation import metrics
 
 
 @dataclass
-class StubJudgeProvider(ModelProvider):
+class StubJudgeExecutor(StatelessTaskExecutor):
     payload: dict
 
-    def generate(
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:  # type: ignore[override]
         text = json.dumps(self.payload)
@@ -23,11 +23,11 @@ class StubJudgeProvider(ModelProvider):
 
 
 @dataclass
-class RawJudgeProvider(ModelProvider):
+class RawJudgeExecutor(StatelessTaskExecutor):
     text: str
     last_prompt: str | None = None
 
-    def generate(
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:  # type: ignore[override]
         self.last_prompt = task.prompt.text
@@ -49,10 +49,10 @@ def test_pairwise_judge_metric_handles_preference_and_confidence():
         "confidence": 0.8,
         "rationale": "A is clearer.",
     }
-    provider = StubJudgeProvider(payload=judge_payload)
+    provider = StubJudgeExecutor(payload=judge_payload)
     metric = metrics.PairwiseJudgeMetric(
         judge_model=make_task_model(),
-        judge_provider=provider,
+        judge_executor=provider,
         rubric=["clarity"],
     )
 
@@ -65,10 +65,10 @@ def test_pairwise_judge_metric_handles_preference_and_confidence():
 
 
 def test_pairwise_judge_metric_handles_invalid_json():
-    provider = RawJudgeProvider(text="Not JSON at all")
+    provider = RawJudgeExecutor(text="Not JSON at all")
     metric = metrics.PairwiseJudgeMetric(
         judge_model=make_task_model(),
-        judge_provider=provider,
+        judge_executor=provider,
         rubric=["clarity"],
     )
 
@@ -80,12 +80,12 @@ def test_pairwise_judge_metric_handles_invalid_json():
 
 
 def test_pairwise_judge_metric_extracts_embedded_json():
-    provider = RawJudgeProvider(
+    provider = RawJudgeExecutor(
         text='Result: {"preference": "B", "confidence": 0.3, "rationale": "Shorter."}'
     )
     metric = metrics.PairwiseJudgeMetric(
         judge_model=make_task_model(),
-        judge_provider=provider,
+        judge_executor=provider,
         rubric=["clarity"],
     )
 
@@ -97,10 +97,10 @@ def test_pairwise_judge_metric_extracts_embedded_json():
 
 
 def test_pairwise_judge_metric_prompt_contains_guards():
-    provider = RawJudgeProvider(text="{}")
+    provider = RawJudgeExecutor(text="{}")
     metric = metrics.PairwiseJudgeMetric(
         judge_model=make_task_model(),
-        judge_provider=provider,
+        judge_executor=provider,
         rubric=["clarity"],
     )
 

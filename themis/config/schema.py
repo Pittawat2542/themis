@@ -25,6 +25,24 @@ class RunnerConfig:
 
 
 @dataclass
+class ExtractorConfig:
+    name: str = "identity"
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class MetricConfig:
+    name: str
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PipelineConfig:
+    extractor: ExtractorConfig | None = None
+    metrics: list[MetricConfig] = field(default_factory=list)
+
+
+@dataclass
 class GenerationConfig:
     model_identifier: str = ""
     provider: ProviderConfig = field(default_factory=ProviderConfig)
@@ -74,6 +92,7 @@ class ExperimentConfig:
     name: str = "math500_zero_shot"
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
+    pipeline: PipelineConfig | None = None  # Added generic pipeline config
     storage: StorageConfig = field(default_factory=StorageConfig)
     integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
     max_samples: int | None = None

@@ -11,7 +11,7 @@ from themis.backends.execution import (
 )
 from themis.core import entities as core_entities
 from themis.generation.runner import GenerationRunner
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 
 
 class TestLocalExecutionBackend:
@@ -188,8 +188,8 @@ class RecordingExecutionBackend(ExecutionBackend):
         self.shutdown_called = True
 
 
-class FakeProvider(ModelProvider):
-    def generate(
+class FakeExecutor(StatelessTaskExecutor):
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:
         return core_entities.GenerationRecord(
@@ -215,7 +215,7 @@ def _make_task(sample_id: str) -> core_entities.GenerationTask:
 def test_generation_runner_uses_execution_backend():
     backend = RecordingExecutionBackend()
     runner = GenerationRunner(
-        provider=FakeProvider(), execution_backend=backend, max_parallel=2
+        executor=FakeExecutor(), execution_backend=backend, max_parallel=2
     )
     tasks = [_make_task("a"), _make_task("b")]
 

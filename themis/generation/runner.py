@@ -10,14 +10,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from themis.core import entities as core_entities
 from themis.generation import strategies
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 from themis.utils import tracing
 
 logger = logging.getLogger(__name__)
 
 
 class GenerationRunner:
-    """Delegates generation tasks to an injected provider with strategy support."""
+    """Delegates generation tasks to an injected executor with strategy support."""
 
     _NON_RETRYABLE_ERROR_MARKERS = (
         "authentication",
@@ -33,7 +33,7 @@ class GenerationRunner:
     def __init__(
         self,
         *,
-        provider: ModelProvider,
+        executor: StatelessTaskExecutor,
         strategy_resolver: Callable[
             [core_entities.GenerationTask], strategies.GenerationStrategy
         ]
@@ -46,7 +46,7 @@ class GenerationRunner:
         retry_max_delay: float | None = 2.0,
         max_in_flight_tasks: int | None = None,
     ) -> None:
-        self._provider = provider
+        self._executor = executor
         self._strategy_resolver = strategy_resolver or (
             lambda task: strategies.SingleAttemptStrategy()
         )
@@ -171,7 +171,7 @@ class GenerationRunner:
                         "max_retries": self._max_retries,
                     },
                 )
-                record = self._invoke_provider(task)
+                record = self._invoke_executor(task)
                 if record.error is not None:
                     error_message = record.error.message
                     retryable = self._is_retryable_record_error(record)
@@ -181,7 +181,7 @@ class GenerationRunner:
                             record.metrics.setdefault("retry_errors", attempt_errors)
                         return record
                     logger.warning(
-                        "Runner: Retryable provider error (attempt %s/%s) for %s: %s",
+                        "Runner: Retryable executor error (attempt %s/%s) for %s: %s",
                         attempt,
                         self._max_retries,
                         task_label,
@@ -259,13 +259,13 @@ class GenerationRunner:
             marker in haystack for marker in self._NON_RETRYABLE_ERROR_MARKERS
         )
 
-    def _invoke_provider(
+    def _invoke_executor(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:
         start = time.perf_counter()
 
-        with tracing.span("provider_generate", model=task.model.identifier):
-            record = self._provider.generate(task)
+        with tracing.span("executor_execute", model=task.model.identifier):
+            record = self._executor.execute(task)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         record.metrics.setdefault("generation_time_ms", elapsed_ms)
@@ -356,7 +356,7 @@ class GenerationRunner:
             return aggregated
 
     def _count_tokens(self, text: str) -> int | None:
-        counter = getattr(self._provider, "count_tokens", None)
+        counter = getattr(self._executor, "count_tokens", None)
         if callable(counter):
             try:
                 return int(counter(text))

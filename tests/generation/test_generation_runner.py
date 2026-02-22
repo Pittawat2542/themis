@@ -15,7 +15,7 @@ class FakeModelProvider:
     def __post_init__(self) -> None:
         self.calls: list[core_entities.GenerationTask] = []
 
-    def generate(
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:
         self.calls.append(task)
@@ -57,7 +57,7 @@ def test_runner_invokes_model_client_and_returns_structured_results():
     ]
 
     provider = FakeModelProvider()
-    runner = generation_runner.GenerationRunner(provider=provider)
+    runner = generation_runner.GenerationRunner(executor=provider)
 
     results = list(runner.run(requests))
 
@@ -74,10 +74,10 @@ def test_runner_invokes_model_client_and_returns_structured_results():
 
 def test_runner_attaches_failures_to_result_stream():
     class FlakyProvider(FakeModelProvider):
-        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+        def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             if "fail" in task.prompt.text:
                 raise RuntimeError("boom")
-            return super().generate(task)
+            return super().execute(task)
 
     sampling = core_entities.SamplingConfig(temperature=1.0, top_p=0.9, max_tokens=16)
     requests = [
@@ -86,7 +86,7 @@ def test_runner_attaches_failures_to_result_stream():
     ]
 
     runner = generation_runner.GenerationRunner(
-        provider=FlakyProvider(), retry_initial_delay=0.0
+        executor=FlakyProvider(), retry_initial_delay=0.0
     )
 
     results = list(runner.run(requests))
@@ -102,17 +102,17 @@ def test_runner_retries_transient_failures_and_records_attempts():
             super().__post_init__()
             self.failures = 0
 
-        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+        def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             if self.failures < 2:
                 self.failures += 1
                 raise RuntimeError("temporary outage")
-            return super().generate(task)
+            return super().execute(task)
 
     sampling = core_entities.SamplingConfig(temperature=0.1, top_p=0.9, max_tokens=16)
     requests = [build_task("Recover please", "gpt-4o", sampling)]
 
     runner = generation_runner.GenerationRunner(
-        provider=TransientProvider(), retry_initial_delay=0.0, max_retries=3
+        executor=TransientProvider(), retry_initial_delay=0.0, max_retries=3
     )
 
     results = list(runner.run(requests))
@@ -127,14 +127,14 @@ def test_runner_retries_transient_failures_and_records_attempts():
 
 def test_runner_stops_after_max_retries_and_reports_cause():
     class AlwaysFailProvider(FakeModelProvider):
-        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+        def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             raise RuntimeError("permanent failure")
 
     sampling = core_entities.SamplingConfig(temperature=0.1, top_p=0.9, max_tokens=16)
     requests = [build_task("Never works", "gpt-4o", sampling)]
 
     runner = generation_runner.GenerationRunner(
-        provider=AlwaysFailProvider(), max_retries=2, retry_initial_delay=0.0
+        executor=AlwaysFailProvider(), max_retries=2, retry_initial_delay=0.0
     )
 
     results = list(runner.run(requests))
@@ -153,12 +153,12 @@ def test_runner_parallel_execution():
             self.max_active = 0
             self.lock = threading.Lock()
 
-        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+        def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             with self.lock:
                 self.active += 1
                 self.max_active = max(self.max_active, self.active)
             time.sleep(0.05)
-            record = super().generate(task)
+            record = super().execute(task)
             with self.lock:
                 self.active -= 1
             return record
@@ -167,7 +167,7 @@ def test_runner_parallel_execution():
     sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.9, max_tokens=32)
     requests = [build_task(f"Task {i}", "gpt-4o", sampling) for i in range(4)]
 
-    runner = generation_runner.GenerationRunner(provider=provider, max_parallel=3)
+    runner = generation_runner.GenerationRunner(executor=provider, max_parallel=3)
     list(runner.run(requests))
 
     assert provider.max_active >= 2
@@ -176,12 +176,12 @@ def test_runner_parallel_execution():
 
 def test_runner_parallel_yields_completion_order():
     class VariableLatencyProvider(FakeModelProvider):
-        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+        def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             if task.prompt.text == "slow":
                 time.sleep(0.08)
             else:
                 time.sleep(0.01)
-            return super().generate(task)
+            return super().execute(task)
 
     provider = VariableLatencyProvider()
     sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.9, max_tokens=32)
@@ -190,7 +190,7 @@ def test_runner_parallel_yields_completion_order():
         build_task("fast", "gpt-4o", sampling),
     ]
 
-    runner = generation_runner.GenerationRunner(provider=provider, max_parallel=2)
+    runner = generation_runner.GenerationRunner(executor=provider, max_parallel=2)
     results = list(runner.run(requests))
 
     assert [record.task.prompt.text for record in results] == ["fast", "slow"]
@@ -211,7 +211,7 @@ def test_runner_streams_iterables_without_full_materialization():
                 yield build_task(f"Task {idx}", "gpt-4o", sampling)
 
     tasks = TrackingTasks(total=20)
-    runner = generation_runner.GenerationRunner(provider=provider, max_parallel=1)
+    runner = generation_runner.GenerationRunner(executor=provider, max_parallel=1)
     stream = runner.run(tasks)
 
     first = next(stream)
@@ -224,9 +224,9 @@ def test_runner_streams_iterables_without_full_materialization():
 
 def test_runner_bounds_in_flight_task_submission():
     class SlowProvider(FakeModelProvider):
-        def generate(self, task: core_entities.GenerationTask):  # type: ignore[override]
+        def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             time.sleep(0.03)
-            return super().generate(task)
+            return super().execute(task)
 
     provider = SlowProvider()
     sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.9, max_tokens=32)
@@ -243,7 +243,7 @@ def test_runner_bounds_in_flight_task_submission():
 
     tasks = TrackingTasks(total=10)
     runner = generation_runner.GenerationRunner(
-        provider=provider,
+        executor=provider,
         max_parallel=2,
         max_in_flight_tasks=3,
     )
@@ -260,7 +260,7 @@ def test_runner_retries_when_provider_returns_retryable_error_record():
         def __init__(self) -> None:
             self.calls = 0
 
-        def generate(self, task: core_entities.GenerationTask):
+        def execute(self, task: core_entities.GenerationTask):
             self.calls += 1
             if self.calls < 3:
                 return core_entities.GenerationRecord(
@@ -283,7 +283,7 @@ def test_runner_retries_when_provider_returns_retryable_error_record():
     requests = [build_task("Recover from error-record", "gpt-4o", sampling)]
     provider = RetryableErrorProvider()
     runner = generation_runner.GenerationRunner(
-        provider=provider, max_retries=3, retry_initial_delay=0.0
+        executor=provider, max_retries=3, retry_initial_delay=0.0
     )
 
     result = list(runner.run(requests))[0]
@@ -297,7 +297,7 @@ def test_runner_does_not_retry_non_retryable_error_record():
         def __init__(self) -> None:
             self.calls = 0
 
-        def generate(self, task: core_entities.GenerationTask):
+        def execute(self, task: core_entities.GenerationTask):
             self.calls += 1
             return core_entities.GenerationRecord(
                 task=task,
@@ -313,7 +313,7 @@ def test_runner_does_not_retry_non_retryable_error_record():
     requests = [build_task("No retry expected", "gpt-4o", sampling)]
     provider = NonRetryableErrorProvider()
     runner = generation_runner.GenerationRunner(
-        provider=provider, max_retries=3, retry_initial_delay=0.0
+        executor=provider, max_retries=3, retry_initial_delay=0.0
     )
 
     result = list(runner.run(requests))[0]

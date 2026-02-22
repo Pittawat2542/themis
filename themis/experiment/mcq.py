@@ -11,14 +11,14 @@ from themis.experiment import orchestrator
 from themis import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
 from themis.generation import clients, plan, runner, templates
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 
 
 def build_multiple_choice_json_experiment(
     *,
     dataset_name: str,
     task_id: str | None = None,
-    model_client: ModelProvider | None = None,
+    model_client: StatelessTaskExecutor | None = None,
     model_name: str = "fake-math-llm",
     provider_name: str = "fake",
     temperature: float | None = None,
@@ -121,7 +121,7 @@ def build_multiple_choice_json_experiment(
             )
 
     mcq_runner = runner.GenerationRunner(
-        provider=model_client or clients.FakeMathModelClient(),
+        executor=model_client or clients.FakeMathModelClient(),
         **runner_kwargs,
     )
 

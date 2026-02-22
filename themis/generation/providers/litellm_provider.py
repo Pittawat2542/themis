@@ -8,14 +8,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from themis.core import entities as core_entities
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 from themis.providers import register_provider
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class LiteLLMProvider(ModelProvider):
+class LiteLLMProvider(StatelessTaskExecutor):
     """
     Universal LLM provider using LiteLLM.
 
@@ -81,10 +81,10 @@ class LiteLLMProvider(ModelProvider):
                 "`uv add litellm` to use LiteLLMProvider."
             ) from exc
 
-    def generate(
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:  # type: ignore[override]
-        """Generate a response using LiteLLM."""
+        """Execute a stateless generation task using LiteLLM."""
 
         messages = self._build_messages(task)
         completion_kwargs = self._build_completion_kwargs(task, messages)

@@ -361,7 +361,7 @@ def evaluate(
 
     # Build generation runner
     runner = GenerationRunner(
-        provider=router,
+        executor=router,
         strategy_resolver=strategy_resolver,
         max_parallel=workers,
         max_retries=max_retries,

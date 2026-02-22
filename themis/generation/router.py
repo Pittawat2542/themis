@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from themis.core import entities as core_entities
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 
 
 ProviderKey = str | tuple[str, str]
@@ -15,11 +15,11 @@ def _model_key(provider: str, identifier: str) -> str:
     return f"{provider}:{identifier}"
 
 
-class ProviderRouter(ModelProvider):
+class ProviderRouter(StatelessTaskExecutor):
     """Dispatches generation tasks to concrete providers by model identifier."""
 
-    def __init__(self, providers: Mapping[ProviderKey, ModelProvider]):
-        normalized: dict[str, ModelProvider] = {}
+    def __init__(self, providers: Mapping[ProviderKey, StatelessTaskExecutor]):
+        normalized: dict[str, StatelessTaskExecutor] = {}
 
         for key, provider in providers.items():
             if isinstance(key, tuple):
@@ -30,7 +30,7 @@ class ProviderRouter(ModelProvider):
 
         self._providers = normalized
 
-    def generate(
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:  # type: ignore[override]
         provider = self._providers.get(
@@ -44,10 +44,10 @@ class ProviderRouter(ModelProvider):
                 f"No provider registered for model '{task.model.identifier}'. "
                 f"Known providers: {known}."
             )
-        return provider.generate(task)
+        return provider.execute(task)
 
     @property
-    def providers(self) -> Mapping[str, ModelProvider]:
+    def providers(self) -> Mapping[str, StatelessTaskExecutor]:
         return self._providers
 
 

@@ -8,10 +8,12 @@ from typing import List
 
 from themis.core import entities as core_entities
 from themis.datasets import create_dataset
+from themis.evaluation import extractors, metrics, pipeline as eval_pipeline
 from themis.experiment import math as math_experiment
 from themis.experiment import mcq as mcq_experiment
 from themis.experiment import orchestrator as experiment_orchestrator
 from themis import storage as experiment_storage
+from themis.generation import plan, runner, templates
 from themis.providers import registry as provider_registry
 
 from . import registry, schema
@@ -75,6 +77,74 @@ def _build_experiment(
     )
 
 
+def build_pipeline_from_config(
+    config: schema.PipelineConfig,
+) -> eval_pipeline.EvaluationPipeline:
+    """Dynamically construct an evaluation pipeline from a YAML configuration."""
+
+    # 1. Build Extractor
+    extractor_obj = None
+    if config.extractor:
+        ext_name = config.extractor.name.lower()
+        opts = config.extractor.options or {}
+        if ext_name == "json_field":
+            extractor_obj = extractors.JsonFieldExtractor(**opts)
+        elif ext_name == "regex":
+            extractor_obj = extractors.RegexExtractor(**opts)
+        elif ext_name == "math_verify":
+            extractor_obj = extractors.MathVerifyExtractor(**opts)
+        elif ext_name == "identity":
+            extractor_obj = extractors.IdentityExtractor(**opts)
+        else:
+            raise ValueError(f"Unknown extractor: {ext_name}")
+    else:
+        extractor_obj = extractors.IdentityExtractor()
+
+    # 2. Build Metrics
+    metric_list = []
+    for m_cfg in config.metrics:
+        m_name = m_cfg.name.lower()
+        opts = m_cfg.options or {}
+        if m_name == "exact_match":
+            metric_list.append(metrics.ExactMatch(**opts))
+        elif m_name == "math_verify":
+            metric_list.append(metrics.MathVerifyAccuracy(**opts))
+        elif m_name == "response_length":
+            metric_list.append(metrics.ResponseLength(**opts))
+        elif m_name in ("rubric_judge", "llm_judge"):
+            # Requires judge_model and judge_executor in options
+            # If judge executor not specified, fallback to generation provider?
+            if "judge_executor" in opts and isinstance(opts["judge_executor"], dict):
+                p_cfg = opts.pop("judge_executor")
+                j_prov = provider_registry.create_provider(
+                    p_cfg.get("name", "fake"), **p_cfg.get("options", {})
+                )
+                opts["judge_executor"] = j_prov
+            if "judge_model" in opts and isinstance(opts["judge_model"], dict):
+                m_cfg_spec = opts.pop("judge_model")
+                opts["judge_model"] = core_entities.ModelSpec(
+                    identifier=m_cfg_spec.get("identifier", ""),
+                    provider=m_cfg_spec.get("provider", ""),
+                )
+            metric_list.append(metrics.RubricJudgeMetric(**opts))
+        else:
+            # Try to resolve via metric_resolver
+            from themis.evaluation.metric_resolver import resolve_metrics
+
+            resolved = resolve_metrics([m_name])
+            if resolved:
+                # If it's a class we need to instantiate it with opts (hacky fallback)
+                met = resolved[0]
+                # resolve_metrics returns instances now, but we want to pass opts
+                metric_list.append(met)
+            else:
+                raise ValueError(f"Unknown metric: {m_name}")
+
+    return eval_pipeline.EvaluationPipeline(
+        extractor=extractor_obj, metrics=metric_list
+    )
+
+
 @registry.register_experiment_builder("math500")
 @registry.register_experiment_builder("aime24")
 @registry.register_experiment_builder("aime25")
@@ -115,6 +185,78 @@ def _build_math_experiment(
         provider_name=config.generation.provider.name,
         runner_options=runner_options,
         task_name=task_name,
+    )
+
+
+@registry.register_experiment_builder("custom")
+def _build_custom_experiment(
+    config: schema.ExperimentConfig,
+) -> experiment_orchestrator.ExperimentOrchestrator:
+    """Build a fully custom declarative experiment using YAML configs for pipelines."""
+
+    storage_path = config.storage.path or config.storage.default_path
+    storage = (
+        experiment_storage.ExperimentStorage(Path(storage_path))
+        if storage_path
+        else None
+    )
+
+    sampling_cfg = core_entities.SamplingConfig(
+        temperature=config.generation.sampling.temperature,
+        top_p=config.generation.sampling.top_p,
+        max_tokens=config.generation.sampling.max_tokens,
+    )
+
+    provider = provider_registry.create_provider(
+        config.generation.provider.name, **config.generation.provider.options
+    )
+
+    model_spec = core_entities.ModelSpec(
+        identifier=config.generation.model_identifier,
+        provider=config.generation.provider.name,
+        default_sampling=sampling_cfg,
+    )
+
+    # Needs tasks templates from config.task_options
+    template_str = config.task_options.get("template", "{question}")
+    prompt_template = templates.PromptTemplate(
+        name="custom-template",
+        template=template_str,
+    )
+
+    gen_plan = plan.GenerationPlan(
+        templates=[prompt_template],
+        models=[model_spec],
+        sampling_parameters=[sampling_cfg],
+        dataset_id_field=config.task_options.get("dataset_id_field", "id"),
+        reference_field=config.task_options.get("reference_field", "reference"),
+    )
+
+    runner_kwargs = config.generation.runner.__dict__
+    gen_runner = runner.GenerationRunner(
+        provider=provider,
+        **runner_kwargs,
+    )
+
+    # Use custom pipeline if provided, else empty
+    if config.pipeline:
+        eval_pl = build_pipeline_from_config(config.pipeline)
+    else:
+        eval_pl = eval_pipeline.EvaluationPipeline(
+            extractor=extractors.IdentityExtractor(), metrics=[]
+        )
+
+    from themis.experiment.cache_manager import CacheManager
+
+    return experiment_orchestrator.ExperimentOrchestrator(
+        generation_plan=gen_plan,
+        generation_runner=gen_runner,
+        evaluation_pipeline=eval_pl,
+        cache_manager=CacheManager(
+            storage=storage,
+            enable_resume=config.resume,
+            enable_cache=True,
+        ),
     )
 
 

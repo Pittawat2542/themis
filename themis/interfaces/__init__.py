@@ -9,13 +9,42 @@ from typing import Any, Protocol, runtime_checkable
 from themis.core import entities
 
 
-class ModelProvider(ABC):
-    """Abstract interface for anything capable of fulfilling generation tasks."""
+# --- Task Executor Interfaces ---
+
+
+class StatelessTaskExecutor(ABC):
+    """Task executor for handling stateless, single-turn interactions.
+
+    A stateless executor receives a complete generation task, processes it without
+    relying on past tasks, and returns a generation record.
+    """
 
     @abstractmethod
-    def generate(
+    def execute(
         self, task: entities.GenerationTask
     ) -> entities.GenerationRecord:  # pragma: no cover - abstract
+        raise NotImplementedError
+
+
+class StatefulTaskExecutor(ABC):
+    """Task executor for complex, multi-turn, stateful agentic interactions.
+
+    A stateful executor is instantiated anew for a multi-turn evaluation sample.
+    It can maintain conversation history, tool usage state, and other context
+    across sequential inputs safely without thread pollution.
+    """
+
+    @abstractmethod
+    def step(
+        self, prompt: str | entities.PromptRender, **kwargs
+    ) -> entities.ModelOutput:  # pragma: no cover - abstract
+        raise NotImplementedError
+
+    @abstractmethod
+    def execute_task(
+        self, task: entities.GenerationTask
+    ) -> entities.GenerationRecord:  # pragma: no cover - abstract
+        """Execute an entire complex task to completion, returning the final record."""
         raise NotImplementedError
 
 
@@ -163,8 +192,9 @@ class Metric(ABC):
 
 
 __all__ = [
-    "ModelProvider",
     "DatasetAdapter",
     "Extractor",
     "Metric",
+    "StatelessTaskExecutor",
+    "StatefulTaskExecutor",
 ]

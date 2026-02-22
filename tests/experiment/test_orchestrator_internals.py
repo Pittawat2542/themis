@@ -8,7 +8,7 @@ from themis.evaluation.reports import EvaluationReport
 from themis.experiment.orchestrator import ExperimentOrchestrator
 from themis.generation.plan import GenerationPlan
 from themis.generation.runner import GenerationRunner
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 
 
 class DummyCacheManager:
@@ -89,8 +89,8 @@ class DummyCacheManager:
         self.fail_calls.append({"run_id": run_id, "error_message": error_message})
 
 
-class FakeProvider(ModelProvider):
-    def generate(
+class FakeProvider(StatelessTaskExecutor):
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:
         return core_entities.GenerationRecord(
@@ -122,7 +122,7 @@ def _make_plan() -> GenerationPlan:
 
 def test_orchestrator_uses_cache_manager_api():
     plan = _make_plan()
-    runner = GenerationRunner(provider=FakeProvider())
+    runner = GenerationRunner(executor=FakeProvider())
     eval_pipeline = evaluation_pipeline.EvaluationPipeline(
         extractor=extractors.IdentityExtractor(),
         metrics=[metrics.ResponseLength()],
@@ -187,7 +187,7 @@ def test_orchestrator_prefers_evaluation_fingerprint():
             return EvaluationReport(metrics={}, failures=[], records=[], slices={})
 
     plan = _make_plan()
-    runner = GenerationRunner(provider=FakeProvider())
+    runner = GenerationRunner(executor=FakeProvider())
     cache_manager = DummyCacheManager()
 
     orchestrator = ExperimentOrchestrator(

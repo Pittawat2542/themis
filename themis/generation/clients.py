@@ -8,11 +8,11 @@ import random
 import re
 
 from themis.core import entities as core_entities
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 from themis.providers import register_provider
 
 
-class FakeMathModelClient(ModelProvider):
+class FakeMathModelClient(StatelessTaskExecutor):
     """A lightweight heuristic provider used for math experiments."""
 
     _POINT_PATTERN = re.compile(
@@ -28,7 +28,7 @@ class FakeMathModelClient(ModelProvider):
         self._rng = random.Random(seed)
         self._default_answer = default_answer
 
-    def generate(
+    def execute(
         self, task: core_entities.GenerationTask
     ) -> core_entities.GenerationRecord:  # type: ignore[override]
         prompt_text = task.prompt.text

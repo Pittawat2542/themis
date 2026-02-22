@@ -105,7 +105,7 @@ def test_vllm_provider_lora_request(monkeypatch):
     task = build_task_with_lora()
 
     # Generate
-    record = provider.generate(task)
+    record = provider.execute(task)
 
     # Verify result (basic check)
     assert "chunk" in record.output.text
@@ -150,7 +150,7 @@ def test_vllm_provider_no_lora_request(monkeypatch):
         metadata={"dataset_id": "sample-2"},  # No lora_path
     )
 
-    provider.generate(task_no_lora)
+    provider.execute(task_no_lora)
 
     engine = provider._engines[0]
     last_kwargs = engine.last_generate_kwargs

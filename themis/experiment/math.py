@@ -11,12 +11,12 @@ from themis.experiment import orchestrator
 from themis import storage as experiment_storage
 from themis.experiment.cache_manager import CacheManager
 from themis.generation import clients, plan, runner, templates
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 
 
 def build_math500_zero_shot_experiment(
     *,
-    model_client: ModelProvider | None = None,
+    model_client: StatelessTaskExecutor | None = None,
     model_name: str = "fake-math-llm",
     provider_name: str = "fake",
     temperature: float | None = None,
@@ -95,7 +95,7 @@ def build_math500_zero_shot_experiment(
             )
 
     math_runner = runner.GenerationRunner(
-        provider=model_client or clients.FakeMathModelClient(),
+        executor=model_client or clients.FakeMathModelClient(),
         **runner_kwargs,
     )
     if math_verify_utils.math_verify_available():

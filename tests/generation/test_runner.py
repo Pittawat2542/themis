@@ -6,9 +6,9 @@ from themis.core import entities as core_entities
 
 class TestGenerationRunner(unittest.TestCase):
     def setUp(self):
-        self.mock_provider = MagicMock()
-        self.mock_provider.reset_mock()
-        self.runner = GenerationRunner(provider=self.mock_provider)
+        self.mock_executor = MagicMock()
+        self.mock_executor.reset_mock()
+        self.runner = GenerationRunner(executor=self.mock_executor)
 
         # Setup common test objects
         self.task = core_entities.GenerationTask(
@@ -27,7 +27,7 @@ class TestGenerationRunner(unittest.TestCase):
     def test_run_executes_single_task(self):
         """Test basic single task execution."""
         # Setup successful response
-        self.mock_provider.generate.return_value = core_entities.GenerationRecord(
+        self.mock_executor.execute.return_value = core_entities.GenerationRecord(
             task=self.task,
             output=core_entities.ModelOutput(text="response"),
             error=None,
@@ -38,7 +38,7 @@ class TestGenerationRunner(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertIsNone(results[0].error)
         self.assertEqual(results[0].output.text, "response")
-        self.mock_provider.generate.assert_called_once()
+        self.mock_executor.execute.assert_called_once()
 
     def test_run_handles_provider_error(self):
         """Test handling of provider errors."""
@@ -48,10 +48,10 @@ class TestGenerationRunner(unittest.TestCase):
             output=None,
             error=core_entities.ModelError(message="API Error", kind="api_error"),
         )
-        self.mock_provider.generate.return_value = error_record
+        self.mock_executor.execute.return_value = error_record
 
         # Configure runner to not retry for faster test
-        self.runner = GenerationRunner(provider=self.mock_provider, max_retries=0)
+        self.runner = GenerationRunner(executor=self.mock_executor, max_retries=0)
 
         results = list(self.runner.run([self.task]))
 
@@ -63,12 +63,12 @@ class TestGenerationRunner(unittest.TestCase):
     def test_parallel_execution(self):
         """Test parallel execution mode."""
         # Clean up existing runner as we need one with parallel config
-        self.runner = GenerationRunner(provider=self.mock_provider, max_parallel=2)
+        self.runner = GenerationRunner(executor=self.mock_executor, max_parallel=2)
 
         tasks = [self.task for _ in range(5)]
 
         # Configure mock to return valid outputs for parallel execution
-        self.mock_provider.generate.return_value = core_entities.GenerationRecord(
+        self.mock_executor.execute.return_value = core_entities.GenerationRecord(
             task=self.task,
             output=core_entities.ModelOutput(text="response"),
             error=None,
@@ -77,4 +77,4 @@ class TestGenerationRunner(unittest.TestCase):
         results = list(self.runner.run(tasks))
 
         self.assertEqual(len(results), 5)
-        self.assertEqual(self.mock_provider.generate.call_count, 5)
+        self.assertEqual(self.mock_executor.execute.call_count, 5)

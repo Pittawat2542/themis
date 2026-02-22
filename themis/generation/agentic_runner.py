@@ -38,7 +38,7 @@ from typing import Any
 from themis.core import conversation as conv
 from themis.core import entities as core_entities
 from themis.core import tools as tool_primitives
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 from themis.utils import tracing
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ class AgenticRunner:
     receive results, and continue processing until completion or max iterations.
 
     Attributes:
-        provider: Model provider for generation
+        executor: Model executor for generation
         tool_registry: Registry of available tools
         max_iterations: Maximum number of iterations
         tool_call_parser: Function to parse tool calls from model output
@@ -125,7 +125,7 @@ class AgenticRunner:
     def __init__(
         self,
         *,
-        provider: ModelProvider,
+        executor: StatelessTaskExecutor,
         tool_registry: tool_primitives.ToolRegistry,
         max_iterations: int = 10,
         tool_call_parser: Callable[[str], list[tool_primitives.ToolCall]] | None = None,
@@ -133,12 +133,12 @@ class AgenticRunner:
         """Initialize agentic runner.
 
         Args:
-            provider: Model provider for generation
+            executor: Model executor for generation
             tool_registry: Registry of available tools
             max_iterations: Maximum number of iterations
             tool_call_parser: Optional custom parser for tool calls
         """
-        self._provider = provider
+        self._executor = executor
         self._tools = tool_registry
         self._max_iterations = max_iterations
         self._tool_call_parser = tool_call_parser or self._default_tool_call_parser
@@ -181,7 +181,7 @@ class AgenticRunner:
                     with tracing.span("generate"):
                         prompt_text = context.to_prompt()
                         gen_task = self._update_task_prompt(task, prompt_text, i)
-                        record = self._provider.generate(gen_task)
+                        record = self._executor.execute(gen_task)
 
                     # Parse tool calls from output
                     with tracing.span("parse_tool_calls"):

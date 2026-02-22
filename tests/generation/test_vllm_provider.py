@@ -77,5 +77,5 @@ def test_vllm_provider_multiple_engines(monkeypatch):
 
     assert len(provider._engines) == 2
 
-    record = provider.generate(build_task())
+    record = provider.execute(build_task())
     assert "chunk" in record.output.text

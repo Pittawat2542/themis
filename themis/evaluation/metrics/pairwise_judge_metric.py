@@ -26,7 +26,7 @@ def _extract_json_payload(raw_text: str) -> tuple[dict[str, Any], bool]:
 @dataclass
 class PairwiseJudgeMetric(MetricInterface):
     judge_model: core_entities.ModelSpec
-    judge_provider: Any
+    judge_executor: Any
     sampling: core_entities.SamplingConfig | None = None
     rubric: dict[str, str] | Sequence[str] = ()
     _runner: Any = field(init=False, default=None, repr=False)
@@ -145,5 +145,5 @@ class PairwiseJudgeMetric(MetricInterface):
         if self._runner is None:
             from themis.generation.runner import GenerationRunner
 
-            self._runner = GenerationRunner(provider=self.judge_provider)
+            self._runner = GenerationRunner(executor=self.judge_executor)
         return self._runner

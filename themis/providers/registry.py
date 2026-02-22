@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Callable, Dict
 
-from themis.interfaces import ModelProvider
+from themis.interfaces import StatelessTaskExecutor
 
-ProviderFactory = Callable[..., ModelProvider]
+ProviderFactory = Callable[..., StatelessTaskExecutor]
 
 
 class _ProviderRegistry:
@@ -17,7 +17,7 @@ class _ProviderRegistry:
         key = name.lower()
         self._factories[key] = factory
 
-    def create(self, name: str, **options) -> ModelProvider:
+    def create(self, name: str, **options) -> StatelessTaskExecutor:
         key = name.lower()
         factory = self._factories.get(key)
         if factory is None:
@@ -32,7 +32,7 @@ def register_provider(name: str, factory: ProviderFactory) -> None:
     _REGISTRY.register(name, factory)
 
 
-def create_provider(name: str, **options) -> ModelProvider:
+def create_provider(name: str, **options) -> StatelessTaskExecutor:
     return _REGISTRY.create(name, **options)
 
 
