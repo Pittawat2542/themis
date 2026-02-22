@@ -26,7 +26,7 @@ def test_json_default_serializes_set():
 
 def test_json_default_serializes_path():
     result = _json_default(Path("/tmp/foo"))
-    assert result == "/tmp/foo"
+    assert result == str(Path("/tmp/foo"))
 
 
 def test_json_default_serializes_object_with_dict():
