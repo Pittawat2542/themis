@@ -5,6 +5,16 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-02-22
+
+### Changed
+- Refactored `ModelProvider` out in favor of `StatelessTaskExecutor` and `StatefulTaskExecutor` protocols.
+- Updated engines and routers to accept standard executor instances directly.
+
+### Added
+- Comprehensive `PHILOSOPHY.md` document outlining system design tenets.
+- Explicit `advanced-orchestration.md` guide explaining the underlying abstraction layers (Orchestrator, Plan, Runner).
+
 ## [1.2.0] - 2026-02-20
 
 ### Added

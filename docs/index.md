@@ -72,10 +72,10 @@ flowchart LR
 
 ## Release Spotlight
 
-!!! success "Themis 1.2.0"
-    Massive architectural cleanup: removed obsolete `MetricPipeline` and `FlexibleGenerationPlan`, unified entries into `themis.evaluate()`, stripped deprecations, and hardened `examples/`.
+!!! success "Themis 1.2.1"
+    Execution API refactored to standard Python protocols (`TaskExecutor`), replacing legacy `ModelProvider`. Huge documentation update.
 
-    [Read the full 1.2.0 notes](releases/1.2.0.md)
+    [Read the full 1.2.1 notes](releases/1.2.1.md)
 
 ## Documentation Map
 

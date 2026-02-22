@@ -112,6 +112,7 @@ nav:
   - Home: index.md
 
   - Releases:
+      - 1.2.1: releases/1.2.1.md
       - 1.2.0: releases/1.2.0.md
       - 1.1.1.post1: releases/1.1.1.post1.md
       - 1.1.1: releases/1.1.1.md
