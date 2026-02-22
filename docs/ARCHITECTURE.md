@@ -1,17 +1,22 @@
 # Architecture Overview
 
-Themis has a single public evaluation surface built on a layered orchestration core:
+Themis has a public evaluation surface built on a layered orchestration core, supporting both declarative YAML configs and programmatic Python execution:
 
-- `themis.evaluate(...)`: high-level API for all benchmark and dataset workflows.
+- `themis.evaluate(...)`: high-level programmatic API for benchmark workflows.
+- `themis.config.ExperimentConfig`: YAML-backed registry parser for no-code declarations.
 
 ## Layered Design
 
 ```mermaid
 flowchart TD
-    A["themis.evaluate(...) / CLI commands"] --> B["ExperimentOrchestrator"]
+    Config["YAML Config / Registry"] -.-> |parsed by| A
+    A["themis.evaluate(...) / CLI"] --> B["ExperimentOrchestrator"]
     B --> C["GenerationPlan"]
     C --> D["GenerationRunner"]
-    D --> E["EvaluationPipeline"]
+    D -.-> |Single-turn| SE["StatelessTaskExecutor"]
+    D -.-> |Multi-turn| ME["StatefulTaskExecutor"]
+    SE --> E["EvaluationPipeline"]
+    ME --> E
     E --> F["ExperimentStorage"]
     F --> G["comparison / server / export"]
 ```
@@ -45,6 +50,7 @@ sequenceDiagram
 ### Public API Layer
 - `themis.api.evaluate`: resolves presets, metrics, storage and runs the orchestrator.
 - `themis.cli.main`: `demo`, `eval`, `compare`, `share`, `serve`, `list`, `clean`.
+- `themis.config.ExperimentConfig`: loads YAML definitions using Hydra.
 
 ### Orchestration Layer
 - `themis.experiment.orchestrator.ExperimentOrchestrator`: drives the generation + evaluation loop.
@@ -53,6 +59,8 @@ sequenceDiagram
 ### Generation + Evaluation Layer
 - `themis.generation.GenerationPlan`: expands dataset into tasks.
 - `themis.generation.GenerationRunner`: executes tasks against providers.
+- `themis.interfaces.StatelessTaskExecutor`: standard single-turn text generation tasks.
+- `themis.interfaces.StatefulTaskExecutor`: complex multi-turn or agentic generation tasks.
 - `themis.evaluation.EvaluationPipelineContract`: enforced evaluation interface.
 - `themis.evaluation.EvaluationPipeline` / `EvaluationPipeline`: standard metric execution.
 

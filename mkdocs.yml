@@ -124,6 +124,7 @@ nav:
 
   - Guides:
       - Evaluation: guides/evaluation.md
+      - Advanced Orchestration: guides/advanced-orchestration.md
       - Countdown Tutorial: guides/countdown-tutorial.md
       - Comparison: guides/comparison.md
       - Interoperability: guides/interoperability.md
@@ -146,6 +147,7 @@ nav:
           - Backends: api/backends.md
 
   - Architecture:
+      - Philosophy: PHILOSOPHY.md
       - Architecture: ARCHITECTURE.md
 
   - Project:
