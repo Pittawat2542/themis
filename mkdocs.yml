@@ -133,6 +133,7 @@ nav:
       - Storage: guides/storage.md
       - Observability: guides/observability.md
       - CI/CD: guides/ci-cd.md
+      - Releasing and Publishing: guides/releasing.md
 
   - Reference:
       - CLI Reference: guides/cli.md
