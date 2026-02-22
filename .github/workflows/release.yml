@@ -3,11 +3,11 @@ name: Create GitHub Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (for example: v1.2.3)"
+        description: 'Release tag to publish (for example: v1.2.3)'
         required: true
         type: string
 
@@ -67,7 +67,7 @@ jobs:
             const repo = context.repo.repo;
             const workflowId = "ci.yml";
             const targetSha = process.env.TARGET_SHA;
-            const maxAttempts = 60;
+            const maxAttempts = 90;
             const sleepMs = 30000;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -111,12 +111,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
+          version: 'latest'
           enable-cache: true
 
       - name: Validate release metadata
@@ -138,7 +138,7 @@ jobs:
           tag: ${{ steps.resolve-tag.outputs.tag }}
           name: Themis ${{ steps.resolve-tag.outputs.tag }}
           bodyFile: release_notes.md
-          artifacts: "dist/*"
+          artifacts: 'dist/*'
           artifactErrorsFailBuild: true
           allowUpdates: true
           updateOnlyUnreleased: false

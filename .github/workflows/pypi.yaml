@@ -3,11 +3,11 @@ name: Publish to PyPI
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (for example: v1.2.3)"
+        description: 'Release tag to publish (for example: v1.2.3)'
         required: true
         type: string
 
@@ -35,7 +35,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
       - name: Resolve release tag
         id: resolve-tag
@@ -75,7 +75,7 @@ jobs:
             const repo = context.repo.repo;
             const workflowId = "ci.yml";
             const targetSha = process.env.TARGET_SHA;
-            const maxAttempts = 60;
+            const maxAttempts = 90;
             const sleepMs = 30000;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -129,13 +129,13 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
+          version: 'latest'
           enable-cache: true
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
       - name: Build package
         run: uv build
@@ -152,7 +152,7 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v3
         with:
-          subject-path: "dist/*"
+          subject-path: 'dist/*'
 
   publish:
     name: Publish package
