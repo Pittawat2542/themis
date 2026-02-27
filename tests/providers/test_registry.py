@@ -1,7 +1,10 @@
+"""Tests for the provider registry."""
+
 import pytest
 
 from themis.core import entities as core_entities
-from themis.providers import create_provider, register_provider
+from themis.exceptions import ProviderError
+from themis.providers import create_provider, list_providers, register_provider
 from themis.interfaces import StatelessTaskExecutor
 
 
@@ -39,5 +42,23 @@ def test_provider_registry_returns_registered_provider():
 
 
 def test_provider_registry_unknown_provider_raises():
+    """ProviderError is raised with available providers listed."""
+    with pytest.raises(ProviderError, match="Available providers"):
+        create_provider("non-existent-provider-xyz")
+
+
+def test_provider_registry_unknown_is_also_key_error():
+    """ProviderError inherits from KeyError for backward compat."""
     with pytest.raises(KeyError):
-        create_provider("non-existent-provider")
+        create_provider("non-existent-provider-xyz")
+
+
+def test_list_providers_returns_sorted_list():
+    register_provider("zeta-test", DummyProvider)
+    register_provider("alpha-test", DummyProvider)
+    providers = list_providers()
+    assert isinstance(providers, list)
+    assert "alpha-test" in providers
+    assert "zeta-test" in providers
+    # Should be sorted
+    assert providers == sorted(providers)

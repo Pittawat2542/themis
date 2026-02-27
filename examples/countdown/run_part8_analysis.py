@@ -5,7 +5,7 @@ from dataclasses import replace
 from statistics import mean, pstdev
 
 from themis.comparison import ComparisonEngine
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 from themis.storage import ExperimentStorage
 
 from common import (

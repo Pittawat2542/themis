@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from themis.core import entities as core_entities
+from themis.exceptions import ProviderError
 from themis.generation.router import ProviderRouter
 from themis.interfaces import StatelessTaskExecutor
 from tests.factories import make_task
@@ -65,5 +66,5 @@ def test_provider_router_requires_provider_prefix():
     try:
         router.execute(task)
         assert False, "Expected missing provider mapping"
-    except RuntimeError as exc:
+    except ProviderError as exc:
         assert "No provider registered" in str(exc)

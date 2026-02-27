@@ -6,6 +6,7 @@ import pytest
 
 import themis
 from themis.core.entities import MetricScore
+from themis.exceptions import MetricError
 from themis.interfaces import Metric
 
 
@@ -58,16 +59,16 @@ def test_register_metric():
 
 def test_register_metric_validates_class():
     """Test that register_metric validates the input is a class."""
-    with pytest.raises(TypeError, match="metric_cls must be a class"):
+    with pytest.raises(MetricError, match="metric_cls must be a class"):
         themis.register_metric("invalid", "not_a_class")
 
-    with pytest.raises(TypeError, match="metric_cls must be a class"):
+    with pytest.raises(MetricError, match="metric_cls must be a class"):
         themis.register_metric("invalid", DummyMetric())  # Instance, not class
 
 
 def test_register_metric_validates_interface():
     """Test that register_metric validates the metric implements compute()."""
-    with pytest.raises(ValueError, match="must implement compute"):
+    with pytest.raises(MetricError, match="must implement compute"):
         themis.register_metric("invalid", InvalidMetric)
 
 
@@ -138,7 +139,7 @@ def test_unknown_metric_raises_error():
     """Test that using an unknown metric raises a helpful error."""
     dataset = [{"id": "1", "question": "Test", "answer": "test"}]
 
-    with pytest.raises(ValueError, match="Unknown metric: nonexistent"):
+    with pytest.raises(MetricError, match="Unknown metric: nonexistent"):
         themis.evaluate(
             dataset,
             model="fake",

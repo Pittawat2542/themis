@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 from themis.experiment import export as export_utils
 
 from common import (

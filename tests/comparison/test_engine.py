@@ -5,7 +5,10 @@ import pytest
 from themis.core import entities as core_entities
 from themis.comparison.engine import ComparisonEngine
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest, StatisticalTestResult
+from themis.evaluation.statistics.comparison_tests import (
+    StatisticalTest,
+    StatisticalTestResult,
+)
 from themis import storage as experiment_storage
 from tests.factories import make_evaluation_record, make_record
 

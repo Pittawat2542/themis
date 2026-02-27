@@ -11,13 +11,16 @@ from themis.evaluation.statistics import (
     paired_t_test as evaluation_paired_t_test,
     permutation_test as evaluation_permutation_test,
 )
-from themis.comparison.statistics import (
+from themis.evaluation.statistics import comparison_tests as statistics
+from themis.evaluation.statistics.comparison_tests import (
     StatisticalTestResult,
-    bootstrap_confidence_interval,
-    mcnemar_test,
-    permutation_test,
-    t_test,
 )
+
+# Use extracted functions from statistics module
+t_test = statistics.t_test
+bootstrap_confidence_interval = statistics.bootstrap_confidence_interval
+permutation_test = statistics.permutation_test
+mcnemar_test = statistics.mcnemar_test
 
 
 class TestTTest:

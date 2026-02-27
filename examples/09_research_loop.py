@@ -7,7 +7,7 @@ from pathlib import Path
 
 from themis.api import evaluate
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 from themis.experiment import export
 from themis.experiment.share import create_share_pack
 

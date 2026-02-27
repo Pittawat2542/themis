@@ -13,7 +13,7 @@ from datasets import load_dataset
 from themis.core import entities as core
 from themis.evaluation.extractors import IdentityExtractor
 from themis.evaluation.pipeline import EvaluationPipeline
-from themis.interfaces import Metric as MetricInterface, ModelProvider
+from themis.interfaces import Metric as MetricInterface, StatelessTaskExecutor
 
 DEFAULT_API_BASE = "http://localhost:1234/api/v1/chat"
 DEFAULT_MODEL = "localchat:qwen/qwen3-1.7b"
@@ -36,7 +36,7 @@ CANDIDATE_PROMPT = (
 )
 
 
-class LocalChatProvider(ModelProvider):
+class LocalChatProvider(StatelessTaskExecutor):
     def __init__(
         self,
         *,
@@ -47,7 +47,7 @@ class LocalChatProvider(ModelProvider):
         self.api_base = api_base
         self.timeout = timeout
 
-    def generate(self, task: core.GenerationTask) -> core.GenerationRecord:
+    def execute(self, task: core.GenerationTask) -> core.GenerationRecord:
         payload = {
             "model": task.model.identifier,
             "system_prompt": "Return only one arithmetic expression.",

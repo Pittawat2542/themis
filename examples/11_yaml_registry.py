@@ -30,9 +30,8 @@ dataset:
 generation:
     model_identifier: "gpt-4o-mini"
     provider:
-        name: "litellm"
-        options:
-            api_key: "${oc.env:OPENAI_API_KEY,sk-dummy}"
+        name: "fake"
+        options: {}
     sampling:
         temperature: 0.0
         max_tokens: 50
@@ -71,8 +70,8 @@ def main() -> None:
     print(f"Total Samples    : {report.metadata.get('total_samples')}")
     print(f"Failures         : {len(report.failures)}")
     print("Metrics:")
-    for metric_score in report.evaluation_report.scores:
-        print(f"  {metric_score.metric_name}: {metric_score.value:.3f}")
+    for metric_name, aggregate in report.evaluation_report.metrics.items():
+        print(f"  {metric_name}: {aggregate.mean:.3f}")
 
     # Cleanup
     if config_path.exists():

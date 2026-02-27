@@ -9,7 +9,7 @@ from themis.generation import runner as generation_runner
 
 
 @dataclass
-class FakeModelProvider:
+class FakeTaskExecutor:
     latency_ms: int = 10
 
     def __post_init__(self) -> None:
@@ -56,7 +56,7 @@ def test_runner_invokes_model_client_and_returns_structured_results():
         build_task("Explain rejection sampling", "gpt-4o", sampling),
     ]
 
-    provider = FakeModelProvider()
+    provider = FakeTaskExecutor()
     runner = generation_runner.GenerationRunner(executor=provider)
 
     results = list(runner.run(requests))
@@ -73,7 +73,7 @@ def test_runner_invokes_model_client_and_returns_structured_results():
 
 
 def test_runner_attaches_failures_to_result_stream():
-    class FlakyProvider(FakeModelProvider):
+    class FlakyProvider(FakeTaskExecutor):
         def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             if "fail" in task.prompt.text:
                 raise RuntimeError("boom")
@@ -97,7 +97,7 @@ def test_runner_attaches_failures_to_result_stream():
 
 
 def test_runner_retries_transient_failures_and_records_attempts():
-    class TransientProvider(FakeModelProvider):
+    class TransientProvider(FakeTaskExecutor):
         def __post_init__(self):  # type: ignore[override]
             super().__post_init__()
             self.failures = 0
@@ -126,7 +126,7 @@ def test_runner_retries_transient_failures_and_records_attempts():
 
 
 def test_runner_stops_after_max_retries_and_reports_cause():
-    class AlwaysFailProvider(FakeModelProvider):
+    class AlwaysFailProvider(FakeTaskExecutor):
         def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             raise RuntimeError("permanent failure")
 
@@ -146,7 +146,7 @@ def test_runner_stops_after_max_retries_and_reports_cause():
 
 
 def test_runner_parallel_execution():
-    class SlowProvider(FakeModelProvider):
+    class SlowProvider(FakeTaskExecutor):
         def __post_init__(self) -> None:  # type: ignore[override]
             super().__post_init__()
             self.active = 0
@@ -175,7 +175,7 @@ def test_runner_parallel_execution():
 
 
 def test_runner_parallel_yields_completion_order():
-    class VariableLatencyProvider(FakeModelProvider):
+    class VariableLatencyProvider(FakeTaskExecutor):
         def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             if task.prompt.text == "slow":
                 time.sleep(0.08)
@@ -197,7 +197,7 @@ def test_runner_parallel_yields_completion_order():
 
 
 def test_runner_streams_iterables_without_full_materialization():
-    provider = FakeModelProvider()
+    provider = FakeTaskExecutor()
     sampling = core_entities.SamplingConfig(temperature=0.2, top_p=0.9, max_tokens=32)
 
     class TrackingTasks:
@@ -223,7 +223,7 @@ def test_runner_streams_iterables_without_full_materialization():
 
 
 def test_runner_bounds_in_flight_task_submission():
-    class SlowProvider(FakeModelProvider):
+    class SlowProvider(FakeTaskExecutor):
         def execute(self, task: core_entities.GenerationTask):  # type: ignore[override]
             time.sleep(0.03)
             return super().execute(task)

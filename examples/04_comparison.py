@@ -4,7 +4,7 @@ from pathlib import Path
 
 import themis
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 from themis.presets import get_benchmark_preset
 from themis.storage import ExperimentStorage
 

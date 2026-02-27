@@ -12,6 +12,7 @@ import pytest
 
 from themis.core import entities as core_entities
 from themis import storage as experiment_storage
+from themis.exceptions import StorageError
 from themis.storage import RunStatus
 
 
@@ -149,7 +150,7 @@ def test_lock_timeout_on_external_lock(tmp_path):
         try:
             with storage2._acquire_lock("run-1"):
                 storage2_lock_acquired = True
-        except TimeoutError as e:
+        except StorageError as e:
             elapsed = time.time() - start_time
             assert elapsed >= 30  # Should wait at least 30 seconds
             assert "Failed to acquire lock" in str(e)
@@ -177,7 +178,7 @@ def test_concurrent_access_same_run_different_threads(tmp_path):
             # Just verify the lock is blocked
             with storage._acquire_lock("run-1"):
                 results["thread2_timeout"] = False
-        except TimeoutError:
+        except StorageError:
             results["thread2_timeout"] = True
 
     # Note: In real scenario, different threads in same process would share
