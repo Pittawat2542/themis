@@ -12,12 +12,31 @@ Extension APIs for registering custom components:
     - themis.register_benchmark() - Register custom benchmark presets
 """
 
-from themis import config, core, evaluation, generation
 from themis._version import __version__
 from themis.api import evaluate, get_registered_metrics, register_metric
 from themis.datasets import register_dataset, list_datasets, is_dataset_registered
 from themis.presets import register_benchmark, list_benchmarks, get_benchmark_preset
-from themis.providers import register_provider
+from themis.providers import register_provider, list_providers
+from themis.exceptions import (
+    ThemisError,
+    ConfigurationError,
+    ProviderError,
+    DatasetError,
+    MetricError,
+    EvaluationError,
+    StorageError,
+)
+
+
+def __getattr__(name: str):
+    """Lazy-load heavy submodules on first access."""
+    import importlib
+
+    _LAZY_SUBMODULES = {"config", "core", "evaluation", "generation"}
+    if name in _LAZY_SUBMODULES:
+        return importlib.import_module(f"themis.{name}")
+    raise AttributeError(f"module 'themis' has no attribute {name!r}")
+
 
 __all__ = [
     # Main API
@@ -35,7 +54,16 @@ __all__ = [
     "get_benchmark_preset",
     # Providers
     "register_provider",
-    # Submodules
+    "list_providers",
+    # Exceptions
+    "ThemisError",
+    "ConfigurationError",
+    "ProviderError",
+    "DatasetError",
+    "MetricError",
+    "EvaluationError",
+    "StorageError",
+    # Submodules (lazy)
     "config",
     "core",
     "evaluation",

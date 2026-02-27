@@ -4,22 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import (
-    competition_math,
-    commonsense_qa,
-    coqa,
-    gpqa,
-    gsm_symbolic,
-    gsm8k,
-    math500,
-    med_qa,
-    medmcqa,
-    mmlu_pro,
-    piqa,
-    sciq,
-    social_i_qa,
-    super_gpqa,
-)
+from themis.exceptions import DatasetError
 from .registry import (
     create_dataset,
     is_dataset_registered,
@@ -28,12 +13,18 @@ from .registry import (
     unregister_dataset,
 )
 
+# ---------------------------------------------------------------------------
 # Factory functions for built-in datasets
+# All dataset module imports are deferred to inside the factory so that
+# `import themis` does not trigger heavy HuggingFace / network IO.
+# ---------------------------------------------------------------------------
 
 
 def _create_math500(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for MATH-500 dataset."""
-    samples = math500.load_math500(
+    from themis.datasets.math500 import load_math500
+
+    samples = load_math500(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -45,15 +36,17 @@ def _create_math500(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_competition_math(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for competition math datasets (AIME, AMC, etc.)."""
+    from themis.datasets.competition_math import load_competition_math
+
     # Get dataset and subset from options
     dataset = options.get("dataset")
     if not dataset:
-        raise ValueError(
+        raise DatasetError(
             "Competition math requires 'dataset' option "
             "(e.g., 'math-ai/aime24', 'math-ai/amc23')"
         )
 
-    samples = competition_math.load_competition_math(
+    samples = load_competition_math(
         dataset=dataset,
         subset=options.get("subset"),
         source=options.get("source", "huggingface"),
@@ -67,7 +60,9 @@ def _create_competition_math(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_super_gpqa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for SuperGPQA dataset."""
-    samples = super_gpqa.load_super_gpqa(
+    from themis.datasets.super_gpqa import load_super_gpqa
+
+    samples = load_super_gpqa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -79,7 +74,9 @@ def _create_super_gpqa(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_mmlu_pro(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for MMLU-Pro dataset."""
-    samples = mmlu_pro.load_mmlu_pro(
+    from themis.datasets.mmlu_pro import load_mmlu_pro
+
+    samples = load_mmlu_pro(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -91,7 +88,9 @@ def _create_mmlu_pro(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_gsm8k(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for GSM8K dataset."""
-    samples = gsm8k.load_gsm8k(
+    from themis.datasets.gsm8k import load_gsm8k
+
+    samples = load_gsm8k(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -103,7 +102,9 @@ def _create_gsm8k(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_gpqa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for GPQA dataset."""
-    samples = gpqa.load_gpqa(
+    from themis.datasets.gpqa import load_gpqa
+
+    samples = load_gpqa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -115,7 +116,9 @@ def _create_gpqa(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_gsm_symbolic(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for GSM-Symbolic dataset."""
-    samples = gsm_symbolic.load_gsm_symbolic(
+    from themis.datasets.gsm_symbolic import load_gsm_symbolic
+
+    samples = load_gsm_symbolic(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -127,7 +130,9 @@ def _create_gsm_symbolic(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_medmcqa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for MedMCQA dataset."""
-    samples = medmcqa.load_medmcqa(
+    from themis.datasets.medmcqa import load_medmcqa
+
+    samples = load_medmcqa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -139,7 +144,9 @@ def _create_medmcqa(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_med_qa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for MedQA dataset."""
-    samples = med_qa.load_med_qa(
+    from themis.datasets.med_qa import load_med_qa
+
+    samples = load_med_qa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -151,7 +158,9 @@ def _create_med_qa(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_sciq(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for SciQ dataset."""
-    samples = sciq.load_sciq(
+    from themis.datasets.sciq import load_sciq
+
+    samples = load_sciq(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "test"),
@@ -162,7 +171,9 @@ def _create_sciq(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_commonsense_qa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for CommonsenseQA dataset."""
-    samples = commonsense_qa.load_commonsense_qa(
+    from themis.datasets.commonsense_qa import load_commonsense_qa
+
+    samples = load_commonsense_qa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "validation"),
@@ -173,7 +184,9 @@ def _create_commonsense_qa(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_piqa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for PIQA dataset."""
-    samples = piqa.load_piqa(
+    from themis.datasets.piqa import load_piqa
+
+    samples = load_piqa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "validation"),
@@ -184,7 +197,9 @@ def _create_piqa(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_social_i_qa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for Social IQA dataset."""
-    samples = social_i_qa.load_social_i_qa(
+    from themis.datasets.social_i_qa import load_social_i_qa
+
+    samples = load_social_i_qa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "validation"),
@@ -195,7 +210,9 @@ def _create_social_i_qa(options: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _create_coqa(options: dict[str, Any]) -> list[dict[str, Any]]:
     """Factory for CoQA dataset."""
-    samples = coqa.load_coqa(
+    from themis.datasets.coqa import load_coqa
+
+    samples = load_coqa(
         source=options.get("source", "huggingface"),
         data_dir=options.get("data_dir"),
         split=options.get("split", "validation"),
