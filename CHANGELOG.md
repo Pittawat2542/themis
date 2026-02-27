@@ -5,6 +5,18 @@ All notable changes to Themis will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-27
+
+### Added
+- Comprehensive custom exception hierarchy (`ThemisError`, `DependencyError`, `MetricError`, etc.).
+- Explicitly listed registered choices in `KeyError` messages for missing metrics/providers.
+
+### Changed
+- Massively improved import times (~0.036s) by leveraging lazy loading for heavy modules.
+- Refactored missing optional dependency handling to consistently raise `DependencyError`.
+- Polished type annotations to Python 3.12+ standard format (`list`, `dict`).
+- Finalized removal of all legacy `ModelProvider` logic and deprecated items.
+
 ## [1.2.1] - 2026-02-22
 
 ### Changed

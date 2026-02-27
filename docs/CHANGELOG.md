@@ -4,10 +4,16 @@ Canonical release history lives in the repository root at [`CHANGELOG.md`](https
 
 ## Current Release
 
-- Version: `1.2.1`
-- [Release Notes 1.2.1](releases/1.2.1.md)
+- Version: `1.3.0`
+- [Release Notes 1.3.0](releases/1.3.0.md)
 
 ## Previous Releases
+- Version: `1.2.1`
+- Date: `2026-02-22`
+- Highlights:
+  - Refactored `ModelProvider` out in favor of `StatelessTaskExecutor` and `StatefulTaskExecutor`.
+  - Added Advanced Orchestration guide and philosophy document.
+
 - Version: `1.2.0`
 - Date: `2026-02-20`
 - Highlights:
