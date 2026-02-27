@@ -7,7 +7,12 @@ without requiring complex entity construction.
 import tempfile
 
 
-from themis.config.schema import HuggingFaceHubConfig, IntegrationsConfig, WandbConfig
+from themis.config.schema import (
+    HuggingFaceHubConfig,
+    IntegrationsConfig,
+    LangfuseConfig,
+    WandbConfig,
+)
 from themis.experiment.cache_manager import CacheManager
 from themis.experiment.integration_manager import IntegrationManager
 from themis.storage import ExperimentStorage
@@ -172,12 +177,14 @@ def test_integration_manager_with_both_disabled():
     config = IntegrationsConfig(
         wandb=WandbConfig(enable=False),
         huggingface_hub=HuggingFaceHubConfig(enable=False),
+        langfuse=LangfuseConfig(enable=False),
     )
     manager = IntegrationManager(config=config)
 
-    # Both should be disabled
+    # All should be disabled
     assert not manager.has_wandb
     assert not manager.has_huggingface
+    assert not manager.has_langfuse
 
     # All operations should be safe no-ops
     manager.initialize_run({"run_id": "test", "max_samples": 10})
@@ -240,12 +247,15 @@ def test_integration_manager_property_checks():
     manager1 = IntegrationManager(config=None)
     assert not manager1.has_wandb
     assert not manager1.has_huggingface
+    assert not manager1.has_langfuse
 
     # Explicitly disabled
     config2 = IntegrationsConfig(
         wandb=WandbConfig(enable=False),
         huggingface_hub=HuggingFaceHubConfig(enable=False),
+        langfuse=LangfuseConfig(enable=False),
     )
     manager2 = IntegrationManager(config=config2)
     assert not manager2.has_wandb
     assert not manager2.has_huggingface
+    assert not manager2.has_langfuse
