@@ -69,6 +69,9 @@ code = [
 viz = [
     "plotly>=5.18.0",
 ]
+langfuse = [
+    "langfuse>=3.0.0",
+]
 server = [
     "fastapi>=0.128.0",
     "uvicorn[standard]>=0.32.0",
@@ -80,7 +83,7 @@ docs = [
     "mkdocstrings[python]>=0.25.0",
 ]
 all = [
-    "themis-eval[math,nlp,code,viz,server,docs]",
+    "themis-eval[math,nlp,code,viz,server,docs,langfuse]",
 ]
 
 [tool.pytest.ini_options]
