@@ -162,7 +162,7 @@ See the extension guides:
 
 ## Examples
 
-Runnable examples live in [`examples-simple/`](examples-simple/):
+Runnable examples live in [`examples/`](examples/):
 
 - `01_quickstart.py`
 - `02_custom_dataset.py`
@@ -175,7 +175,7 @@ Runnable examples live in [`examples-simple/`](examples-simple/):
 Run one:
 
 ```bash
-uv run python examples-simple/01_quickstart.py
+uv run python examples/01_quickstart.py
 ```
 
 ## Development

@@ -16,7 +16,7 @@ flowchart LR
 
 ```python
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 
 report = compare_runs(
     run_ids=["run-a", "run-b"],

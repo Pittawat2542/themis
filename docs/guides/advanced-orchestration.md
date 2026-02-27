@@ -125,7 +125,7 @@ from themis.generation.runner import GenerationRunner
 from themis.providers import create_provider
 from themis.evaluation.pipeline import EvaluationPipeline
 from themis.evaluation.extractors import IdentityExtractor
-from themis.evaluation.metrics.heuristic import ExactMatch
+from themis.evaluation.metrics.exact_match import ExactMatch
 from themis.experiment.orchestrator import ExperimentOrchestrator
 from themis.experiment.cache_manager import CacheManager
 from themis.storage import ExperimentStorage

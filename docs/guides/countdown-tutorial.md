@@ -77,7 +77,7 @@ An experiment in Themis is:
 ```mermaid
 flowchart LR
     A["Dataset row"] --> B["Prompt rendering"]
-    B --> C["Provider.generate(...)"]
+    B --> C["Executor.execute(...)"]
     C --> D["GenerationRecord"]
     D --> E["Metric.compute(...)"]
     E --> F["EvaluationReport"]
@@ -144,11 +144,11 @@ from typing import Any, Sequence
 import themis
 from datasets import load_dataset
 from themis.core import entities as core
-from themis.interfaces import Metric as MetricInterface, ModelProvider
+from themis.interfaces import Metric as MetricInterface, StatelessTaskExecutor
 
 
 # ---------- 1) Custom provider for localhost:1234/api/v1/chat ----------
-class LocalChatProvider(ModelProvider):
+class LocalChatProvider(StatelessTaskExecutor):
     def __init__(
         self,
         *,
@@ -159,7 +159,7 @@ class LocalChatProvider(ModelProvider):
         self.api_base = api_base
         self.timeout = timeout
 
-    def generate(self, task: core.GenerationTask) -> core.GenerationRecord:
+    def execute(self, task: core.GenerationTask) -> core.GenerationRecord:
         payload = {
             "model": task.model.identifier,
             "system_prompt": "Return only one arithmetic expression.",
@@ -597,7 +597,7 @@ Expected outcome:
 
 ```python
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 
 _ = themis.evaluate(
     dataset,
@@ -1059,7 +1059,7 @@ Gate candidate on comparison against baseline.
 
 ```python
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 
 BASELINE = "countdown-baseline-v1"
 CANDIDATE = "countdown-candidate-v1"
@@ -1612,7 +1612,7 @@ hypothesis decisions with multiple-comparison correction.
 
 ```python
 from themis.comparison import ComparisonEngine
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 
 run_ids = [
     "countdown-part8-baseline-r1",
@@ -1649,7 +1649,7 @@ decision rule.
 
 ```python
 from themis.comparison import ComparisonEngine
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import StatisticalTest
 
 engine = ComparisonEngine(
     storage_path=".cache/experiments",

@@ -313,15 +313,15 @@ The root cause was two-fold:
 
 ### Major Changes
 - Complete architecture refactor for simplicity and extensibility
-- Breaking changes from v1.x - see Migration Guide
+- Breaking changes from v0.1.x - see Migration Guide
 
-### Migration from v1.x
+### Migration from v0.1.x
 - ExperimentBuilder replaced with `themis.evaluate()`
 - Configuration files no longer needed for simple use cases
 - CLI commands simplified and renamed
 - See [Migration Guide](docs/MIGRATION.md) for details
 
-## [1.x] - Previous Versions
+## [0.1.x and earlier]
 
 See git history for previous releases.
 
