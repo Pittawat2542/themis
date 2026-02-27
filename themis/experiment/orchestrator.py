@@ -26,6 +26,7 @@ from themis.experiment.manifest import (
     validate_reproducibility_manifest,
 )
 from themis import storage as experiment_storage
+from themis.exceptions import ConfigurationError
 from themis.experiment.cache_manager import CacheManager
 from themis.experiment.cost import CostTracker
 from themis.experiment.integration_manager import IntegrationManager
@@ -169,9 +170,9 @@ class ExperimentOrchestrator:
         """
         logger.info("Orchestrator: Initializing experiment run")
         if evaluation_batch_size < 1:
-            raise ValueError("evaluation_batch_size must be >= 1")
+            raise ConfigurationError("evaluation_batch_size must be >= 1")
         if max_records_in_memory is not None and max_records_in_memory < 1:
-            raise ValueError("max_records_in_memory must be >= 1")
+            raise ConfigurationError("max_records_in_memory must be >= 1")
 
         # Initialize integrations
         self._integrations.initialize_run(

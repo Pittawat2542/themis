@@ -6,7 +6,7 @@ configurations across multiple runs with statistical rigor.
 
 from themis.comparison.engine import ComparisonEngine, compare_runs
 from themis.comparison.reports import ComparisonReport, ComparisonResult
-from themis.comparison.statistics import (
+from themis.evaluation.statistics.comparison_tests import (
     StatisticalTest,
     bootstrap_confidence_interval,
     permutation_test,

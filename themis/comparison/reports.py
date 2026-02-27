@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from themis.comparison.statistics import StatisticalTestResult
+from themis.evaluation.statistics.comparison_tests import StatisticalTestResult
 
 
 @dataclass

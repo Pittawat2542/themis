@@ -32,7 +32,9 @@ def to_dict(obj):
 class HuggingFaceHubUploader:
     def __init__(self, config: HuggingFaceHubConfig):
         if HfApi is None:
-            raise ImportError(
+            from themis.exceptions import DependencyError
+
+            raise DependencyError(
                 "huggingface_hub is not installed. Install with: pip install huggingface_hub"
             )
         self.config = config

@@ -7,6 +7,7 @@ from statistics import mean, stdev
 from collections.abc import Sequence
 
 from themis.core import entities as core_entities
+from themis.exceptions import MetricError
 
 from .distributions import inverse_normal_cdf, t_critical_value
 from .types import ConfidenceInterval, StatisticalSummary
@@ -30,7 +31,7 @@ def compute_confidence_interval(
     """
     n = len(values)
     if n == 0:
-        raise ValueError("Cannot compute confidence interval for empty sequence")
+        raise MetricError("Cannot compute confidence interval for empty sequence")
     if n == 1:
         # Single value - return degenerate interval
         val = float(values[0])
@@ -90,7 +91,7 @@ def compute_statistical_summary(
         ValueError: If scores is empty
     """
     if not scores:
-        raise ValueError("Cannot compute statistical summary for empty scores list")
+        raise MetricError("Cannot compute statistical summary for empty scores list")
 
     metric_name = scores[0].metric_name
     values = [score.value for score in scores]

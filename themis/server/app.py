@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from themis.comparison import compare_runs
-from themis.comparison.statistics import StatisticalTest
+from themis.evaluation.statistics.comparison_tests import StatisticalTest
 from themis.storage import ExperimentStorage
 from themis._version import __version__
 

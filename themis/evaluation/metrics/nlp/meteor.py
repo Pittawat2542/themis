@@ -15,6 +15,7 @@ from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
+from themis.exceptions import DependencyError
 
 
 class METEOR(Metric):
@@ -89,7 +90,7 @@ class METEOR(Metric):
                 nltk.download("omw-1.4", quiet=True)
 
         except ImportError:
-            raise ImportError(
+            raise DependencyError(
                 "nltk is required for METEOR metric. Install it with: pip install nltk"
             )
 

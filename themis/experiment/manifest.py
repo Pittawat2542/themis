@@ -11,6 +11,8 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
+from themis.exceptions import ConfigurationError
+
 MANIFEST_SCHEMA_VERSION = "1"
 
 _REQUIRED_FIELDS = {
@@ -77,26 +79,30 @@ def validate_reproducibility_manifest(manifest: Mapping[str, Any]) -> None:
     """Validate manifest completeness and key scientific fields."""
     missing = sorted(field for field in _REQUIRED_FIELDS if field not in manifest)
     if missing:
-        raise ValueError(f"Missing required manifest fields: {', '.join(missing)}")
+        raise ConfigurationError(
+            f"Missing required manifest fields: {', '.join(missing)}"
+        )
 
     model_section = manifest.get("model")
     if not isinstance(model_section, Mapping):
-        raise ValueError("Manifest field 'model' must be an object.")
+        raise ConfigurationError("Manifest field 'model' must be an object.")
     for key in ("identifier", "provider", "provider_options"):
         if key not in model_section:
-            raise ValueError(f"Manifest field 'model.{key}' is required.")
+            raise ConfigurationError(f"Manifest field 'model.{key}' is required.")
 
     evaluation = manifest.get("evaluation")
     if not isinstance(evaluation, Mapping):
-        raise ValueError("Manifest field 'evaluation' must be an object.")
+        raise ConfigurationError("Manifest field 'evaluation' must be an object.")
     if "metrics" not in evaluation or "extractor" not in evaluation:
-        raise ValueError(
+        raise ConfigurationError(
             "Manifest field 'evaluation' must include 'metrics' and 'extractor'."
         )
 
     commit_hash = manifest.get("git_commit_hash")
     if not isinstance(commit_hash, str) or not commit_hash.strip():
-        raise ValueError("Manifest field 'git_commit_hash' must be a non-empty string.")
+        raise ConfigurationError(
+            "Manifest field 'git_commit_hash' must be a non-empty string."
+        )
 
 
 def manifest_hash(manifest: Mapping[str, Any]) -> str:

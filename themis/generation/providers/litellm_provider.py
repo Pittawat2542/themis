@@ -76,7 +76,9 @@ class LiteLLMProvider(StatelessTaskExecutor):
                 )
         except ImportError as exc:
             logger.error("❌ LiteLLM is not installed")
-            raise RuntimeError(
+            from themis.exceptions import ConfigurationError
+
+            raise ConfigurationError(
                 "LiteLLM is not installed. Install via `pip install litellm` or "
                 "`uv add litellm` to use LiteLLMProvider."
             ) from exc

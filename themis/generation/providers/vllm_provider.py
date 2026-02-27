@@ -144,7 +144,9 @@ class VLLMProvider(StatelessTaskExecutor):
             from vllm import AsyncLLMEngine, SamplingParams
             from vllm.lora.request import LoraRequest
         except ImportError as exc:  # pragma: no cover - optional dep
-            raise RuntimeError(
+            from themis.exceptions import DependencyError
+
+            raise DependencyError(
                 "vLLM is not installed. Install via `pip install vllm` to use VLLMProvider."
             ) from exc
         return AsyncLLMEngine, SamplingParams, LoraRequest

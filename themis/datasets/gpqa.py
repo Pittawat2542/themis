@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
+from themis.exceptions import ConfigurationError, DatasetError
+
 _DATASET_NAME = "math-ai/gpqa"
 _CHOICE_LABELS = tuple(string.ascii_uppercase)
 
@@ -32,7 +34,7 @@ class GpqaSample(BaseModel):
             return [str(v) for _, v in sorted(value.items())]
         if isinstance(value, (list, tuple)):
             return [str(item) for item in value]
-        raise TypeError("choices must be a sequence or mapping")
+        raise DatasetError("choices must be a sequence or mapping")
 
     @field_validator("choice_labels", mode="before")
     @classmethod
@@ -71,7 +73,7 @@ def load_gpqa(
     """Load GPQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
-        raise ValueError(
+        raise DatasetError(
             f"Unsupported source '{source}'. Expected one of: 'huggingface', 'local'."
         )
 
@@ -79,7 +81,7 @@ def load_gpqa(
         rows = _load_from_huggingface(split=split, subset=subset)
     else:
         if data_dir is None:
-            raise ValueError(
+            raise DatasetError(
                 "data_dir must be provided when source='local'. "
                 "Pass dataset.data_dir in configs or --data-dir on the CLI."
             )
@@ -161,7 +163,7 @@ def _load_from_huggingface(*, split: str, subset: str) -> Iterable[dict[str, Any
     try:
         from datasets import load_dataset
     except ImportError as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError(
+        raise ConfigurationError(
             "datasets is required to load GPQA from Hugging Face. Install it via `uv pip install '.[hf]'`."
         ) from exc
 

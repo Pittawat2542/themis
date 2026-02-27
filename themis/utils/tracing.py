@@ -33,6 +33,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
+from themis.exceptions import EvaluationError
+
 
 @dataclass
 class Span:
@@ -284,7 +286,7 @@ def export_json(filepath: str, indent: int = 2) -> None:
     """
     trace = get_trace()
     if trace is None:
-        raise ValueError("No trace to export")
+        raise EvaluationError("No trace to export")
 
     with open(filepath, "w") as f:
         json.dump(trace.to_dict(), f, indent=indent)
@@ -301,7 +303,7 @@ def get_summary() -> dict[str, Any]:
     """
     trace = get_trace()
     if trace is None:
-        raise ValueError("No trace to summarize")
+        raise EvaluationError("No trace to summarize")
 
     return trace.get_summary()
 

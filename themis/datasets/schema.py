@@ -10,6 +10,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from themis.exceptions import DatasetError
+
 
 @dataclass
 class DatasetSchema:
@@ -55,7 +57,7 @@ class DatasetSchema:
         # Check required fields
         for field_name in self.required_fields:
             if field_name not in sample:
-                raise ValueError(
+                raise DatasetError(
                     f"Missing required field '{field_name}' in sample {sample.get(self.id_field)}"
                 )
 
@@ -186,7 +188,7 @@ def validate_non_empty_field(field_name: str) -> Callable[[dict], None]:
     def validator(sample: dict) -> None:
         value = sample.get(field_name)
         if not value:
-            raise ValueError(f"Field '{field_name}' cannot be empty")
+            raise DatasetError(f"Field '{field_name}' cannot be empty")
 
     return validator
 
@@ -205,7 +207,7 @@ def validate_field_type(field_name: str, expected_type: type) -> Callable[[dict]
     def validator(sample: dict) -> None:
         value = sample.get(field_name)
         if value is not None and not isinstance(value, expected_type):
-            raise ValueError(
+            raise DatasetError(
                 f"Field '{field_name}' expected type {expected_type.__name__}, "
                 f"got {type(value).__name__}"
             )
@@ -229,7 +231,7 @@ def validate_field_in_choices(
     def validator(sample: dict) -> None:
         value = sample.get(field_name)
         if value is not None and value not in choices:
-            raise ValueError(
+            raise DatasetError(
                 f"Field '{field_name}' value '{value}' not in allowed choices: {choices}"
             )
 

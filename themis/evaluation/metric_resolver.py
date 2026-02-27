@@ -6,6 +6,8 @@ import logging
 import re
 from typing import Any
 
+from themis.exceptions import MetricError
+
 logger = logging.getLogger(__name__)
 
 # Module-level metrics registry for custom metrics
@@ -26,8 +28,7 @@ def register_metric(name: str, metric_cls: type) -> None:
             and metadata parameters.
 
     Raises:
-        TypeError: If metric_cls is not a class
-        ValueError: If metric_cls doesn't implement the required interface
+        MetricError: If metric_cls is not a class or doesn't implement compute()
 
     Example:
         >>> from themis.evaluation.metrics import MyCustomMetric
@@ -35,11 +36,11 @@ def register_metric(name: str, metric_cls: type) -> None:
         >>> report = themis.evaluate("math500", model="gpt-4", metrics=["my_metric"])
     """
     if not isinstance(metric_cls, type):
-        raise TypeError(f"metric_cls must be a class, got {type(metric_cls)}")
+        raise MetricError(f"metric_cls must be a class, got {type(metric_cls)}")
 
     # Validate that it implements the Metric interface
     if not hasattr(metric_cls, "compute"):
-        raise ValueError(
+        raise MetricError(
             f"{metric_cls.__name__} must implement compute() method. "
             f"See themis.evaluation.metrics for examples."
         )
@@ -57,7 +58,7 @@ def get_registered_metrics() -> dict[str, type]:
     return _METRICS_REGISTRY.copy()
 
 
-def resolve_metrics(metric_names: list[str]) -> list:
+def resolve_metrics(metric_names: list[str]) -> list[Any]:
     """Resolve metric names to metric instances.
 
     Args:
@@ -67,7 +68,7 @@ def resolve_metrics(metric_names: list[str]) -> list:
         List of metric instances
 
     Raises:
-        ValueError: If a metric name is unknown
+        MetricError: If a metric name is unknown
     """
     from themis.evaluation.metrics.exact_match import ExactMatch
     from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
@@ -84,8 +85,12 @@ def resolve_metrics(metric_names: list[str]) -> list:
         )
 
         nlp_available = True
-    except ImportError:
+    except ImportError as exc:
         nlp_available = False
+        # If the user explicitly asked for an NLP metric, they will get a DependencyError later
+        # when we try to instantiate it (because BLEU/ROUGE/etc. will raise it in __init__)
+        # But for now we just flag it as unavailable in the resolver.
+        _nlp_error = exc
 
     # Code metrics (some optional dependencies)
     try:
@@ -152,13 +157,14 @@ def resolve_metrics(metric_names: list[str]) -> list:
         resolved = _normalize_metric_name(name)
         if resolved is None:
             available = ", ".join(sorted(METRICS_REGISTRY.keys()))
-            raise ValueError(f"Unknown metric: {name}. Available metrics: {available}")
+            raise MetricError(f"Unknown metric: {name}. Available metrics: {available}")
 
         metric_cls = METRICS_REGISTRY[resolved]
-        # Handle both class and lambda factory
-        if callable(metric_cls) and not isinstance(metric_cls, type):
-            metrics.append(metric_cls())
-        else:
-            metrics.append(metric_cls())
+        metrics.append(metric_cls())
 
     return metrics
+
+
+def _reset_metrics_for_testing() -> None:
+    """Clear custom metrics registry. For testing only."""
+    _METRICS_REGISTRY.clear()

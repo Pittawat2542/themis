@@ -17,7 +17,11 @@ from themis.core.entities import ExperimentReport
 class WandbTracker:
     def __init__(self, config: WandbConfig):
         if wandb is None:
-            raise ImportError("wandb is not installed. Install with: pip install wandb")
+            from themis.exceptions import DependencyError
+
+            raise DependencyError(
+                "wandb is not installed. Install with: pip install wandb"
+            )
         self.config = config
 
     def init(self, experiment_config: dict) -> None:

@@ -9,9 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 from collections.abc import Sequence
 
-from themis.comparison import reports, statistics
-from themis.comparison.statistics import StatisticalTest
+from themis.comparison import reports
+from themis.evaluation.statistics import comparison_tests as statistics
+from themis.evaluation.statistics.comparison_tests import StatisticalTest
 from themis.evaluation.statistics import holm_bonferroni
+from themis.exceptions import ConfigurationError, EvaluationError, MetricError
 from themis.storage import ExperimentStorage
 
 
@@ -46,7 +48,7 @@ class ComparisonEngine:
                 comparisons. Use "holm-bonferroni" (default) or None.
         """
         if storage is None and storage_path is None:
-            raise ValueError("Either storage or storage_path must be provided")
+            raise ConfigurationError("Either storage or storage_path must be provided")
 
         self._storage = storage or ExperimentStorage(storage_path)
         self._statistical_test = statistical_test
@@ -76,7 +78,7 @@ class ComparisonEngine:
             ValueError: If fewer than 2 runs provided or runs not found
         """
         if len(run_ids) < 2:
-            raise ValueError("Need at least 2 runs to compare")
+            raise ConfigurationError("Need at least 2 runs to compare")
         effective_test = statistical_test or self._statistical_test
 
         # Load all runs
@@ -86,7 +88,7 @@ class ComparisonEngine:
                 data = self._load_run_metrics(run_id)
                 run_data[run_id] = data
             except FileNotFoundError:
-                raise ValueError(f"Run not found: {run_id}")
+                raise EvaluationError(f"Run not found: {run_id}")
 
         # Determine metrics to compare
         if metrics is None:
@@ -97,7 +99,7 @@ class ComparisonEngine:
             metrics = sorted(all_metrics)
 
         if not metrics:
-            raise ValueError("No common metrics found across all runs")
+            raise MetricError("No common metrics found across all runs")
 
         # Perform pairwise comparisons
         pairwise_results = []
@@ -223,7 +225,7 @@ class ComparisonEngine:
         """
         common_sample_ids = sorted(set(samples_a) & set(samples_b))
         if not common_sample_ids:
-            raise ValueError(
+            raise MetricError(
                 f"Cannot compare metric '{metric_name}' for runs '{run_a_id}' and "
                 f"'{run_b_id}': no overlapping sample_ids."
             )
@@ -287,7 +289,7 @@ class ComparisonEngine:
         if self._multiple_comparison_correction is None:
             return
         if self._multiple_comparison_correction != "holm-bonferroni":
-            raise ValueError(
+            raise ConfigurationError(
                 "Unsupported multiple comparison correction: "
                 f"{self._multiple_comparison_correction}"
             )

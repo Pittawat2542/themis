@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from themis.exceptions import DatasetError
+
 from themis.experiment import export as experiment_export
 from themis.experiment import orchestrator
 
@@ -88,12 +90,12 @@ def load_custom_dataset_file(path: Path) -> tuple[list[dict[str, Any]], str, str
     """Load and normalize a custom dataset file."""
     rows = _read_dataset_rows(path)
     if not rows:
-        raise ValueError(f"Dataset file is empty: {path}")
+        raise DatasetError(f"Dataset file is empty: {path}")
 
     normalized_rows: list[dict[str, Any]] = []
     for index, row in enumerate(rows, 1):
         if not isinstance(row, dict):
-            raise ValueError(
+            raise DatasetError(
                 f"Row {index} in {path} must be a JSON object, got {type(row).__name__}."
             )
         normalized_rows.append(dict(row))
@@ -130,7 +132,7 @@ def _read_dataset_rows(path: Path) -> list[Any]:
                 try:
                     rows.append(json.loads(content))
                 except json.JSONDecodeError as exc:
-                    raise ValueError(
+                    raise DatasetError(
                         f"Invalid JSON on line {line_no} in {path}: {exc.msg}"
                     ) from exc
         return rows
@@ -138,13 +140,13 @@ def _read_dataset_rows(path: Path) -> list[Any]:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON in {path}: {exc.msg}") from exc
+            raise DatasetError(f"Invalid JSON in {path}: {exc.msg}") from exc
         if not isinstance(payload, builtins.list):
-            raise ValueError(
+            raise DatasetError(
                 f"JSON dataset in {path} must be a top-level array of row objects."
             )
         return payload
-    raise ValueError(
+    raise DatasetError(
         f"Unsupported dataset format '{suffix or '<none>'}' for {path}. "
         "Use .json or .jsonl."
     )
@@ -156,7 +158,7 @@ def _detect_required_field(
     field = _detect_optional_field(rows, candidates)
     if field is None:
         options = ", ".join(candidates)
-        raise ValueError(
+        raise DatasetError(
             f"Could not detect {kind} field in dataset. Add one of: {options}."
         )
     return field

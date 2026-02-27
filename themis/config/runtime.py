@@ -17,6 +17,18 @@ from themis.generation import plan, runner, templates
 from themis.providers import registry as provider_registry
 
 from . import registry, schema
+from themis.exceptions import ConfigurationError
+
+
+def _ensure_providers_registered() -> None:
+    """Import provider modules to ensure they register themselves (lazy)."""
+    try:
+        from themis.generation.providers import (
+            litellm_provider,  # noqa: F401
+            vllm_provider,  # noqa: F401
+        )
+    except ImportError:
+        pass
 
 
 def run_experiment_from_config(
@@ -25,6 +37,7 @@ def run_experiment_from_config(
     dataset: list[dict[str, object]] | None = None,
     on_result=None,
 ) -> experiment_orchestrator.ExperimentReport:
+    _ensure_providers_registered()
     dataset_to_use = (
         dataset
         if dataset is not None
@@ -55,7 +68,7 @@ def summarize_report_for_config(
         return math_experiment.summarize_report(report)
     if config.task in {"supergpqa", "mmlu_pro"}:
         return mcq_experiment.summarize_report(report)
-    raise ValueError(f"Unsupported task '{config.task}' for summarization.")
+    raise ConfigurationError(f"Unsupported task '{config.task}' for summarization.")
 
 
 def load_dataset_from_config(
@@ -71,7 +84,7 @@ def _build_experiment(
         builder = registry.get_experiment_builder(config.task)
         return builder(config)
 
-    raise ValueError(
+    raise ConfigurationError(
         "Experiment configuration must specify a 'task'. "
         f"Available tasks: {', '.join(sorted(registry._EXPERIMENT_BUILDERS.keys()))}"
     )
@@ -96,7 +109,7 @@ def build_pipeline_from_config(
         elif ext_name == "identity":
             extractor_obj = extractors.IdentityExtractor(**opts)
         else:
-            raise ValueError(f"Unknown extractor: {ext_name}")
+            raise ConfigurationError(f"Unknown extractor: {ext_name}")
     else:
         extractor_obj = extractors.IdentityExtractor()
 
@@ -138,7 +151,7 @@ def build_pipeline_from_config(
                 # resolve_metrics returns instances now, but we want to pass opts
                 metric_list.append(met)
             else:
-                raise ValueError(f"Unknown metric: {m_name}")
+                raise ConfigurationError(f"Unknown metric: {m_name}")
 
     return eval_pipeline.EvaluationPipeline(
         extractor=extractor_obj, metrics=metric_list
@@ -234,7 +247,7 @@ def _build_custom_experiment(
 
     runner_kwargs = config.generation.runner.__dict__
     gen_runner = runner.GenerationRunner(
-        provider=provider,
+        executor=provider,
         **runner_kwargs,
     )
 
@@ -321,7 +334,7 @@ def _load_dataset(
     # Handle inline datasets (not in registry)
     if config.source == "inline":
         if not config.inline_samples:
-            raise ValueError(
+            raise ConfigurationError(
                 "dataset.inline_samples must contain at least one row when"
                 " dataset.source='inline'."
             )
@@ -337,7 +350,7 @@ def _load_dataset(
         # Wait, _load_dataset only gets DatasetConfig and experiment_name.
         # We should probably pass the full config or at least the task.
         # But for now, let's rely on dataset_id being present or raise error.
-        raise ValueError(
+        raise ConfigurationError(
             "dataset.dataset_id must be provided when source is not 'inline'."
         )
 

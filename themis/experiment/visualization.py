@@ -19,12 +19,15 @@ except ImportError:
 from themis.experiment.comparison import MultiExperimentComparison
 from themis.experiment.cost import CostBreakdown
 from themis.evaluation.reports import EvaluationReport
+from themis.exceptions import ConfigurationError, MetricError
 
 
 def _check_plotly():
     """Check if plotly is available."""
     if not PLOTLY_AVAILABLE:
-        raise ImportError(
+        from themis.exceptions import DependencyError
+
+        raise DependencyError(
             "Plotly is required for interactive visualizations. "
             "Install with: pip install plotly"
         )
@@ -66,7 +69,7 @@ class InteractiveVisualizer:
             >>> fig.show()
         """
         if metric not in comparison.metrics and metric not in ("cost", "total_cost"):
-            raise ValueError(
+            raise MetricError(
                 f"Metric '{metric}' not found. Available: {comparison.metrics}"
             )
 
@@ -220,7 +223,7 @@ class InteractiveVisualizer:
             >>> fig = visualizer.plot_metric_distribution(report, "accuracy", "violin")
         """
         if metric not in report.metrics:
-            raise ValueError(
+            raise MetricError(
                 f"Metric '{metric}' not found. Available: {list(report.metrics.keys())}"
             )
 
@@ -232,7 +235,7 @@ class InteractiveVisualizer:
                     values.append(score.value)
 
         if not values:
-            raise ValueError(f"No values found for metric '{metric}'")
+            raise MetricError(f"No values found for metric '{metric}'")
 
         # Create plot based on type
         if plot_type == "histogram":
@@ -275,7 +278,7 @@ class InteractiveVisualizer:
             )
             fig.update_layout(yaxis_title=metric)
         else:
-            raise ValueError(
+            raise ConfigurationError(
                 f"Unknown plot_type '{plot_type}'. Use 'histogram', 'box', or 'violin'"
             )
 
@@ -414,7 +417,7 @@ class InteractiveVisualizer:
             >>> fig = visualizer.plot_metric_evolution(comparison, "accuracy")
         """
         if metric not in comparison.metrics and metric not in ("cost", "total_cost"):
-            raise ValueError(
+            raise MetricError(
                 f"Metric '{metric}' not found. Available: {comparison.metrics}"
             )
 

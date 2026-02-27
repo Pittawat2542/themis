@@ -13,6 +13,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from themis.datasets import schema as dataset_schema
+from themis.exceptions import DatasetError
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class BaseDataset:
                 self._schema.validate_sample(sample)
             except ValueError as e:
                 logger.error("Validation failed for sample %d: %s", i, e)
-                raise ValueError(f"Sample {i} validation failed: {e}") from e
+                raise DatasetError(f"Sample {i} validation failed: {e}") from e
 
         logger.debug("All samples validated successfully")
 
@@ -184,7 +185,7 @@ class BaseDataset:
         groups: dict[Any, list[dict[str, Any]]] = defaultdict(list)
         for sample in self._samples:
             if field not in sample:
-                raise ValueError(f"Field '{field}' not found in sample")
+                raise DatasetError(f"Field '{field}' not found in sample")
             groups[sample[field]].append(sample)
 
         # Validate distribution

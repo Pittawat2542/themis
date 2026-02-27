@@ -204,7 +204,9 @@ class ToolRegistry:
             ValueError: If tool with same name already registered
         """
         if tool.name in self._tools:
-            raise ValueError(f"Tool '{tool.name}' already registered")
+            from themis.exceptions import ConfigurationError
+
+            raise ConfigurationError(f"Tool '{tool.name}' already registered")
 
         self._tools[tool.name] = tool
 

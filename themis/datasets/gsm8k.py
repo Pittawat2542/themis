@@ -9,6 +9,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from themis.exceptions import ConfigurationError, DatasetError
+
 _DATASET_NAME = "openai/gsm8k"
 
 
@@ -44,7 +46,7 @@ def load_gsm8k(
     """Load GSM8K samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
-        raise ValueError(
+        raise DatasetError(
             f"Unsupported source '{source}'. Expected one of: 'huggingface', 'local'."
         )
 
@@ -52,7 +54,7 @@ def load_gsm8k(
         rows = _load_from_huggingface(split=split, subset=subset)
     else:
         if data_dir is None:
-            raise ValueError(
+            raise DatasetError(
                 "data_dir must be provided when source='local'. "
                 "Pass dataset.data_dir in configs or --data-dir on the CLI."
             )
@@ -87,7 +89,7 @@ def _load_from_huggingface(*, split: str, subset: str) -> Iterable[dict[str, Any
     try:
         from datasets import load_dataset
     except ImportError as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError(
+        raise ConfigurationError(
             "datasets is required to load GSM8K from Hugging Face. Install it via `uv pip install '.[hf]'`."
         ) from exc
 

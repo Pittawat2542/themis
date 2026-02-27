@@ -7,6 +7,8 @@ from statistics import mean
 from collections.abc import Sequence
 from typing import Literal
 
+from themis.exceptions import MetricError
+
 from themis.core import entities as core_entities
 from themis.evaluation.statistics import (
     bootstrap_ci,
@@ -82,7 +84,7 @@ def _require_full_per_sample_available(
         return
     if _has_full_per_sample_available(report, metric_name):
         return
-    raise ValueError(
+    raise MetricError(
         f"{helper_name} requires full per-sample data for metric '{metric_name}', "
         "but the report only retains a truncated subset. Re-run without "
         "max_records_in_memory (or increase it) to enable inferential statistics."
@@ -119,7 +121,7 @@ def aligned_metric_values(
     values_b = _metric_values_by_sample(report_b, metric_name)
     common_ids = sorted(set(values_a) & set(values_b))
     if not common_ids:
-        raise ValueError(f"No overlapping sample_ids for metric '{metric_name}'")
+        raise MetricError(f"No overlapping sample_ids for metric '{metric_name}'")
     aligned_a = [values_a[sample_id] for sample_id in common_ids]
     aligned_b = [values_b[sample_id] for sample_id in common_ids]
     return aligned_a, aligned_b
@@ -134,7 +136,7 @@ def ci_for_metric(
     _require_full_per_sample_available(report, metric_name, helper_name="ci_for_metric")
     values = _metric_values(report, metric_name)
     if not values:
-        raise ValueError(f"No scores for metric '{metric_name}'")
+        raise MetricError(f"No scores for metric '{metric_name}'")
     return bootstrap_ci(
         values, n_bootstrap=n_bootstrap, confidence_level=confidence_level
     )
@@ -161,7 +163,7 @@ def permutation_test_for_metric(
         values_a = _metric_values(report_a, metric_name)
         values_b = _metric_values(report_b, metric_name)
     if not values_a or not values_b:
-        raise ValueError(f"Both reports must have scores for metric '{metric_name}'")
+        raise MetricError(f"Both reports must have scores for metric '{metric_name}'")
     return permutation_test(
         values_a,
         values_b,
@@ -203,7 +205,9 @@ def cohens_h_for_metric(
     agg_a = report_a.metrics.get(metric_name)
     agg_b = report_b.metrics.get(metric_name)
     if not agg_a or not agg_b:
-        raise ValueError(f"Both reports must have aggregate for metric '{metric_name}'")
+        raise MetricError(
+            f"Both reports must have aggregate for metric '{metric_name}'"
+        )
     return cohens_h(agg_a.mean, agg_b.mean)
 
 
@@ -220,7 +224,7 @@ def cohens_d_for_metric(
     )
     values_a, values_b = aligned_metric_values(report_a, report_b, metric_name)
     if len(values_a) < 2 or len(values_b) < 2:
-        raise ValueError("Each group must have at least 2 values for Cohen's d")
+        raise MetricError("Each group must have at least 2 values for Cohen's d")
     return cohens_d(values_a, values_b)
 
 
@@ -276,7 +280,7 @@ def ci_for_slice_metric(
     )
     values = _slice_metric_values(report, slice_name, metric_name)
     if not values:
-        raise ValueError(
+        raise MetricError(
             f"No scores for metric '{metric_name}' in slice '{slice_name}'"
         )
     return bootstrap_ci(
@@ -329,7 +333,7 @@ def confusion_matrix(
     labels_true: Sequence[str], labels_pred: Sequence[str]
 ) -> dict[str, dict[str, int]]:
     if len(labels_true) != len(labels_pred):
-        raise ValueError("labels_true and labels_pred must have same length")
+        raise MetricError("labels_true and labels_pred must have same length")
     cm: dict[str, dict[str, int]] = {}
     for t, p in zip(labels_true, labels_pred):
         cm.setdefault(t, {})

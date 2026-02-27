@@ -14,6 +14,7 @@ from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
+from themis.exceptions import DependencyError
 
 
 class BERTScore(Metric):
@@ -78,7 +79,7 @@ class BERTScore(Metric):
 
             self._bert_score = bert_score
         except ImportError:
-            raise ImportError(
+            raise DependencyError(
                 "bert-score is required for BERTScore metric. "
                 "Install it with: pip install bert-score"
             )

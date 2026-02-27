@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+from themis.exceptions import MetricError
+
 
 def inverse_normal_cdf(p: float) -> float:
     """Approximate inverse normal CDF (probit function) for standard normal.
@@ -17,10 +19,10 @@ def inverse_normal_cdf(p: float) -> float:
         z-score corresponding to probability p
 
     Raises:
-        ValueError: If p is not between 0 and 1
+        MetricError: If p is not between 0 and 1
     """
     if p <= 0 or p >= 1:
-        raise ValueError("Probability must be between 0 and 1")
+        raise MetricError("Probability must be between 0 and 1")
 
     # Constants for approximation
     a = [2.50662823884, -18.61500062529, 41.39119773534, -25.44106049637]

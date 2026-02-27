@@ -2,34 +2,37 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-from themis.config import schema
-from themis.experiment import orchestrator
+if TYPE_CHECKING:
+    from themis.config import schema
+    from themis.experiment import orchestrator
 
-ExperimentBuilder = Callable[
-    [schema.ExperimentConfig], orchestrator.ExperimentOrchestrator
-]
+    ExperimentBuilder = Callable[
+        [schema.ExperimentConfig], orchestrator.ExperimentOrchestrator
+    ]
 
-_EXPERIMENT_BUILDERS: dict[str, ExperimentBuilder] = {}
+_EXPERIMENT_BUILDERS: dict[str, Callable] = {}
 
 
 def register_experiment_builder(
     task: str,
-) -> Callable[[ExperimentBuilder], ExperimentBuilder]:
+) -> Callable:
     """Decorator to register an experiment builder for a specific task."""
 
-    def decorator(builder: ExperimentBuilder) -> ExperimentBuilder:
+    def decorator(builder: Callable) -> Callable:
         _EXPERIMENT_BUILDERS[task] = builder
         return builder
 
     return decorator
 
 
-def get_experiment_builder(task: str) -> ExperimentBuilder:
+def get_experiment_builder(task: str) -> Callable:
     """Get the experiment builder for a specific task."""
     if task not in _EXPERIMENT_BUILDERS:
-        raise ValueError(
+        from themis.exceptions import ConfigurationError
+
+        raise ConfigurationError(
             f"No experiment builder registered for task '{task}'. "
             f"Available tasks: {', '.join(sorted(_EXPERIMENT_BUILDERS.keys()))}"
         )

@@ -14,6 +14,7 @@ from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
+from themis.exceptions import DependencyError
 
 
 class CodeBLEU(Metric):
@@ -78,7 +79,7 @@ class CodeBLEU(Metric):
 
             self._calc_codebleu = calc_codebleu
         except ImportError:
-            raise ImportError(
+            raise DependencyError(
                 "codebleu is required for CodeBLEU metric. "
                 "Install it with: pip install codebleu"
             )

@@ -14,6 +14,7 @@ from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
+from themis.exceptions import DependencyError
 
 
 class BLEU(Metric):
@@ -75,7 +76,7 @@ class BLEU(Metric):
                 max_ngram_order=max_ngram_order,
             )
         except ImportError:
-            raise ImportError(
+            raise DependencyError(
                 "sacrebleu is required for BLEU metric. "
                 "Install it with: pip install sacrebleu"
             )

@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from themis.exceptions import MetricError
 from themis.storage import ExperimentStorage
 
 
@@ -139,14 +140,14 @@ def _select_metric(
     metric: str | None,
 ) -> tuple[str, float | None]:
     if not metrics:
-        raise ValueError("No metrics found for this run")
+        raise MetricError("No metrics found for this run")
 
     if metric is None:
         metric = sorted(metrics.keys())[0]
 
     if metric not in metrics:
         available = ", ".join(sorted(metrics.keys()))
-        raise ValueError(f"Metric '{metric}' not found. Available: {available}")
+        raise MetricError(f"Metric '{metric}' not found. Available: {available}")
 
     mean = metrics[metric].get("mean")
     return metric, _safe_float(mean)

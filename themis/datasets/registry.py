@@ -20,6 +20,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from themis.exceptions import DatasetError
+
 # Factory type: takes config options, returns list of samples
 DatasetFactory = Callable[[dict[str, Any]], list[dict[str, Any]]]
 
@@ -45,7 +47,7 @@ class DatasetRegistry:
             ValueError: If dataset name is already registered
         """
         if name in self._datasets:
-            raise ValueError(
+            raise DatasetError(
                 f"Dataset '{name}' is already registered. "
                 f"Use a different name or unregister the existing dataset first."
             )
@@ -61,7 +63,7 @@ class DatasetRegistry:
             ValueError: If dataset name is not registered
         """
         if name not in self._datasets:
-            raise ValueError(f"Dataset '{name}' is not registered")
+            raise DatasetError(f"Dataset '{name}' is not registered")
         del self._datasets[name]
 
     def create(self, name: str, **options) -> list[dict[str, Any]]:
@@ -85,7 +87,7 @@ class DatasetRegistry:
         """
         if name not in self._datasets:
             available = list(self._datasets.keys())
-            raise ValueError(
+            raise DatasetError(
                 f"Unknown dataset: '{name}'. "
                 f"Available datasets: {', '.join(sorted(available)) or 'none'}"
             )

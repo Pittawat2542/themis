@@ -9,6 +9,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from themis.exceptions import ConfigurationError, DatasetError
+
 _DATASET_NAME = "openlifescienceai/medmcqa"
 _CHOICE_LABELS = ["A", "B", "C", "D"]
 
@@ -31,7 +33,7 @@ class MedMcqaSample(BaseModel):
             return [str(v) for _, v in sorted(value.items())]
         if isinstance(value, (list, tuple)):
             return [str(item) for item in value]
-        raise TypeError("choices must be a sequence or mapping")
+        raise DatasetError("choices must be a sequence or mapping")
 
     def to_generation_example(self) -> dict[str, Any]:
         effective_labels = (
@@ -61,7 +63,7 @@ def load_medmcqa(
     """Load MedMCQA samples from Hugging Face or a local directory."""
 
     if source not in {"huggingface", "local"}:
-        raise ValueError(
+        raise DatasetError(
             f"Unsupported source '{source}'. Expected one of: 'huggingface', 'local'."
         )
 
@@ -69,7 +71,7 @@ def load_medmcqa(
         rows = _load_from_huggingface(split=split, subset=subset)
     else:
         if data_dir is None:
-            raise ValueError(
+            raise DatasetError(
                 "data_dir must be provided when source='local'. "
                 "Pass dataset.data_dir in configs or --data-dir on the CLI."
             )
@@ -142,7 +144,7 @@ def _load_from_huggingface(
     try:
         from datasets import load_dataset
     except ImportError as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError(
+        raise ConfigurationError(
             "datasets is required to load MedMCQA from Hugging Face. Install it via `uv pip install '.[hf]'`."
         ) from exc
 

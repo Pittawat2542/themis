@@ -340,7 +340,9 @@ class LocalFileStorageBackend(StorageBackend):
         with report_path.open("rb") as handle:
             report = pickle.load(handle)
         if not isinstance(report, ExperimentReport):
-            raise TypeError(f"Invalid report payload for run {run_id}")
+            from themis.exceptions import StorageError
+
+            raise StorageError(f"Invalid report payload for run {run_id}")
         return report
 
     def list_runs(self) -> List[str]:

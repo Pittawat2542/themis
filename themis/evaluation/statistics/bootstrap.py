@@ -10,11 +10,13 @@ from collections.abc import Callable, Sequence
 
 from .types import BootstrapResult
 
+from themis.exceptions import MetricError
+
 
 def _percentile(sorted_values: Sequence[float], quantile: float) -> float:
     """Return linearly interpolated percentile from a pre-sorted sequence."""
     if not sorted_values:
-        raise ValueError("Cannot compute percentile of empty sequence")
+        raise MetricError("Cannot compute percentile of empty sequence")
     if quantile <= 0:
         return float(sorted_values[0])
     if quantile >= 1:
@@ -62,7 +64,7 @@ def bootstrap_ci(
         >>> print(f"Mean: {result.statistic:.2f}, 95% CI: [{result.ci_lower:.2f}, {result.ci_upper:.2f}]")
     """
     if not values:
-        raise ValueError("Cannot compute bootstrap CI for empty sequence")
+        raise MetricError("Cannot compute bootstrap CI for empty sequence")
 
     rng = random.Random(seed)
 

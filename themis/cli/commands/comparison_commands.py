@@ -57,7 +57,7 @@ def compare_command(
         print()
 
         from themis.comparison import compare_runs
-        from themis.comparison.statistics import StatisticalTest
+        from themis.evaluation.statistics.comparison_tests import StatisticalTest
 
         metrics_list = [metric] if metric else None
 

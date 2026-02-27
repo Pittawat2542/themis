@@ -1,7 +1,7 @@
 """Common type definitions and generic types for Themis.
 
 This module provides improved type safety through generic types and protocols.
-All types are designed to be backward compatible with existing code.
+All types are designed for internal consistency and public API clarity.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ T_co = TypeVar("T_co", covariant=True)  # Covariant type for outputs
 class TypedExtractor(Protocol[T_co]):
     """Protocol for extractors with typed output.
 
-    This is a backward-compatible extension of the Extractor protocol that
+    This is an extension of the Extractor protocol that
     provides type information about the extraction output.
     """
 
@@ -42,7 +42,7 @@ class TypedExtractor(Protocol[T_co]):
 class TypedMetric(Protocol[T]):
     """Protocol for metrics with typed predictions.
 
-    This is a backward-compatible extension of the Metric interface that
+    This is an extension of the Metric interface that
     provides type information about expected prediction types.
     """
 

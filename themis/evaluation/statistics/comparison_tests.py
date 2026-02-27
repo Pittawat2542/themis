@@ -23,6 +23,7 @@ from themis.evaluation.statistics.hypothesis_tests import (
     permutation_test as evaluation_permutation_test,
 )
 from themis.core import entities as core_entities
+from themis.exceptions import MetricError
 
 
 class StatisticalTest(str, Enum):
@@ -97,10 +98,10 @@ def t_test(
         ValueError: If samples are empty or have mismatched lengths (for paired test)
     """
     if not samples_a or not samples_b:
-        raise ValueError("Cannot perform t-test on empty samples")
+        raise MetricError("Cannot perform t-test on empty samples")
 
     if paired and len(samples_a) != len(samples_b):
-        raise ValueError(
+        raise MetricError(
             f"Paired t-test requires equal sample sizes. "
             f"Got {len(samples_a)} and {len(samples_b)}"
         )
@@ -227,7 +228,7 @@ def bootstrap_confidence_interval(
         This path is CI-only inference. We intentionally do not synthesize p-values.
     """
     if not samples_a or not samples_b:
-        raise ValueError("Cannot perform bootstrap on empty samples")
+        raise MetricError("Cannot perform bootstrap on empty samples")
 
     # Default statistic: difference in means (delegate to evaluation stack for paired samples)
     if statistic_fn is None and len(samples_a) == len(samples_b):
@@ -321,7 +322,7 @@ def permutation_test(
         StatisticalTestResult with permutation test results
     """
     if not samples_a or not samples_b:
-        raise ValueError("Cannot perform permutation test on empty samples")
+        raise MetricError("Cannot perform permutation test on empty samples")
 
     if statistic_fn is None:
         perm = evaluation_permutation_test(

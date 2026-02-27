@@ -27,6 +27,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 from themis.core import entities as core_entities
+from themis.exceptions import ConfigurationError
 
 
 @dataclass
@@ -46,9 +47,9 @@ class BatchConfig:
     def __post_init__(self):
         """Validate configuration."""
         if self.max_batch_size < 1:
-            raise ValueError("max_batch_size must be >= 1")
+            raise ConfigurationError("max_batch_size must be >= 1")
         if self.timeout_ms < 0:
-            raise ValueError("timeout_ms must be >= 0")
+            raise ConfigurationError("timeout_ms must be >= 0")
 
 
 class TaskBatcher:

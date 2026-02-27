@@ -11,6 +11,8 @@ from pathlib import Path
 from collections.abc import Iterable
 from typing import Any
 
+from themis.exceptions import StorageError
+
 from themis.core import entities as core_entities
 from themis.core import serialization as core_serialization
 from themis.storage.database import MetadataStore
@@ -157,7 +159,7 @@ class ExperimentStorage:
         with self._acquire_lock(run_id):
             # Check if run already exists
             if self._run_metadata_exists(run_id):
-                raise ValueError(f"Run {run_id} already exists")
+                raise StorageError(f"Run {run_id} already exists")
 
             # Create run directory
             run_dir = self._get_run_dir(run_id, experiment_id=experiment_id)

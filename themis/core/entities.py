@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 if TYPE_CHECKING:
     from themis.evaluation.reports import EvaluationReport
@@ -100,7 +100,7 @@ class Reference(Generic[T]):
 class ModelOutput:
     text: str
     raw: Any | None = None
-    usage: Dict[str, int] | None = (
+    usage: dict[str, int] | None = (
         None  # Token usage: {prompt_tokens, completion_tokens, total_tokens}
     )
 
@@ -127,7 +127,7 @@ class GenerationRecord:
     output: ModelOutput | None
     error: ModelError | None
     metrics: dict[str, Any] = field(default_factory=dict)
-    attempts: List["GenerationRecord"] = field(default_factory=list)
+    attempts: list["GenerationRecord"] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -146,15 +146,15 @@ class MetricScore:
 
 @dataclass
 class EvaluationSummary:
-    scores: List[MetricScore]
-    failures: List[str] = field(default_factory=list)
+    scores: list[MetricScore]
+    failures: list[str] = field(default_factory=list)
 
 
 @dataclass
 class EvaluationRecord:
     sample_id: str | None
-    scores: List[MetricScore]
-    failures: List[str] = field(default_factory=list)
+    scores: list[MetricScore]
+    failures: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -169,6 +169,42 @@ class ExperimentReport:
     evaluation_report: "EvaluationReport"
     failures: list[ExperimentFailure]
     metadata: dict[str, object]
+
+    def metric(self, name: str) -> Any:
+        """Get a metric aggregate by name (case-insensitive, supports snake_case).
+
+        This is a convenience accessor that normalises the lookup key so
+        both ``"exact_match"`` and ``"ExactMatch"`` resolve correctly.
+
+        Args:
+            name: Metric name — accepts snake_case, CamelCase, or exact key.
+
+        Returns:
+            The ``MetricAggregate`` for the requested metric.
+
+        Raises:
+            KeyError: If no metric matches *name*.
+
+        Example:
+            >>> agg = report.metric("exact_match")
+            >>> print(f"{agg.mean:.2%}")
+        """
+        import re
+
+        metrics = self.evaluation_report.metrics
+        # 1. Exact key match
+        if name in metrics:
+            return metrics[name]
+        # 2. Normalised comparison: convert both sides to snake_case lower
+        name_norm = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+        for key, value in metrics.items():
+            key_norm = re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
+            if key_norm == name_norm:
+                return value
+        available = ", ".join(sorted(metrics.keys()))
+        from themis.exceptions import MetricError
+
+        raise MetricError(f"Metric '{name}' not found. Available: {available}")
 
 
 __all__ = [

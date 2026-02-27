@@ -10,6 +10,8 @@ import threading
 import time
 from pathlib import Path
 
+from themis.exceptions import StorageError
+
 # fcntl is Unix-only
 if sys.platform == "win32":
     FCNTL_AVAILABLE = False
@@ -111,7 +113,7 @@ class LockManager:
                             os.close(lock_fd)
                         except OSError:
                             pass
-                        raise TimeoutError(
+                        raise StorageError(
                             f"Failed to acquire lock for run {run_id} after {timeout}s on Windows. "
                             f"Try deleting: {lock_path}"
                         ) from e
@@ -130,7 +132,7 @@ class LockManager:
                             os.close(lock_fd)
                         except OSError:
                             pass
-                        raise TimeoutError(
+                        raise StorageError(
                             f"Failed to acquire lock for run {run_id} after {timeout}s. "
                             f"Try: rm -f {lock_path}"
                         ) from e

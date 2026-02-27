@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from themis.core import entities as core_entities
+from themis.exceptions import ProviderError
 from themis.interfaces import StatelessTaskExecutor
 
 
@@ -40,7 +41,7 @@ class ProviderRouter(StatelessTaskExecutor):
             provider = self._providers.get(task.model.identifier)
         if provider is None:
             known = ", ".join(sorted(self._providers)) or "<none>"
-            raise RuntimeError(
+            raise ProviderError(
                 f"No provider registered for model '{task.model.identifier}'. "
                 f"Known providers: {known}."
             )

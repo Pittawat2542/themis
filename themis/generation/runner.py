@@ -9,6 +9,7 @@ from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from themis.core import entities as core_entities
+from themis.exceptions import ConfigurationError
 from themis.generation import strategies
 from themis.interfaces import StatelessTaskExecutor
 from themis.utils import tracing
@@ -59,7 +60,7 @@ class GenerationRunner:
             retry_max_delay if retry_max_delay is None else max(0.0, retry_max_delay)
         )
         if max_in_flight_tasks is not None and max_in_flight_tasks < 1:
-            raise ValueError("max_in_flight_tasks must be >= 1 when provided.")
+            raise ConfigurationError("max_in_flight_tasks must be >= 1 when provided.")
         default_in_flight = self._max_parallel * 4
         self._max_in_flight_tasks = max_in_flight_tasks or default_in_flight
 

@@ -7,6 +7,8 @@ from collections.abc import Sequence
 
 from .types import EffectSize
 
+from themis.exceptions import MetricError
+
 
 def cohens_h(p1: float, p2: float) -> EffectSize:
     """Compute Cohen's h effect size for comparing two proportions.
@@ -87,7 +89,7 @@ def cohens_d(group1: Sequence[float], group2: Sequence[float]) -> EffectSize:
     n2 = len(group2)
 
     if n1 < 2 or n2 < 2:
-        raise ValueError("Each group must have at least 2 values")
+        raise MetricError("Each group must have at least 2 values")
 
     mean1 = mean(group1)
     mean2 = mean(group2)

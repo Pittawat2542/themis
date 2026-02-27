@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from themis.core.entities import EvaluationRecord, GenerationRecord
+from themis.exceptions import ConfigurationError
 from themis import storage as experiment_storage
 
 
@@ -105,7 +106,9 @@ class CacheManager:
         """Start a run in storage with required run configuration."""
         if self._storage is not None:
             if config is None:
-                raise ValueError("Run config is required when starting a cached run.")
+                raise ConfigurationError(
+                    "Run config is required when starting a cached run."
+                )
             self._storage.start_run(run_id, experiment_id=experiment_id, config=config)
 
     def complete_run(self, run_id: str) -> None:

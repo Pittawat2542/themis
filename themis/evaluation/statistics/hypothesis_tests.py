@@ -8,6 +8,8 @@ from statistics import mean, stdev
 from collections.abc import Sequence
 from typing import Literal
 
+from themis.exceptions import MetricError
+
 from themis.core import entities as core_entities
 
 from .confidence_intervals import compute_confidence_interval
@@ -34,12 +36,12 @@ def compare_metrics(
         ValueError: If either scores list is empty or metric names don't match
     """
     if not baseline_scores or not treatment_scores:
-        raise ValueError("Both baseline and treatment scores must be non-empty")
+        raise MetricError("Both baseline and treatment scores must be non-empty")
 
     baseline_name = baseline_scores[0].metric_name
     treatment_name = treatment_scores[0].metric_name
     if baseline_name != treatment_name:
-        raise ValueError(
+        raise MetricError(
             f"Metric names must match: baseline='{baseline_name}', "
             f"treatment='{treatment_name}'"
         )
@@ -125,7 +127,7 @@ def permutation_test(
         ValueError: If either group is empty
     """
     if not group_a or not group_b:
-        raise ValueError("Both groups must be non-empty")
+        raise MetricError("Both groups must be non-empty")
 
     rng = random.Random(seed)
 
@@ -138,7 +140,7 @@ def permutation_test(
 
             return statistics.median(b) - statistics.median(a)
         else:
-            raise ValueError(f"Unknown statistic: {statistic}")
+            raise MetricError(f"Unknown statistic: {statistic}")
 
     observed = compute_stat(group_a, group_b)
 
@@ -181,9 +183,9 @@ def paired_permutation_test(
 ) -> PermutationTestResult:
     """Perform paired permutation test using sign flips on paired differences."""
     if len(group_a) != len(group_b):
-        raise ValueError("Paired test requires equal-length groups")
+        raise MetricError("Paired test requires equal-length groups")
     if not group_a:
-        raise ValueError("Paired test requires non-empty groups")
+        raise MetricError("Paired test requires non-empty groups")
 
     rng = random.Random(seed)
     diffs = [b - a for a, b in zip(group_a, group_b)]
@@ -196,7 +198,7 @@ def paired_permutation_test(
 
             return statistics.median(values)
         else:
-            raise ValueError(f"Unknown statistic: {statistic}")
+            raise MetricError(f"Unknown statistic: {statistic}")
 
     observed = compute_stat(diffs)
     count_extreme = 0
@@ -223,9 +225,9 @@ def paired_t_test(
 ) -> ComparisonResult:
     """Perform paired t-test on matched samples."""
     if len(group_a) != len(group_b):
-        raise ValueError("Paired t-test requires equal-length groups")
+        raise MetricError("Paired t-test requires equal-length groups")
     if not group_a:
-        raise ValueError("Paired t-test requires non-empty groups")
+        raise MetricError("Paired t-test requires non-empty groups")
 
     diffs = [b - a for a, b in zip(group_a, group_b)]
     n = len(diffs)

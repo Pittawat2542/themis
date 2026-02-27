@@ -37,7 +37,12 @@ import logging
 import os
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
+
+if TYPE_CHECKING:
+    from themis.backends.execution import ExecutionBackend
+    from themis.backends.storage import StorageBackend
+    from themis.experiment.cache_manager import CacheManager
 
 from themis.core.entities import (
     ExperimentReport,
@@ -46,9 +51,7 @@ from themis.core.entities import (
     SamplingConfig,
 )
 from themis.evaluation.pipeline import EvaluationPipeline, EvaluationPipelineContract
-from themis.experiment.manifest import build_reproducibility_manifest
-from themis.experiment.cache_manager import CacheManager
-from themis.experiment.orchestrator import ExperimentOrchestrator
+from themis.exceptions import ConfigurationError
 from themis.generation.plan import GenerationPlan
 from themis.generation.router import ProviderRouter
 from themis.generation.runner import GenerationRunner
@@ -64,17 +67,21 @@ from themis.evaluation.metric_resolver import (
     resolve_metrics,
 )
 
-# Import provider modules to ensure they register themselves
-try:
-    from themis.generation import clients  # noqa: F401 - registers fake provider
-    from themis.generation.providers import (
-        litellm_provider,  # noqa: F401
-        vllm_provider,  # noqa: F401
-    )
-except ImportError:
-    pass
-
 logger = logging.getLogger(__name__)
+
+
+def _ensure_providers_registered() -> None:
+    """Import provider modules to ensure they register themselves (lazy)."""
+    try:
+        from themis.generation import clients  # noqa: F401
+        from themis.generation.providers import (
+            litellm_provider,  # noqa: F401
+            vllm_provider,  # noqa: F401
+        )
+    except ImportError:
+        # We don't raise here as this is triggered on evaluate() call which might
+        # not need these specific providers, but we log it if needed.
+        pass
 
 
 _PROVIDER_OPTION_KEYS = (
@@ -108,8 +115,8 @@ def evaluate(
     workers: int = 4,
     max_retries: int = 3,
     storage: str | Path | None = None,
-    storage_backend: object | None = None,
-    execution_backend: object | None = None,
+    storage_backend: StorageBackend | None = None,  # ExperimentStorage-compatible
+    execution_backend: ExecutionBackend | None = None,  # ExecutionBackend-compatible
     run_id: str | None = None,
     resume: bool = True,
     on_result: Callable[[GenerationRecord], None] | None = None,
@@ -169,14 +176,21 @@ def evaluate(
         and metadata.
 
     Raises:
-        ValueError: If benchmark is unknown or configuration is invalid.
-        RuntimeError: If evaluation fails.
+        ConfigurationError: If benchmark is unknown or configuration is invalid.
+        EvaluationError: If evaluation fails.
 
     Example:
         >>> report = themis.evaluate("math500", model="gpt-4", limit=10)
         >>> print(f"ExactMatch: {report.evaluation_report.metrics['ExactMatch'].mean:.2%}")
         ExactMatch: 85.00%
     """
+    _ensure_providers_registered()
+
+    # Lazy imports to break circular: api → experiment → config → experiment
+    from themis.experiment.manifest import build_reproducibility_manifest
+    from themis.experiment.cache_manager import CacheManager
+    from themis.experiment.orchestrator import ExperimentOrchestrator
+
     logger.info("=" * 60)
     logger.info("Starting Themis evaluation")
     logger.info(f"Model: {model}")
@@ -190,7 +204,7 @@ def evaluate(
     unsupported_options = sorted(set(kwargs.keys()) - _ALLOWED_EXTRA_OPTIONS)
     if unsupported_options:
         unsupported = ", ".join(unsupported_options)
-        raise ValueError(
+        raise ConfigurationError(
             f"Unsupported option(s): {unsupported}. "
             "Supported extra options are provider options and `top_p`."
         )
@@ -210,7 +224,9 @@ def evaluate(
 
     if is_benchmark:
         if reference_field is not None:
-            raise ValueError("`reference_field` is only supported for custom datasets.")
+            raise ConfigurationError(
+                "`reference_field` is only supported for custom datasets."
+            )
         benchmark_name = benchmark_or_dataset
         logger.info(f"Loading benchmark: {benchmark_name}")
 
@@ -262,7 +278,7 @@ def evaluate(
 
         # Use provided prompt or default
         if prompt is None:
-            raise ValueError(
+            raise ConfigurationError(
                 "Custom datasets require a prompt template. "
                 "Example: prompt='Solve: {question}'"
             )
@@ -288,7 +304,7 @@ def evaluate(
             _metrics_require_references(metrics_list)
             and selected_reference_field is None
         ):
-            raise ValueError(
+            raise ConfigurationError(
                 "Could not detect a reference field for custom dataset. "
                 "Provide rows with a consistent `answer` or `reference` column, "
                 "or pass `reference_field=...`."
@@ -307,7 +323,7 @@ def evaluate(
     # ========================================================================
 
     if not isinstance(pipeline, EvaluationPipelineContract):
-        raise TypeError("pipeline must implement EvaluationPipelineContract.")
+        raise ConfigurationError("pipeline must implement EvaluationPipelineContract.")
 
     # Resolve storage
     resolved_storage_backend = _resolve_storage(
@@ -353,11 +369,11 @@ def evaluate(
     router = ProviderRouter({(provider_name, model_id): provider})
 
     # Setup strategy resolver for multi-sampling
-    strategy_resolver = None
-    if num_samples > 1:
-
-        def strategy_resolver(task):  # noqa: ARG001
-            return RepeatedSamplingStrategy(attempts=num_samples)
+    strategy_resolver = (
+        (lambda task: RepeatedSamplingStrategy(attempts=num_samples))  # noqa: ARG005
+        if num_samples > 1
+        else None
+    )
 
     # Build generation runner
     runner = GenerationRunner(
@@ -422,7 +438,7 @@ def _detect_reference_field(dataset: Sequence[dict[str, Any]]) -> str | None:
     if reference_in_all:
         return "reference"
     if any(("answer" in row) or ("reference" in row) for row in dataset):
-        raise ValueError(
+        raise ConfigurationError(
             "Detected mixed or partial reference fields across rows. "
             "Use a consistent `answer` or `reference` column, or pass "
             "`reference_field=...`."
@@ -442,7 +458,7 @@ def _resolve_custom_reference_field(
     ]
     if missing_indices:
         preview = ", ".join(missing_indices[:5])
-        raise ValueError(
+        raise ConfigurationError(
             f"reference_field='{requested_field}' is missing in row(s): {preview}."
         )
     return requested_field
@@ -523,9 +539,9 @@ def _build_sampling(
 
 
 def _resolve_dataset_with_cache(
-    dataset: object,
+    dataset: DatasetAdapter | Iterable | Sequence[dict] | object,
     *,
-    cache_manager: CacheManager,
+    cache_manager: "CacheManager",
     run_id: str | None,
     resume: bool,
 ) -> list[dict]:
@@ -547,20 +563,22 @@ def _resolve_dataset_with_cache(
             return cached
 
     # 3. Fail if nothing found
-    raise ValueError(
+    raise ConfigurationError(
         "No dataset provided. Supply `dataset=` to evaluate() "
         "or ensure `run_id` points to a cached run."
     )
 
 
-def _resolve_storage(storage_path: str | Path | None, storage_backend: object | None):
+def _resolve_storage(storage_path: str | Path | None, storage_backend: Any | None):
     """Resolve storage backend from path or explicit backend."""
     if storage_backend is not None:
         backend = storage_backend
         if hasattr(backend, "experiment_storage"):
             return backend.experiment_storage
         if not hasattr(backend, "start_run"):
-            raise TypeError("storage_backend must be ExperimentStorage-compatible.")
+            raise ConfigurationError(
+                "storage_backend must be ExperimentStorage-compatible."
+            )
         return backend
     root = (
         Path(storage_path) if storage_path is not None else Path(".cache/experiments")

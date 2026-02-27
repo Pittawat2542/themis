@@ -29,7 +29,9 @@ class LangfuseTracker:
 
     def __init__(self, config: LangfuseConfig) -> None:
         if Langfuse is None:
-            raise ImportError(
+            from themis.exceptions import DependencyError
+
+            raise DependencyError(
                 "langfuse is not installed. Install with: pip install langfuse"
             )
         self.config = config

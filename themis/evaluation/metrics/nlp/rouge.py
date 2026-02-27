@@ -15,6 +15,7 @@ from typing import Any
 
 from themis.core.entities import MetricScore
 from themis.interfaces import Metric
+from themis.exceptions import DependencyError
 
 
 class ROUGEVariant(str, Enum):
@@ -81,7 +82,7 @@ class ROUGE(Metric):
                 use_stemmer=use_stemmer,
             )
         except ImportError:
-            raise ImportError(
+            raise DependencyError(
                 "rouge-score is required for ROUGE metric. "
                 "Install it with: pip install rouge-score"
             )

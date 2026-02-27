@@ -13,6 +13,7 @@ from themis.evaluation.reports import (
     MetricAggregate,
 )
 from themis.interfaces import Metric as MetricInterface
+from themis.exceptions import EvaluationError
 from themis.utils import tracing
 
 # Type variables for composable pipeline
@@ -156,7 +157,7 @@ class ComposableEvaluationPipeline:
 
         def validate_fn(value):
             if not validator(value):
-                raise ValueError(error_message)
+                raise EvaluationError(error_message)
             return value
 
         return self.add_step(
@@ -211,12 +212,12 @@ class ComposableEvaluationPipeline:
             if condition(value):
                 result, error = step_if_true.execute(value)
                 if error:
-                    raise ValueError(f"True branch failed: {error}")
+                    raise EvaluationError(f"True branch failed: {error}")
                 return result
             elif step_if_false:
                 result, error = step_if_false.execute(value)
                 if error:
-                    raise ValueError(f"False branch failed: {error}")
+                    raise EvaluationError(f"False branch failed: {error}")
                 return result
             else:
                 return value  # Passthrough

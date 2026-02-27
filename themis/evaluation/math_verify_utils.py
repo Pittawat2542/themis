@@ -33,7 +33,9 @@ def math_verify_available() -> bool:
 
 def require_math_verify() -> None:
     if not math_verify_available():  # pragma: no cover - informative exception
-        raise RuntimeError(
+        from themis.exceptions import ConfigurationError
+
+        raise ConfigurationError(
             "math-verify is required for math extraction/evaluation. Install via `uv pip install '.[math]'`."
         )
 

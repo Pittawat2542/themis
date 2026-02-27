@@ -141,7 +141,7 @@ class CostTracker(RuntimeCostTracker):
         self.pricing[model] = (input_cost_per_1m, output_cost_per_1m)
 
     def reset(self) -> None:
-        """Reset both compatibility and runtime tracking state."""
+        """Reset tracking state."""
         super().reset()
         self.records.clear()
 

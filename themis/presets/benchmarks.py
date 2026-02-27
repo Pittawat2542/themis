@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 from themis.generation.templates import PromptTemplate
+from themis.exceptions import ConfigurationError
 from themis.interfaces import Extractor, Metric
 
 
@@ -161,14 +162,14 @@ def get_benchmark_preset(name: str) -> BenchmarkPreset:
         Benchmark preset
 
     Raises:
-        ValueError: If benchmark is not found
+        ConfigurationError: If benchmark is not found
     """
     _ensure_registry_initialized()
 
     name_lower = name.lower()
     if name_lower not in _BENCHMARK_REGISTRY:
         available = ", ".join(sorted(_BENCHMARK_REGISTRY.keys()))
-        raise ValueError(
+        raise ConfigurationError(
             f"Unknown benchmark: {name}. Available benchmarks: {available}"
         )
     return _BENCHMARK_REGISTRY[name_lower]

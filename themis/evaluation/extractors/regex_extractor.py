@@ -38,5 +38,11 @@ class RegexExtractor:
             raise FieldExtractionError("Regex did not match")
         groups = match.groupdict()
         if groups:
-            return {key: value.strip() for key, value in groups.items()}
-        return {str(index): value.strip() for index, value in enumerate(match.groups())}
+            return {
+                key: value.strip() for key, value in groups.items() if value is not None
+            }
+        return {
+            str(index): value.strip()
+            for index, value in enumerate(match.groups())
+            if value is not None
+        }

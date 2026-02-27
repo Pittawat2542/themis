@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from themis.core.entities import ExperimentReport
+from themis.exceptions import ConfigurationError, MetricError
 
 
 @dataclass
@@ -73,7 +74,7 @@ class MultiExperimentComparison:
     def __post_init__(self):
         """Validate comparison data."""
         if not self.experiments:
-            raise ValueError("Must have at least one experiment to compare")
+            raise ConfigurationError("Must have at least one experiment to compare")
         if not self.metrics:
             # Infer metrics from first experiment
             if self.experiments:
@@ -94,7 +95,7 @@ class MultiExperimentComparison:
         """
         # Special handling for cost metrics
         if metric not in self.metrics and metric not in ("cost", "total_cost"):
-            raise ValueError(f"Metric '{metric}' not found. Available: {self.metrics}")
+            raise MetricError(f"Metric '{metric}' not found. Available: {self.metrics}")
 
         # Sort experiments, handling None values
         def key_func(row: ComparisonRow) -> tuple[bool, float]:
@@ -139,13 +140,13 @@ class MultiExperimentComparison:
             List of run_ids on the Pareto frontier
         """
         if not objectives:
-            raise ValueError("Must specify at least one objective")
+            raise ConfigurationError("Must specify at least one objective")
 
         if maximize is None:
             maximize = [True] * len(objectives)
 
         if len(maximize) != len(objectives):
-            raise ValueError(
+            raise ConfigurationError(
                 f"maximize list length ({len(maximize)}) must match "
                 f"objectives length ({len(objectives)})"
             )
@@ -552,7 +553,7 @@ def compare_experiments(
             continue
 
     if not comparison_rows:
-        raise ValueError(
+        raise ConfigurationError(
             f"No valid experiments found for run_ids: {run_ids}. "
             "Make sure experiments have been run and saved with report.json files."
         )

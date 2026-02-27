@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from themis.exceptions import ConfigurationError
+
 
 @dataclass
 class CostBreakdown:
@@ -33,11 +35,11 @@ class CostBreakdown:
     def __post_init__(self):
         """Validate cost breakdown."""
         if self.total_cost < 0:
-            raise ValueError("Total cost cannot be negative")
+            raise ConfigurationError("Total cost cannot be negative")
         if self.generation_cost < 0:
-            raise ValueError("Generation cost cannot be negative")
+            raise ConfigurationError("Generation cost cannot be negative")
         if self.evaluation_cost < 0:
-            raise ValueError("Evaluation cost cannot be negative")
+            raise ConfigurationError("Evaluation cost cannot be negative")
 
 
 @dataclass
@@ -180,9 +182,9 @@ class BudgetMonitor:
             ValueError: If max_cost is negative or alert_threshold is invalid
         """
         if max_cost < 0:
-            raise ValueError("Max cost cannot be negative")
+            raise ConfigurationError("Max cost cannot be negative")
         if not 0.0 <= alert_threshold <= 1.0:
-            raise ValueError("Alert threshold must be between 0.0 and 1.0")
+            raise ConfigurationError("Alert threshold must be between 0.0 and 1.0")
 
         self.max_cost = max_cost
         self.alert_threshold = alert_threshold
