@@ -1,4 +1,4 @@
-"""Integration management for external services (WandB, HuggingFace Hub)."""
+"""Integration management for external services (WandB, HuggingFace Hub, Langfuse)."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ from themis.core.entities import ExperimentReport
 
 
 class IntegrationManager:
-    """Manages external integrations (WandB, HuggingFace Hub).
+    """Manages external integrations (WandB, HuggingFace Hub, Langfuse).
 
     This class handles all integration-related operations including:
     - Initializing integrations based on configuration
-    - Logging experiment results to WandB
+    - Logging experiment results to WandB and Langfuse
     - Uploading results to HuggingFace Hub
     - Finalizing integrations on completion
 
@@ -45,6 +45,14 @@ class IntegrationManager:
         else:
             self._hf_uploader = None
 
+        # Initialize Langfuse tracker if enabled
+        if self._config.langfuse.enable:
+            from themis.integrations.langfuse import LangfuseTracker
+
+            self._langfuse_tracker = LangfuseTracker(self._config.langfuse)
+        else:
+            self._langfuse_tracker = None
+
     @property
     def has_wandb(self) -> bool:
         """Check if WandB integration is enabled."""
@@ -55,6 +63,11 @@ class IntegrationManager:
         """Check if HuggingFace Hub integration is enabled."""
         return self._hf_uploader is not None
 
+    @property
+    def has_langfuse(self) -> bool:
+        """Check if Langfuse integration is enabled."""
+        return self._langfuse_tracker is not None
+
     def initialize_run(self, run_config: dict[str, Any]) -> None:
         """Initialize integrations for a new run.
 
@@ -64,6 +77,8 @@ class IntegrationManager:
         """
         if self._wandb_tracker:
             self._wandb_tracker.init(run_config)
+        if self._langfuse_tracker:
+            self._langfuse_tracker.init(run_config)
 
     def log_results(self, report: ExperimentReport) -> None:
         """Log experiment results to integrations.
@@ -73,6 +88,8 @@ class IntegrationManager:
         """
         if self._wandb_tracker:
             self._wandb_tracker.log_results(report)
+        if self._langfuse_tracker:
+            self._langfuse_tracker.log_results(report)
 
     def log_metrics(self, metrics: dict[str, Any], step: int | None = None) -> None:
         """Log real-time metrics to integrations.
@@ -83,6 +100,8 @@ class IntegrationManager:
         """
         if self._wandb_tracker:
             self._wandb_tracker.log_metrics(metrics, step)
+        if self._langfuse_tracker:
+            self._langfuse_tracker.log_metrics(metrics, step)
 
     def upload_results(
         self,
@@ -106,6 +125,9 @@ class IntegrationManager:
         """
         if self._wandb_tracker:
             self._wandb_tracker.finalize()
+
+        if self._langfuse_tracker:
+            self._langfuse_tracker.finalize()
 
         if self._hf_uploader:
             # HuggingFace uploader is stateless, no finalization needed
