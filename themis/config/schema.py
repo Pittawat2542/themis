@@ -82,9 +82,21 @@ class HuggingFaceHubConfig:
 
 
 @dataclass
+class LangfuseConfig:
+    enable: bool = False
+    public_key: str | None = None
+    secret_key: str | None = None
+    base_url: str | None = None
+    tags: list[str] = field(default_factory=list)
+    trace_name: str | None = None
+    enable_tracing: bool = True
+
+
+@dataclass
 class IntegrationsConfig:
     wandb: WandbConfig = field(default_factory=WandbConfig)
     huggingface_hub: HuggingFaceHubConfig = field(default_factory=HuggingFaceHubConfig)
+    langfuse: LangfuseConfig = field(default_factory=LangfuseConfig)
 
 
 @dataclass
