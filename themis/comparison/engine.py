@@ -1,7 +1,11 @@
-"""Comparison engine for analyzing multiple experiment runs.
+"""Statistical comparison engine for analyzing multiple experiment runs.
 
 This module provides the main ComparisonEngine class that orchestrates
 loading runs, computing statistics, and generating comparison reports.
+It performs rigorous sample-level statistical significance testing (e.g., Bootstrap, T-Test).
+
+Note: For lightweight, high-level aggregated comparisons without statistical
+tests, see the `themis.experiment.comparison` module.
 """
 
 from __future__ import annotations

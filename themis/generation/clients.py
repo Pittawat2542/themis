@@ -139,4 +139,14 @@ class FakeMathModelClient(StatelessTaskExecutor):
 __all__ = ["FakeMathModelClient"]
 
 
+# ==============================================================================
+# Plugin Registration Side-Effects
+# ==============================================================================
+# This module intentionally uses import-time side-effects to register
+# provider implementations into the global provider registry.
+# By importing `themis.generation.clients`, the `register_provider` function
+# is called, making these clients discoverable via string identifiers (e.g., "fake"
+# or via `.eval()` CLI parameters).
+# This pattern allows external packages to register their own providers simply by
+# executing module-level code, without modifying core library internals.
 register_provider("fake", FakeMathModelClient)

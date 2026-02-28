@@ -1,4 +1,20 @@
-"""Interfaces (ports) that external adapters must implement."""
+"""Interfaces (ports) that external adapters must implement.
+
+This module defines the core abstractions of the Themis library. It uses a mix of
+Abstract Base Classes (ABCs) and Protocols depending on the specific integration
+requirements:
+
+1. Abstract Base Classes (ABCs) like `Metric` and `StatelessTaskExecutor` are used
+   when the interface represents a core domain concept where inheritance provides
+   valuable base functionality or strict type hierarchy enforcement is desired.
+   Implementing classes MUST explicitly inherit from the ABC.
+
+2. Protocols like `DatasetAdapter` and `Extractor` are used for structural subtyping
+   (duck typing). They are ideal for lightweight integrations where we want
+   to lower the barrier to entry. Users can supply any object that implements
+   the expected methods (e.g., `iter_samples`), without needing to import
+   or subclass the Themis protocol explicitly. This makes external integrations frictionless.
+"""
 
 from __future__ import annotations
 

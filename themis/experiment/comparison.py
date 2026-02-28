@@ -1,4 +1,12 @@
-"""Multi-experiment comparison tools for analyzing multiple runs."""
+"""Multi-experiment comparison tools for analyzing multiple runs.
+
+This module provides lightweight tools for comparing aggregated outputs
+across multiple experiment runs, such as ranking runs or finding the
+Pareto frontier. It does NOT perform statistical significance testing.
+
+Note: For rigorous, sample-level statistical comparisons and p-values,
+see the `themis.comparison` package (e.g., `themis.comparison.compare_runs`).
+"""
 
 from __future__ import annotations
 
