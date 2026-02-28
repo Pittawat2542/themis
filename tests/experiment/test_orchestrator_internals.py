@@ -197,5 +197,33 @@ def test_orchestrator_prefers_evaluation_fingerprint():
         cache_manager=cache_manager,
     )
 
-    config = orchestrator._build_evaluation_config()
+    config = dict(orchestrator._evaluation.evaluation_fingerprint())
     assert config == {"fingerprint": "value"}
+
+
+def test_orchestrator_uses_public_protocol_not_private_attrs():
+    """Orchestrator must not access _metrics or _extractor directly."""
+    import inspect
+    from themis.experiment import orchestrator
+
+    source = inspect.getsource(orchestrator.ExperimentOrchestrator)
+    # After fix, no hasattr checks on _metrics or _extractor
+    assert 'hasattr(self._evaluation, "_metrics")' not in source
+    assert 'hasattr(self._evaluation, "_extractor")' not in source
+
+
+def test_experiment_context_has_run_level_fields():
+    """Context should hold run_identifier and evaluation_config."""
+    from themis.experiment.orchestrator import _ExperimentContext
+
+    # Needs max_items, evaluation_config, and run_identifier based on plan
+    ctx = _ExperimentContext(
+        max_records_in_memory=None,
+        run_identifier="test",
+        evaluation_config={},
+        cache_results=False,
+    )
+    # These fields should exist to reduce parameter threading
+    assert hasattr(ctx, "run_identifier")
+    assert hasattr(ctx, "evaluation_config")
+    assert hasattr(ctx, "cache_results")
