@@ -5,19 +5,19 @@ Themis supports pluggable execution and storage backends.
 ## Storage
 
 - `themis.backends.storage.StorageBackend`
-- `themis.backends.storage.LocalFileStorageBackend`
+- `themis.backends.storage.ExperimentStorage`
 - `themis.storage.ExperimentStorage`
 
 Example with `evaluate()`:
 
 ```python
 from themis import evaluate
-from themis.backends.storage import LocalFileStorageBackend
+from themis.storage import ExperimentStorage
 
 report = evaluate(
     "demo",
     model="fake-math-llm",
-    storage_backend=LocalFileStorageBackend(".cache/experiments"),
+    storage_backend=ExperimentStorage(".cache/experiments"),
 )
 ```
 

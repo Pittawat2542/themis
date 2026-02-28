@@ -1195,7 +1195,7 @@ Assume Part 1 definitions are available:
 ```python
 import themis
 from themis.backends.execution import LocalExecutionBackend
-from themis.backends.storage import LocalFileStorageBackend
+from themis.storage import ExperimentStorage
 from themis.evaluation.extractors import IdentityExtractor
 from themis.evaluation.pipeline import EvaluationPipeline
 
@@ -1205,7 +1205,7 @@ dataset = load_countdown_for_themis(limit=30, split="train")
 pipeline = EvaluationPipeline(extractor=IdentityExtractor(), metrics=[CountdownValidity()])
 
 execution_backend = LocalExecutionBackend(max_workers=2)
-storage_backend = LocalFileStorageBackend(".cache/experiments")
+storage_backend = ExperimentStorage(".cache/experiments")
 
 report = themis.evaluate(
     dataset,

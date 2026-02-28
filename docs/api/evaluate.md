@@ -105,7 +105,7 @@ Storage location for runs and cache. Defaults to `.cache/experiments`.
 **`storage_backend`** : `object | None = None`
 
 Optional storage backend instance (typically `ExperimentStorage` or
-`LocalFileStorageBackend`) used by `evaluate()` through `StorageSpec`.
+`ExperimentStorage`) used by `evaluate()` through `StorageSpec`.
 
 **`execution_backend`** : `object | None = None`
 
@@ -184,12 +184,12 @@ report = evaluate(
 ```python
 from themis import evaluate
 from themis.backends.execution import LocalExecutionBackend
-from themis.backends.storage import LocalFileStorageBackend
+from themis.storage import ExperimentStorage
 
 report = evaluate(
     "math500",
     model="gpt-4",
-    storage_backend=LocalFileStorageBackend(".cache/experiments"),
+    storage_backend=ExperimentStorage(".cache/experiments"),
     execution_backend=LocalExecutionBackend(max_workers=8),
 )
 ```

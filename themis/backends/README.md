@@ -28,12 +28,12 @@ result = evaluate(
 
 ```python
 from themis import evaluate
-from themis.backends.storage import LocalFileStorageBackend
+from themis.storage import ExperimentStorage
 
 result = evaluate(
     "demo",
     model="gpt-4",
-    storage_backend=LocalFileStorageBackend(".cache/experiments"),
+    storage_backend=ExperimentStorage(".cache/experiments"),
 )
 ```
 
@@ -61,7 +61,7 @@ result = evaluate(
 
 ### Storage Backends
 
-- **`LocalFileStorageBackend`** (default): File-based storage with SQLite metadata
+- **`ExperimentStorage`** (default): File-based storage with SQLite metadata
   - Fast, reliable, no dependencies
   - Good for: Individual research, local experiments
 

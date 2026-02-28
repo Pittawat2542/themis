@@ -4,7 +4,7 @@ from pathlib import Path
 
 import themis
 from themis.backends.execution import LocalExecutionBackend
-from themis.backends.storage import LocalFileStorageBackend
+from themis.storage import ExperimentStorage
 from themis.experiment import export as export_utils
 
 from common import (
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     register_countdown_extensions()
 
     execution_backend = LocalExecutionBackend(max_workers=2)
-    storage_backend = LocalFileStorageBackend(DEFAULT_STORAGE)
+    storage_backend = ExperimentStorage(DEFAULT_STORAGE)
 
     try:
         report = themis.evaluate(

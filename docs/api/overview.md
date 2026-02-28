@@ -45,7 +45,7 @@ Evaluation metrics for different domains.
 
 Pluggable backend interfaces.
 
-- **Storage**: `StorageBackend`, `LocalFileStorageBackend`
+- **Storage**: `StorageBackend`, `ExperimentStorage`
 - **Execution**: `ExecutionBackend`, `LocalExecutionBackend`, `SequentialExecutionBackend`
 
 ## Package Structure

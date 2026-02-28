@@ -82,7 +82,7 @@ You are still using `evaluate()` to orchestrate the run, but replacing the infra
 
 ```python
 from themis import evaluate
-from themis.backends.storage import LocalFileStorageBackend
+from themis.storage import ExperimentStorage
 from my_infrastructure import RayExecutionBackend, S3StorageBackend
 
 report = evaluate(
