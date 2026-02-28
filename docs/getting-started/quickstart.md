@@ -1,39 +1,50 @@
 # Quick Start
 
-## 1) Run Your First Evaluation (No API key)
+## 1) Run Your First Evaluation (No API key required)
+
+Use our built-in `fake` model provider with the `demo` benchmark to ensure everything is installed correctly:
 
 ```python
 from themis import evaluate
 
-report = evaluate("demo", model="fake-math-llm", limit=10)
-exact_match = report.evaluation_report.metrics["ExactMatch"].mean
-print(f"ExactMatch: {exact_match:.2%}")
+report = evaluate("demo", model="fake:fake-math-llm", limit=10)
+exact_match = report.evaluation_report.metrics["ExactMatch"]
+print(f"ExactMatch: {exact_match.mean:.2%} (n={exact_match.count})")
 ```
 
 ## 2) Run a Hosted Benchmark
 
+Evaluating real models requires the corresponding provider's API key (e.g., `OPENAI_API_KEY`). By default, Themis uses [LiteLLM](https://github.com/BerriAI/litellm) for robust multi-provider routing.
+
 ```python
+import os
 from themis import evaluate
 
-report = evaluate("gsm8k", model="gpt-4", limit=10)
+os.environ["OPENAI_API_KEY"] = "sk-..."
+
+# Run the GSM8K math benchmark with GPT-4
+report = evaluate("gsm8k", model="openai/gpt-4o", limit=10)
 accuracy = report.evaluation_report.metrics["ExactMatch"].mean
 print(f"Accuracy: {accuracy:.2%}")
 ```
 
 ## 3) Use the Full `evaluate()` API
 
+You can customize almost everything directly through `themis.evaluate()`:
+
 ```python
 from themis import evaluate
 
 report = evaluate(
     "demo",
-    model="fake-math-llm",
+    model="fake:fake-math-llm",
     limit=5,
     temperature=0.0,
     max_tokens=128,
+    max_retries=5,
     workers=2,
     run_id="my-run",
-    storage_path=".cache/experiments",
+    storage=".cache/experiments", # specify save location
 )
 ```
 

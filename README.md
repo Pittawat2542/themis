@@ -10,19 +10,19 @@
 
 Themis gives you two clean entry points:
 
-- `themis.evaluate(...)` for quick benchmark and dataset evaluation.
-- `ExperimentSession().run(spec, ...)` for explicit, versioned workflows.
+- `themis.evaluate(...)` for quick benchmark and custom dataset evaluation.
+- `ExperimentSession().run(...)` for explicit, step-by-step evaluation pipelines.
 
-It includes built-in benchmarks, metric pipelines, caching/resume, comparison utilities, and a web server for run inspection.
+It includes built-in benchmarks, auto-configured metric pipelines, caching and resumability, statistical comparison utilities, and a web server for run inspection.
 
 ## Why Themis
 
 - **Fast start**: run your first evaluation in a few lines.
-- **Structured control**: spec/session API for reproducible workflows.
-- **Built-in presets**: curated benchmark definitions with prompt + metrics + extractors.
-- **Extensible**: register datasets, metrics, providers, and benchmark presets.
-- **Practical storage**: local cache, resumable runs, robust storage backend.
-- **Production-minded CI/CD**: strict docs build, package validation, release automation.
+- **Structured control**: `ExperimentSession` API for reproducible workflows.
+- **Built-in presets**: Curated benchmark definitions with prompts, metrics, and extractors included.
+- **Extensible**: Register your own datasets, custom metrics, LLM providers, and benchmark presets.
+- **Practical storage**: Local cache, resumable runs, and a robust storage backend.
+- **Production-minded CI/CD**: Strict docs build, package validation, and release automation.
 
 ## Installation
 
@@ -34,36 +34,43 @@ uv add themis-eval
 uv add "themis-eval[math,nlp,code,server]"
 ```
 
-## Quick Start (No API key)
+## Quick Start (No API key required)
 
-Use the built-in fake model with the demo preset:
+Use our built-in `fake` model provider with the `demo` benchmark to ensure everything is installed correctly:
 
 ```python
 from themis import evaluate
 
 report = evaluate(
     "demo",
-    model="fake-math-llm",
+    model="fake:fake-math-llm", # Uses the built-in fake provider
     limit=10,
 )
 
-metric = report.evaluation_report.metrics["ExactMatch"]
-print(f"ExactMatch: {metric.mean:.2%}")
+exact_match = report.evaluation_report.metrics["ExactMatch"]
+print(f"ExactMatch: {exact_match.mean:.2%} (n={exact_match.count})")
 ```
 
-## Quick Start (Real model)
+## Quick Start (Real models)
+
+Evaluating real models requires the corresponding provider's API key (e.g., `OPENAI_API_KEY`). By default, Themis uses [LiteLLM](https://github.com/BerriAI/litellm) for robust multi-provider routing.
 
 ```python
+import os
 from themis import evaluate
 
+os.environ["OPENAI_API_KEY"] = "sk-..."
+
+# Run the GSM8K math benchmark with GPT-4
 report = evaluate(
     "gsm8k",
-    model="gpt-4",
+    model="openai/gpt-4o", # Model string parsed by LiteLLM
     limit=100,
-    metrics=["exact_match", "math_verify"],
 )
 
-print(report.evaluation_report.metrics["ExactMatch"].mean)
+# Extract and print the aggregated metric score
+accuracy = report.evaluation_report.metrics["ExactMatch"].mean
+print(f"Accuracy: {accuracy:.2%}")
 ```
 
 ## CLI Workflow
@@ -88,9 +95,9 @@ themis list runs --storage .cache/experiments
 themis list metrics
 ```
 
-## Spec + Session API (v1 workflow)
+## Session API (Advanced Workflow)
 
-Use this when you want explicit control over dataset, pipeline, execution, and storage specs.
+Use the `ExperimentSession` API when you want explicit programmatic control over the dataset, metric pipeline, execution parallelization, and storage backend.
 
 ```python
 from themis.evaluation.metric_pipeline import MetricPipeline
@@ -98,18 +105,21 @@ from themis.presets import get_benchmark_preset
 from themis.session import ExperimentSession
 from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
 
+# 1. Load the benchmark preset
 preset = get_benchmark_preset("gsm8k")
 pipeline = MetricPipeline(extractor=preset.extractor, metrics=preset.metrics)
 
+# 2. Define the explicit specification
 spec = ExperimentSpec(
     dataset=preset.load_dataset(limit=100),
     prompt=preset.prompt_template.template,
-    model="litellm:gpt-4",
+    model="litellm:gpt-4o",
     sampling={"temperature": 0.0, "max_tokens": 512},
     pipeline=pipeline,
-    run_id="gsm8k-gpt4",
+    run_id="gsm8k-gpt4o-eval",
 )
 
+# 3. Run the session with explicit execution and storage configurations
 report = ExperimentSession().run(
     spec,
     execution=ExecutionSpec(workers=8),

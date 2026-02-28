@@ -1,402 +1,142 @@
 # Themis Cookbook - Quick Reference
 
-This is a quick reference guide to the Themis examples cookbook. For detailed tutorials, see [`examples/README.md`](examples/README.md).
+This is a quick reference guide to the Themis examples cookbook. For detailed runnable code, see the `examples/` directory.
 
 ## 🎯 Which Example Should I Start With?
 
 | Your Goal | Start Here | Time |
 |-----------|------------|------|
-| I'm completely new to Themis | [getting_started](examples/getting_started/) | 15 min |
-| I want to run systematic experiments | [config_file](examples/config_file/) | 20 min |
-| I want to master prompt engineering | [prompt_engineering](examples/prompt_engineering/) | 25 min |
-| I'm managing multiple experiments | [projects](examples/projects/) | 45 min |
-| I need custom behavior | [advanced](examples/advanced/) | 60 min |
+| I'm completely new to Themis | [`examples/01_quickstart.py`](examples/01_quickstart.py) | 5 min |
+| I want to evaluate a custom dataset inline | [`examples/02_custom_dataset.py`](examples/02_custom_dataset.py) | 5 min |
+| I want to scale up execution (workers/retries) | [`examples/03_distributed.py`](examples/03_distributed.py) | 10 min |
+| I want to compare two models statistically | [`examples/04_comparison.py`](examples/04_comparison.py) | 15 min |
+| I want to interact with Themis via a REST/WebSocket API | [`examples/05_api_server.py`](examples/05_api_server.py) | 15 min |
+| I want to write a custom evaluation metric | [`examples/06_custom_metrics.py`](examples/06_custom_metrics.py) | 15 min |
+| I want to run a complex, multi-stage R&D pipeline | [`examples/countdown/`](examples/countdown/) | 60 min |
 
-## 🚀 Quick Start Commands
 
-### Run Your First Experiment
-```bash
-# Preview what will run
-uv run python -m examples.getting_started.cli run --dry-run
+## 🚀 Quick Recipes
 
-# Run it
-uv run python -m examples.getting_started.cli run
+These recipes highlight common `themis.evaluate()` patterns.
 
-# Export results
-uv run python -m examples.getting_started.cli run --csv-output results.csv
+### 1. Basic Generation with a Hosted API
+
+Themis uses [LiteLLM](https://github.com/BerriAI/litellm) under the hood. You can pass API keys via the environment or directly via `**kwargs`.
+
+```python
+import os
+import themis
+
+# Set your API key
+os.environ["OPENAI_API_KEY"] = "sk-..."
+
+report = themis.evaluate(
+    "gsm8k",                 # Built-in benchmark preset
+    model="openai/gpt-4o",   # LiteLLM provider string
+    limit=50,                # Only evaluate the first 50 samples
+    temperature=0.0,         # Greedy decoding
+)
+
+print(f"Accuracy: {report.evaluation_report.metrics['ExactMatch'].mean:.2%}")
 ```
 
-### Use Configuration Files
-```bash
-# Run with a config
-uv run python -m examples.config_file.cli run --config-path examples/config_file/config.sample.json
+### 2. Evaluating a Custom Dataset
 
-# Override settings from CLI
-uv run python -m examples.config_file.cli run \
-  --config-path examples/config_file/config.sample.json \
-  --run-id my-experiment \
-  --resume false
+You don't need a built-in benchmark to use Themis. You can pass a list of dictionaries directly.
+
+```python
+import themis
+
+my_dataset = [
+    {"question": "What is the capital of France?", "expected_answer": "Paris"},
+    {"question": "Who wrote Hamlet?", "expected_answer": "William Shakespeare"},
+]
+
+report = themis.evaluate(
+    dataset=my_dataset,
+    model="anthropic/claude-3-5-sonnet-20241022",
+    prompt="Answer the following question concisely: {question}",
+    reference_field="expected_answer", # Tell Themis where the answer is
+    metrics=["exact_match"],           # Use the built-in exact match metric
+)
 ```
 
-### Master Prompt Engineering
-```bash
-# Run prompt engineering experiment
-uv run python -m examples.prompt_engineering.cli run
+### 3. Distributed Execution & Rate Limit Resilience
 
-# Run with analysis
-uv run python -m examples.prompt_engineering.cli run --analyze
+When evaluating against public APIs, you often hit rate limits. Themis has native, multi-threaded retry logic.
 
-# Export results for analysis
-uv run python -m examples.prompt_engineering.cli run \
-  --csv-output results.csv \
-  --html-output results.html
+```python
+import themis
+
+report = themis.evaluate(
+    "math500",
+    model="ollama/llama3",
+    workers=16,          # Number of concurrent Generation requests
+    max_retries=5,       # How many times to retry a failed generation (e.g. HTTP 429)
+    timeout=60,          # LiteLLM kwargs are passed through directly
+)
 ```
 
-## 📚 Example Overview
+> **Note**: If a generation fails `max_retries` times, Themis does not crash the entire run. It records a generation error for that specific item, returns an empty string, and metrics like `ExactMatch` will score it as `0.0`.
 
-### 1. Getting Started
-**Location:** `examples/getting_started/`
+### 4. Resuming from a Cache
 
-**What you'll learn:**
-- How to define prompt templates
-- How to configure models and sampling parameters
-- How to run experiments programmatically or via CLI
-- How to view and export results
+Evaluations can be expensive and time-consuming. You can cache and resume them seamlessly using a specific `run_id`.
 
-**Key files:**
-- `README.md` - Comprehensive tutorial
-- `config.sample.json` - Basic configuration
-- `experiment.py` - Programmatic example
+```python
+import themis
 
-### 2. Config File
-**Location:** `examples/config_file/`
+# Run 1: Imagine this crashes or you stop it halfway through
+report_partial = themis.evaluate(
+    "demo",
+    model="fake:fake-math-llm",
+    run_id="my-expensive-run",     # Unique ID for caching
+    storage=".cache/experiments",  # Local storage directory
+    resume=True,                   # Enable caching/resumption
+)
 
-**What you'll learn:**
-- How to structure configuration files
-- How to run grid searches (multiple models × samplings)
-- How to use CLI overrides
-- How to leverage resumability and caching
-
-**Key files:**
-- `README.md` - Configuration guide
-- `compare_sampling.json` - Temperature comparison
-- `compare_models.json` - Model comparison
-- `grid_search.json` - Full grid search example
-
-### 3. Prompt Engineering
-**Location:** `examples/prompt_engineering/`
-
-**What you'll learn:**
-- How to systematically compare different prompting strategies
-- Zero-shot vs few-shot vs chain-of-thought prompting
-- How to analyze prompt effectiveness across models
-- How to export and analyze results
-
-**Key files:**
-- `README.md` - Comprehensive prompt engineering guide
-- `USAGE.md` - Detailed usage examples
-- `config.sample.json` - Example configuration
-- `prompts.py` - Prompt template definitions
-- `results_analysis.py` - Analysis utilities
-
-**Key concepts:**
-- Prompt variations and strategy comparison
-- Built-in metrics for evaluation
-- Export to CSV, JSON, HTML formats
-- Systematic experimentation workflows
-
-### 4. Projects
-**Location:** `examples/projects/`
-
-**What you'll learn:**
-- How to organize multiple experiments in a project
-- How to share configurations across experiments
-- How to run experiments selectively
-- How to maintain reproducible research workflows
-
-**Key concepts:**
-- Project structure and metadata
-- Experiment definitions and tags
-- Systematic evaluation campaigns
-
-### 5. Advanced
-**Location:** `examples/advanced/`
-
-**What you'll learn:**
-- How to override generation loops with custom runners
-- How to create custom evaluation pipelines
-- How to implement domain-specific metrics
-- How to build agentic workflows with multi-step generation
-- How to add instrumentation and debugging
-
-**Advanced topics:**
-- Custom generation runners (prioritized, batched)
-- Subject-aware evaluation pipelines
-- Instrumented provider routers
-- Agentic workflows (plan → execute → verify)
-- Custom metrics with partial credit
-
-## 🔧 Common Configuration Patterns
-
-### Single Model, Single Sampling
-```json
-{
-  "run_id": "simple-test",
-  "storage_dir": ".cache/simple-test",
-  "resume": true,
-  "models": [
-    {"name": "my-model", "provider": "fake"}
-  ],
-  "samplings": [
-    {"name": "greedy", "temperature": 0.0, "max_tokens": 512}
-  ],
-  "datasets": [
-    {"name": "demo", "kind": "demo", "limit": 10}
-  ]
-}
+# Run 2: Running the exact same code will instantly load all completed
+# generations from disk and only execute the missing ones.
+report_completed = themis.evaluate(
+    "demo",
+    model="fake:fake-math-llm",
+    run_id="my-expensive-run",
+    storage=".cache/experiments",
+    resume=True,
+)
 ```
 
-### Grid Search (2 Models × 3 Temperatures)
-```json
-{
-  "run_id": "grid-search",
-  "storage_dir": ".cache/grid-search",
-  "resume": true,
-  "models": [
-    {"name": "model-a", "provider": "fake"},
-    {"name": "model-b", "provider": "fake"}
-  ],
-  "samplings": [
-    {"name": "greedy", "temperature": 0.0, "max_tokens": 512},
-    {"name": "balanced", "temperature": 0.7, "max_tokens": 512},
-    {"name": "creative", "temperature": 1.0, "max_tokens": 512}
-  ],
-  "datasets": [
-    {"name": "demo", "kind": "demo", "limit": 20}
-  ]
-}
-```
+### 5. Running the API Web Server
 
-### OpenAI-Compatible Endpoint
-```json
-{
-  "run_id": "openai-test",
-  "storage_dir": ".cache/openai-test",
-  "resume": true,
-  "models": [
-    {
-      "name": "local-llm",
-      "provider": "openai-compatible",
-      "provider_options": {
-        "base_url": "http://localhost:1234/v1",
-        "api_key": "not-needed",
-        "model_mapping": {
-          "local-llm": "qwen2.5-7b-instruct"
-        },
-        "timeout": 60,
-        "n_parallel": 2
-      }
-    }
-  ],
-  "samplings": [
-    {"name": "standard", "temperature": 0.7, "max_tokens": 512}
-  ],
-  "datasets": [
-    {"name": "math500", "kind": "math500_hf", "limit": 50}
-  ]
-}
-```
-
-### Integrations
-
-Enable Weights & Biases and Hugging Face Hub integrations:
-
-```json
-{
-  "run_id": "integrated-experiment",
-  "storage_dir": ".cache/integrated-experiment",
-  "resume": true,
-  "models": [
-    {"name": "my-model", "provider": "fake"}
-  ],
-  "samplings": [
-    {"name": "greedy", "temperature": 0.0, "max_tokens": 512}
-  ],
-  "datasets": [
-    {"name": "demo", "kind": "demo", "limit": 10}
-  ],
-  "integrations": {
-    "wandb": {
-      "enable": true,
-      "project": "themis-experiments",
-      "entity": "your-wandb-entity",
-      "tags": ["smoke-test", "demo"]
-    },
-    "huggingface_hub": {
-      "enable": true,
-      "repository": "your-hf-username/themis-results"
-    }
-  }
-}
-```
-
-## 🛠️ Common Tasks
-
-### Creating a New Project
-
-Scaffold a new Themis project with a basic structure:
+Themis ships with a built-in FastAPI server that provides a REST UI and WebSocket streaming for evaluations.
 
 ```bash
-uv run python -m themis.cli new-project --project-name my-themis-project
+uv run themis serve --storage .cache/experiments --port 8000
 ```
-
-This command creates a directory `my-themis-project` containing:
-- `config.sample.json`: A basic experiment configuration.
-- `cli.py`: A simple CLI to run experiments defined in `config.sample.json`.
-- `README.md`: Project-specific instructions.
-
-After creation, navigate into the new project directory and customize `config.sample.json`.
-
-### Preview Configuration (Dry Run)
-```bash
-uv run python -m examples.getting_started.cli run --dry-run
-```
-
-### Run with Custom Storage
-```bash
-uv run python -m examples.getting_started.cli run \
-  --storage-dir .cache/my-experiment \
-  --run-id experiment-2024-01-15
-```
-
-### Export Results
-```bash
-uv run python -m examples.getting_started.cli run \
-  --csv-output results.csv \
-  --html-output results.html \
-  --json-output results.json
-```
-
-### Limit Dataset Size (Quick Testing)
-```bash
-# Use "limit" in config.json datasets section
-uv run python -m examples.getting_started.cli run \
-  --config-path config.sample.json
-
-# Or modify config to add:
-# "datasets": [{"name": "demo", "kind": "demo", "limit": 5}]
-```
-
-### Disable Resume (Force Re-run)
-```bash
-uv run python -m examples.getting_started.cli run --resume false
-```
+Open `http://localhost:8000` in your browser to view historic runs and trigger new ones.
 
 ## 🐛 Troubleshooting
 
-### "Module not found" errors
+### "No module named X"
+Always run your scripts within the `uv` environment:
 ```bash
-# Always run from the project root
-cd /path/to/themis
-uv run python -m examples.getting_started.cli run
+uv run python my_script.py
 ```
 
-### "Connection refused" (OpenAI compatible)
-```bash
-# Verify server is running
-curl http://localhost:1234/v1/models
-
-# Check port in config matches your server
-# Try 127.0.0.1 instead of localhost
+### Rate Limits or Connection Timeouts
+Reduce your worker count or increase your retries.
+```python
+themis.evaluate(..., workers=2, max_retries=10)
 ```
 
-### Results not updating
-```bash
-# Check if resume is enabled and using cached results
-# Solution 1: Disable resume
-uv run python -m examples.getting_started.cli run --resume false
+### Results not updating when I change the prompt/code
+Themis caching (`resume=True`) uses the `run_id`. If you change your prompt or code, you must either:
+1. Change the `run_id`.
+2. Delete the `.cache/experiments/{run_id}` folder.
+3. Pass `resume=False` to force a complete re-run.
 
-# Solution 2: Use a new run ID
-uv run python -m examples.getting_started.cli run --run-id new-run-1
+## 📚 Advanced Learning Path
 
-# Solution 3: Clear cache
-rm -rf .cache/your-storage-dir
-```
+Once you are comfortable with `themis.evaluate()`, check out the [`countdown/`](examples/countdown/) directory.
 
-### Slow performance
-```bash
-# 1. Reduce parallelism in provider_options
-"n_parallel": 1  # in config.json
-
-# 2. Use limit for quick testing
-"limit": 5  # in datasets section
-
-# 3. Use fake provider for testing
-"provider": "fake"  # in config.json
-```
-
-### Invalid configuration
-```bash
-# Validate JSON syntax
-python -m json.tool your_config.json
-
-# Check for:
-# - Trailing commas
-# - Missing quotes
-# - Incorrect brackets
-```
-
-## 📖 Learning Path
-
-1. **Start with `getting_started`** (15 min)
-   - Run the example
-   - Read the README
-   - Modify the config
-
-2. **Try `config_file`** (20 min)
-   - Use configuration files
-   - Run grid searches
-   - Learn about resumability
-
-3. **Master prompt engineering with `prompt_engineering`** (25 min)
-   - Compare zero-shot vs few-shot vs chain-of-thought
-   - Analyze prompt effectiveness across models
-   - Export results for analysis
-
-4. **Organize with `projects`** (45 min)
-   - Create a project structure
-   - Define multiple experiments
-   - Run experiments selectively
-
-5. **Customize with `advanced`** (60 min)
-   - Override generation loops
-   - Create custom metrics
-   - Build agentic workflows
-
-## 🎓 Best Practices
-
-1. **Always use resumability**: Set `"resume": true` in configs
-2. **Start small**: Use `"limit": 5` for quick testing
-3. **Use descriptive IDs**: `run_id: "2024-01-15-temperature-sweep"`
-4. **Separate storage**: Different `storage_dir` per experiment
-5. **Export results**: Always use `--csv-output` for analysis
-6. **Version control configs**: Commit configurations to git
-7. **Dry run first**: Use `--dry-run` to preview
-8. **Document experiments**: Add descriptions to Project metadata
-
-## 📚 Additional Resources
-
-- **Full tutorials**: [`examples/README.md`](examples/README.md)
-- **API documentation**: [`docs/ADDING_COMPONENTS.md`](docs/ADDING_COMPONENTS.md)
-- **Architecture**: [`docs/DIAGRAM.md`](docs/DIAGRAM.md)
-- **Configuration**: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
-- **More examples**: [`docs/EXAMPLES.md`](docs/EXAMPLES.md)
-
-## 🤝 Getting Help
-
-1. Read the example README for detailed explanations
-2. Check error messages - they're usually helpful
-3. Search issues in the repository
-4. Create a new issue with your question
-
-Happy experimenting! 🚀
+It is a dense, multi-part internal tutorial showcasing advanced R&D pipelines, SLURM orchestration, dataset synthesis, and reproducibility gates using the programmatic `ExperimentSession` API.

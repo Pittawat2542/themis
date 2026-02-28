@@ -58,7 +58,7 @@ dataset = [
 
 report = evaluate(
     dataset,
-    model="fake:fake-math-llm",
+    model="fake:fake-math-llm", # Use the built-in fake provider for custom data
     prompt="Q: {question}\nA:",
     metrics=["exact_match", "response_length"],
     reference_field="gold_label",
