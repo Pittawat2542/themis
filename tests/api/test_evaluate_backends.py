@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from themis.api import evaluate
 from themis.backends.execution import ExecutionBackend
-from themis.backends.storage import LocalFileStorageBackend
+from themis.storage import ExperimentStorage
 
 
 class RecordingBackend(ExecutionBackend):
@@ -41,7 +41,7 @@ def test_evaluate_uses_execution_backend(tmp_path):
 
 
 def test_evaluate_with_local_storage_backend(tmp_path):
-    storage_backend = LocalFileStorageBackend(tmp_path)
+    storage_backend = ExperimentStorage(tmp_path)
     dataset = [{"id": "1", "question": "2+2", "answer": "4"}]
 
     evaluate(
