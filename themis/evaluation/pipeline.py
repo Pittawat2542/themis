@@ -57,6 +57,10 @@ class EvaluationPipelineContract(Protocol):
     def evaluation_fingerprint(self) -> dict:  # pragma: no cover - protocol
         ...
 
+    @property
+    def metric_names(self) -> list[str]:  # pragma: no cover - protocol
+        ...
+
 
 __all__ = [
     "EvaluationPipeline",

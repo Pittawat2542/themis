@@ -164,6 +164,11 @@ class EvaluationPipeline:
                 stacklevel=2,
             )
 
+    @property
+    def metric_names(self) -> list[str]:
+        """Return the names of metrics in this pipeline."""
+        return [m.name for m in self._metrics]
+
     def evaluate(
         self, records: Sequence[core_entities.GenerationRecord]
     ) -> EvaluationReport:

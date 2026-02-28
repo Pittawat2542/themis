@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from themis.exceptions import ProviderError
 from themis.interfaces import StatelessTaskExecutor
+from themis.presets import parse_model_name
+from themis.providers.options import normalize_provider_options
 
 ProviderFactory = Callable[..., StatelessTaskExecutor]
 
@@ -99,9 +101,21 @@ def _reset_for_testing() -> None:
     _REGISTRY._reset_for_testing()
 
 
+def parse_model(model: str, **provider_options: Any) -> tuple[str, str, dict[str, Any]]:
+    """Parse model string into provider, model_id, and options."""
+    options = normalize_provider_options(provider_options)
+    if ":" in model:
+        provider_name, model_id = model.split(":", 1)
+        return provider_name, model_id, options
+
+    parsed_provider, model_id, parsed_options = parse_model_name(model, **options)
+    return parsed_provider, model_id, normalize_provider_options(parsed_options)
+
+
 __all__ = [
     "register_provider",
     "create_provider",
     "list_providers",
+    "parse_model",
     "ProviderFactory",
 ]

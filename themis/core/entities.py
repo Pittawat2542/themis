@@ -18,6 +18,20 @@ class SamplingConfig:
     top_p: float = 0.95
     max_tokens: int = 512
 
+    @classmethod
+    def from_params(
+        cls,
+        temperature: float = 0.0,
+        top_p: float = 0.95,
+        max_tokens: int = 2048,
+    ) -> SamplingConfig:
+        """Build SamplingConfig from individual parameters."""
+        return cls(
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+        )
+
 
 @dataclass(frozen=True)
 class ModelSpec:

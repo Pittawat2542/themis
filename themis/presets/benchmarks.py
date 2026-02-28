@@ -186,292 +186,270 @@ def list_benchmarks() -> list[str]:
 
 
 # ============================================================================
+# Generic Benchmark Factories
+# ============================================================================
+
+
+def _create_math_preset(
+    name: str,
+    dataset_name: str,
+    prompt_template_str: str,
+    description: str,
+    dataset_kwargs: dict[str, Any] | None = None,
+    metadata_fields: tuple[str, ...] = ("subject", "level"),
+) -> BenchmarkPreset:
+    """Create a generic math benchmark preset."""
+    from themis.datasets.competition_math import load_competition_math
+    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
+    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
+
+    kwargs = dataset_kwargs or {}
+
+    def load_dataset(limit: int | None = None) -> Sequence[dict[str, Any]]:
+        # Some loaders like gsm8k have specific loader functions, but for
+        # generic competition math we use load_competition_math. We handle
+        # specific hardcoded loaders below via dataset_name mapping if needed,
+        # otherwise default to load_competition_math.
+        if dataset_name == "math500":
+            from themis.datasets.math500 import load_math500
+
+            samples = load_math500(limit=limit, **kwargs)
+        elif dataset_name == "gsm8k":
+            from themis.datasets.gsm8k import load_gsm8k
+
+            samples = load_gsm8k(limit=limit, **kwargs)
+        elif dataset_name == "gsm-symbolic":
+            from themis.datasets.gsm_symbolic import load_gsm_symbolic
+
+            samples = load_gsm_symbolic(limit=limit, **kwargs)
+        else:
+            samples = load_competition_math(
+                dataset=dataset_name,
+                limit=limit,
+                **kwargs,
+            )
+        return _to_dict_samples(samples)
+
+    prompt_template = PromptTemplate(
+        name=f"{name}-zero-shot",
+        template=prompt_template_str,
+    )
+
+    return BenchmarkPreset(
+        name=name,
+        prompt_template=prompt_template,
+        metrics=[MathVerifyAccuracy()],
+        extractor=MathVerifyExtractor(),
+        dataset_loader=load_dataset,
+        metadata_fields=metadata_fields,
+        reference_field="answer" if name != "math500" else "solution",
+        dataset_id_field="unique_id",
+        description=description,
+    )
+
+
+def _create_mcq_preset(
+    name: str,
+    dataset_name: str,
+    prompt_template_str: str,
+    description: str,
+    dataset_kwargs: dict[str, Any] | None = None,
+    metadata_fields: tuple[str, ...] = ("subject",),
+    reference_field: str = "answer",
+) -> BenchmarkPreset:
+    """Create a generic MCQ benchmark preset."""
+    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
+    from themis.evaluation.metrics.exact_match import ExactMatch
+
+    kwargs = dataset_kwargs or {}
+
+    def load_dataset(limit: int | None = None) -> Sequence[dict[str, Any]]:
+        if dataset_name == "mmlu-pro":
+            from themis.datasets.mmlu_pro import load_mmlu_pro
+
+            samples = load_mmlu_pro(limit=limit, **kwargs)
+        elif dataset_name == "super_gpqa":
+            from themis.datasets.super_gpqa import load_super_gpqa
+
+            samples = load_super_gpqa(limit=limit, **kwargs)
+        elif dataset_name == "gpqa":
+            from themis.datasets.gpqa import load_gpqa
+
+            samples = load_gpqa(limit=limit, **kwargs)
+        elif dataset_name == "medmcqa":
+            from themis.datasets.medmcqa import load_medmcqa
+
+            samples = load_medmcqa(limit=limit, **kwargs)
+        elif dataset_name == "med_qa":
+            from themis.datasets.med_qa import load_med_qa
+
+            samples = load_med_qa(limit=limit, **kwargs)
+        elif dataset_name == "sciq":
+            from themis.datasets.sciq import load_sciq
+
+            samples = load_sciq(limit=limit, **kwargs)
+        elif dataset_name == "commonsense_qa":
+            from themis.datasets.commonsense_qa import load_commonsense_qa
+
+            samples = load_commonsense_qa(limit=limit, **kwargs)
+        elif dataset_name == "piqa":
+            from themis.datasets.piqa import load_piqa
+
+            samples = load_piqa(limit=limit, **kwargs)
+        elif dataset_name == "social_i_qa":
+            from themis.datasets.social_i_qa import load_social_i_qa
+
+            samples = load_social_i_qa(limit=limit, **kwargs)
+        elif dataset_name == "coqa":
+            from themis.datasets.coqa import load_coqa
+
+            samples = load_coqa(limit=limit, **kwargs)
+            return _to_dict_samples(samples)  # CoQA doesn't need _normalize_mcq_samples
+        else:
+            raise ConfigurationError(f"Unsupported MCQ dataset loader: {dataset_name}")
+
+        return _normalize_mcq_samples(_to_dict_samples(samples))
+
+    prompt_template = PromptTemplate(
+        name=f"{name}-zero-shot",
+        template=prompt_template_str,
+    )
+
+    return BenchmarkPreset(
+        name=name,
+        prompt_template=prompt_template,
+        metrics=[ExactMatch()],
+        extractor=IdentityExtractor(),
+        dataset_loader=load_dataset,
+        metadata_fields=metadata_fields,
+        reference_field=reference_field,
+        dataset_id_field="unique_id",
+        description=description,
+    )
+
+
+# ============================================================================
 # Math Benchmarks
 # ============================================================================
 
 
 def _create_math500_preset() -> BenchmarkPreset:
     """Create MATH-500 benchmark preset."""
-    from themis.datasets.math500 import load_math500 as load_math500_dataset
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_math500(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_math500_dataset(source="huggingface", limit=limit)
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="math500-zero-shot",
-        template=(
+    return _create_math_preset(
+        name="math500",
+        dataset_name="math500",
+        prompt_template_str=(
             "Solve the following math problem step by step. "
             "Put your final answer in \\boxed{{}}.\n\n"
             "Problem: {problem}\n\n"
             "Solution:"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="math500",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_math500,
-        metadata_fields=("subject", "level"),
-        reference_field="solution",
-        dataset_id_field="unique_id",
         description="MATH-500 dataset with 500 competition math problems",
     )
 
 
 def _create_gsm8k_preset() -> BenchmarkPreset:
     """Create GSM8K benchmark preset."""
-    from themis.datasets.gsm8k import load_gsm8k as load_gsm8k_dataset
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_gsm8k(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_gsm8k_dataset(source="huggingface", split="test", limit=limit)
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="gsm8k-zero-shot",
-        template=("Solve this math problem step by step.\n\nQ: {question}\nA:"),
-    )
-
-    return BenchmarkPreset(
+    return _create_math_preset(
         name="gsm8k",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_gsm8k,
-        metadata_fields=(),
-        reference_field="answer",
-        dataset_id_field="unique_id",
+        dataset_name="gsm8k",
+        prompt_template_str="Solve this math problem step by step.\n\nQ: {question}\nA:",
         description="GSM8K dataset with grade school math word problems",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
+        metadata_fields=(),
     )
 
 
 def _create_aime24_preset() -> BenchmarkPreset:
     """Create AIME 2024 benchmark preset."""
-    from themis.datasets.competition_math import load_competition_math
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_aime24(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_competition_math(
-            dataset="math-ai/aime24",
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="aime24-zero-shot",
-        template=(
+    return _create_math_preset(
+        name="aime24",
+        dataset_name="math-ai/aime24",
+        prompt_template_str=(
             "Solve the following AIME problem. "
             "Your answer should be a number between 000 and 999.\n\n"
             "Problem: {problem}\n\n"
             "Solution:"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="aime24",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_aime24,
-        metadata_fields=("subject",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="AIME 2024 competition math problems",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
+        metadata_fields=("subject",),
     )
 
 
 def _create_gsm_symbolic_preset() -> BenchmarkPreset:
     """Create GSM-Symbolic benchmark preset."""
-    from themis.datasets.gsm_symbolic import (
-        load_gsm_symbolic as load_gsm_symbolic_dataset,
-    )
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_gsm_symbolic(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_gsm_symbolic_dataset(
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="gsm-symbolic-zero-shot",
-        template=("Solve this math problem step by step.\n\nQ: {question}\nA:"),
-    )
-
-    return BenchmarkPreset(
+    return _create_math_preset(
         name="gsm-symbolic",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_gsm_symbolic,
-        metadata_fields=(),
-        reference_field="answer",
-        dataset_id_field="unique_id",
+        dataset_name="gsm-symbolic",
+        prompt_template_str="Solve this math problem step by step.\n\nQ: {question}\nA:",
         description="GSM-Symbolic dataset for algebraic word problems",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
+        metadata_fields=(),
     )
 
 
 def _create_aime25_preset() -> BenchmarkPreset:
     """Create AIME 2025 benchmark preset."""
-    from themis.datasets.competition_math import load_competition_math
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_aime25(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_competition_math(
-            dataset="math-ai/aime25",
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="aime25-zero-shot",
-        template=(
+    return _create_math_preset(
+        name="aime25",
+        dataset_name="math-ai/aime25",
+        prompt_template_str=(
             "Solve the following AIME problem. "
             "Your answer should be a number between 000 and 999.\n\n"
             "Problem: {problem}\n\n"
             "Solution:"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="aime25",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_aime25,
-        metadata_fields=("subject", "level"),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="AIME 2025 competition math problems",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
 def _create_amc23_preset() -> BenchmarkPreset:
     """Create AMC 2023 benchmark preset."""
-    from themis.datasets.competition_math import load_competition_math
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_amc23(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_competition_math(
-            dataset="math-ai/amc23",
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="amc23-zero-shot",
-        template=(
+    return _create_math_preset(
+        name="amc23",
+        dataset_name="math-ai/amc23",
+        prompt_template_str=(
             "Solve the following AMC problem. "
             "Give only the final answer.\n\n"
             "Problem: {problem}\n\n"
             "Answer:"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="amc23",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_amc23,
-        metadata_fields=("subject", "level"),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="AMC 2023 competition math problems",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
 def _create_olympiadbench_preset() -> BenchmarkPreset:
     """Create OlympiadBench benchmark preset."""
-    from themis.datasets.competition_math import load_competition_math
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_olympiadbench(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_competition_math(
-            dataset="math-ai/olympiadbench",
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="olympiadbench-zero-shot",
-        template=(
+    return _create_math_preset(
+        name="olympiadbench",
+        dataset_name="math-ai/olympiadbench",
+        prompt_template_str=(
             "Solve the following olympiad-style math problem. "
             "Show reasoning briefly, then give the final answer.\n\n"
             "Problem: {problem}\n\n"
             "Solution:"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="olympiadbench",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_olympiadbench,
-        metadata_fields=("subject", "level"),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="OlympiadBench competition math benchmark",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
 def _create_beyondaime_preset() -> BenchmarkPreset:
     """Create BeyondAIME benchmark preset."""
-    from themis.datasets.competition_math import load_competition_math
-    from themis.evaluation.extractors.math_verify_extractor import MathVerifyExtractor
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-
-    def load_beyondaime(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_competition_math(
-            dataset="ByteDance-Seed/BeyondAIME",
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="beyondaime-zero-shot",
-        template=(
+    return _create_math_preset(
+        name="beyondaime",
+        dataset_name="ByteDance-Seed/BeyondAIME",
+        prompt_template_str=(
             "Solve the following advanced contest math problem. "
             "Provide the final answer clearly.\n\n"
             "Problem: {problem}\n\n"
             "Answer:"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="beyondaime",
-        prompt_template=prompt_template,
-        metrics=[MathVerifyAccuracy()],
-        extractor=MathVerifyExtractor(),
-        dataset_loader=load_beyondaime,
-        metadata_fields=("subject", "level"),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="BeyondAIME advanced competition math problems",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
@@ -482,371 +460,167 @@ def _create_beyondaime_preset() -> BenchmarkPreset:
 
 def _create_mmlu_pro_preset() -> BenchmarkPreset:
     """Create MMLU-Pro benchmark preset."""
-    from themis.datasets.mmlu_pro import load_mmlu_pro as load_mmlu_pro_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_mmlu_pro(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_mmlu_pro_dataset(source="huggingface", split="test", limit=limit)
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="mmlu-pro-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="mmlu-pro",
+        dataset_name="mmlu-pro",
+        prompt_template_str=(
             "Answer the following multiple choice question.\n\n"
             "Question: {question}\n\n"
             "Options:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="mmlu-pro",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_mmlu_pro,
-        metadata_fields=("subject",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="MMLU-Pro professional-level multiple choice questions",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
 def _create_supergpqa_preset() -> BenchmarkPreset:
     """Create SuperGPQA benchmark preset."""
-    from themis.datasets.super_gpqa import load_super_gpqa as load_supergpqa_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_supergpqa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_supergpqa_dataset(
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="supergpqa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="supergpqa",
+        dataset_name="super_gpqa",
+        prompt_template_str=(
             "Answer the following science question.\n\n"
             "Question: {question}\n\n"
             "Choices:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="supergpqa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_supergpqa,
-        metadata_fields=("subject",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="SuperGPQA graduate-level science questions",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
 def _create_gpqa_preset() -> BenchmarkPreset:
     """Create GPQA benchmark preset."""
-    from themis.datasets.gpqa import load_gpqa as load_gpqa_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_gpqa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_gpqa_dataset(
-            source="huggingface",
-            split="test",
-            limit=limit,
-            subset="default",
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="gpqa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="gpqa",
+        dataset_name="gpqa",
+        prompt_template_str=(
             "Answer the following question.\n\n"
             "Question: {question}\n\n"
             "Choices:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="gpqa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_gpqa,
-        metadata_fields=("subject",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="GPQA graduate-level science questions",
+        dataset_kwargs={"source": "huggingface", "split": "test", "subset": "default"},
     )
 
 
 def _create_medmcqa_preset() -> BenchmarkPreset:
     """Create MedMCQA benchmark preset."""
-    from themis.datasets.medmcqa import load_medmcqa as load_medmcqa_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_medmcqa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_medmcqa_dataset(
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="medmcqa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="medmcqa",
+        dataset_name="medmcqa",
+        prompt_template_str=(
             "Answer the following medical multiple choice question.\n\n"
             "Question: {question}\n\n"
             "Options:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="medmcqa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_medmcqa,
-        metadata_fields=("subject",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="MedMCQA medical entrance exam questions",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
 def _create_med_qa_preset() -> BenchmarkPreset:
     """Create MedQA benchmark preset."""
-    from themis.datasets.med_qa import load_med_qa as load_med_qa_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_med_qa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_med_qa_dataset(
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="med-qa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="med_qa",
+        dataset_name="med_qa",
+        prompt_template_str=(
             "Answer the following medical multiple choice question.\n\n"
             "Question: {question}\n\n"
             "Options:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="med_qa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_med_qa,
-        metadata_fields=("subject",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="MedQA multiple choice medical QA benchmark",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
     )
 
 
 def _create_sciq_preset() -> BenchmarkPreset:
     """Create SciQ benchmark preset."""
-    from themis.datasets.sciq import load_sciq as load_sciq_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_sciq(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_sciq_dataset(
-            source="huggingface",
-            split="test",
-            limit=limit,
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="sciq-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="sciq",
+        dataset_name="sciq",
+        prompt_template_str=(
             "Answer the following science question.\n\n"
             "Question: {question}\n\n"
             "Options:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="sciq",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_sciq,
-        metadata_fields=(),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="SciQ science multiple choice questions",
+        dataset_kwargs={"source": "huggingface", "split": "test"},
+        metadata_fields=(),
     )
 
 
 def _create_commonsense_qa_preset() -> BenchmarkPreset:
     """Create CommonsenseQA benchmark preset."""
-    from themis.datasets.commonsense_qa import (
-        load_commonsense_qa as load_commonsense_qa_dataset,
-    )
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_commonsense_qa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_commonsense_qa_dataset(
-            source="huggingface",
-            split="validation",
-            limit=limit,
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="commonsense-qa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="commonsense_qa",
+        dataset_name="commonsense_qa",
+        prompt_template_str=(
             "Answer the following commonsense question.\n\n"
             "Question: {question}\n\n"
             "Options:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="commonsense_qa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_commonsense_qa,
-        metadata_fields=("concept",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="CommonsenseQA multiple choice reasoning benchmark",
+        dataset_kwargs={"source": "huggingface", "split": "validation"},
+        metadata_fields=("concept",),
     )
 
 
 def _create_piqa_preset() -> BenchmarkPreset:
     """Create PIQA benchmark preset."""
-    from themis.datasets.piqa import load_piqa as load_piqa_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_piqa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_piqa_dataset(
-            source="huggingface",
-            split="validation",
-            limit=limit,
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="piqa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="piqa",
+        dataset_name="piqa",
+        prompt_template_str=(
             "Choose the best answer for the goal.\n\n"
             "Goal: {goal}\n\n"
             "Options:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="piqa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_piqa,
-        metadata_fields=(),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="PIQA physical commonsense reasoning benchmark",
+        dataset_kwargs={"source": "huggingface", "split": "validation"},
+        metadata_fields=(),
     )
 
 
 def _create_social_i_qa_preset() -> BenchmarkPreset:
     """Create Social IQA benchmark preset."""
-    from themis.datasets.social_i_qa import load_social_i_qa as load_social_i_qa_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_social_i_qa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_social_i_qa_dataset(
-            source="huggingface",
-            split="validation",
-            limit=limit,
-        )
-        return _normalize_mcq_samples(_to_dict_samples(samples))
-
-    prompt_template = PromptTemplate(
-        name="social-iqa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="social_i_qa",
+        dataset_name="social_i_qa",
+        prompt_template_str=(
             "Answer the question based on the social context.\n\n"
             "Context: {context}\n"
             "Question: {question}\n\n"
             "Options:\n{options}\n\n"
             "Answer (letter):"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="social_i_qa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_social_i_qa,
-        metadata_fields=(),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="Social IQA commonsense reasoning benchmark",
+        dataset_kwargs={"source": "huggingface", "split": "validation"},
+        metadata_fields=(),
     )
 
 
 def _create_coqa_preset() -> BenchmarkPreset:
     """Create CoQA benchmark preset."""
-    from themis.datasets.coqa import load_coqa as load_coqa_dataset
-    from themis.evaluation.extractors.identity_extractor import IdentityExtractor
-    from themis.evaluation.metrics.exact_match import ExactMatch
-
-    def load_coqa(limit: int | None = None) -> Sequence[dict[str, Any]]:
-        samples = load_coqa_dataset(
-            source="huggingface",
-            split="validation",
-            limit=limit,
-        )
-        return _to_dict_samples(samples)
-
-    prompt_template = PromptTemplate(
-        name="coqa-zero-shot",
-        template=(
+    return _create_mcq_preset(
+        name="coqa",
+        dataset_name="coqa",
+        prompt_template_str=(
             "Answer the question based on the passage.\n\n"
             "Passage: {story}\n\n"
             "Question: {question}\n"
             "Answer:"
         ),
-    )
-
-    return BenchmarkPreset(
-        name="coqa",
-        prompt_template=prompt_template,
-        metrics=[ExactMatch()],
-        extractor=IdentityExtractor(),
-        dataset_loader=load_coqa,
-        metadata_fields=("turn",),
-        reference_field="answer",
-        dataset_id_field="unique_id",
         description="CoQA conversational question answering benchmark",
+        dataset_kwargs={"source": "huggingface", "split": "validation"},
+        metadata_fields=("turn",),
     )
 
 

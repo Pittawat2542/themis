@@ -107,6 +107,7 @@ class ComposableEvaluationPipeline:
     def __init__(self):
         """Initialize empty pipeline."""
         self._steps: list[EvaluationStep] = []
+        self._metric_names: list[str] = []
 
     def add_step(self, step: EvaluationStep) -> ComposableEvaluationPipeline:
         """Add a step to the pipeline (builder pattern).
@@ -259,6 +260,7 @@ class ComposableEvaluationPipeline:
                 scores.append(score)
             return scores
 
+        self._metric_names.extend(m.name for m in metrics)
         return self.add_step(
             EvaluationStep(
                 name="compute_metrics",
@@ -361,11 +363,17 @@ class ComposableEvaluationPipeline:
             Self for chaining
         """
         self._steps.clear()
+        self._metric_names.clear()
         return self
+
+    @property
+    def metric_names(self) -> list[str]:
+        """Return the names of metrics in this pipeline."""
+        return list(self._metric_names)
 
     def evaluation_fingerprint(self) -> dict:
         """Return a fingerprint based on the configured steps."""
-        return {"steps": self.get_step_names()}
+        return {"steps": self.get_step_names(), "metrics": self.metric_names}
 
 
 class ComposableEvaluationReportPipeline:
@@ -415,6 +423,10 @@ class ComposableEvaluationReportPipeline:
             records=per_record,
             slices={},
         )
+
+    @property
+    def metric_names(self) -> list[str]:
+        return self._pipeline.metric_names
 
     def evaluation_fingerprint(self) -> dict:
         return self._pipeline.evaluation_fingerprint()
