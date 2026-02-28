@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from themis.backends.storage import LocalFileStorageBackend
 from themis.storage import ExperimentStorage
 from tests.factories import make_evaluation_record, make_record
 
@@ -40,7 +39,7 @@ def _experiment_storage_adapter(root: Path) -> _StorageAdapter:
 
 
 def _local_backend_adapter(root: Path) -> _StorageAdapter:
-    backend = LocalFileStorageBackend(root)
+    backend = ExperimentStorage(root)
 
     return _StorageAdapter(
         start_run=lambda run_id: backend.start_run(

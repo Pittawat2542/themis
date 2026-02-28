@@ -6,10 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
-from themis.storage.core import (
-    ExperimentStorage,
-    _json_default,
-)
+from themis.storage.core import ExperimentStorage
+from themis.storage.cache_keys import _json_default
 from themis.storage.models import RetentionPolicy, RunStatus, StorageConfig
 from tests.factories import make_record
 

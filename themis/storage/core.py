@@ -5,16 +5,19 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import pickle
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from collections.abc import Iterable
 from typing import Any
+from dataclasses import asdict  # Added for StorageBackend interface
 
 from themis.exceptions import StorageError
 
 from themis.core import entities as core_entities
 from themis.core import serialization as core_serialization
+from themis.storage.cache_keys import evaluation_cache_key, task_cache_key
 from themis.storage.database import MetadataStore
 from themis.storage.filesystem import FileSystem
 from themis.storage.locking import LockManager
@@ -24,83 +27,10 @@ from themis.storage.models import (
     RunStatus,
     StorageConfig,
 )
-
-TASK_CACHE_KEY_VERSION = "k2"
-
-
-def _json_default(value: Any) -> Any:
-    """Best-effort stable JSON serializer for cache key fingerprinting."""
-    if isinstance(value, set):
-        return sorted(value, key=repr)
-    if isinstance(value, Path):
-        return str(value)
-    if hasattr(value, "__dict__"):
-        return vars(value)
-    return repr(value)
+from themis.backends.storage import StorageBackend
 
 
-def _stable_hash(value: Any, *, length: int = 12) -> str:
-    """Return a deterministic short hash for arbitrary JSON-serializable values."""
-    serialized = json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        default=_json_default,
-    )
-    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:length]
-
-
-def _reference_fingerprint(task: core_entities.GenerationTask) -> str:
-    reference = task.reference
-    if reference is None:
-        return _stable_hash(None)
-    payload = {"kind": reference.kind, "value": reference.value}
-    return _stable_hash(payload)
-
-
-def _evaluation_config_fingerprint(evaluation_config: dict | None) -> str:
-    canonical_default = {"metrics": [], "extractor": "unknown"}
-    if evaluation_config:
-        payload = evaluation_config
-    else:
-        payload = canonical_default
-    return _stable_hash(payload)
-
-
-def task_cache_key(task: core_entities.GenerationTask) -> str:
-    """Generate cache key for a task."""
-    prompt_hash = _stable_hash(
-        {"template": task.prompt.spec.template, "params": task.prompt.context}
-    )
-    sampling = task.sampling
-    sampling_key = (
-        f"{sampling.temperature:.3f}-{sampling.top_p:.3f}-{sampling.max_tokens}"
-    )
-    model_key = task.model.model_key
-    ref_hash = _reference_fingerprint(task)
-
-    dataset_raw = task.metadata.get("dataset_id") or task.metadata.get("sample_id")
-    dataset_id = str(dataset_raw) if dataset_raw is not None else ""
-
-    manifest_hash = task.metadata.get("manifest_hash", "")
-    base_key = f"{TASK_CACHE_KEY_VERSION}::{dataset_id}::{task.prompt.spec.name}::{model_key}::{sampling_key}::{prompt_hash}::{ref_hash}"
-
-    if manifest_hash:
-        return f"{base_key}::{manifest_hash}"
-    return base_key
-
-
-def evaluation_cache_key(
-    task: core_entities.GenerationTask, evaluation_config: dict | None
-) -> str:
-    """Generate cache key for an evaluation result."""
-    t_key = task_cache_key(task)
-    config_hash = _evaluation_config_fingerprint(evaluation_config)
-    return f"{t_key}::eval:{config_hash}"
-
-
-class ExperimentStorage:
+class ExperimentStorage(StorageBackend):
     """Robust storage with lifecycle management, locking, and integrity checks."""
 
     def __init__(self, root: str | Path, config: StorageConfig | None = None) -> None:
@@ -124,6 +54,110 @@ class ExperimentStorage:
         self._task_index: dict[str, set[str]] = {}
         self._template_index: dict[str, dict[str, str]] = {}
         self._run_dir_index: dict[str, Path] = {}
+
+    @property
+    def __repr__(self) -> str:
+        return f"ExperimentStorage(root={self._root})"
+
+    # === StorageBackend Interface Implementation ===
+
+    def save_run_metadata(self, run_id: str, metadata: dict[str, Any]) -> None:
+        """Save run metadata (StorageBackend API)."""
+        experiment_id = metadata.get("experiment_id", "default")
+        if not self.run_metadata_exists(run_id):
+            self.start_run(
+                run_id,
+                experiment_id=experiment_id,
+                config=metadata,
+            )
+            return
+
+        run_metadata = self._load_run_metadata(run_id)
+        run_metadata.experiment_id = experiment_id
+        run_metadata.config_snapshot = dict(metadata)
+        status = metadata.get("status")
+        if status is not None:
+            run_metadata.status = RunStatus(status)
+        if "error_message" in metadata:
+            run_metadata.error_message = metadata.get("error_message")
+        run_metadata.updated_at = metadata.get("updated_at", run_metadata.updated_at)
+        self._save_run_metadata(run_metadata)
+
+    def load_run_metadata(self, run_id: str) -> dict[str, Any]:
+        """Load run metadata (StorageBackend API)."""
+        metadata = self._load_run_metadata(run_id)
+        payload = asdict(metadata)
+        payload["status"] = metadata.status.value
+        return payload
+
+    def save_generation_record(
+        self, run_id: str, record: core_entities.GenerationRecord
+    ) -> None:
+        """Save generation record (StorageBackend API)."""
+        if not self.run_metadata_exists(run_id):
+            self.start_run(run_id, experiment_id="default")
+        self.append_record(run_id, record)
+
+    def load_generation_records(
+        self, run_id: str
+    ) -> list[core_entities.GenerationRecord]:
+        """Load generation records (StorageBackend API)."""
+        cached = self.load_cached_records(run_id)
+        return list(cached.values())
+
+    def save_evaluation_record(
+        self,
+        run_id: str,
+        generation_record: core_entities.GenerationRecord,
+        record: core_entities.EvaluationRecord,
+    ) -> None:
+        """Save evaluation record (StorageBackend API)."""
+        if not self.run_metadata_exists(run_id):
+            self.start_run(run_id, experiment_id="default")
+        self.append_evaluation(run_id, generation_record, record)
+
+    def load_evaluation_records(
+        self, run_id: str
+    ) -> dict[str, core_entities.EvaluationRecord]:
+        """Load evaluation records (StorageBackend API)."""
+        return self.load_cached_evaluations(run_id)
+
+    def list_run_ids(self) -> list[str]:
+        """List all run IDs in storage (StorageBackend API)."""
+        return [run.run_id for run in self.list_runs()]
+
+    def run_exists(self, run_id: str) -> bool:
+        """Check if run exists (StorageBackend API)."""
+        return self.run_metadata_exists(run_id)
+
+    def save_report(self, run_id: str, report: core_entities.ExperimentReport) -> None:
+        """Save report (StorageBackend API)."""
+        if not self.run_metadata_exists(run_id):
+            self.start_run(run_id, experiment_id="default")
+        report_path = self.get_run_path(run_id) / "report.pkl"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with report_path.open("wb") as handle:
+            pickle.dump(report, handle)
+
+        metadata_path = self.get_run_path(run_id) / "report_metadata.json"
+        metadata = {
+            "run_id": run_id,
+            "generation_results": len(report.generation_results),
+            "failures": len(report.failures),
+            "report_metadata": report.metadata,
+        }
+        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+
+    def load_report(self, run_id: str) -> core_entities.ExperimentReport:
+        """Load report (StorageBackend API)."""
+        report_path = self.get_run_path(run_id) / "report.pkl"
+        if not report_path.exists():
+            raise FileNotFoundError(f"Report not found for run {run_id}")
+        with report_path.open("rb") as handle:
+            report = pickle.load(handle)
+        if not isinstance(report, core_entities.ExperimentReport):
+            raise StorageError(f"Invalid report payload for run {run_id}")
+        return report
 
     @property
     def root(self) -> Path:
