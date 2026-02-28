@@ -6,6 +6,9 @@ import logging
 import re
 from typing import Any
 
+from themis.evaluation.metrics.exact_match import ExactMatch
+from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
+from themis.evaluation.metrics.response_length import ResponseLength
 from themis.exceptions import MetricError
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,53 @@ def get_registered_metrics() -> dict[str, type]:
     return _METRICS_REGISTRY.copy()
 
 
+_BUILTIN_METRICS: dict[str, Any] = {
+    "exact_match": ExactMatch,
+    "math_verify": MathVerifyAccuracy,
+    "response_length": ResponseLength,
+}
+
+# NLP metrics (Phase 2)
+try:
+    from themis.evaluation.metrics.nlp import (
+        BLEU,
+        ROUGE,
+        BERTScore,
+        METEOR,
+        ROUGEVariant,
+    )
+
+    _BUILTIN_METRICS.update(
+        {
+            "bleu": BLEU,
+            "rouge1": lambda: ROUGE(variant=ROUGEVariant.ROUGE_1),
+            "rouge2": lambda: ROUGE(variant=ROUGEVariant.ROUGE_2),
+            "rougeL": lambda: ROUGE(variant=ROUGEVariant.ROUGE_L),
+            "bertscore": BERTScore,
+            "meteor": METEOR,
+        }
+    )
+except ImportError:
+    pass
+
+# Code metrics (some optional dependencies)
+try:
+    from themis.evaluation.metrics.code.execution import ExecutionAccuracy
+    from themis.evaluation.metrics.code.pass_at_k import PassAtK
+
+    _BUILTIN_METRICS["pass_at_k"] = PassAtK
+    _BUILTIN_METRICS["execution_accuracy"] = ExecutionAccuracy
+
+    try:
+        from themis.evaluation.metrics.code.codebleu import CodeBLEU
+
+        _BUILTIN_METRICS["codebleu"] = CodeBLEU
+    except ImportError:
+        pass
+except ImportError:
+    pass
+
+
 def resolve_metrics(metric_names: list[str]) -> list[Any]:
     """Resolve metric names to metric instances.
 
@@ -70,85 +120,23 @@ def resolve_metrics(metric_names: list[str]) -> list[Any]:
     Raises:
         MetricError: If a metric name is unknown
     """
-    from themis.evaluation.metrics.exact_match import ExactMatch
-    from themis.evaluation.metrics.math_verify_accuracy import MathVerifyAccuracy
-    from themis.evaluation.metrics.response_length import ResponseLength
-
-    # NLP metrics (Phase 2)
-    try:
-        from themis.evaluation.metrics.nlp import (
-            BLEU,
-            ROUGE,
-            BERTScore,
-            METEOR,
-            ROUGEVariant,
-        )
-
-        nlp_available = True
-    except ImportError as exc:
-        nlp_available = False
-        # If the user explicitly asked for an NLP metric, they will get a DependencyError later
-        # when we try to instantiate it (because BLEU/ROUGE/etc. will raise it in __init__)
-        # But for now we just flag it as unavailable in the resolver.
-        _nlp_error = exc
-
-    # Code metrics (some optional dependencies)
-    try:
-        from themis.evaluation.metrics.code.execution import ExecutionAccuracy
-        from themis.evaluation.metrics.code.pass_at_k import PassAtK
-
-        code_metrics: dict[str, Any] = {
-            "pass_at_k": PassAtK,
-            "execution_accuracy": ExecutionAccuracy,
-        }
-        try:
-            from themis.evaluation.metrics.code.codebleu import CodeBLEU
-
-            code_metrics["codebleu"] = CodeBLEU
-        except ImportError:
-            pass
-    except ImportError:
-        code_metrics = {}
-
-    BUILTIN_METRICS: dict[str, Any] = {
-        # Core metrics
-        "exact_match": ExactMatch,
-        "math_verify": MathVerifyAccuracy,
-        "response_length": ResponseLength,
-    }
-
-    # Add NLP metrics if available
-    if nlp_available:
-        BUILTIN_METRICS.update(
-            {
-                "bleu": BLEU,
-                "rouge1": lambda: ROUGE(variant=ROUGEVariant.ROUGE_1),
-                "rouge2": lambda: ROUGE(variant=ROUGEVariant.ROUGE_2),
-                "rougeL": lambda: ROUGE(variant=ROUGEVariant.ROUGE_L),
-                "bertscore": BERTScore,
-                "meteor": METEOR,
-            }  # type: ignore
-        )
-
-    BUILTIN_METRICS.update(code_metrics)
-
     # Merge built-in and custom metrics
     # Custom metrics can override built-in metrics
-    METRICS_REGISTRY = {**BUILTIN_METRICS, **_METRICS_REGISTRY}
+    registry = {**_BUILTIN_METRICS, **_METRICS_REGISTRY}
 
     def _normalize_metric_name(name: str) -> str | None:
         raw = name.strip()
-        if raw in METRICS_REGISTRY:
+        if raw in registry:
             return raw
         lowered = raw.lower()
-        if lowered in METRICS_REGISTRY:
+        if lowered in registry:
             return lowered
-        for key in METRICS_REGISTRY.keys():
+        for key in registry:
             if key.lower() == lowered:
                 return key
         # Convert CamelCase / PascalCase to snake_case
         snake = re.sub(r"(?<!^)(?=[A-Z])", "_", raw).lower()
-        if snake in METRICS_REGISTRY:
+        if snake in registry:
             return snake
         return None
 
@@ -156,10 +144,10 @@ def resolve_metrics(metric_names: list[str]) -> list[Any]:
     for name in metric_names:
         resolved = _normalize_metric_name(name)
         if resolved is None:
-            available = ", ".join(sorted(METRICS_REGISTRY.keys()))
+            available = ", ".join(sorted(registry.keys()))
             raise MetricError(f"Unknown metric: {name}. Available metrics: {available}")
 
-        metric_cls = METRICS_REGISTRY[resolved]
+        metric_cls = registry[resolved]
         metrics.append(metric_cls())
 
     return metrics
