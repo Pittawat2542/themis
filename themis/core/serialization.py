@@ -1,215 +1,205 @@
-"""Serialization helpers for Themis core entities."""
+"""Serialization helpers for Themis core entities using a generic introspective approach."""
 
 from __future__ import annotations
 
-import copy
-from typing import Any, Dict
+import dataclasses
+import types
+import typing
+from typing import Any, Dict, TypeVar, get_args, get_origin
 
 from themis.core import entities as core_entities
 
+T = TypeVar("T")
+
+# =========================================================================
+# GENERIC SERIALIZATION
+# =========================================================================
+
+
+def serialize(entity: Any) -> Any:
+    """Recursively serialize a dataclass or standard collection."""
+    if dataclasses.is_dataclass(entity):
+        return dataclasses.asdict(entity)
+    elif isinstance(entity, (list, tuple, set)):
+        return [serialize(x) for x in entity]
+    elif isinstance(entity, dict):
+        return {k: serialize(v) for k, v in entity.items()}
+    return entity
+
+
+def _resolve_type_hint(hint: Any) -> Any:
+    """Resolve forward references and extract underlying types from generics."""
+    if isinstance(hint, str):
+        hint = hint.strip("'\"")
+        return getattr(core_entities, hint, hint)
+
+    origin = get_origin(hint)
+
+    # Handle Optional[T] / Union[T, None]
+    if origin is getattr(types, "UnionType", type(None)) or origin is typing.Union:
+        args = get_args(hint)
+        non_none_args = [arg for arg in args if arg is not type(None)]
+        if non_none_args:
+            return _resolve_type_hint(non_none_args[0])
+
+    # Handle list[T]
+    if origin is list or origin is typing.List:
+        args = get_args(hint)
+        if args:
+            return list, _resolve_type_hint(args[0])
+
+    # Handle dict[K, V]
+    if origin is dict or origin is typing.Dict:
+        return dict, None
+
+    return hint
+
+
+def deserialize(entity_cls: type[T], data: Any) -> T:
+    """Recursively deserialize a dictionary into a dataclass."""
+    if data is None:
+        return None  # type: ignore
+
+    if isinstance(entity_cls, str):
+        entity_cls = getattr(core_entities, entity_cls)
+
+    origin = get_origin(entity_cls)
+    if origin is not None:
+        if origin is list or origin is typing.List:
+            args = get_args(entity_cls)
+            if args:
+                item_cls = _resolve_type_hint(args[0])
+                if isinstance(item_cls, tuple):
+                    item_cls = item_cls[1]
+                return [deserialize(item_cls, item) for item in data]  # type: ignore
+            return data  # type: ignore
+        elif origin is dict:
+            return data  # type: ignore
+        elif hasattr(origin, "__dataclass_fields__"):
+            entity_cls = origin  # Fallback for generics like Reference[T]
+
+    if not dataclasses.is_dataclass(entity_cls):
+        return data  # type: ignore
+
+    kwargs = {}
+    type_hints = typing.get_type_hints(entity_cls)
+
+    for field in dataclasses.fields(entity_cls):
+        if field.name not in data:
+            continue
+
+        value = data[field.name]
+        if value is None:
+            kwargs[field.name] = None
+            continue
+
+        hint = type_hints.get(field.name, field.type)
+        resolved_hint = _resolve_type_hint(hint)
+
+        if isinstance(resolved_hint, tuple) and resolved_hint[0] is list:
+            kwargs[field.name] = [deserialize(resolved_hint[1], item) for item in value]
+        elif resolved_hint is dict:
+            kwargs[field.name] = value
+        elif dataclasses.is_dataclass(resolved_hint):
+            kwargs[field.name] = deserialize(resolved_hint, value)
+        else:
+            kwargs[field.name] = value
+
+    return entity_cls(**kwargs)  # type: ignore
+
+
+# =========================================================================
+# BACKWARDS COMPATIBILITY WRAPPERS
+# =========================================================================
+
 
 def serialize_sampling(config: core_entities.SamplingConfig) -> Dict[str, Any]:
-    return {
-        "temperature": config.temperature,
-        "top_p": config.top_p,
-        "max_tokens": config.max_tokens,
-    }
+    return serialize(config)
 
 
 def deserialize_sampling(data: Dict[str, Any]) -> core_entities.SamplingConfig:
-    return core_entities.SamplingConfig(
-        temperature=data["temperature"],
-        top_p=data["top_p"],
-        max_tokens=data["max_tokens"],
-    )
+    return deserialize(core_entities.SamplingConfig, data)
 
 
 def serialize_model_spec(spec: core_entities.ModelSpec) -> Dict[str, Any]:
-    return {
-        "identifier": spec.identifier,
-        "provider": spec.provider,
-        "metadata": copy.deepcopy(spec.metadata),
-        "default_sampling": serialize_sampling(spec.default_sampling)
-        if spec.default_sampling
-        else None,
-    }
+    return serialize(spec)
 
 
 def deserialize_model_spec(data: Dict[str, Any]) -> core_entities.ModelSpec:
-    default_sampling = (
-        deserialize_sampling(data["default_sampling"])
-        if data.get("default_sampling")
-        else None
-    )
-    return core_entities.ModelSpec(
-        identifier=data["identifier"],
-        provider=data["provider"],
-        metadata=copy.deepcopy(data.get("metadata", {})),
-        default_sampling=default_sampling,
-    )
+    return deserialize(core_entities.ModelSpec, data)
 
 
 def serialize_prompt_spec(spec: core_entities.PromptSpec) -> Dict[str, Any]:
-    return {
-        "name": spec.name,
-        "template": spec.template,
-        "metadata": copy.deepcopy(spec.metadata),
-    }
+    return serialize(spec)
 
 
 def deserialize_prompt_spec(data: Dict[str, Any]) -> core_entities.PromptSpec:
-    return core_entities.PromptSpec(
-        name=data["name"],
-        template=data["template"],
-        metadata=copy.deepcopy(data.get("metadata", {})),
-    )
+    return deserialize(core_entities.PromptSpec, data)
 
 
 def serialize_prompt_render(render: core_entities.PromptRender) -> Dict[str, Any]:
-    return {
-        "spec": serialize_prompt_spec(render.spec),
-        "text": render.text,
-        "context": copy.deepcopy(render.context),
-        "metadata": copy.deepcopy(render.metadata),
-    }
+    return serialize(render)
 
 
 def deserialize_prompt_render(data: Dict[str, Any]) -> core_entities.PromptRender:
-    return core_entities.PromptRender(
-        spec=deserialize_prompt_spec(data["spec"]),
-        text=data["text"],
-        context=copy.deepcopy(data.get("context", {})),
-        metadata=copy.deepcopy(data.get("metadata", {})),
-    )
+    return deserialize(core_entities.PromptRender, data)
 
 
 def serialize_reference(
     reference: core_entities.Reference | None,
 ) -> Dict[str, Any] | None:
-    if reference is None:
-        return None
-    return {"kind": reference.kind, "value": reference.value}
+    return serialize(reference) if reference else None
 
 
 def deserialize_reference(
     data: Dict[str, Any] | None,
 ) -> core_entities.Reference | None:
-    if data is None:
-        return None
-    return core_entities.Reference(kind=data["kind"], value=data.get("value"))
+    return deserialize(core_entities.Reference, data) if data else None
 
 
 def serialize_generation_task(task: core_entities.GenerationTask) -> Dict[str, Any]:
-    return {
-        "prompt": serialize_prompt_render(task.prompt),
-        "model": serialize_model_spec(task.model),
-        "sampling": serialize_sampling(task.sampling),
-        "metadata": copy.deepcopy(task.metadata),
-        "reference": serialize_reference(task.reference),
-    }
+    return serialize(task)
 
 
 def deserialize_generation_task(data: Dict[str, Any]) -> core_entities.GenerationTask:
-    return core_entities.GenerationTask(
-        prompt=deserialize_prompt_render(data["prompt"]),
-        model=deserialize_model_spec(data["model"]),
-        sampling=deserialize_sampling(data["sampling"]),
-        metadata=copy.deepcopy(data.get("metadata", {})),
-        reference=deserialize_reference(data.get("reference")),
-    )
+    return deserialize(core_entities.GenerationTask, data)
 
 
 def serialize_generation_record(
     record: core_entities.GenerationRecord,
 ) -> Dict[str, Any]:
-    return {
-        "task": serialize_generation_task(record.task),
-        "output": {
-            "text": record.output.text,
-            "raw": record.output.raw,
-        }
-        if record.output
-        else None,
-        "error": {
-            "message": record.error.message,
-            "kind": record.error.kind,
-            "details": copy.deepcopy(record.error.details),
-        }
-        if record.error
-        else None,
-        "metrics": copy.deepcopy(record.metrics),
-        "attempts": [
-            serialize_generation_record(attempt) for attempt in record.attempts
-        ],
-    }
+    return serialize(record)
 
 
 def deserialize_generation_record(
     data: Dict[str, Any],
 ) -> core_entities.GenerationRecord:
-    output_data = data.get("output")
-    error_data = data.get("error")
-    return core_entities.GenerationRecord(
-        task=deserialize_generation_task(data["task"]),
-        output=core_entities.ModelOutput(
-            text=output_data["text"], raw=output_data.get("raw")
-        )
-        if output_data
-        else None,
-        error=core_entities.ModelError(
-            message=error_data["message"],
-            kind=error_data.get("kind", "model_error"),
-            details=copy.deepcopy(error_data.get("details", {})),
-        )
-        if error_data
-        else None,
-        metrics=copy.deepcopy(data.get("metrics", {})),
-        attempts=[
-            deserialize_generation_record(attempt)
-            for attempt in data.get("attempts", [])
-        ],
-    )
+    return deserialize(core_entities.GenerationRecord, data)
 
 
 def serialize_metric_score(score: core_entities.MetricScore) -> Dict[str, Any]:
-    return {
-        "metric_name": score.metric_name,
-        "value": score.value,
-        "details": copy.deepcopy(score.details),
-        "metadata": copy.deepcopy(score.metadata),
-    }
+    return serialize(score)
 
 
 def deserialize_metric_score(data: Dict[str, Any]) -> core_entities.MetricScore:
-    return core_entities.MetricScore(
-        metric_name=data["metric_name"],
-        value=data["value"],
-        details=copy.deepcopy(data.get("details", {})),
-        metadata=copy.deepcopy(data.get("metadata", {})),
-    )
+    return deserialize(core_entities.MetricScore, data)
 
 
 def serialize_evaluation_record(
     record: core_entities.EvaluationRecord,
 ) -> Dict[str, Any]:
-    return {
-        "sample_id": record.sample_id,
-        "scores": [serialize_metric_score(score) for score in record.scores],
-        "failures": list(record.failures),
-    }
+    return serialize(record)
 
 
 def deserialize_evaluation_record(
     data: Dict[str, Any],
 ) -> core_entities.EvaluationRecord:
-    return core_entities.EvaluationRecord(
-        sample_id=data.get("sample_id"),
-        scores=[deserialize_metric_score(score) for score in data.get("scores", [])],
-        failures=list(data.get("failures", [])),
-    )
+    return deserialize(core_entities.EvaluationRecord, data)
 
 
 __all__ = [
+    "serialize",
+    "deserialize",
     "serialize_generation_record",
     "deserialize_generation_record",
     "serialize_generation_task",
