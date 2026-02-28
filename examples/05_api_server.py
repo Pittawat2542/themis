@@ -1,12 +1,13 @@
 """Example: Using the Themis API Server
 
 This example shows how to use the FastAPI server for accessing
-experiment results via REST API and WebSocket.
+experiment results via REST API and WebSocket. The built-in
+server gives you a UI to browse historic runs.
 
 Requirements:
-    pip install themis[server]
+    pip install "themis[server]"
     # or
-    uv pip install themis[server]
+    uv add "themis-eval[server]"
 """
 
 import asyncio

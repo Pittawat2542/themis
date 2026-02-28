@@ -1,10 +1,14 @@
-"""Compare two runs."""
+"""Example: Compare two runs statistically.
+
+This script demonstrates how to run two separate experiments (e.g., comparing
+different temperatures or models) and then run a statistical test (Bootstrap)
+to determine if one is significantly better than the other.
+"""
 
 from pathlib import Path
 
 import themis
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.comparison import StatisticalTest, compare_runs
 from themis.presets import get_benchmark_preset
 from themis.storage import ExperimentStorage
 
