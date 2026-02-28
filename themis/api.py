@@ -1,32 +1,58 @@
 """Unified API for Themis - The primary interface for all evaluations.
 
 This module provides the main entry point for running evaluations:
-    - Simple one-liner for benchmarks
-    - Custom datasets with minimal configuration
+    - Built-in benchmarks (e.g., "math500", "gsm8k")
+    - Custom datasets (list of dictionaries) with minimal configuration
     - Distributed execution and cloud storage support
     - Auto-configuration of prompts, metrics, and extractors
 
-Example:
-    ```python
-    import themis
+# Quick Examples
 
-    # Simple benchmark evaluation
-    report = themis.evaluate("math500", model="gpt-4", limit=100)
+**1. Simple Benchmark Evaluation**
+Run an existing benchmark (like 'math500') using a specific model.
+Themis automatically configures the correct metrics and prompt templates.
 
-    # Custom dataset
-    report = themis.evaluate(
-        dataset=[{"id": "1", "question": "...", "answer": "..."}],
-        model="claude-3-opus",
-        prompt="Solve: {question}"
-    )
+```python
+import themis
 
-    # Custom execution backend
-    report = themis.evaluate(
-        "gsm8k",
-        model="gpt-4",
-        workers=8,
-    )
-    ```
+# Run 100 samples from MATH-500 using OpenAI's GPT-4o
+report = themis.evaluate("math500", model="openai/gpt-4o", limit=100)
+
+print(f"Accuracy: {report.evaluation_report.metrics['ExactMatch'].mean:.2%}")
+```
+
+**2. Custom Dataset Evaluation**
+Evaluate your own data by passing a list of dictionaries. You must supply a prompt template and choose your metrics.
+
+```python
+import themis
+
+dataset = [
+    {"id": "q1", "question": "What is 2+2?", "answer": "4"},
+    {"id": "q2", "question": "What is the capital of France?", "answer": "Paris"}
+]
+
+# Provide a prompt string that references fields in your dataset dictionaries
+report = themis.evaluate(
+    dataset=dataset,
+    model="anthropic/claude-3-5-sonnet-20241022",
+    prompt="Answer the following question concisely: {question}",
+    metrics=["exact_match"], # Default is exact_match if not provided
+)
+```
+
+**3. Execution Options: Parallelism and Resilience**
+Scale your evaluation natively using Python threads and automatic retries.
+
+```python
+report = themis.evaluate(
+    "gsm8k",
+    model="gpt-4o-mini",
+    workers=16,          # Run 16 concurrent requests (watch your API limits!)
+    max_retries=5,       # Retry up to 5 times on rate limits or API errors
+    timeout=30,          # Set custom LiteLLM timeouts via kwargs
+)
+```
 """
 
 from __future__ import annotations
@@ -129,58 +155,60 @@ def evaluate(
     for custom datasets.
 
     Args:
-        benchmark_or_dataset: Either a benchmark name (e.g., "math500", "gsm8k")
-            or a list of dataset samples as dictionaries. For custom datasets,
-            each dict should have: prompt/question (input), answer/reference (output),
-            and optionally id (unique identifier).
-        model: Model identifier for LiteLLM (e.g., "gpt-4", "claude-3-opus-20240229",
-            "azure/gpt-4", "ollama/llama3"). Provider is auto-detected from the name.
-        limit: Maximum number of samples to evaluate. Use for testing or when you
-            want to evaluate a subset. None means evaluate all samples.
+        benchmark_or_dataset: Either a built-in benchmark name (e.g., `"math500"`, `"gsm8k"`)
+            or a list of dictionaries for custom datasets. For custom datasets,
+            each dict should represent a single test case (e.g., `{"question": "...", "answer": "..."}`).
+        model: Model identifier for LiteLLM (e.g., `"openai/gpt-4o"`, `"anthropic/claude-3-5-sonnet-20241022"`,
+            `"fake:fake-math-llm"`). Provider prefixes are strongly recommended.
+        limit: Maximum number of samples to evaluate. Useful for quick testing before
+            running a full benchmark. If `None`, evaluates all samples.
         prompt: Custom prompt template using Python format strings. Variables like
-            {prompt}, {question}, {context} will be replaced with dataset fields.
-            If None, uses the benchmark's default prompt template.
-        reference_field: Field name containing references for custom datasets.
-            If None, Themis auto-detects a consistent field (`answer` or `reference`).
+            `{question}` will be substituted with the corresponding keys from the dataset.
+            Required if evaluating a custom dataset.
+        reference_field: The dictionary key containing the expected answer (the "gold" reference).
+            If None, Themis auto-detects common fields (`"answer"` or `"reference"`).
+            Required if your custom dataset uses a different key (e.g., `reference_field="solution"`).
             This option is ignored for built-in benchmarks.
         metrics: List of metric names to compute. Common built-ins include:
-            "exact_match", "math_verify", "response_length", "bleu",
-            "rouge1", "rouge2", "rougeL", "bertscore", "meteor",
-            "pass_at_k", "codebleu", "execution_accuracy".
-            If None, benchmark defaults are used.
-        temperature: Sampling temperature (0.0 = deterministic/greedy, 1.0 = standard,
-            2.0 = very random). Recommended: 0.0 for evaluation reproducibility.
-        max_tokens: Maximum tokens in model response. Typical values: 256 for short
-            answers, 512 for medium, 2048 for long explanations or code.
+            `"exact_match"`, `"math_verify"`, `"response_length"`, `"bleu"`, `"rougeL"`.
+            If None, built-in benchmarks use their defaults; custom datasets default to `["exact_match"]`.
+        temperature: Sampling temperature (0.0 = deterministic/greedy, 1.0 = standard).
+            Recommended: 0.0 for reproducible evaluation loops.
+        max_tokens: Maximum tokens in the model's generated response. Typical values:
+            256 for short factual answers, 2048 for long reasoning paths (CoT) or code.
         num_samples: Number of responses to generate per prompt. Use >1 for Pass@K
-            metrics, ensembling, or measuring response variance.
-        max_records_in_memory: Optional cap on generation/evaluation records kept in
-            the returned report to bound memory for very large runs.
-        workers: Number of parallel workers for generation. Higher = faster but may
-            hit rate limits. Recommended: 4-16 for APIs, 32+ for local models.
-        max_retries: Number of retries for generation failures (default: 3).
-        storage: Storage location for results and cache. Defaults to ".cache/experiments".
-            Can be a local path or (future) cloud storage URI.
-        storage_backend: Optional storage backend instance. Typically an
-            ExperimentStorage or LocalFileStorageBackend (adapter). Custom
-            storage backends are not yet integrated with the evaluate() API.
-        execution_backend: Optional execution backend for custom parallelism.
-        run_id: Unique identifier for this run. If None, auto-generated from timestamp
-            (e.g., "run-2024-01-15-123456"). Use meaningful IDs for tracking experiments.
-        resume: Whether to resume from cached results.
-        on_result: Optional callback function called for each result.
-        **kwargs: Additional provider-specific options.
+            metrics or to measure generation consistency.
+        max_records_in_memory: Optional cap on records kept in the returned report to
+            bound memory for very large runs.
+        workers: Number of parallel requests to send to the provider. Higher = faster, but
+            increases the risk of HTTP 429 Rate Limit errors. Recommended: 8-16 for public APIs.
+        max_retries: Number of automatic retries for generation failures (default: 3). Failed
+            generations will ultimately result in empty text and `0.0` metric scores without crashing the run.
+        storage: Local directory path to cache results. Defaults to `".cache/experiments"`.
+        storage_backend: Optional advanced storage backend instance for custom databases.
+        execution_backend: Optional advanced execution backend for distributed workers.
+        run_id: Unique string identifier for caching this run. If you stop and restart
+            a script with the same `run_id`, it will instantly resume from where it left off.
+        resume: Whether to resume from cached results found in the storage directory under `run_id`.
+        on_result: Optional callback function triggered immediately after each sample is evaluated.
+        **kwargs: Additional provider-specific options passed directly to LiteLLM
+            (e.g., `api_key`, `base_url`, `timeout`, `top_p`).
 
     Returns:
         ExperimentReport containing generation results, evaluation metrics,
-        and metadata.
+        and metadata. You can inspect `.evaluation_report.metrics` for aggregated
+        scores, or iterate over `.generation_records` to inspect individual answers.
 
     Raises:
         ConfigurationError: If benchmark is unknown or configuration is invalid.
-        EvaluationError: If evaluation fails.
+        EvaluationError: If evaluation fails catastrophically. Note: individual item
+            failures (e.g., occasional API errors after max_retries) will *not* throw
+            an error, but will surface as empty outputs in the returned `ExperimentReport`.
 
     Example:
-        >>> report = themis.evaluate("math500", model="gpt-4", limit=10)
+        >>> import os
+        >>> os.environ["OPENAI_API_KEY"] = "sk-..."
+        >>> report = themis.evaluate("math500", model="openai/gpt-4o-mini", limit=10)
         >>> print(f"ExactMatch: {report.evaluation_report.metrics['ExactMatch'].mean:.2%}")
         ExactMatch: 85.00%
     """

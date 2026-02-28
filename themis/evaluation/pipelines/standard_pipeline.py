@@ -91,24 +91,27 @@ def _normalize_references(reference) -> list:
 
 
 class EvaluationPipeline:
-    """Traditional batch evaluation pipeline.
+    """The central engine for scoring LLM outputs against references.
 
-    This pipeline evaluates generation records using extractors, metrics,
-    and evaluation strategies. It supports slicing for subset analysis.
+    The EvaluationPipeline takes completed `GenerationRecord`s (which contain
+    the model's raw text response) and pipes them through:
+    1. An Extractor (to pull out the specific answer, like from JSON or XML tags).
+    2. A Strategy (to handle single answers vs. multiple samples like Pass@K).
+    3. A list of Metrics (to score the extracted answer against the gold reference).
 
-    Example:
-        >>> pipeline = EvaluationPipeline(
-        ...     extractor=JsonFieldExtractor("answer"),
-        ...     metrics=[ExactMatch()]
-        ... )
-        >>> report = pipeline.evaluate(records)
+    Example (Standalone Usage):
+        ```python
+        from themis.evaluation.pipelines import EvaluationPipeline
+        from themis.evaluation.extractors import RegexExtractor
+        from themis.evaluation.metrics import ExactMatch
 
-    Attributes:
-        _extractor: Extractor for parsing model output
-        _metrics: List of metrics to compute
-        _reference_selector: Function to extract reference from record
-        _strategy_resolver: Function to resolve evaluation strategy
-        _slices: List of (name, predicate) tuples for slicing
+        pipeline = EvaluationPipeline(
+            extractor=RegexExtractor(pattern=r"<answer>(.*?)</answer>"),
+            metrics=[ExactMatch()]
+        )
+        report = pipeline.evaluate(my_records)
+        print(report.metrics["ExactMatch"].mean)
+        ```
     """
 
     def __init__(
@@ -123,21 +126,21 @@ class EvaluationPipeline:
         ]
         | None = None,
     ) -> None:
-        """Initialize evaluation pipeline.
+        """Initialize the evaluation pipeline.
 
         Args:
-            extractor: Extractor for parsing model output
-            metrics: List of metrics to compute
-            reference_selector: Optional function to extract reference from record.
-                If provided, this takes precedence over item.reference from strategies.
-            strategy_resolver: Optional function to resolve evaluation strategy.
-                If using a custom reference_selector with DefaultEvaluationStrategy,
-                the selector will take precedence.
+            extractor: The component responsible for parsing the final answer out of
+                the model's raw text.
+            metrics: A list of instantiated metrics (e.g., `[ExactMatch(), RougeL()]`)
+                to compute against the extracted answer.
+            reference_selector: An optional custom function to extract the expected
+                reference from the dataset row. If provided, overrides default behavior.
+            strategy_resolver: Optional function to dictate how multiple samples
+                per prompt are handled (e.g., majority voting, best-of-N).
 
         Note:
-            When using DefaultEvaluationStrategy with a custom reference_selector,
-            the reference_selector will override the default behavior. Consider
-            using a custom strategy if you need more control over reference selection.
+            If you provide a custom `reference_selector` but use the default strategy,
+            your custom selector still takes precedence.
         """
         self._extractor = extractor
         self._metrics = list(metrics)

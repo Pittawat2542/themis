@@ -18,7 +18,28 @@ logger = logging.getLogger(__name__)
 
 
 class GenerationRunner:
-    """Delegates generation tasks to an injected executor with strategy support."""
+    """The execution engine that runs LLM requests in parallel with built-in resilience.
+
+    The GenerationRunner takes a list of `GenerationTask`s (prepared prompts + model specs)
+    and executes them against an LLM provider (like LiteLLM or vLLM). It handles the heavy
+    lifting of evaluation scripts:
+    1. Parallel execution (via ThreadPoolExecutor or custom backends).
+    2. Automatic retries with exponential backoff for rate limits (HTTP 429) or transient errors.
+    3. Applying advanced generation strategies (like Self-Consistency/Best-of-N).
+
+    Example:
+        ```python
+        from themis.generation.runner import GenerationRunner
+        from themis.generation.providers.litellm_provider import LiteLLMExecutor
+
+        runner = GenerationRunner(
+            executor=LiteLLMExecutor(),
+            max_parallel=10,
+            max_retries=3
+        )
+        records = list(runner.run(my_tasks))
+        ```
+    """
 
     _NON_RETRYABLE_ERROR_MARKERS = (
         "authentication",
@@ -47,6 +68,24 @@ class GenerationRunner:
         retry_max_delay: float | None = 2.0,
         max_in_flight_tasks: int | None = None,
     ) -> None:
+        """Initialize the GenerationRunner.
+
+        Args:
+            executor: The component that actually talks to the LLM (e.g., `LiteLLMExecutor`).
+            strategy_resolver: Optional function to determine how many times to sample a prompt.
+                Defaults to single-attempt generation.
+            execution_backend: Optional advanced backend (like Ray or Modal) for distributed
+                cluster execution instead of local threads.
+            max_parallel: Number of concurrent LLM requests to make. Increase for faster runs,
+                but watch out for provider rate limits. Default is 1 (sequential).
+            max_retries: How many times to retry a failed request before giving up.
+                Auth/Permission errors are never retried. Default is 3.
+            retry_initial_delay: Seconds to wait before the first retry. Default: 0.5s.
+            retry_backoff_multiplier: Factor to multiply the delay by after each failure. Default: 2.0.
+            retry_max_delay: Maximum seconds to wait between retries. Default: 2.0s.
+            max_in_flight_tasks: Optimization for memory. Caps how many tasks are held in RAM
+                simultaneously. Defaults to `max_parallel * 4`.
+        """
         self._executor = executor
         self._strategy_resolver = strategy_resolver or (
             lambda task: strategies.SingleAttemptStrategy()

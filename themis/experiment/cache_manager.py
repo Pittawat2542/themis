@@ -12,13 +12,15 @@ from themis import storage as experiment_storage
 class CacheManager:
     """Manages experiment caching and resumability.
 
-    This class handles all storage-related operations including:
-    - Loading cached generation records
-    - Loading cached evaluations
-    - Saving datasets for resumability
-    - Saving generation records and evaluations
+    The CacheManager connects an `ExperimentOrchestrator` to a storage backend
+    (like a local `.cache/` folder). It allows Themis to save incremental progress
+    during long evaluations. If your script crashes, rate limits out, or you simply
+    stop it, the CacheManager ensures you can resume instantly by passing the same `run_id`.
 
-    Single Responsibility: Cache and storage management
+    Features:
+    - Loading prior generation records (saving LLM API costs).
+    - Saving new generations and evaluations incrementally.
+    - Caching the underlying dataset so results map exactly to your inputs.
     """
 
     def __init__(

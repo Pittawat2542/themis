@@ -18,10 +18,15 @@ from themis.storage import ExperimentStorage
 
 
 class ComparisonEngine:
-    """Engine for comparing multiple experiment runs.
+    """Engine for comparing multiple experiment runs with statistical rigor.
 
-    This class loads experiment results from storage and performs
-    pairwise comparisons across all metrics with statistical testing.
+    This class loads evaluation results from storage and performs pairwise
+    comparisons across all metrics. It applies statistical tests (like Bootstrap or T-Test)
+    to determine if the difference between two runs is statistically significant,
+    rather than just noise.
+
+    Attributes:
+        storage: The experiment storage backend.
     """
 
     def __init__(
@@ -35,17 +40,18 @@ class ComparisonEngine:
         n_permutations: int = 10000,
         multiple_comparison_correction: str | None = "holm-bonferroni",
     ):
-        """Initialize comparison engine.
+        """Initialize the comparison engine.
 
         Args:
-            storage: Experiment storage instance
-            storage_path: Path to storage (if storage not provided)
-            statistical_test: Type of statistical test to use
-            alpha: Significance level for tests
-            n_bootstrap: Number of bootstrap iterations
-            n_permutations: Number of permutations for permutation test
-            multiple_comparison_correction: Correction policy for multiple
-                comparisons. Use "holm-bonferroni" (default) or None.
+            storage: An injected `ExperimentStorage` instance. Preferred over `storage_path`.
+            storage_path: Path to the local `.cache/` folder if not injecting a storage object.
+            statistical_test: The statistical method used to compute p-values and confidence intervals.
+                Defaults to Bootstrap, which is robust for most non-parametric NLP metrics.
+            alpha: Significance level threshold (e.g., 0.05 means 95% confidence required to declare a winner).
+            n_bootstrap: Number of bootstrap iterations if using `BOOTSTRAP`.
+            n_permutations: Number of permutations if using `PERMUTATION` test.
+            multiple_comparison_correction: Method to correct p-values when comparing many runs
+                to avoid false positives. Defaults to "holm-bonferroni".
         """
         if storage is None and storage_path is None:
             raise ConfigurationError("Either storage or storage_path must be provided")
@@ -395,25 +401,35 @@ def compare_runs(
     statistical_test: StatisticalTest = StatisticalTest.BOOTSTRAP,
     alpha: float = 0.05,
 ) -> reports.ComparisonReport:
-    """Convenience function to compare runs.
+    """Compare the results of two or more runs using statistical tests.
+
+    Takes a list of `run_id`s, loads their metric scores from the storage
+    directory, and computes whether one run is definitively better than another.
+    It compares sample-by-sample, enabling robust paired significance tests.
 
     Args:
-        run_ids: List of run IDs to compare
-        storage_path: Path to experiment storage
-        metrics: List of metrics to compare (None = all)
-        statistical_test: Type of statistical test
-        alpha: Significance level
+        run_ids: A list of previously evaluated run IDs (e.g., `["run_baseline", "run_v2"]`).
+            Must contain at least 2 IDs.
+        storage_path: Directory where evaluations are cached (usually `.cache/experiments`).
+        metrics: Specific metrics to compare. If None, it aligns and compares all
+            metrics that are common across the given runs.
+        statistical_test: Method for testing significance. Defaults to `BOOTSTRAP`.
+        alpha: P-value threshold (default 0.05). If p < 0.05, the difference is significant.
 
     Returns:
-        ComparisonReport with all comparisons
+        A `ComparisonReport` object containing the win/loss matrix, best-performing run,
+        and pairwise tests. Call `.summary()` on it for a human-readable text block.
 
     Example:
-        >>> report = compare_runs(
-        ...     ["run-gpt4", "run-claude"],
-        ...     storage_path=".cache/experiments",
-        ...     metrics=["ExactMatch", "BLEU"],
-        ... )
-        >>> print(report.summary())
+        ```python
+        from themis.comparison import compare_runs
+
+        report = compare_runs(
+            run_ids=["gpt-4o", "claude-3-5-sonnet"],
+            storage_path=".cache/experiments"
+        )
+        print(report.summary())
+        ```
     """
     engine = ComparisonEngine(
         storage_path=storage_path,

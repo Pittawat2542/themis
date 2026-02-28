@@ -19,44 +19,39 @@ logger = logging.getLogger(__name__)
 
 
 class BaseDataset:
-    """Base implementation for dataset classes that implement DatasetAdapter protocol.
+    """The foundation for custom datasets in Themis.
 
     This class provides a reusable implementation of common dataset operations
-    including filtering, limiting, and stratification. It satisfies the
-    DatasetAdapter protocol by implementing iter_samples().
+    (like `.filter()`, `.limit()`, and `.shuffle()`). If you are loading your own
+    data (e.g., from a CSV, a database, or Hugging Face), you can inherit from
+    `BaseDataset` or simply use it directly to wrap your list of dictionaries.
 
-    The class implements the structural DatasetAdapter protocol without
-    explicit inheritance, using duck typing. At runtime, instances will
-    satisfy isinstance(obj, DatasetAdapter) checks.
+    At runtime, instances of this class satisfy the `DatasetAdapter` protocol
+    needed by `themis.evaluate()`.
 
-    Subclasses should provide the initial samples, schema, and metadata.
+    Example (Wrapping a list of dicts directly):
+        ```python
+        from themis.datasets import BaseDataset, DatasetSchema, DatasetMetadata
 
-    Protocol Compliance:
-        Implements DatasetAdapter protocol via iter_samples() method
+        samples = [
+            {"id": "1", "question": "What is 2+2?", "answer": "4"},
+            {"id": "2", "question": "What is 3+3?", "answer": "6"},
+        ]
 
-    Examples:
-        class MyDataset(BaseDataset):
-            def __init__(self):
-                samples = [
-                    {"id": "1", "problem": "What is 2+2?", "answer": "4"},
-                    {"id": "2", "problem": "What is 3+3?", "answer": "6"},
-                ]
-                schema = DatasetSchema(
-                    id_field="id",
-                    reference_field="answer",
-                    required_fields={"id", "problem", "answer"},
-                )
-                metadata = DatasetMetadata(
-                    name="SimpleArithmetic",
-                    version="1.0",
-                    total_samples=2,
-                )
-                super().__init__(samples, schema, metadata)
+        schema = DatasetSchema(
+            id_field="id",
+            reference_field="answer",
+            required_fields={"id", "question", "answer"},
+        )
 
-        # Verify protocol compliance
-        >>> from themis.interfaces import DatasetAdapter
-        >>> dataset = MyDataset()
-        >>> isinstance(dataset, DatasetAdapter)  # True
+        dataset = BaseDataset(
+            samples=samples,
+            schema=schema,
+            metadata=DatasetMetadata(name="SimpleMath")
+        )
+
+        # Now you can pass `dataset` to themis.evaluate()
+        ```
     """
 
     def __init__(
@@ -66,16 +61,18 @@ class BaseDataset:
         metadata: dataset_schema.DatasetMetadata,
         validate: bool = True,
     ):
-        """Initialize dataset.
+        """Initialize a new dataset wrapper.
 
         Args:
-            samples: Iterable of sample dictionaries
-            schema: Dataset schema
-            metadata: Dataset metadata
-            validate: Whether to validate samples against schema (default: True)
+            samples: The raw data you want to evaluate, typically a list of dictionaries.
+            schema: Defines the required shape of your `samples` (e.g., what is the
+                ID field? What is the expected answer field?).
+            metadata: Basic info about this dataset (name, version, etc.).
+            validate: If True, checks every sample against the `schema` upon creation.
+                Turn off for massive datasets to save time. Defaults to True.
 
         Raises:
-            ValueError: If validation is enabled and samples don't match schema
+            DatasetError: If `validate=True` and a sample is missing a required field.
         """
         self._samples = list(samples)
         self._schema = schema

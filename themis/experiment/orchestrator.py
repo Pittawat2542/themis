@@ -97,11 +97,31 @@ class _ExperimentContext:
 class ExperimentOrchestrator:
     """Orchestrates experiment execution: generation → evaluation → reporting.
 
-    This class coordinates the experiment workflow using focused managers:
-    - CacheManager: Handles storage and resumability
-    - IntegrationManager: Handles WandB and HuggingFace Hub
+    The Orchestrator is the engine powering `themis.evaluate()` and the `ExperimentSession` API.
+    It coordinates the entire lifecycle of an experiment run, expanding datasets into tasks,
+    piping them through GenerationRunners, feeding them into EvaluationPipelines,
+    and managing caching so interrupted runs can be resumed.
 
-    Single Responsibility: Orchestration of experiment flow
+    Example:
+        ```python
+        import themis
+        from themis.experiment.orchestrator import ExperimentOrchestrator
+        from themis.generation.plan import GenerationPlan
+        # ... assuming plan, runner, pipeline, and cache are instantiated
+
+        orchestrator = ExperimentOrchestrator(
+            generation_plan=plan,
+            generation_runner=runner,
+            evaluation_pipeline=pipeline,
+            cache_manager=cache,
+        )
+
+        report = orchestrator.run(
+            dataset=[{"question": "2+2", "expected": "4"}],
+            run_id="my-experiment-run",
+            resume=True
+        )
+        ```
     """
 
     def __init__(
@@ -113,14 +133,16 @@ class ExperimentOrchestrator:
         cache_manager: CacheManager | None = None,
         integration_manager: IntegrationManager | None = None,
     ) -> None:
-        """Initialize experiment orchestrator.
+        """Initialize the experiment orchestrator.
 
         Args:
-            generation_plan: Plan for expanding dataset into tasks
-            generation_runner: Runner for executing generation tasks
-            evaluation_pipeline: Pipeline for evaluating outputs
-            cache_manager: Manager for caching and resumability
-            integration_manager: Manager for external integrations
+            generation_plan: The plan dictating how dataset rows expand into concrete tasks (prompts/models).
+            generation_runner: The async/threaded engine that physically executes LLM requests.
+            evaluation_pipeline: The pipeline containing metrics to score outputs against references.
+            cache_manager: Manager for writing/reading `.cache/experiments/{run_id}` to allow resumability.
+                If None, memory-only execution is used.
+            integration_manager: Manager that pushes real-time results to Weights & Biases or HF Hub.
+                If None, a default no-op manager is used.
         """
         self._plan = generation_plan
         self._runner = generation_runner
@@ -151,22 +173,32 @@ class ExperimentOrchestrator:
         evaluation_batch_size: int = 100,
         max_records_in_memory: int | None = None,
     ) -> ExperimentReport:
-        """Run experiment: generate responses, evaluate, and report results.
+        """Execute the experiment run pipeline: fetch, generate, evaluate, and assemble report.
+
+        This method expands the dataset into tasks, checks the cache for previously
+        completed work (if `resume=True`), queues up missing work to the generation runner,
+        batches the generations into the evaluation pipeline, and produces a final report.
 
         Args:
-            dataset: Dataset samples to use (must be pre-resolved)
-            max_samples: Optional limit on number of samples
-            run_id: Optional run identifier for caching
-            resume: Whether to resume from cached results
-            cache_results: Whether to cache new results
-            on_result: Optional callback for each generation result
-            run_manifest: Required reproducibility manifest for this run
-            evaluation_batch_size: Number of records per evaluation batch
-            max_records_in_memory: Maximum generation/evaluation records to keep
-                in the final report. None keeps all records.
+            dataset: A resolved list of dataset samples (dictionaries) to evaluate.
+            max_samples: Optional limit on the number of samples to process. Used for quick tests.
+            run_id: A unique identifier used to look up cached results. If None, a timestamp ID is used.
+            resume: Whether to skip generating/evaluating samples that were already completed
+                in a previous run with this same `run_id`.
+            cache_results: Whether to save freshly generated results to disk for future resumption.
+            on_result: An optional callback function triggered immediately after a generation
+                record is evaluated. Useful for updating real-time UIs.
+            run_manifest: A reproducibility dictionary mapping model configurations and prompt hashes.
+                Used to ensure runs with the exact same variables can be reproduced precisely.
+            evaluation_batch_size: How many records to evaluate before flushing stats. Default: 100.
+            max_records_in_memory: Memory optimization. If set, limits the number of historical
+                generation/evaluation records saved in RAM (and thus in the returned report). `None` keeps all.
 
         Returns:
-            ExperimentReport with generation results, evaluation, and metadata
+            An `ExperimentReport` containing standard aggregated metrics, failure logs, and individual records.
+
+        Raises:
+            ConfigurationError: If `evaluation_batch_size` or `max_records_in_memory` are < 1.
         """
         logger.info("Orchestrator: Initializing experiment run")
         if evaluation_batch_size < 1:
