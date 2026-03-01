@@ -3,7 +3,32 @@
 All notable changes to Themis will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.4.0] - 2026-03-02
+
+### Added
+- Added `from_function` helper and type mapping for tool auto-packing.
+- Implemented conditional metrics and adaptive evaluation pipeline.
+- Added conversation paradigms and agentic evaluation examples.
+
+### Changed
+- Improved DX across entities, providers, presets, and pipelines.
+- Consolidated comparison and provider namespaces to reduce fragmentation.
+- Introduced builder registry for experiment types.
+- Overhauled cookbook and getting-started guides for V1 API.
+- Comprehensively updated API cross-reference docstrings and interface documentation across core modules.
+- Extracted and unified sub-components (`StorageBackend` -> `ExperimentStorage`, `comparison`, `api`, `server`, and more).
+- Updated architecture diagrams and references for refactored directories.
+
+### Refactored
+- Decomposed large monolithic files into cohesive modular components (`storage`, `comparison`, `execution`, `generation`, `evaluation`, `benchmarks`, `visualization`, `conversation`, `progress`, `server`).
+- Replaced hand-rolled serialization logic with dataclass introspection.
+
+### Fixed
+- Fixed `AsyncLLMEngine` import for vLLM compatibility.
+- Fixed `FakeMathModelClient` and research loop caching for CI validation.
+
+### Removed
+- Removed `httpx` from dependencies.
 
 ## [1.3.0] - 2026-02-27
 
