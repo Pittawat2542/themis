@@ -39,15 +39,15 @@ Themis follows a **hexagonal (ports-and-adapters)** architecture. Dependencies f
 ├──────────────┴──────────────┴───────────────────────────┤
 │                 Infrastructure Layer                      │
 │  storage/core.py, storage/database.py, storage/locking    │
-│  backends/execution.py, backends/storage.py               │
+│  backends/execution/, backends/storage.py                 │
 │  config/runtime.py, config/schema.py                      │
 │  providers/registry.py, datasets/registry.py              │
 │  integrations/ (langfuse, wandb, huggingface)             │
 ├─────────────────────────────────────────────────────────┤
 │                    Presentation Layer                      │
 │  experiment/export.py (CSV, HTML, JSON, LaTeX)            │
-│  experiment/visualization.py, server/app.py               │
-│  presets/benchmarks.py (benchmark configs)                 │
+│  experiment/visualization.py, server/                     │
+│  presets/benchmarks.py (benchmark configs)                │
 │  utils/ (dashboard, progress, logging, tracing)           │
 └─────────────────────────────────────────────────────────┘
 ```

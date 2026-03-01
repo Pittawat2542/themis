@@ -66,7 +66,7 @@ themis/
 │   └── metrics/
 ├── backends/                # Pluggable backends
 │   ├── storage.py
-│   └── execution.py
+│   └── execution/
 ├── generation/              # LLM generation
 ├── experiment/              # Experiment orchestration
 ├── storage/                 # Storage adapters
