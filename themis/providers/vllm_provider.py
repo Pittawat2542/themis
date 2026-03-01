@@ -141,8 +141,13 @@ class VLLMProvider(StatelessTaskExecutor):
     @staticmethod
     def _load_vllm_classes():
         try:
-            from vllm import AsyncLLMEngine, SamplingParams
+            from vllm import SamplingParams
             from vllm.lora.request import LoraRequest
+
+            try:
+                from vllm import AsyncLLMEngine
+            except ImportError:
+                from vllm.engine.async_llm_engine import AsyncLLMEngine
         except ImportError as exc:  # pragma: no cover - optional dep
             from themis.exceptions import DependencyError
 
