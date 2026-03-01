@@ -1,8 +1,5 @@
 """Tool use primitives for agentic workflows.
 
-.. warning::
-    This module is experimental and subject to backwards-incompatible changes.
-
 This module provides abstractions for defining and executing tools
 (functions) that models can call during generation. This enables
 agentic workflows, function calling, and tool-augmented generation.
@@ -43,18 +40,11 @@ Examples:
 
 from __future__ import annotations
 
+import inspect
 import time
 import uuid
-import warnings
 from dataclasses import dataclass, field
-from typing import Any, Callable
-
-warnings.warn(
-    "Themis tool primitives are currently experimental "
-    "and subject to breaking changes in future minor releases.",
-    FutureWarning,
-    stacklevel=2,
-)
+from typing import Any, Callable, get_type_hints
 
 
 @dataclass
@@ -72,8 +62,9 @@ class ToolDefinition:
     name: str
     description: str
     parameters: dict[str, Any]
-    handler: Callable[[dict[str, Any]], Any]
+    handler: Callable[..., Any]
     metadata: dict[str, Any] = field(default_factory=dict)
+    auto_unpack: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert tool definition to dictionary (without handler).
@@ -91,6 +82,9 @@ class ToolDefinition:
     def validate_arguments(self, arguments: dict[str, Any]) -> list[str]:
         """Validate arguments against parameter schema.
 
+        Checks required fields, rejects unknown fields, and validates
+        JSON Schema types (string, number, integer, boolean, array, object).
+
         Args:
             arguments: Arguments to validate
 
@@ -99,20 +93,132 @@ class ToolDefinition:
         """
         errors = []
 
-        # Simple validation - check required fields
+        # Check required fields
         if "required" in self.parameters:
-            for field in self.parameters["required"]:
-                if field not in arguments:
-                    errors.append(f"Missing required field: {field}")
+            for req_field in self.parameters["required"]:
+                if req_field not in arguments:
+                    errors.append(f"Missing required field: {req_field}")
+
+        properties = self.parameters.get("properties", {})
 
         # Check for unknown fields
-        if "properties" in self.parameters:
-            known_fields = set(self.parameters["properties"].keys())
-            for field in arguments.keys():
-                if field not in known_fields:
-                    errors.append(f"Unknown field: {field}")
+        known_fields = set(properties.keys())
+        for arg_field in arguments:
+            if arg_field not in known_fields:
+                errors.append(f"Unknown field: {arg_field}")
+
+        # Validate types
+        _JSON_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
+            "string": str,
+            "number": (int, float),
+            "integer": int,
+            "boolean": bool,
+            "array": list,
+            "object": dict,
+        }
+        for arg_field, value in arguments.items():
+            prop_schema = properties.get(arg_field)
+            if prop_schema is None:
+                continue
+            expected_type_name = prop_schema.get("type")
+            if expected_type_name is None:
+                continue
+            expected_type = _JSON_TYPE_MAP.get(expected_type_name)
+            if expected_type is None:
+                continue
+            # bool is a subclass of int in Python; treat booleans as invalid integers
+            if expected_type_name == "integer" and isinstance(value, bool):
+                errors.append(
+                    f"Field '{arg_field}': expected {expected_type_name}, "
+                    f"got {type(value).__name__}"
+                )
+            elif not isinstance(value, expected_type):
+                errors.append(
+                    f"Field '{arg_field}': expected {expected_type_name}, "
+                    f"got {type(value).__name__}"
+                )
 
         return errors
+
+    @classmethod
+    def from_function(
+        cls,
+        fn: Callable[..., Any],
+        *,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> ToolDefinition:
+        """Create a ToolDefinition by introspecting a Python function.
+
+        Generates JSON Schema parameters from the function's type
+        annotations and docstring.
+
+        Args:
+            fn: The function to wrap as a tool.
+            name: Override tool name (defaults to ``fn.__name__``).
+            description: Override description (defaults to first line
+                of the function's docstring, or an empty string).
+
+        Returns:
+            ToolDefinition with auto-generated schema and ``auto_unpack=True``.
+
+        Examples:
+            >>> def add(a: int, b: int) -> int:
+            ...     return a + b
+            >>> tool = ToolDefinition.from_function(add)
+            >>> tool.name
+            'add'
+            >>> tool.parameters["required"]
+            ['a', 'b']
+        """
+        tool_name = name or fn.__name__
+        if description is not None:
+            tool_description = description
+        else:
+            doc = inspect.getdoc(fn)
+            tool_description = doc.split("\n")[0] if doc else ""
+
+        _PYTHON_TO_JSON: dict[type, str] = {
+            str: "string",
+            int: "integer",
+            float: "number",
+            bool: "boolean",
+            list: "array",
+            dict: "object",
+        }
+
+        sig = inspect.signature(fn)
+        try:
+            hints = get_type_hints(fn)
+        except Exception:
+            hints = {}
+
+        properties: dict[str, Any] = {}
+        required: list[str] = []
+
+        for param_name, param in sig.parameters.items():
+            annotation = hints.get(param_name)
+            json_type = (
+                _PYTHON_TO_JSON.get(annotation, "string") if annotation else "string"
+            )
+            properties[param_name] = {"type": json_type}
+            if param.default is inspect.Parameter.empty:
+                required.append(param_name)
+
+        parameters: dict[str, Any] = {
+            "type": "object",
+            "properties": properties,
+        }
+        if required:
+            parameters["required"] = required
+
+        return cls(
+            name=tool_name,
+            description=tool_description,
+            parameters=parameters,
+            handler=fn,
+            auto_unpack=True,
+        )
 
 
 @dataclass
@@ -280,7 +386,10 @@ class ToolRegistry:
         # Execute tool
         start = time.perf_counter()
         try:
-            result = tool.handler(call.arguments)
+            if tool.auto_unpack:
+                result = tool.handler(**call.arguments)
+            else:
+                result = tool.handler(call.arguments)
             elapsed = (time.perf_counter() - start) * 1000
             return ToolResult(
                 call=call,
