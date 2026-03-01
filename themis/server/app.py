@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from themis.comparison import compare_runs
+from themis.experiment.comparison import compare_runs
 from themis.evaluation.statistics.comparison_tests import StatisticalTest
 from themis.storage import ExperimentStorage
 from themis._version import __version__
@@ -59,6 +59,53 @@ class ErrorResponse(BaseModel):
     detail: str | None = None
 
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.subscriptions: Dict[str, set[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        for clients in self.subscriptions.values():
+            clients.discard(websocket)
+
+    def subscribe(self, websocket: WebSocket, run_id: str):
+        if run_id not in self.subscriptions:
+            self.subscriptions[run_id] = set()
+        self.subscriptions[run_id].add(websocket)
+
+    def unsubscribe(self, websocket: WebSocket, run_id: str):
+        if run_id in self.subscriptions:
+            self.subscriptions[run_id].discard(websocket)
+
+    async def broadcast(self, message: dict):
+        run_id = message.get("run_id")
+        if run_id and run_id in self.subscriptions:
+            # Targeted broadcast
+            for connection in list(self.subscriptions[run_id]):
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    self.disconnect(connection)
+        elif not run_id:
+            # Global broadcast
+            for connection in list(self.active_connections):
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    self.disconnect(connection)
+
+
+# Global manager instance
+manager = ConnectionManager()
+_manager = manager
+
+
 def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     """Create FastAPI application.
 
@@ -95,24 +142,6 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
             StaticFiles(directory=str(static_dir), html=True),
             name="static",
         )
-
-    # WebSocket connection manager
-    class ConnectionManager:
-        def __init__(self):
-            self.active_connections: List[WebSocket] = []
-
-        async def connect(self, websocket: WebSocket):
-            await websocket.accept()
-            self.active_connections.append(websocket)
-
-        def disconnect(self, websocket: WebSocket):
-            self.active_connections.remove(websocket)
-
-        async def broadcast(self, message: dict):
-            for connection in self.active_connections:
-                await connection.send_json(message)
-
-    manager = ConnectionManager()
 
     # ===== REST ENDPOINTS =====
 
@@ -152,11 +181,19 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
                 for name, scores in metrics_dict.items()
             }
 
+            # entry.status is an Enum (`RunStatus.IN_PROGRESS`), but our mock factory stringifies it maybe.
+            # Handle both string and enum cleanly.
+            status_val = (
+                entry.status.value
+                if hasattr(entry.status, "value")
+                else str(entry.status)
+            )
+
             summaries.append(
                 RunSummary(
                     run_id=run_id,
                     experiment_id=entry.experiment_id,
-                    status=entry.status.value,
+                    status=status_val,
                     num_samples=len(eval_records),
                     metrics=avg_metrics,
                     created_at=entry.created_at,
@@ -225,10 +262,17 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
             for name, scores in metrics_dict.items()
         }
 
+        # Handle both string and enum cleanly.
+        status_val = (
+            run_entry.status.value
+            if hasattr(run_entry.status, "value")
+            else str(run_entry.status)
+        )
+
         return RunDetail(
             run_id=run_id,
             experiment_id=run_entry.experiment_id,
-            status=run_entry.status.value,
+            status=status_val,
             num_samples=len(eval_records),
             metrics=avg_metrics,
             samples=samples,
@@ -313,7 +357,13 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
             while True:
                 # Receive message from client
                 data = await websocket.receive_text()
-                message = json.loads(data)
+                try:
+                    message = json.loads(data)
+                except json.JSONDecodeError:
+                    await websocket.send_json(
+                        {"type": "error", "message": "Invalid JSON mapping"}
+                    )
+                    continue
 
                 msg_type = message.get("type")
 
@@ -322,15 +372,19 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
 
                 elif msg_type == "subscribe":
                     run_id = message.get("run_id")
-                    # TODO: Implement run subscription logic
-                    await websocket.send_json({"type": "subscribed", "run_id": run_id})
+                    if run_id:
+                        manager.subscribe(websocket, run_id)
+                        await websocket.send_json(
+                            {"type": "subscribed", "run_id": run_id}
+                        )
 
                 elif msg_type == "unsubscribe":
                     run_id = message.get("run_id")
-                    # TODO: Implement unsubscribe logic
-                    await websocket.send_json(
-                        {"type": "unsubscribed", "run_id": run_id}
-                    )
+                    if run_id:
+                        manager.unsubscribe(websocket, run_id)
+                        await websocket.send_json(
+                            {"type": "unsubscribed", "run_id": run_id}
+                        )
 
                 else:
                     await websocket.send_json(
@@ -346,4 +400,4 @@ def create_app(storage_path: str | Path = ".cache/experiments") -> FastAPI:
     return app
 
 
-__all__ = ["create_app"]
+__all__ = ["create_app", "manager", "_manager", "ConnectionManager"]
