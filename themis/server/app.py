@@ -7,102 +7,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
 from themis.experiment.comparison import compare_runs
 from themis.evaluation.statistics.comparison_tests import StatisticalTest
 from themis.storage import ExperimentStorage
 from themis._version import __version__
 
+from themis.server.schemas import RunSummary, RunDetail, ComparisonRequest
+from themis.server.websocket import manager, ConnectionManager
 
-class RunSummary(BaseModel):
-    """Summary of an experiment run."""
-
-    run_id: str
-    experiment_id: str = "default"
-    status: str
-    num_samples: int = 0
-    metrics: Dict[str, float] = Field(default_factory=dict)
-    created_at: str | None = None
-
-
-class RunDetail(BaseModel):
-    """Detailed information about a run."""
-
-    run_id: str
-    experiment_id: str = "default"
-    status: str
-    num_samples: int
-    metrics: Dict[str, float]
-    samples: List[Dict[str, Any]] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class ComparisonRequest(BaseModel):
-    """Request to compare multiple runs."""
-
-    run_ids: List[str]
-    metrics: List[str] | None = None
-    statistical_test: str = "bootstrap"
-    alpha: float = 0.05
-
-
-class ErrorResponse(BaseModel):
-    """Error response model."""
-
-    error: str
-    detail: str | None = None
-
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-        self.subscriptions: Dict[str, set[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-        for clients in self.subscriptions.values():
-            clients.discard(websocket)
-
-    def subscribe(self, websocket: WebSocket, run_id: str):
-        if run_id not in self.subscriptions:
-            self.subscriptions[run_id] = set()
-        self.subscriptions[run_id].add(websocket)
-
-    def unsubscribe(self, websocket: WebSocket, run_id: str):
-        if run_id in self.subscriptions:
-            self.subscriptions[run_id].discard(websocket)
-
-    async def broadcast(self, message: dict):
-        run_id = message.get("run_id")
-        if run_id and run_id in self.subscriptions:
-            # Targeted broadcast
-            for connection in list(self.subscriptions[run_id]):
-                try:
-                    await connection.send_json(message)
-                except Exception:
-                    self.disconnect(connection)
-        elif not run_id:
-            # Global broadcast
-            for connection in list(self.active_connections):
-                try:
-                    await connection.send_json(message)
-                except Exception:
-                    self.disconnect(connection)
-
-
-# Global manager instance
-manager = ConnectionManager()
 _manager = manager
 
 
