@@ -95,37 +95,6 @@ themis list runs --storage .cache/experiments
 themis list metrics
 ```
 
-## Session API (Advanced Workflow)
-
-Use the `ExperimentSession` API when you want explicit programmatic control over the dataset, metric pipeline, execution parallelization, and storage backend.
-
-```python
-from themis.evaluation.metric_pipeline import MetricPipeline
-from themis.presets import get_benchmark_preset
-from themis.session import ExperimentSession
-from themis.specs import ExecutionSpec, ExperimentSpec, StorageSpec
-
-# 1. Load the benchmark preset
-preset = get_benchmark_preset("gsm8k")
-pipeline = MetricPipeline(extractor=preset.extractor, metrics=preset.metrics)
-
-# 2. Define the explicit specification
-spec = ExperimentSpec(
-    dataset=preset.load_dataset(limit=100),
-    prompt=preset.prompt_template.template,
-    model="litellm:gpt-4o",
-    sampling={"temperature": 0.0, "max_tokens": 512},
-    pipeline=pipeline,
-    run_id="gsm8k-gpt4o-eval",
-)
-
-# 3. Run the session with explicit execution and storage configurations
-report = ExperimentSession().run(
-    spec,
-    execution=ExecutionSpec(workers=8),
-    storage=StorageSpec(path=".cache/experiments", cache=True),
-)
-```
 
 ## Built-in Coverage
 

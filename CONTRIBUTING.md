@@ -86,7 +86,7 @@ files with `ruff format --check` and `ruff check` before each commit.
 
 - `themis/`: Source code
 - `tests/`: Test suite
-- `examples-simple/`: Runnable vNext example scripts
+- `examples/`: Runnable vNext example scripts
 - `docs/`: Documentation
 
 ## Submitting Changes

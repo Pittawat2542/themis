@@ -111,3 +111,8 @@ module = [
     "vllm.*",
 ]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.151.9",
+]

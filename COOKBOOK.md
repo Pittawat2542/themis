@@ -12,6 +12,8 @@ This is a quick reference guide to the Themis examples cookbook. For detailed ru
 | I want to compare two models statistically | [`examples/04_comparison.py`](examples/04_comparison.py) | 15 min |
 | I want to interact with Themis via a REST/WebSocket API | [`examples/05_api_server.py`](examples/05_api_server.py) | 15 min |
 | I want to write a custom evaluation metric | [`examples/06_custom_metrics.py`](examples/06_custom_metrics.py) | 15 min |
+| I want to create a custom storage backend | [`examples/13_custom_storage.py`](examples/13_custom_storage.py) | 15 min |
+| I want to build a multi-turn agent | [`examples/14_agentic_evaluation.py`](examples/14_agentic_evaluation.py) | 20 min |
 | I want to run a complex, multi-stage R&D pipeline | [`examples/countdown/`](examples/countdown/) | 60 min |
 
 
