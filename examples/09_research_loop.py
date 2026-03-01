@@ -21,6 +21,7 @@ report_a = evaluate(
     model="fake-math-llm",
     limit=10,
     temperature=0.0,
+    storage=storage_root,
     run_id=run_a,
 )
 
@@ -29,6 +30,7 @@ report_b = evaluate(
     model="fake-math-llm",
     limit=10,
     temperature=0.7,
+    storage=storage_root,
     run_id=run_b,
 )
 
