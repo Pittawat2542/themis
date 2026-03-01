@@ -63,7 +63,7 @@ Complete benchmark configuration.
 ```python
 from themis.evaluation import extractors, metrics
 from themis.generation.templates import PromptTemplate
-from themis.presets.benchmarks import BenchmarkPreset, register_benchmark
+from themis.presets.core import BenchmarkPreset, register_benchmark
 
 
 def my_dataset_loader(limit=None):
