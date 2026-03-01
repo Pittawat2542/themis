@@ -338,3 +338,71 @@ def _resolve_evaluation_context(
         reference_field=selected_reference_field,
         dataset_id_field=dataset_id_field,
     )
+
+
+def _wire_storage(storage: Any, storage_backend: Any, resume: bool) -> Any:
+    """Wire up the storage components based on configuration."""
+    from themis.storage import resolve_storage
+    from themis.experiment.cache_manager import CacheManager
+
+    resolved_storage_backend = resolve_storage(storage, storage_backend=storage_backend)
+    cache_manager = CacheManager(
+        storage=resolved_storage_backend,
+        enable_resume=resume,
+        enable_cache=resume,
+    )
+    return cache_manager
+
+
+def _build_run_manifest(
+    model_id: str,
+    provider_name: str,
+    provider_options: dict,
+    temperature: float,
+    top_p: float,
+    max_tokens: int,
+    num_samples: int,
+    pipeline: Any,
+    dataset_list: list,
+    prompt_template: str,
+) -> Any:
+    """Build the reproducibility manifest."""
+    from themis.experiment.manifest import build_reproducibility_manifest
+
+    manifest = build_reproducibility_manifest(
+        model=model_id,
+        provider=provider_name,
+        provider_options=provider_options,
+        sampling={
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens,
+        },
+        num_samples=num_samples,
+        evaluation_config=_build_evaluation_config(pipeline),
+        seeds={
+            "provider_seed": provider_options.get("seed"),
+            "sampling_seed": None,
+        },
+        dataset_fingerprint=_dataset_fingerprint(dataset_list),
+        prompt_fingerprint=_prompt_fingerprint(prompt_template),
+    )
+    return manifest
+
+
+def _build_orchestrator(
+    plan: Any,
+    runner: Any,
+    pipeline: Any,
+    cache_manager: Any,
+) -> Any:
+    """Build the ExperimentOrchestrator."""
+    from themis.experiment.orchestrator import ExperimentOrchestrator
+
+    orchestrator = ExperimentOrchestrator(
+        generation_plan=plan,
+        generation_runner=runner,
+        evaluation_pipeline=pipeline,
+        cache_manager=cache_manager,
+    )
+    return orchestrator

@@ -71,3 +71,63 @@ class TestParseModelPublic:
 
         provider, model_id, options = parse_model("gpt-4", api_key="sk-test")
         assert options["api_key"] == "sk-test"
+
+
+class TestWireStorage:
+    def test_wire_storage_creates_cache_manager(self, tmp_path):
+        from themis.api._helpers import _wire_storage
+
+        cache_manager = _wire_storage(
+            storage=tmp_path, storage_backend=None, resume=True
+        )
+        assert cache_manager is not None
+        assert cache_manager._enable_resume is True
+        assert cache_manager._enable_cache is True
+        assert cache_manager._storage is not None
+
+
+class TestBuildRunManifest:
+    def test_build_run_manifest(self):
+        from themis.api._helpers import _build_run_manifest
+        from themis.evaluation.pipeline import EvaluationPipeline
+        from unittest.mock import MagicMock
+
+        pipeline = EvaluationPipeline(extractor=MagicMock(), metrics=[])
+        manifest = _build_run_manifest(
+            model_id="gpt-4",
+            provider_name="openai",
+            provider_options={"api_key": "xxx"},
+            temperature=0.0,
+            top_p=0.95,
+            max_tokens=100,
+            num_samples=1,
+            pipeline=pipeline,
+            dataset_list=[{"id": "1", "q": "test"}],
+            prompt_template="Tell me {q}",
+        )
+        assert manifest["model"]["identifier"] == "gpt-4"
+        assert manifest["model"]["provider"] == "openai"
+
+
+class TestBuildOrchestrator:
+    def test_build_orchestrator(self):
+        from themis.api._helpers import _build_orchestrator
+        from themis.evaluation.pipeline import EvaluationPipeline
+        from unittest.mock import MagicMock
+        from themis.generation.plan import GenerationPlan
+        from themis.generation.runner import GenerationRunner
+
+        plan = GenerationPlan(templates=[], models=[], sampling_parameters=[])
+        runner = GenerationRunner(executor=None)
+        pipeline = EvaluationPipeline(extractor=MagicMock(), metrics=[])
+
+        orchestrator = _build_orchestrator(
+            plan=plan, runner=runner, pipeline=pipeline, cache_manager=None
+        )
+        assert (
+            getattr(orchestrator, "plan", getattr(orchestrator, "_plan", None)) is plan
+        )
+        assert (
+            getattr(orchestrator, "runner", getattr(orchestrator, "_runner", None))
+            is runner
+        )

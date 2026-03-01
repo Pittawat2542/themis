@@ -80,15 +80,14 @@ from themis.generation.runner import GenerationRunner
 from themis.generation.strategies import RepeatedSamplingStrategy
 from themis.generation.templates import PromptTemplate
 from themis.providers import create_provider, parse_model
-from themis.storage import resolve_storage
 from themis.api._helpers import (
-    _build_evaluation_config,
-    _dataset_fingerprint,
+    _build_orchestrator,
+    _build_run_manifest,
     _extract_provider_options,
-    _prompt_fingerprint,
     _resolve_dataset_with_cache,
     _resolve_evaluation_context,
     _should_warn_missing_api_key,
+    _wire_storage,
     _ALLOWED_EXTRA_OPTIONS,
 )
 from themis.evaluation.metric_resolver import (
@@ -103,7 +102,7 @@ def _ensure_providers_registered() -> None:
     """Import provider modules to ensure they register themselves (lazy)."""
     try:
         from themis.generation import clients  # noqa: F401
-        from themis.generation.providers import (
+        from themis.providers import (
             litellm_provider,  # noqa: F401
             vllm_provider,  # noqa: F401
         )
@@ -202,10 +201,6 @@ def evaluate(
     _ensure_providers_registered()
 
     # Lazy imports to break circular: api → experiment → config → experiment
-    from themis.experiment.manifest import build_reproducibility_manifest
-    from themis.experiment.cache_manager import CacheManager
-    from themis.experiment.orchestrator import ExperimentOrchestrator
-
     logger.info("=" * 60)
     logger.info("Starting Themis evaluation")
     logger.info(f"Model: {model}")
@@ -251,12 +246,7 @@ def evaluate(
         raise ConfigurationError("pipeline must implement EvaluationPipelineContract.")
 
     # Resolve storage
-    resolved_storage_backend = resolve_storage(storage, storage_backend=storage_backend)
-    cache_manager = CacheManager(
-        storage=resolved_storage_backend,
-        enable_resume=resume,
-        enable_cache=resume,
-    )
+    cache_manager = _wire_storage(storage, storage_backend, resume)
 
     # Resolve dataset with cache support
     dataset_list = _resolve_dataset_with_cache(
@@ -310,30 +300,24 @@ def evaluate(
     )
 
     # Build reproducibility manifest
-    manifest = build_reproducibility_manifest(
-        model=model_id,
-        provider=provider_name,
+    manifest = _build_run_manifest(
+        model_id=model_id,
+        provider_name=provider_name,
         provider_options=resolved_provider_options,
-        sampling={
-            "temperature": temperature,
-            "top_p": kwargs.get("top_p", 0.95),
-            "max_tokens": max_tokens,
-        },
+        temperature=temperature,
+        top_p=kwargs.get("top_p", 0.95),
+        max_tokens=max_tokens,
         num_samples=num_samples,
-        evaluation_config=_build_evaluation_config(pipeline),
-        seeds={
-            "provider_seed": resolved_provider_options.get("seed"),
-            "sampling_seed": None,
-        },
-        dataset_fingerprint=_dataset_fingerprint(dataset_list),
-        prompt_fingerprint=_prompt_fingerprint(eval_ctx.prompt_template.template),
+        pipeline=pipeline,
+        dataset_list=dataset_list,
+        prompt_template=eval_ctx.prompt_template.template,
     )
 
     # Create orchestrator and run
-    orchestrator = ExperimentOrchestrator(
-        generation_plan=plan,
-        generation_runner=runner,
-        evaluation_pipeline=pipeline,
+    orchestrator = _build_orchestrator(
+        plan=plan,
+        runner=runner,
+        pipeline=pipeline,
         cache_manager=cache_manager,
     )
 
