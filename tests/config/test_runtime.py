@@ -195,3 +195,32 @@ def test_run_competition_math_configs(tmp_path, experiment_name):
     assert report.metadata["total_samples"] == 1
     summary = runtime.summarize_report_for_config(config, report)
     assert "Exact match" in summary
+
+
+def test_register_custom_experiment_builder(tmp_path):
+    # Test that we can register a new experiment builder and use it
+    from themis.config.registry import register_experiment_builder
+    from unittest.mock import MagicMock
+    from themis.experiment.orchestrator import ExperimentOrchestrator
+
+    mock_orchestrator = MagicMock(spec=ExperimentOrchestrator)
+    mock_orchestrator.run.return_value = MagicMock()
+
+    builder_called = False
+
+    @register_experiment_builder("my_custom_task")
+    def mock_builder(config):
+        nonlocal builder_called
+        builder_called = True
+        return mock_orchestrator
+
+    config = schema.ExperimentConfig(
+        task="my_custom_task",
+        dataset=schema.DatasetConfig(source="inline", inline_samples=_inline_samples()),
+        generation=_default_generation_config(),
+    )
+
+    dataset = runtime.load_dataset_from_config(config)
+    runtime.run_experiment_from_config(config, dataset=dataset)
+
+    assert builder_called

@@ -23,7 +23,7 @@ from themis.exceptions import ConfigurationError
 def _ensure_providers_registered() -> None:
     """Import provider modules to ensure they register themselves (lazy)."""
     try:
-        from themis.generation.providers import (
+        from themis.providers import (
             litellm_provider,  # noqa: F401
             vllm_provider,  # noqa: F401
         )
@@ -167,6 +167,17 @@ def build_pipeline_from_config(
 def _build_math_experiment(
     config: schema.ExperimentConfig,
 ) -> experiment_orchestrator.ExperimentOrchestrator:
+    """Build a math evaluation experiment.
+
+    Constructs an orchestrator and dataset for verifying mathematical reasoning
+    using the `math_verify` extractor and exact-match metrics.
+
+    Args:
+        config: The experiment configuration.
+
+    Returns:
+        An instantiated `ExperimentOrchestrator`.
+    """
     # Use the specific path if provided, otherwise use the default path
     storage_path = config.storage.path or config.storage.default_path
     storage = (
@@ -205,7 +216,17 @@ def _build_math_experiment(
 def _build_custom_experiment(
     config: schema.ExperimentConfig,
 ) -> experiment_orchestrator.ExperimentOrchestrator:
-    """Build a fully custom declarative experiment using YAML configs for pipelines."""
+    """Build a fully custom declarative experiment.
+
+    Constructs an orchestrator driven entirely by YAML configuration,
+    where pipelines, metrics, and models are resolved dynamically.
+
+    Args:
+        config: The experiment configuration.
+
+    Returns:
+        An instantiated `ExperimentOrchestrator`.
+    """
 
     storage_path = config.storage.path or config.storage.default_path
     storage = (
@@ -277,6 +298,17 @@ def _build_custom_experiment(
 def _build_supergpqa_experiment(
     config: schema.ExperimentConfig,
 ) -> experiment_orchestrator.ExperimentOrchestrator:
+    """Build a SuperGPQA multiple-choice experiment.
+
+    Constructs an orchestrator and dataset tailored for the SuperGPQA benchmark,
+    using letter extraction and exact-match metrics.
+
+    Args:
+        config: The experiment configuration.
+
+    Returns:
+        An instantiated `ExperimentOrchestrator`.
+    """
     return _build_mcq_experiment(config, "supergpqa", "supergpqa")
 
 
@@ -284,12 +316,37 @@ def _build_supergpqa_experiment(
 def _build_mmlu_pro_experiment(
     config: schema.ExperimentConfig,
 ) -> experiment_orchestrator.ExperimentOrchestrator:
+    """Build an MMLU-Pro multiple-choice experiment.
+
+    Constructs an orchestrator and dataset tailored for the MMLU-Pro benchmark,
+    using letter extraction and exact-match metrics.
+
+    Args:
+        config: The experiment configuration.
+
+    Returns:
+        An instantiated `ExperimentOrchestrator`.
+    """
     return _build_mcq_experiment(config, "mmlu-pro", "mmlu_pro")
 
 
 def _build_mcq_experiment(
     config: schema.ExperimentConfig, dataset_name: str, task_id: str
 ) -> experiment_orchestrator.ExperimentOrchestrator:
+    """Build a generic multiple-choice question experiment.
+
+    Constructs an orchestrator using a standard letter extraction pipeline
+    (parsing A/B/C/D from generation text) and maps it against a specified
+    dataset and task identifier.
+
+    Args:
+        config: The experiment configuration.
+        dataset_name: The name of the dataset to load from the registry.
+        task_id: The specific task identifier for the dataset slice.
+
+    Returns:
+        An instantiated `ExperimentOrchestrator`.
+    """
     # Use the specific path if provided, otherwise use the default path
     storage_path = config.storage.path or config.storage.default_path
     storage = (
