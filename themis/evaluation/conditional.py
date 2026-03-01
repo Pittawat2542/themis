@@ -1,5 +1,8 @@
 """Conditional and adaptive evaluation strategies.
 
+.. warning::
+    This module is experimental and subject to backwards-incompatible changes.
+
 This module provides evaluation components that adapt based on sample characteristics:
 - ConditionalMetric: Only runs when condition is met
 - AdaptiveEvaluationPipeline: Selects metrics based on sample metadata
@@ -26,6 +29,7 @@ Example:
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from collections.abc import Callable, Sequence
@@ -35,6 +39,8 @@ from themis.core import entities as core_entities
 from themis.evaluation import pipeline, reports
 from themis.interfaces import Metric
 from themis.utils import tracing
+
+_WARNED = False
 
 
 @dataclass
@@ -65,6 +71,16 @@ class ConditionalMetric:
     name: str | None = None
 
     def __post_init__(self):
+        global _WARNED
+        if not _WARNED:
+            warnings.warn(
+                "Themis conditional evaluation pipelines are currently experimental "
+                "and subject to breaking changes in future minor releases.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            _WARNED = True
+
         if self.name is None:
             self.name = f"conditional_{self.metric.name}"
 
@@ -180,6 +196,16 @@ class AdaptiveEvaluationPipeline(pipeline.EvaluationPipeline):
             metric_selector: Function that selects metrics for each record
             **kwargs: Additional arguments passed to EvaluationPipeline
         """
+        global _WARNED
+        if not _WARNED:
+            warnings.warn(
+                "Themis conditional evaluation pipelines are currently experimental "
+                "and subject to breaking changes in future minor releases.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            _WARNED = True
+
         # Initialize with empty metrics - we'll select them dynamically
         super().__init__(extractor=extractor, metrics=[], **kwargs)
         self._metric_selector = metric_selector
