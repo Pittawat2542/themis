@@ -32,10 +32,17 @@ __all__ = [
 ]
 
 
-def resolve_storage(
-    storage_path: str | Path | None, storage_backend: Any | None = None
-):
+def resolve_storage(storage_path: Any | None, storage_backend: Any | None = None):
     """Resolve storage backend from path or explicit backend."""
+    # Allow users to pass a backend object directly to the first argument
+    if (
+        storage_backend is None
+        and storage_path is not None
+        and not isinstance(storage_path, (str, Path))
+    ):
+        storage_backend = storage_path
+        storage_path = None
+
     if storage_backend is not None:
         backend = storage_backend
         if hasattr(backend, "experiment_storage"):

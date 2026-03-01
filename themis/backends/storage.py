@@ -123,8 +123,11 @@ class StorageBackend(RecordStore, RunManager):
         run_id: str,
         generation_record: GenerationRecord,
         evaluation_record: EvaluationRecord,
+        *,
+        evaluation_config: Dict[str, Any] | None = None,
     ) -> None:
         """Append an evaluation record to a run."""
+        _ = evaluation_config
         self.save_evaluation_record(run_id, generation_record, evaluation_record)
 
     def complete_run(self, run_id: str) -> None:
@@ -139,6 +142,28 @@ class StorageBackend(RecordStore, RunManager):
         metadata["status"] = "failed"
         metadata["error_message"] = error_message
         self.save_run_metadata(run_id, metadata)
+
+    def cache_dataset(self, run_id: str, dataset: List[Dict[str, Any]]) -> None:
+        """Cache the dataset for resumability (optional for backends)."""
+        pass
+
+    def load_dataset(self, run_id: str) -> List[Dict[str, Any]] | None:
+        """Load cached dataset (optional for backends)."""
+        return None
+
+    def load_cached_records(self, run_id: str) -> Dict[str, GenerationRecord]:
+        """Load records mapped by cache_key for resumability (optional)."""
+        return {}
+
+    def load_cached_evaluations(
+        self, run_id: str, evaluation_config: Dict[str, Any] | None = None
+    ) -> Dict[str, EvaluationRecord]:
+        """Load evaluations mapped by cache_key for resumability (optional)."""
+        return {}
+
+    def get_run_path(self, run_id: str) -> Any | None:
+        """Get underlying storage path or identifier for this run."""
+        return None
 
 
 __all__ = [

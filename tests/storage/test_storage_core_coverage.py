@@ -9,7 +9,8 @@ from pathlib import Path
 from themis.storage.core import ExperimentStorage
 from themis.storage.cache_keys import _json_default
 from themis.storage.models import RetentionPolicy, RunStatus, StorageConfig
-from tests.factories import make_record
+from tests.factories import make_record, make_evaluation_record
+from themis.core.entities import ExperimentReport
 
 
 # ---------------------------------------------------------------------------
@@ -270,3 +271,142 @@ def test_save_raw_responses(tmp_path):
     storage.append_record("run-raw", record)
     loaded = storage.load_cached_records("run-raw")
     assert len(loaded) == 1
+
+
+# ---------------------------------------------------------------------------
+# Thin delegates coverage
+# ---------------------------------------------------------------------------
+
+
+def test_facade_run_metadata_delegates(tmp_path):
+    storage = ExperimentStorage(tmp_path)
+    storage.start_run("run-meta", experiment_id="exp-meta")
+    # Needs to go through StorageBackend API
+    storage.save_run_metadata(
+        "run-meta", {"experiment_id": "exp-meta", "status": "in_progress"}
+    )
+
+    assert storage.run_exists("run-meta") is True
+    assert storage.run_metadata_exists("run-meta") is True
+
+    loaded = storage.load_run_metadata("run-meta")
+    assert loaded["experiment_id"] == "exp-meta"
+    assert "run-meta" in storage.list_run_ids()
+
+
+def test_facade_generation_evaluation_delegates(tmp_path):
+    # Using specific cache keys to match implementation mapping expectations
+    storage = ExperimentStorage(tmp_path)
+    storage.start_run("run-gen-eval", experiment_id="exp")
+
+    record = make_record(sample_id="s1")
+    eval_record = make_evaluation_record(sample_id="s1")
+
+    # Generation
+    storage.save_generation_record("run-gen-eval", record)
+    loaded_gen = storage.load_generation_records("run-gen-eval")
+    assert len(loaded_gen) == 1
+
+    # Evaluation (save_evaluation_record)
+    storage.save_evaluation_record("run-gen-eval", record, eval_record)
+
+    # Evaluation (append_evaluation_record)
+    eval_record2 = make_evaluation_record(sample_id="s2")
+    storage.append_evaluation_record(
+        "run-gen-eval",
+        record,
+        eval_record2,
+        evaluation_config={"metrics": ["exact_match"]},
+    )
+
+    loaded_evals = storage.load_evaluation_records("run-gen-eval")
+    assert len(loaded_evals) == 2
+
+    # cache_dataset / load_dataset
+    dataset = [{"id": "s1", "question": "q"}]
+    storage.cache_dataset("run-gen-eval", dataset)
+    loaded_ds = storage.load_dataset("run-gen-eval")
+    assert len(loaded_ds) == 1
+
+
+def test_facade_report_delegates(tmp_path):
+    storage = ExperimentStorage(tmp_path)
+    storage.start_run("run-report", experiment_id="exp")
+
+    report = ExperimentReport(
+        generation_results=[],
+        evaluation_report=None,
+        failures=[],
+        metadata={"test": True},
+    )
+    storage.save_report("run-report", report)
+
+    loaded_report = storage.load_report("run-report")
+    assert loaded_report.metadata["test"] is True
+
+    # Missing report returns None
+    assert storage.load_report("run-nonexistent") is None
+
+
+def test_delete_run_delegate(tmp_path):
+    storage = ExperimentStorage(tmp_path)
+    storage.start_run("run-del", experiment_id="exp")
+    assert storage.run_exists("run-del")
+    storage.delete_run("run-del")
+    assert not storage.run_exists("run-del")
+
+
+def test_facade_property_delegates(tmp_path):
+    storage = ExperimentStorage(tmp_path)
+    assert repr(storage).startswith("ExperimentStorage(root=")
+    assert storage.root == tmp_path
+
+    storage.start_run("run-props", experiment_id="exp")
+    # Verify internal getters
+    assert storage.get_run_path("run-props") == storage._get_run_dir("run-props")
+    assert storage._get_generation_dir("run-props").name == "generation"
+    assert storage._get_evaluation_dir("run-props").parent.name == "evaluations"
+    assert storage._experiments_dir.name == "experiments"
+
+    # Verify internal property paths exist without erroring
+    _ = storage._lock_manager
+    _ = storage._fs
+    _ = storage._metadata_store
+    _ = storage._task_index
+    _ = storage._template_index
+    _ = storage._run_dir_index
+
+    # Verify acquire lock
+    lock = storage._acquire_lock("run-props")
+    assert lock is not None
+
+
+def test_append_evaluation_delegate(tmp_path):
+    storage = ExperimentStorage(tmp_path)
+    storage.start_run("run-eval-io", "exp")
+    record = make_record(sample_id="s1")
+    eval_record = make_evaluation_record(sample_id="s1")
+    storage.append_evaluation("run-eval-io", record, eval_record, eval_id="custom")
+
+    evals = storage.load_cached_evaluations("run-eval-io", eval_id="custom")
+    assert len(evals) == 1
+
+
+def test_facade_internal_helpers(tmp_path):
+    storage = ExperimentStorage(tmp_path)
+    storage.start_run("run-internal", "exp")
+
+    assert storage._run_metadata_exists("run-internal") is True
+
+    record = make_record(sample_id="s1")
+    _ = storage._task_cache_key(record.task)
+
+    meta = storage._load_run_metadata("run-internal")
+    storage._save_run_metadata(meta)
+
+    storage._persist_task("run-internal", record.task)
+    _ = storage._load_tasks("run-internal")
+    _ = storage._load_templates("run-internal")
+
+    payload = storage._serialize_record("run-internal", record)
+    _ = storage._deserialize_record(payload, {payload["task_key"]: record.task})
