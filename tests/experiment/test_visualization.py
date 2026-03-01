@@ -236,3 +236,121 @@ def test_visualizer_without_plotly():
         # Should raise ImportError when creating visualizer
         with pytest.raises(ImportError, match="Plotly is required"):
             visualization.InteractiveVisualizer()
+
+    # Restore the module state for subsequent tests
+    from importlib import reload
+
+    reload(visualization)
+
+
+@pytest.fixture
+def sample_evaluation_report():
+    from themis.core.entities import EvaluationRecord, MetricScore
+    from themis.evaluation.reports import EvaluationReport
+    from unittest.mock import MagicMock
+
+    records = []
+
+    for i in range(3):
+        score = MetricScore(metric_name="accuracy", value=0.5 * (i + 1))
+        record = EvaluationRecord(sample_id=str(i), scores=[score], failures=[])
+        records.append(record)
+
+    return EvaluationReport(
+        metrics={"accuracy": MagicMock()}, records=records, failures=[]
+    )
+
+
+def test_plot_metric_distribution_histogram(sample_evaluation_report):
+    from themis.experiment.visualization import InteractiveVisualizer
+
+    visualizer = InteractiveVisualizer()
+    fig = visualizer.plot_metric_distribution(
+        sample_evaluation_report, "accuracy", plot_type="histogram"
+    )
+    assert fig is not None
+    assert "accuracy Distribution" in fig.layout.title.text
+
+
+def test_plot_metric_distribution_box(sample_evaluation_report):
+    from themis.experiment.visualization import InteractiveVisualizer
+
+    visualizer = InteractiveVisualizer()
+    fig = visualizer.plot_metric_distribution(
+        sample_evaluation_report, "accuracy", plot_type="box"
+    )
+    assert fig is not None
+
+
+def test_plot_metric_distribution_violin(sample_evaluation_report):
+    from themis.experiment.visualization import InteractiveVisualizer
+
+    visualizer = InteractiveVisualizer()
+    fig = visualizer.plot_metric_distribution(
+        sample_evaluation_report, "accuracy", plot_type="violin"
+    )
+    assert fig is not None
+
+
+def test_plot_metric_distribution_invalid_type(sample_evaluation_report):
+    from themis.experiment.visualization import InteractiveVisualizer
+
+    visualizer = InteractiveVisualizer()
+    with pytest.raises(Exception, match="Unknown plot_type"):
+        visualizer.plot_metric_distribution(
+            sample_evaluation_report, "accuracy", plot_type="magic"
+        )
+
+
+def test_plot_metric_distribution_missing_metric(sample_evaluation_report):
+    from themis.experiment.visualization import InteractiveVisualizer
+    from themis.exceptions import MetricError
+
+    visualizer = InteractiveVisualizer()
+    with pytest.raises(MetricError):
+        visualizer.plot_metric_distribution(sample_evaluation_report, "fake_metric")
+
+
+def test_plot_metric_distribution_no_values():
+    from themis.experiment.visualization import InteractiveVisualizer
+    from themis.evaluation.reports import EvaluationReport
+    from unittest.mock import MagicMock
+    from themis.exceptions import MetricError
+
+    report = EvaluationReport(
+        metrics={"accuracy": MagicMock()}, records=[], failures=[]
+    )
+    visualizer = InteractiveVisualizer()
+    with pytest.raises(MetricError, match="No values found"):
+        visualizer.plot_metric_distribution(report, "accuracy")
+
+
+def test_plot_cost_breakdown_single_pie():
+    from themis.experiment.visualization import InteractiveVisualizer
+    from themis.experiment.cost import CostBreakdown
+
+    breakdown = CostBreakdown(
+        total_cost=1.0, generation_cost=0.5, evaluation_cost=0.5, per_model_costs={}
+    )
+    visualizer = InteractiveVisualizer()
+    fig = visualizer.plot_cost_breakdown(breakdown)
+    assert fig is not None
+
+
+def test_plot_metric_evolution_missing_timestamp(sample_comparison):
+    from themis.experiment.visualization import InteractiveVisualizer
+
+    # Modify one to have no timestamp
+    sample_comparison.experiments[0].timestamp = None
+    visualizer = InteractiveVisualizer()
+    fig = visualizer.plot_metric_evolution(sample_comparison, "accuracy")
+    assert fig is not None
+
+
+def test_plot_metric_evolution_missing_metric(sample_comparison):
+    from themis.experiment.visualization import InteractiveVisualizer
+    from themis.exceptions import MetricError
+
+    visualizer = InteractiveVisualizer()
+    with pytest.raises(MetricError, match="not found"):
+        visualizer.plot_metric_evolution(sample_comparison, "invalid_metric")
