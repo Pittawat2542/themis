@@ -1,51 +1,11 @@
-"""Generation strategy interfaces and default implementations."""
+"""Repeat the same task multiple times for test-time scaling."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Protocol
 
 from themis.core import entities as core_entities
-
-
-class GenerationStrategy(Protocol):
-    """Strategy responsible for expanding a task into one or more execution attempts."""
-
-    def expand(
-        self, task: core_entities.GenerationTask
-    ) -> Iterable[core_entities.GenerationTask]:  # pragma: no cover - interface
-        ...
-
-    def aggregate(
-        self,
-        task: core_entities.GenerationTask,
-        records: list[core_entities.GenerationRecord],
-    ) -> core_entities.GenerationRecord:  # pragma: no cover - interface
-        ...
-
-
-@dataclass
-class SingleAttemptStrategy:
-    """Default strategy – run exactly once and pass-through result."""
-
-    def expand(
-        self, task: core_entities.GenerationTask
-    ) -> Iterable[core_entities.GenerationTask]:
-        return [task]
-
-    def aggregate(
-        self,
-        task: core_entities.GenerationTask,
-        records: list[core_entities.GenerationRecord],
-    ) -> core_entities.GenerationRecord:
-        record = records[0]
-        return core_entities.GenerationRecord(
-            task=task,
-            output=record.output,
-            error=record.error,
-            metrics=dict(record.metrics),
-        )
 
 
 @dataclass
@@ -90,10 +50,3 @@ class RepeatedSamplingStrategy:
             for record in records
         ]
         return aggregated
-
-
-__all__ = [
-    "GenerationStrategy",
-    "SingleAttemptStrategy",
-    "RepeatedSamplingStrategy",
-]
