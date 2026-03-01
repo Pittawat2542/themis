@@ -9,7 +9,7 @@ from themis.utils.progress import (
 
 
 class TestLogProgressReporter(unittest.TestCase):
-    @patch("themis.utils.progress.logger")
+    @patch("themis.utils.progress.log.logger")
     def test_add_task_logs_start(self, mock_logger):
         reporter = LogProgressReporter()
         task_id = reporter.add_task("Test Task", total=100)
@@ -22,7 +22,7 @@ class TestLogProgressReporter(unittest.TestCase):
         self.assertEqual(kwargs["extra"]["event"], "progress_start")
         self.assertEqual(kwargs["extra"]["total"], 100)
 
-    @patch("themis.utils.progress.logger")
+    @patch("themis.utils.progress.log.logger")
     def test_update_debouncing(self, mock_logger):
         reporter = LogProgressReporter()
         task_id = reporter.add_task("Test Task", total=100)
@@ -41,7 +41,7 @@ class TestLogProgressReporter(unittest.TestCase):
         self.assertEqual(kwargs["extra"]["event"], "progress_update")
         self.assertEqual(kwargs["extra"]["percent"], 10.0)
 
-    @patch("themis.utils.progress.logger")
+    @patch("themis.utils.progress.log.logger")
     def test_unknown_total(self, mock_logger):
         reporter = LogProgressReporter()
         task_id = reporter.add_task("Unknown Total", total=None)
@@ -51,7 +51,7 @@ class TestLogProgressReporter(unittest.TestCase):
         reporter.update(task_id, advance=10)
         mock_logger.info.assert_called()
 
-    @patch("themis.utils.progress.logger")
+    @patch("themis.utils.progress.log.logger")
     def test_completion_always_logs(self, mock_logger):
         reporter = LogProgressReporter()
         task_id = reporter.add_task("Test", total=100)
