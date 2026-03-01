@@ -206,6 +206,11 @@ class RunLifecycle:
 
         return report
 
+    def fail_run(self, run_identifier: str, error_message: str) -> None:
+        """Mark the run as failed in storage."""
+        if self._cache.has_storage:
+            self._cache.fail_run(run_identifier, error_message)
+
     def _save_report_json(self, report: ExperimentReport, run_id: str) -> None:
         """Save experiment report as JSON for multi-experiment comparison."""
         from pathlib import Path

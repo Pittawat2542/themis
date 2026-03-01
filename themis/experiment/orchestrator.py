@@ -189,7 +189,7 @@ class ExperimentOrchestrator:
         try:
             task_iterator = iter(self._plan.expand(selected_dataset))
         except Exception as e:
-            self._cache.fail_run(run_identifier, str(e))
+            self._lifecycle.fail_run(run_identifier, str(e))
             logger.error("Orchestrator: Failed to expand dataset", exc_info=True)
             raise
 
@@ -243,7 +243,7 @@ class ExperimentOrchestrator:
                 max_records_in_memory=max_records_in_memory,
             )
         except Exception as exc:
-            self._cache.fail_run(run_identifier, str(exc))
+            self._lifecycle.fail_run(run_identifier, str(exc))
             raise
         logger.info(
             "Orchestrator: Total evaluation records: %s",
@@ -369,7 +369,7 @@ class ExperimentOrchestrator:
                     on_result(record)
                 logger.debug("Orchestrator: Record processing complete")
         except Exception as exc:
-            self._cache.fail_run(ctx.run_identifier, str(exc))
+            self._lifecycle.fail_run(ctx.run_identifier, str(exc))
             raise
         finally:
             progress.__exit__(None, None, None)
@@ -395,7 +395,7 @@ class ExperimentOrchestrator:
         try:
             _flush_eval_batch()
         except Exception as exc:
-            self._cache.fail_run(ctx.run_identifier, str(exc))
+            self._lifecycle.fail_run(ctx.run_identifier, str(exc))
             raise
 
     # =========================================================================

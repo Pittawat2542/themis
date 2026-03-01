@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 from themis.core.entities import EvaluationRecord, GenerationRecord
 from themis.exceptions import ConfigurationError
-from themis import storage as experiment_storage
+from themis.backends.storage import StorageBackend
 
 
 class CacheManager:
@@ -25,7 +25,7 @@ class CacheManager:
 
     def __init__(
         self,
-        storage: experiment_storage.ExperimentStorage | None,
+        storage: StorageBackend | None,
         enable_resume: bool = True,
         enable_cache: bool = True,
     ) -> None:
@@ -96,7 +96,11 @@ class CacheManager:
         """Check if run metadata exists in storage."""
         if self._storage is None:
             return False
-        return self._storage.run_metadata_exists(run_id)
+        if hasattr(self._storage, "run_metadata_exists"):
+            return self._storage.run_metadata_exists(run_id)
+        if hasattr(self._storage, "run_exists"):
+            return self._storage.run_exists(run_id)
+        return False
 
     def start_run(
         self,
@@ -117,7 +121,7 @@ class CacheManager:
         """Mark a run as completed when storage is available."""
         if self._storage is None:
             return
-        if not self._storage.run_metadata_exists(run_id):
+        if not self.run_metadata_exists(run_id):
             return
         self._storage.complete_run(run_id)
 
@@ -125,7 +129,7 @@ class CacheManager:
         """Mark a run as failed when storage is available."""
         if self._storage is None:
             return
-        if not self._storage.run_metadata_exists(run_id):
+        if not self.run_metadata_exists(run_id):
             return
         self._storage.fail_run(run_id, error_message)
 
@@ -143,7 +147,14 @@ class CacheManager:
             cache_key: Cache key for this record
         """
         if self._storage is not None and self._enable_cache:
-            self._storage.append_record(run_id, record, cache_key=cache_key)
+            if hasattr(self._storage, "append_generation_record"):
+                self._storage.append_generation_record(
+                    run_id, record, cache_key=cache_key
+                )
+            elif hasattr(self._storage, "append_record"):  # Fallback for old backends
+                self._storage.append_record(run_id, record, cache_key=cache_key)
+            else:
+                self._storage.save_generation_record(run_id, record)
 
     def save_evaluation_record(
         self,
@@ -161,12 +172,26 @@ class CacheManager:
             evaluation_config: Evaluation configuration for cache invalidation
         """
         if self._storage is not None and self._enable_cache:
-            self._storage.append_evaluation(
-                run_id,
-                generation_record,
-                evaluation_record,
-                evaluation_config=evaluation_config,
-            )
+            if hasattr(self._storage, "append_evaluation_record"):
+                self._storage.append_evaluation_record(
+                    run_id,
+                    generation_record,
+                    evaluation_record,
+                    evaluation_config=evaluation_config,
+                )
+            elif hasattr(
+                self._storage, "append_evaluation"
+            ):  # Fallback for old backends
+                self._storage.append_evaluation(
+                    run_id,
+                    generation_record,
+                    evaluation_record,
+                    evaluation_config=evaluation_config,
+                )
+            else:
+                self._storage.save_evaluation_record(
+                    run_id, generation_record, evaluation_record
+                )
 
     def get_run_path(self, run_id: str) -> str | None:
         """Get filesystem path for a run.
