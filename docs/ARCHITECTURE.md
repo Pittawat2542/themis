@@ -66,9 +66,27 @@ sequenceDiagram
 
 ### Persistence + Analysis Layer
 - `themis.storage.ExperimentStorage`: filesystem-backed run storage.
-- `themis.comparison.compare_runs`: statistical run-to-run comparison.
+- `themis.experiment.comparison.compare_runs`: statistical run-to-run comparison.
 - `themis.experiment.export`: CSV/JSON/HTML export utilities.
 - `themis.server.create_app`: REST/WebSocket API over run artifacts.
+
+## Storage Internals
+
+The `ExperimentStorage` acts as a facade over several highly-focused modules responsible for distinct storage concerns. This adheres to the Single Responsibility Principle and simplifies overriding specific storage behaviors.
+
+```mermaid
+flowchart TD
+    ES["ExperimentStorage (Facade)"] --> LM["RunLifecycleManager"]
+    ES --> RS["RecordSerializer"]
+    ES --> GIO["GenerationIO"]
+    ES --> EIO["EvaluationIO"]
+    
+    LM -.-> |Creates/Updates| MD["run_metadata.json"]
+    GIO -.-> |Appends to| C["generations.jsonl"]
+    EIO -.-> |Appends to| E["evaluations.jsonl"]
+    RS -.-> |Serializes| C
+    RS -.-> |Serializes| E
+```
 
 ## Data Contracts
 

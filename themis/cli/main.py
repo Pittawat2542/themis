@@ -21,7 +21,7 @@ from themis.cli.commands.server_commands import serve_command
 # Import provider modules to ensure they register themselves
 try:
     from themis.generation import clients  # noqa: F401 - registers fake provider
-    from themis.generation.providers import (
+    from themis.providers import (
         litellm_provider,  # noqa: F401
         vllm_provider,  # noqa: F401
     )

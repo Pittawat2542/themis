@@ -6,8 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 from themis.api import evaluate
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import compare_runs
+from themis.experiment.comparison import StatisticalTest
 from themis.experiment import export
 from themis.experiment.share import create_share_pack
 

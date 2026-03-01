@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import compare_runs
+from themis.experiment.comparison import StatisticalTest
 
 
 if __name__ == "__main__":

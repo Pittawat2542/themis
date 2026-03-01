@@ -1,6 +1,6 @@
 # Comparison Guide
 
-Use `themis.comparison.compare_runs` to compare two or more run IDs.
+Use `themis.experiment.comparison.compare_runs` to compare two or more run IDs.
 
 ## Comparison Flow
 
@@ -15,8 +15,8 @@ flowchart LR
 ## Basic
 
 ```python
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import compare_runs
+from themis.experiment.comparison import StatisticalTest
 
 report = compare_runs(
     run_ids=["run-a", "run-b"],

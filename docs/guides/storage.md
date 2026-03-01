@@ -50,6 +50,37 @@ flowchart TD
     D --> E
 ```
 
+## Custom Storage Backend
+
+You can implement your own custom storage backend (e.g. for S3, a remote DB, or Redis) by extending the `StorageBackend` abstraction and passing it directly to `evaluate()`.
+
+```python
+from themis.backends.storage import StorageBackend
+from themis.api import evaluate
+
+class MyS3Storage(StorageBackend):
+    def start_run(self, run_id: str, manifest: dict) -> None:
+        # Implementation to start run tracking
+        pass
+        
+    def append_generation(self, run_id: str, record: dict) -> None:
+        # Implementation to store a generation
+        pass
+        
+    def complete_run(self, run_id: str, metadata: dict) -> None:
+        # Implementation to finalize
+        pass
+        
+    # Implement other specific StorageBackend methods...
+
+# Pass the custom backend instance directly
+report = evaluate(
+    "gsm8k",
+    model="gpt-4",
+    storage_backend=MyS3Storage(),
+)
+```
+
 ## Run Management
 
 ```bash

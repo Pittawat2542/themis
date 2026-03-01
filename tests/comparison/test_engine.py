@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from themis.core import entities as core_entities
-from themis.comparison.engine import ComparisonEngine
-from themis.comparison import compare_runs
+from themis.experiment.comparison.engine import ComparisonEngine
+from themis.experiment.comparison import compare_runs
 from themis.evaluation.statistics.comparison_tests import (
     StatisticalTest,
     StatisticalTestResult,
@@ -102,7 +102,9 @@ def test_compare_runs_applies_holm_bonferroni_by_default(tmp_path, monkeypatch):
             significant=True,
         )
 
-    monkeypatch.setattr("themis.comparison.engine.statistics.t_test", _fake_t_test)
+    monkeypatch.setattr(
+        "themis.experiment.comparison.engine.statistics.t_test", _fake_t_test
+    )
 
     engine = ComparisonEngine(
         storage=storage,
@@ -144,7 +146,9 @@ def test_compare_runs_holm_correction_respects_engine_alpha(tmp_path, monkeypatc
             significant=True,
         )
 
-    monkeypatch.setattr("themis.comparison.engine.statistics.t_test", _fake_t_test)
+    monkeypatch.setattr(
+        "themis.experiment.comparison.engine.statistics.t_test", _fake_t_test
+    )
 
     engine = ComparisonEngine(
         storage=storage,

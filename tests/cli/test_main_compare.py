@@ -26,7 +26,7 @@ def test_compare_command_invokes_engine(tmp_path, monkeypatch, capsys):
         assert Path(kwargs["storage_path"]) == tmp_path
         return _FakeReport()
 
-    monkeypatch.setattr("themis.comparison.compare_runs", _fake_compare_runs)
+    monkeypatch.setattr("themis.experiment.comparison.compare_runs", _fake_compare_runs)
 
     exit_code = compare_command(
         ["run-a", "run-b"],

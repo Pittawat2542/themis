@@ -4,8 +4,8 @@ import os
 from dataclasses import replace
 from statistics import mean, pstdev
 
-from themis.comparison import ComparisonEngine
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import ComparisonEngine
+from themis.experiment.comparison import StatisticalTest
 from themis.storage import ExperimentStorage
 
 from common import (

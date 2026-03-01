@@ -56,7 +56,7 @@ def compare_command(
         print(f"Storage: {storage_path}")
         print()
 
-        from themis.comparison import compare_runs
+        from themis.experiment.comparison import compare_runs
         from themis.evaluation.statistics.comparison_tests import StatisticalTest
 
         metrics_list = [metric] if metric else None

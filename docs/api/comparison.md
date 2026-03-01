@@ -34,8 +34,8 @@ def compare_runs(
 #### Example
 
 ```python
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import compare_runs
+from themis.experiment.comparison import StatisticalTest
 
 report = compare_runs(
     run_ids=["gpt4-run", "claude-run"],
@@ -173,7 +173,7 @@ for run_id, wins, losses, ties in matrix.rank_runs():
 Enum of available statistical tests.
 
 ```python
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import StatisticalTest
 
 # Available tests
 StatisticalTest.T_TEST        # Student's t-test
@@ -187,7 +187,7 @@ StatisticalTest.NONE          # No testing
 Perform Student's t-test.
 
 ```python
-from themis.comparison import t_test
+from themis.experiment.comparison import t_test
 
 result = t_test(
     samples_a=[0.8, 0.85, 0.82],
@@ -206,7 +206,7 @@ print(f"Effect size: {result.effect_size}")
 Compute bootstrap confidence interval.
 
 ```python
-from themis.comparison import bootstrap_confidence_interval
+from themis.experiment.comparison import bootstrap_confidence_interval
 
 result = bootstrap_confidence_interval(
     samples_a=[0.8, 0.85, 0.82],
@@ -227,7 +227,7 @@ Bootstrap mode in Themis is CI-only inference and does not return p-values.
 Perform permutation test.
 
 ```python
-from themis.comparison import permutation_test
+from themis.experiment.comparison import permutation_test
 
 result = permutation_test(
     samples_a=[0.8, 0.85, 0.82],
@@ -244,8 +244,8 @@ print(f"p-value: {result.p_value}")
 
 ```python
 from themis import evaluate
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import compare_runs
+from themis.experiment.comparison import StatisticalTest
 
 # Run two experiments
 result1 = evaluate("gsm8k",

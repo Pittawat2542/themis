@@ -71,7 +71,7 @@ def test_vllm_provider_multiple_engines(monkeypatch):
     fake_vllm_module(monkeypatch)
     fake_torch_module(monkeypatch)
 
-    from themis.generation.providers.vllm_provider import VLLMProvider
+    from themis.providers.vllm_provider import VLLMProvider
 
     provider = VLLMProvider(model="demo", tensor_parallel_size=2)
 

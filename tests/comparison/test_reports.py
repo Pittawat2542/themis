@@ -1,6 +1,10 @@
 """Tests for comparison reports module."""
 
-from themis.comparison.reports import ComparisonReport, ComparisonResult, WinLossMatrix
+from themis.experiment.comparison.reports import (
+    ComparisonReport,
+    ComparisonResult,
+    WinLossMatrix,
+)
 from themis.evaluation.statistics.comparison_tests import StatisticalTestResult
 
 

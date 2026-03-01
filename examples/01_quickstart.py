@@ -1,20 +1,15 @@
 """Quick start with themis.evaluate()."""
 
 import themis
-from themis.presets import get_benchmark_preset
-
-preset = get_benchmark_preset("demo")
 
 report = themis.evaluate(
-    preset.load_dataset(limit=5),
+    "demo",
     model="fake:fake-math-llm",
-    prompt=preset.prompt_template.template,
-    metrics=[m.name for m in preset.metrics],
+    limit=5,
     temperature=0.0,
     max_tokens=128,
     workers=2,
     storage=".cache/experiments",
-    resume=True,
 )
 
 print("Run:", report.metadata.get("run_id"))

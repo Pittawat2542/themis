@@ -126,7 +126,7 @@ Under the hood, caching uses `ExperimentStorage` with a configurable path.
 **Comparison** analyzes differences between runs with statistical rigor:
 
 ```python
-from themis.comparison import compare_runs
+from themis.experiment.comparison import compare_runs
 
 report = compare_runs(
     run_ids=["gpt4-run", "claude-run"],

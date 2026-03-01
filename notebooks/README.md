@@ -130,7 +130,7 @@ After completing the tutorials:
    - [Extending Backends](../docs/EXTENDING_BACKENDS.md)
 
 2. **Try the Examples**
-   - Check out [examples-simple/](../examples-simple/)
+   - Check out [examples/](../examples/)
    - More advanced examples in [examples/](../examples/)
 
 3. **Explore the CLI**

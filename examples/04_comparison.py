@@ -8,7 +8,7 @@ to determine if one is significantly better than the other.
 from pathlib import Path
 
 import themis
-from themis.comparison import StatisticalTest, compare_runs
+from themis.experiment.comparison import StatisticalTest, compare_runs
 from themis.presets import get_benchmark_preset
 from themis.storage import ExperimentStorage
 

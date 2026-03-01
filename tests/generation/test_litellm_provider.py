@@ -83,7 +83,7 @@ def mock_litellm():
 
 def test_litellm_provider_basic_generation(mock_litellm):
     """Test basic generation with LiteLLM provider."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider()
     task = build_task()
@@ -101,7 +101,7 @@ def test_litellm_provider_basic_generation(mock_litellm):
 
 def test_litellm_provider_with_custom_api_key(mock_litellm):
     """Test provider with custom API key."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider(api_key="test-key-123")
     task = build_task()
@@ -115,7 +115,7 @@ def test_litellm_provider_with_custom_api_key(mock_litellm):
 
 def test_litellm_provider_with_custom_api_base(mock_litellm):
     """Test provider with custom API base URL."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider(api_base="https://custom.api.com/v1")
     task = build_task()
@@ -129,7 +129,7 @@ def test_litellm_provider_with_custom_api_base(mock_litellm):
 
 def test_litellm_provider_with_system_prompt(mock_litellm):
     """Test provider with system prompt in metadata."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider()
     task = build_task(metadata={"system_prompt": "You are a helpful assistant."})
@@ -147,7 +147,7 @@ def test_litellm_provider_with_system_prompt(mock_litellm):
 
 def test_litellm_provider_sampling_parameters(mock_litellm):
     """Test that sampling parameters are correctly passed."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider()
     task = build_task(temperature=0.9, top_p=0.95, max_tokens=150)
@@ -163,7 +163,7 @@ def test_litellm_provider_sampling_parameters(mock_litellm):
 
 def test_litellm_provider_no_max_tokens_limit(mock_litellm):
     """Test that negative max_tokens are not passed to API."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider()
     task = build_task(max_tokens=-1)
@@ -177,7 +177,7 @@ def test_litellm_provider_no_max_tokens_limit(mock_litellm):
 
 def test_litellm_provider_with_extra_kwargs(mock_litellm):
     """Test provider with extra kwargs for litellm."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider(
         extra_kwargs={"presence_penalty": 0.5, "frequency_penalty": 0.3}
@@ -194,7 +194,7 @@ def test_litellm_provider_with_extra_kwargs(mock_litellm):
 
 def test_litellm_provider_with_custom_llm_provider(mock_litellm):
     """Test provider with custom_llm_provider specified."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider(custom_llm_provider="azure")
     task = build_task()
@@ -208,7 +208,7 @@ def test_litellm_provider_with_custom_llm_provider(mock_litellm):
 
 def test_litellm_provider_error_handling(mock_litellm):
     """Test error handling when API call fails."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     # Configure mock to raise an exception
     mock_litellm.completion.side_effect = Exception("API Error: Rate limit exceeded")
@@ -227,7 +227,7 @@ def test_litellm_provider_error_handling(mock_litellm):
 
 def test_litellm_provider_with_status_code_error(mock_litellm):
     """Test error handling with HTTP status code."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     # Create exception with status_code attribute
     error = Exception("API Error")
@@ -248,7 +248,7 @@ def test_litellm_provider_with_status_code_error(mock_litellm):
 
 def test_litellm_provider_different_models(mock_litellm):
     """Test provider with different model identifiers."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider()
 
@@ -273,7 +273,7 @@ def test_litellm_provider_different_models(mock_litellm):
 
 def test_litellm_provider_conversation_history(mock_litellm):
     """Test provider with conversation history."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider()
 
@@ -300,7 +300,7 @@ def test_litellm_provider_conversation_history(mock_litellm):
 
 def test_litellm_provider_task_metadata_override(mock_litellm):
     """Test that task-level metadata can override provider settings."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider(timeout=30)
 
@@ -316,7 +316,7 @@ def test_litellm_provider_task_metadata_override(mock_litellm):
 
 def test_litellm_provider_parallel_requests(mock_litellm):
     """Test that parallel request limiting works."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     provider = LiteLLMProvider(n_parallel=2)
 
@@ -326,7 +326,7 @@ def test_litellm_provider_parallel_requests(mock_litellm):
 
 def test_litellm_provider_empty_response(mock_litellm):
     """Test handling of empty response content."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     # Configure mock to return None content
     mock_litellm.completion.return_value.choices[0].message.content = None
@@ -343,7 +343,7 @@ def test_litellm_provider_empty_response(mock_litellm):
 
 def test_litellm_provider_response_without_usage(mock_litellm):
     """Test handling of response without usage information."""
-    from themis.generation.providers.litellm_provider import LiteLLMProvider
+    from themis.providers.litellm_provider import LiteLLMProvider
 
     # Remove usage attribute from mock response
     del mock_litellm.completion.return_value.usage

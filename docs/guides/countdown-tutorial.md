@@ -596,8 +596,8 @@ Expected outcome:
 ### 3) Create a Prompt Variant and Compare Runs
 
 ```python
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import compare_runs
+from themis.experiment.comparison import StatisticalTest
 
 _ = themis.evaluate(
     dataset,
@@ -1058,8 +1058,8 @@ if total_cost > BUDGET_USD:
 Gate candidate on comparison against baseline.
 
 ```python
-from themis.comparison import compare_runs
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import compare_runs
+from themis.experiment.comparison import StatisticalTest
 
 BASELINE = "countdown-baseline-v1"
 CANDIDATE = "countdown-candidate-v1"
@@ -1611,8 +1611,8 @@ Use p-value-based tests (`t_test` or `permutation`) when you need formal
 hypothesis decisions with multiple-comparison correction.
 
 ```python
-from themis.comparison import ComparisonEngine
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import ComparisonEngine
+from themis.experiment.comparison import StatisticalTest
 
 run_ids = [
     "countdown-part8-baseline-r1",
@@ -1648,8 +1648,8 @@ Bootstrap mode is uncertainty estimation. Use CI overlap with zero as the
 decision rule.
 
 ```python
-from themis.comparison import ComparisonEngine
-from themis.comparison import StatisticalTest
+from themis.experiment.comparison import ComparisonEngine
+from themis.experiment.comparison import StatisticalTest
 
 engine = ComparisonEngine(
     storage_path=".cache/experiments",

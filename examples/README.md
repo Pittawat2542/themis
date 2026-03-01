@@ -22,7 +22,10 @@ uv run python examples/01_quickstart.py
 - `07_provider_ready.py`: real-provider execution scaffolding with fake fallback.
 - `08_resume_cache.py`: cache hit/resume behavior with shared `run_id`.
 - `09_research_loop.py`: run, export to bundle, compare, and generate shareable markdown in one script.
-- `10_logging_demo.py`: using built-in structured logging and tracing utilities.
+- `11_yaml_registry.py`: using declarative YAML configurations instead of Python pipelines.
+- `12_error_handling.py`: catching and processing specific exceptions during execution.
+- `13_custom_storage.py`: creating a custom storage backend for evaluation tracking.
+- `14_agentic_evaluation.py`: using `StatefulTaskExecutor` to build multi-turn agents.
 
 ### In-Depth Tutorials
 - **`countdown/`**: A dense, multi-part internal tutorial showcasing advanced R&D pipelines (SLURM orchestration, dataset synthesis, manifest tracking, reproducibility gates). See [its README](countdown/README.md) for sequence details.

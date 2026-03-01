@@ -93,7 +93,7 @@ def test_vllm_provider_lora_request(monkeypatch):
     fake_vllm_module_with_lora(monkeypatch)
     fake_torch_module(monkeypatch)
 
-    from themis.generation.providers.vllm_provider import VLLMProvider
+    from themis.providers.vllm_provider import VLLMProvider
 
     # Initialize provider
     provider = VLLMProvider(model="demo", tensor_parallel_size=1)
@@ -131,7 +131,7 @@ def test_vllm_provider_no_lora_request(monkeypatch):
     fake_vllm_module_with_lora(monkeypatch)
     fake_torch_module(monkeypatch)
 
-    from themis.generation.providers.vllm_provider import VLLMProvider
+    from themis.providers.vllm_provider import VLLMProvider
 
     provider = VLLMProvider(model="demo", tensor_parallel_size=1)
 

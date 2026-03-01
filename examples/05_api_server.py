@@ -156,7 +156,7 @@ if __name__ == "__main__":
     print("Once the server is running, you can test these commands:")
     print()
     print("Python REST API client:")
-    print("  python examples-simple/05_api_server.py")
+    print("  python examples/05_api_server.py")
     print()
     print("WebSocket client:")
     print("  # Requires: pip install websockets")
