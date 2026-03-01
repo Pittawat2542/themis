@@ -30,7 +30,7 @@ class GenerationRunner:
     Example:
         ```python
         from themis.generation.runner import GenerationRunner
-        from themis.generation.providers.litellm_provider import LiteLLMExecutor
+        from themis.providers.litellm_provider import LiteLLMExecutor
 
         runner = GenerationRunner(
             executor=LiteLLMExecutor(),
@@ -305,7 +305,11 @@ class GenerationRunner:
         start = time.perf_counter()
 
         with tracing.span("executor_execute", model=task.model.identifier):
-            record = self._executor.execute(task)
+            # Support both StatefulTaskExecutor (execute_task) and StatelessTaskExecutor (execute)
+            if hasattr(self._executor, "execute_task"):
+                record = self._executor.execute_task(task)
+            else:
+                record = self._executor.execute(task)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         record.metrics.setdefault("generation_time_ms", elapsed_ms)

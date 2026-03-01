@@ -1,5 +1,8 @@
 """Tool use primitives for agentic workflows.
 
+.. warning::
+    This module is experimental and subject to backwards-incompatible changes.
+
 This module provides abstractions for defining and executing tools
 (functions) that models can call during generation. This enables
 agentic workflows, function calling, and tool-augmented generation.
@@ -42,8 +45,16 @@ from __future__ import annotations
 
 import time
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
+warnings.warn(
+    "Themis tool primitives are currently experimental "
+    "and subject to breaking changes in future minor releases.",
+    FutureWarning,
+    stacklevel=2,
+)
 
 
 @dataclass

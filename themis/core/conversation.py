@@ -1,5 +1,8 @@
 """Conversation primitives for multi-turn interactions.
 
+.. warning::
+    This module is experimental and subject to backwards-incompatible changes.
+
 This module provides abstractions for managing multi-turn conversations,
 enabling research on dialogue systems, debugging interactions, and
 agentic workflows.
@@ -21,11 +24,19 @@ Examples:
 from __future__ import annotations
 
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
 
 from themis.core import entities as core_entities
 from themis.generation import templates
+
+warnings.warn(
+    "Themis conversation primitives are currently experimental "
+    "and subject to breaking changes in future minor releases.",
+    FutureWarning,
+    stacklevel=2,
+)
 
 MessageRole = Literal["system", "user", "assistant", "tool"]
 

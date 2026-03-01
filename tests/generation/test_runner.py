@@ -2,11 +2,12 @@ import unittest
 from unittest.mock import MagicMock
 from themis.generation.runner import GenerationRunner
 from themis.core import entities as core_entities
+from themis.interfaces import StatelessTaskExecutor
 
 
 class TestGenerationRunner(unittest.TestCase):
     def setUp(self):
-        self.mock_executor = MagicMock()
+        self.mock_executor = MagicMock(spec=StatelessTaskExecutor)
         self.mock_executor.reset_mock()
         self.runner = GenerationRunner(executor=self.mock_executor)
 

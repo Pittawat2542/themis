@@ -45,6 +45,8 @@ class ProviderRouter(StatelessTaskExecutor):
                 f"No provider registered for model '{task.model.identifier}'. "
                 f"Known providers: {known}."
             )
+        if hasattr(provider, "execute_task"):
+            return provider.execute_task(task)
         return provider.execute(task)
 
     @property
