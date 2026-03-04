@@ -141,7 +141,7 @@ jobs:
         run: python scripts/check_coverage_thresholds.py coverage.json
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -195,7 +195,7 @@ jobs:
         run: uvx --from twine twine check dist/*
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
