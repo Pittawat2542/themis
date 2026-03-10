@@ -3,6 +3,26 @@
 All notable changes to Themis will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+
+## [2.0.0] - 2026-03-10
+
+### Added
+- Added full-package `mypy themis` and full-repo Ruff checks to CI.
+- Added an isolated built-wheel smoke test that verifies `import themis`,
+  curated root exports, and `themis-quickcheck --help`.
+- Added public API docstring coverage and quick-start/README consistency tests.
+
+### Changed
+- Removed the misleading public `parallel_trials` orchestration parameter. Trial
+  execution remains sequential; candidate-level concurrency is controlled only
+  by `parallel_candidates`.
+- `parallel_candidates` now validates `>= 1` at construction time and fails with
+  a stable validation error instead of allowing invalid runtime semaphore state.
+- Judge-backed engine execution now receives a typed `RuntimeContext` rather
+  than an arbitrary mapping.
+- Comparison and report paths now use projected trial summaries and metric score
+  rows when full trial hydration is not required.
+
 ## [1.4.0] - 2026-03-02
 
 ### Added
@@ -18,6 +38,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Comprehensively updated API cross-reference docstrings and interface documentation across core modules.
 - Extracted and unified sub-components (`StorageBackend` -> `ExperimentStorage`, `comparison`, `api`, `server`, and more).
 - Updated architecture diagrams and references for refactored directories.
+- Hardened v2 spec parsing so user-authored config now validates strictly at construction time, prompt messages use explicit `PromptMessage` objects, judge params live on `JudgeInferenceSpec.params`, destructive judge audit reads use `consume_audit_trail()`, and non-JSON-safe boundary payloads fail loudly instead of being coerced.
+
+### Migration Notes
+- `PromptTemplateSpec.messages` and judge audit payloads now use structured `PromptMessage` entries rather than permissive raw dict bags.
+- `JudgeInferenceSpec.extras["params"]` is no longer supported; use `JudgeInferenceSpec.params`.
+- Config/spec models reject implicit coercions and non-JSON-safe `extras`/`metadata`.
+- Boundary parsing now raises stable `SpecValidationError` and `StorageError` wrappers instead of leaking raw Pydantic/JSON errors.
 
 ### Refactored
 - Decomposed large monolithic files into cohesive modular components (`storage`, `comparison`, `execution`, `generation`, `evaluation`, `benchmarks`, `visualization`, `conversation`, `progress`, `server`).

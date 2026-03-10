@@ -4,7 +4,7 @@ All Themis-specific exceptions inherit from ThemisError, allowing
 users to catch any Themis error with a single except clause:
 
     try:
-        report = themis.evaluate(...)
+        result = orchestrator.run(experiment)
     except themis.ThemisError as e:
         handle_gracefully(e)
 

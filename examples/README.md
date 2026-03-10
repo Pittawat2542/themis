@@ -1,36 +1,46 @@
-# Themis Examples
+# Examples
 
-These examples demonstrate the core workflows of Themis using the unified `themis.evaluate()` API and advanced features like comparison loops and internal tooling.
+This directory is intentionally small and progressive. Every script is
+self-contained, well-commented, and aligned with the current implementation.
 
-## Quick Start
+## Recommended Order
 
-You can run any of the standalone examples directly. For instance:
+1. `01_hello_world.py`
+   Minimal end-to-end run. Mirrors the Quick Start.
+
+2. `02_project_file.py`
+   Moves shared policy into a TOML project file and loads it with
+   `Orchestrator.from_project_file(...)`.
+
+3. `03_custom_extractor_metric.py`
+   Shows how to author and register a custom extractor plus a metric that scores
+   parsed output instead of raw text.
+
+4. `04_compare_models.py`
+   Runs a paired comparison and exports a Markdown report.
+   Requires `themis-eval[stats]`.
+
+5. `05_resume_run.py`
+   Demonstrates how repeated runs skip completed trials when storage, specs, and
+   evaluation revision match.
+
+6. `06_hooks_and_timeline.py`
+   Shows how hooks change prompts, how telemetry events flow, and how to inspect
+   a timeline view after execution.
+
+7. `07_judge_metric.py`
+   Demonstrates judge-backed metrics and audit-trail inspection.
+   Requires `themis-eval[compression]`.
+
+## Run an Example
 
 ```bash
-uv run python examples/01_quickstart.py
+uv run python examples/01_hello_world.py
 ```
 
-## Available Examples
+## Design Rules For This Folder
 
-### Standalone Snippets
-- `01_quickstart.py`: basic evaluation using benchmark presets.
-- `02_custom_dataset.py`: custom inline dataset evaluation.
-- `03_distributed.py`: execution tuning (parallel workers and retries).
-- `04_comparison.py`: run multiple experiments and compare them statistically.
-- `05_api_server.py`: launching the Themis FastAPI server with REST/WebSocket interfaces.
-- `06_custom_metrics.py`: registering and using custom evaluation metrics.
-- `07_provider_ready.py`: real-provider execution scaffolding with fake fallback.
-- `08_resume_cache.py`: cache hit/resume behavior with shared `run_id`.
-- `09_research_loop.py`: run, export to bundle, compare, and generate shareable markdown in one script.
-- `11_yaml_registry.py`: using declarative YAML configurations instead of Python pipelines.
-- `12_error_handling.py`: catching and processing specific exceptions during execution.
-- `13_custom_storage.py`: creating a custom storage backend for evaluation tracking.
-- `14_agentic_evaluation.py`: using `StatefulTaskExecutor` to build multi-turn agents.
-
-### In-Depth Tutorials
-- **`countdown/`**: A dense, multi-part internal tutorial showcasing advanced R&D pipelines (SLURM orchestration, dataset synthesis, manifest tracking, reproducibility gates). See [its README](countdown/README.md) for sequence details.
-
-## Notes
-
-- Results and metrics are written to `.cache/experiments` by default.
-- If you don't provide real API keys, the examples frequently default the model string to `fake:fake-math-llm` for local, cost-free smoke testing.
+- Use only the current `ProjectSpec` + `ExperimentSpec` + `Orchestrator` flow.
+- Prefer local fake plugins over external providers unless the example is
+  explicitly about provider integration.
+- Keep each script runnable on its own.

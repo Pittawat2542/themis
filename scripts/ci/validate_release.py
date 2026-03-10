@@ -13,8 +13,10 @@ SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:\.post\d+)?(?:[-+][0-9A-Za-z.-]+)?$")
 CHANGELOG_HEADER_RE = re.compile(
     r"^## \[(?P<version>[^\]]+)\] - (?P<date>\d{4}-\d{2}-\d{2})$"
 )
-DOCS_VERSION_RE = re.compile(r"^- Version:\s*`(?P<version>[^`]+)`\s*$")
 CITATION_VERSION_RE = re.compile(r"^version:\s*(?P<version>[^\s#]+)\s*$")
+CANONICAL_CHANGELOG_URL = (
+    "https://github.com/Pittawat2542/themis/blob/main/CHANGELOG.md"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,14 +53,6 @@ def extract_versions_from_changelog(path: Path) -> set[str]:
     return versions
 
 
-def extract_docs_current_version(path: Path) -> str | None:
-    for line in path.read_text(encoding="utf-8").splitlines():
-        match = DOCS_VERSION_RE.match(line.strip())
-        if match:
-            return match.group("version")
-    return None
-
-
 def extract_citation_version(path: Path) -> str | None:
     for line in path.read_text(encoding="utf-8").splitlines():
         match = CITATION_VERSION_RE.match(line.strip())
@@ -67,56 +61,75 @@ def extract_citation_version(path: Path) -> str | None:
     return None
 
 
-def main() -> int:
-    args = parse_args()
-    repo_root = Path(__file__).resolve().parents[2]
+def docs_changelog_references_root(path: Path) -> bool:
+    return CANONICAL_CHANGELOG_URL in path.read_text(encoding="utf-8")
 
+
+def collect_validation_failures(repo_root: Path, *, tag: str = "") -> list[str]:
     pyproject_path = repo_root / "pyproject.toml"
     changelog_path = repo_root / "CHANGELOG.md"
-    docs_changelog_path = repo_root / "docs" / "CHANGELOG.md"
+    docs_changelog_path = repo_root / "docs" / "changelog" / "index.md"
     citation_path = repo_root / "CITATION.cff"
 
     failures: list[str] = []
+    package_version: str | None = None
+    changelog_versions: set[str] = set()
 
-    package_version = read_project_version(pyproject_path)
-    if not SEMVER_RE.match(package_version):
-        failures.append(
-            f"pyproject.toml version '{package_version}' is not a valid semantic version"
-        )
+    if not pyproject_path.exists():
+        failures.append("pyproject.toml is missing")
+    else:
+        package_version = read_project_version(pyproject_path)
+        if not SEMVER_RE.match(package_version):
+            failures.append(
+                f"pyproject.toml version '{package_version}' is not a valid semantic version"
+            )
 
-    changelog_versions = extract_versions_from_changelog(changelog_path)
-    if package_version not in changelog_versions:
+    if not changelog_path.exists():
+        failures.append("CHANGELOG.md is missing")
+    else:
+        changelog_versions = extract_versions_from_changelog(changelog_path)
+
+    if package_version is not None and package_version not in changelog_versions:
         failures.append(
             f"CHANGELOG.md is missing release heading for version [{package_version}]"
         )
 
-    docs_version = extract_docs_current_version(docs_changelog_path)
-    if docs_version is None:
-        failures.append("docs/CHANGELOG.md is missing a 'Version: `x.y.z`' entry")
-    elif docs_version != package_version:
+    if not docs_changelog_path.exists():
+        failures.append("docs/changelog/index.md is missing")
+    elif not docs_changelog_references_root(docs_changelog_path):
         failures.append(
-            "docs/CHANGELOG.md current version "
-            f"'{docs_version}' does not match pyproject version '{package_version}'"
+            "docs/changelog/index.md must reference the canonical root changelog"
         )
 
-    citation_version = extract_citation_version(citation_path)
-    if citation_version is None:
-        failures.append("CITATION.cff is missing a version field")
-    elif citation_version != package_version:
-        failures.append(
-            f"CITATION.cff version '{citation_version}' does not match pyproject version '{package_version}'"
-        )
-
-    if args.tag:
-        tag_version = normalize_tag(args.tag)
-        if tag_version != package_version:
+    if not citation_path.exists():
+        failures.append("CITATION.cff is missing")
+    else:
+        citation_version = extract_citation_version(citation_path)
+        if citation_version is None:
+            failures.append("CITATION.cff is missing a version field")
+        elif package_version is not None and citation_version != package_version:
             failures.append(
-                f"Release tag '{args.tag}' resolves to '{tag_version}', but pyproject version is '{package_version}'"
+                f"CITATION.cff version '{citation_version}' does not match pyproject version '{package_version}'"
+            )
+
+    if tag:
+        tag_version = normalize_tag(tag)
+        if package_version is not None and tag_version != package_version:
+            failures.append(
+                f"Release tag '{tag}' resolves to '{tag_version}', but pyproject version is '{package_version}'"
             )
         if tag_version not in changelog_versions:
             failures.append(
                 f"CHANGELOG.md is missing release heading for tag version [{tag_version}]"
             )
+
+    return failures
+
+
+def main() -> int:
+    args = parse_args()
+    repo_root = Path(__file__).resolve().parents[2]
+    failures = collect_validation_failures(repo_root, tag=args.tag)
 
     if failures:
         print("Release metadata validation failed:", file=sys.stderr)
@@ -124,6 +137,7 @@ def main() -> int:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
+    package_version = read_project_version(repo_root / "pyproject.toml")
     print(f"Release metadata is valid for version {package_version}")
     return 0
 

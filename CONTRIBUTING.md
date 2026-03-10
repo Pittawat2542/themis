@@ -1,131 +1,92 @@
 # Contributing to Themis
 
-Thank you for your interest in contributing to Themis! We welcome contributions from the community.
+This repository now centers on the typed spec + orchestrator runtime. Use this
+guide when you need the current local workflow, quality gates, and release
+checks.
 
-This guide covers:
-- Development setup
-- Code style and standards
-- Testing requirements
-- Pull request process
-- Areas where we need help
+## Development Setup
 
-## Getting Started
+- Python `3.12+`
+- [`uv`](https://github.com/astral-sh/uv) for environment and dependency management
 
-### Prerequisites
-
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv) (recommended for dependency management)
-
-### Installation
-
-1. **Fork the repository** on GitHub.
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/yourusername/themis.git
-   cd themis
-   ```
-3. **Install dependencies** using `uv`:
-   ```bash
-   uv sync --all-extras --dev
-   ```
-   This will create a virtual environment and install all necessary dependencies, including development tools.
-
-## Development Workflow
-
-### Running Tests
-
-We use `pytest` for testing. To run the full test suite:
+Clone the repository and install the current dev environment:
 
 ```bash
-uv run pytest
+git clone https://github.com/yourusername/themis.git
+cd themis
+uv sync --all-extras --dev
 ```
 
-To run a specific test file:
+## Project Shape
+
+- `themis/`: runtime, storage, specs, registry, telemetry, and reporting code
+- `tests/`: pytest coverage for contracts, orchestration, records, storage, CLI, and telemetry
+- `examples/`: progressive runnable examples for the current implementation
+- `docs/`: MkDocs site and API reference
+- `scripts/ci/`: release, example, and lint helper scripts used by automation
+
+## Local Checks
+
+Run these before opening a pull request:
 
 ```bash
-uv run pytest tests/generation/test_strategies.py
-```
+# Full test suite
+uv run pytest -q
 
-To run with coverage:
+# Example smoke tests
+uv run python scripts/ci/run_examples.py
 
-```bash
-uv run pytest --cov=themis --cov-report=html
-```
+# Lint and format
+uv run ruff format --check .
+uv run ruff check .
 
-### Code Style
-
-- **Python Version**: 3.12+
-- **Formatting**: We follow PEP 8.
-- **Type Hinting**: All code should be fully type-hinted and pass static analysis.
-- **Docstrings**: Please include docstrings for all public modules, classes, and functions.
-
-Run local quality checks before opening a PR:
-
-```bash
-# Formatting and linting for files you changed
-uv run ruff format --check <changed_python_files>
-uv run ruff check <changed_python_files>
-
-# Baseline syntax/runtime lint used by CI
-uv run ruff check --select E9,F63,F7 themis tests
-
-# Docs build must stay strict-clean
+# Docs must build in strict mode
 uv run mkdocs build --strict
 ```
 
-To prevent commit-time Ruff regressions, enable the repository pre-commit hook:
+If you only changed a few Python files, matching CI's changed-file checks is
+fine too:
+
+```bash
+uv run ruff format --check path/to/file.py
+uv run ruff check path/to/file.py
+```
+
+To enable the repository Git hook for staged Python validation:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-This hook runs `scripts/ci/check_staged_python.sh`, which validates staged Python
-files with `ruff format --check` and `ruff check` before each commit.
+That hook runs `scripts/ci/check_staged_python.sh`.
 
-### Project Structure
+## Pull Requests
 
-- `themis/`: Source code
-- `tests/`: Test suite
-- `examples/`: Runnable vNext example scripts
-- `docs/`: Documentation
-
-## Submitting Changes
-
-1. **Create a new branch** for your feature or bugfix:
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-2. **Make your changes** and commit them with clear, descriptive messages.
-3. **Run tests** to ensure your changes don't break existing functionality.
-4. **Push your branch** to your fork:
-   ```bash
-   git push origin feature/my-new-feature
-   ```
-5. **Open a Pull Request** against the `main` branch of the original repository.
-   - Provide a clear title and description of your changes.
-   - Link to any relevant issues.
+1. Create a branch from `main`.
+2. Make the smallest coherent change you can.
+3. Run the relevant local checks.
+4. Open a pull request against `main` with a clear summary and any migration notes.
 
 ## Versioning & Releases
 
-- The project follows SemVer-compatible release tags (for example `vX.Y.Z` and post releases like `vX.Y.Z.postN`).
-- Keep version metadata in sync across:
-  - `pyproject.toml`
-  - `CHANGELOG.md`
-  - `docs/CHANGELOG.md`
-  - `CITATION.cff`
+- Release tags follow `vX.Y.Z` or `vX.Y.Z.postN`.
+- Keep `pyproject.toml` and `CHANGELOG.md` in sync.
 - Validate release metadata locally:
-  ```bash
-  uv run python scripts/ci/validate_release.py --tag vX.Y.Z
-  ```
-- Generate release body from changelog (used by automation):
-  ```bash
-  uv run python scripts/ci/extract_release_notes.py --tag vX.Y.Z --changelog CHANGELOG.md --output /tmp/release_notes.md
-  ```
 
-## Reporting Issues
+```bash
+uv run python scripts/ci/validate_release.py --tag vX.Y.Z
+```
 
-If you find a bug or have a feature request, please open an issue on GitHub. Provide as much detail as possible, including steps to reproduce the issue.
+- Preview generated release notes:
+
+```bash
+uv run python scripts/ci/extract_release_notes.py \
+  --tag vX.Y.Z \
+  --changelog CHANGELOG.md \
+  --output /tmp/release_notes.md
+```
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the
+MIT License.

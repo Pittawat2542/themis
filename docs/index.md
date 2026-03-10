@@ -1,94 +1,81 @@
 <div class="landing-hero">
   <p class="hero-kicker">Themis Documentation</p>
-  <h1 class="hero-title">Evaluate LLMs with confidence.</h1>
+  <h1 class="hero-title">Code-first evaluation, documented from the implementation up.</h1>
   <p class="hero-subtitle">
-    Themis gives research teams a clean workflow for running benchmarks,
-    tracking experiments, and comparing models with statistical rigor.
+    Themis is a typed orchestration layer for repeatable LLM experiments:
+    immutable specs on the way in, append-only events and projections on the
+    way out, and analysis tools built on top of the stored run history.
   </p>
   <div class="hero-actions">
-    <a class="md-button md-button--primary" href="getting-started/quickstart/">Start Quickstart</a>
-    <a class="md-button" href="guides/cli/">View CLI Guide</a>
+    <a class="md-button md-button--primary" href="quick-start/">Start Quick Start</a>
+    <a class="md-button" href="concepts/architecture/">See Architecture</a>
   </div>
 </div>
 
-## Choose Your Path
+## Start Here
 
 <div class="path-grid">
-  <a class="path-card" href="getting-started/installation/">
-    <h3>Install</h3>
-    <p>Set up Themis and verify your environment.</p>
+  <a class="path-card" href="introduction/">
+    <h3>Introduction</h3>
+    <p>Learn the current public surface and the write-side/read-side model.</p>
   </a>
-  <a class="path-card" href="getting-started/quickstart/">
-    <h3>Run First Eval</h3>
-    <p>Use `evaluate(...)` and get your first metrics quickly.</p>
+  <a class="path-card" href="installation-setup/">
+    <h3>Installation</h3>
+    <p>Pick the right extras for providers, stats, compression, and docs.</p>
   </a>
-  <a class="path-card" href="guides/evaluation/">
-    <h3>Design Experiments</h3>
-    <p>Move from one-liners to spec/session-driven workflows.</p>
+  <a class="path-card" href="quick-start/">
+    <h3>Hello World</h3>
+    <p>Run a complete experiment with one dataset loader, one engine, and one metric.</p>
   </a>
-  <a class="path-card" href="guides/comparison/">
-    <h3>Compare Runs</h3>
-    <p>Analyze run deltas with statistical tests.</p>
+  <a class="path-card" href="tutorials/">
+    <h3>Tutorials</h3>
+    <p>Walk through project files, comparisons, and result inspection end to end.</p>
   </a>
-  <a class="path-card" href="reference/benchmarks/">
-    <h3>Explore Benchmarks</h3>
-    <p>Browse built-in benchmarks and expected formats.</p>
+  <a class="path-card" href="guides/">
+    <h3>Guides</h3>
+    <p>Jump to task-oriented how-tos for loaders, plugins, resume, and quickcheck.</p>
   </a>
-  <a class="path-card" href="api/overview/">
-    <h3>Dive Into API</h3>
-    <p>Use the full Python API and extension points.</p>
+  <a class="path-card" href="api-reference/">
+    <h3>API Reference</h3>
+    <p>Browse `themis`, specs, orchestration, runtime, storage, and protocol docs.</p>
   </a>
 </div>
+
+## Current Product Shape
+
+- `ProjectSpec` holds shared policy and storage defaults.
+- `ExperimentSpec` expands into deterministic `TrialSpec` instances.
+- `PluginRegistry` provides engines, extractors, metrics, judges, and hooks.
+- `Orchestrator` plans trials, runs them, stores events, and returns `ExperimentResult`.
+- `ExperimentResult` lets you inspect trials, timelines, reports, and paired comparisons.
+- `themis-quickcheck` reads SQLite summaries for a fast operator view of failures, scores, and latency.
 
 ## Core Workflow
 
 ```mermaid
 flowchart LR
-    A["Benchmark / Dataset"] --> B["themis.evaluate(...)"]
-    B --> C["Generation + Evaluation"]
-    C --> D["ExperimentStorage"]
-    D --> E["compare_runs(...) / Export / API Server"]
+    A["ProjectSpec + ExperimentSpec"] --> B["TrialPlanner"]
+    B --> C["TrialExecutor / TrialRunner"]
+    C --> D["TrialEventRepository"]
+    D --> E["ProjectionHandler"]
+    E --> F["ExperimentResult"]
+    F --> G["view_timeline / compare / report"]
 ```
 
-## Quick Recipes
+## Documentation Principle
 
-=== "Evaluate"
+!!! note
+    This site stays close to the code and tests so the documented workflow,
+    examples, and API reference describe the same runtime contract.
 
-    ```bash
-    themis eval gsm8k --model gpt-4 --limit 100 --run-id gsm8k-gpt4
-    ```
+## Recommended Reading Order
 
-=== "Compare"
-
-    ```bash
-    themis compare gsm8k-gpt4 gsm8k-claude --output comparison.html
-    ```
-
-=== "Serve Dashboard"
-
-    ```bash
-    themis serve --storage .cache/experiments
-    ```
-
-## Release Spotlight
-
-!!! success "Themis 1.2.1"
-    Execution API refactored to standard Python protocols (`TaskExecutor`), replacing legacy `ModelProvider`. Huge documentation update.
-
-    [Read the full 1.2.1 notes](releases/1.2.1.md)
-
-## Documentation Map
-
-- [Getting Started](getting-started/installation.md): installation, quickstart, and core concepts.
-- [Guides](guides/evaluation.md): evaluation design, storage, providers, comparison, and interoperability.
-- [Reference](reference/benchmarks.md): benchmarks and API server details.
-- [Python API](api/overview.md): function/class-level API behavior.
-- [Architecture](ARCHITECTURE.md): module boundaries and design decisions.
-
-## Runnable Examples
-
-- [examples/01_quickstart.py](https://github.com/Pittawat2542/themis/blob/main/examples/01_quickstart.py)
-- [examples/02_custom_dataset.py](https://github.com/Pittawat2542/themis/blob/main/examples/02_custom_dataset.py)
-- [examples/04_comparison.py](https://github.com/Pittawat2542/themis/blob/main/examples/04_comparison.py)
-- [examples/08_resume_cache.py](https://github.com/Pittawat2542/themis/blob/main/examples/08_resume_cache.py)
-- [examples/09_research_loop.py](https://github.com/Pittawat2542/themis/blob/main/examples/09_research_loop.py)
+1. [Introduction](introduction/index.md)
+2. [Installation & Setup](installation-setup/index.md)
+3. [Quick Start](quick-start/index.md)
+4. [Tutorials](tutorials/index.md)
+5. [Concepts](concepts/index.md)
+6. [Guides](guides/index.md)
+7. [API Reference](api-reference/index.md)
+8. [Changelog](changelog/index.md)
+9. [FAQ / Troubleshooting](faq/index.md)
