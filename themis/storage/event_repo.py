@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 
 from pydantic import TypeAdapter, ValidationError
 
-from themis.errors.exceptions import StorageError
+from themis.errors import StorageError
 from themis.records.error import ErrorRecord
 from themis.specs.base import SpecBase
-from themis.storage.sqlite_schema import DatabaseManager
+from themis.storage._protocols import (
+    StorageConnection,
+    StorageConnectionManager,
+    StorageRow,
+)
 from themis.types.enums import ErrorCode
-from themis.types.events import ArtifactRef, TrialEvent, TrialEventType
+from themis.types.events import (
+    ArtifactRef,
+    ProjectionCompletedEventMetadata,
+    TrialEvent,
+    TrialEventType,
+    parse_trial_event_metadata,
+)
 from themis.types.json_types import JSONDict, JSONList, JSONValueType
 from themis.types.json_validation import format_validation_error
 
@@ -24,40 +33,85 @@ _JSON_VALUE_ADAPTER: TypeAdapter[JSONValueType] = TypeAdapter(JSONValueType)
 class SqliteEventRepository:
     """Append-only repository for typed trial lifecycle events."""
 
-    def __init__(self, manager: DatabaseManager):
+    def __init__(self, manager: StorageConnectionManager):
         self.manager = manager
 
-    def save_spec(self, spec: SpecBase, conn: sqlite3.Connection | None = None) -> None:
+    def save_spec(self, spec: SpecBase, conn: StorageConnection | None = None) -> None:
         """Persist or update a canonical serialized spec."""
         if conn is None:
             with self.manager.get_connection() as local_conn:
-                self.save_spec(spec, conn=local_conn)
+                with local_conn:
+                    self.save_spec(spec, conn=local_conn)
             return
+
+        canonical_json = json.dumps(
+            spec.model_dump(mode="json"),
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        existing = conn.execute(
+            """
+            SELECT canonical_hash, canonical_json
+            FROM specs
+            WHERE spec_hash = ?
+            """,
+            (spec.spec_hash,),
+        ).fetchone()
+        if existing is not None:
+            existing_canonical_hash = self._persisted_spec_canonical_hash(
+                spec,
+                row=existing,
+            )
+            if existing_canonical_hash != spec.canonical_hash:
+                raise StorageError(
+                    code=ErrorCode.STORAGE_WRITE,
+                    message=(
+                        "short hash collision for persisted spec identity: "
+                        f"spec_hash '{spec.spec_hash}' is already bound to a "
+                        "different canonical payload"
+                    ),
+                    details={
+                        "spec_hash": spec.spec_hash,
+                        "existing_canonical_hash": existing_canonical_hash,
+                        "incoming_canonical_hash": spec.canonical_hash,
+                        "spec_type": spec.__class__.__name__,
+                    },
+                )
 
         conn.execute(
             """
-            INSERT INTO specs (spec_hash, spec_type, schema_version, canonical_json)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO specs (
+                spec_hash,
+                canonical_hash,
+                spec_type,
+                schema_version,
+                canonical_json
+            )
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(spec_hash) DO UPDATE SET
+                canonical_hash=excluded.canonical_hash,
                 spec_type=excluded.spec_type,
                 schema_version=excluded.schema_version,
                 canonical_json=excluded.canonical_json
             """,
             (
                 spec.spec_hash,
+                spec.canonical_hash,
                 spec.__class__.__name__,
                 str(spec.schema_version),
-                json.dumps(spec.canonical_dict()),
+                canonical_json,
             ),
         )
 
     def append_event(
-        self, event: TrialEvent, conn: sqlite3.Connection | None = None
+        self, event: TrialEvent, conn: StorageConnection | None = None
     ) -> None:
         """Append one typed lifecycle event to the event log."""
         if conn is None:
             with self.manager.get_connection() as local_conn:
-                self.append_event(event, conn=local_conn)
+                with local_conn:
+                    self.append_event(event, conn=local_conn)
             return
 
         conn.execute(
@@ -83,11 +137,13 @@ class SqliteEventRepository:
                 event.event_seq,
                 event.event_id,
                 event.candidate_id,
-                event.event_type,
-                event.stage,
+                event.event_type.value,
+                event.stage.value if event.stage is not None else None,
                 event.status.value if event.status is not None else None,
                 event.event_ts.isoformat(),
-                json.dumps(event.metadata) if event.metadata else None,
+                json.dumps(event.metadata.as_dict())
+                if event.metadata.as_dict()
+                else None,
                 json.dumps(event.payload) if event.payload is not None else None,
                 json.dumps(
                     [
@@ -137,6 +193,18 @@ class SqliteEventRepository:
                 trial_hash=row["trial_hash"],
                 candidate_id=row["candidate_id"],
             )
+            try:
+                parsed_metadata = parse_trial_event_metadata(
+                    event_type=row["event_type"],
+                    metadata=metadata,
+                )
+            except ValidationError as exc:
+                raise self._storage_read_error(
+                    "trial_events.metadata_json",
+                    row["trial_hash"],
+                    row["candidate_id"],
+                    exc,
+                ) from exc
             payload = self._load_json_value(
                 row["payload_json"],
                 label="trial_events.payload_json",
@@ -184,7 +252,7 @@ class SqliteEventRepository:
                         stage=row["stage"],
                         status=row["status"],
                         event_ts=row["event_ts"],
-                        metadata=metadata,
+                        metadata=parsed_metadata,
                         payload=payload,
                         artifact_refs=artifact_refs,
                         error=error,
@@ -192,7 +260,7 @@ class SqliteEventRepository:
                 )
             except ValidationError as exc:
                 raise self._storage_read_error(
-                    "trial_events.error_json",
+                    "trial_events.row",
                     row["trial_hash"],
                     row["candidate_id"],
                     exc,
@@ -221,8 +289,14 @@ class SqliteEventRepository:
         max_seq = row["max_seq"] if row is not None else None
         return int(max_seq) if max_seq is not None else None
 
-    def has_projection_for_revision(self, trial_hash: str, eval_revision: str) -> bool:
-        """Return whether a projection-completed event exists for the revision."""
+    def has_projection_for_overlay(
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> bool:
+        """Return whether a projection-completed event exists for the overlay."""
         with self.manager.get_connection() as conn:
             rows = conn.execute(
                 """
@@ -241,7 +315,23 @@ class SqliteEventRepository:
                 trial_hash=trial_hash,
                 candidate_id=None,
             )
-            if metadata.get("eval_revision") == eval_revision:
+            try:
+                projection_metadata = parse_trial_event_metadata(
+                    event_type=TrialEventType.PROJECTION_COMPLETED,
+                    metadata=metadata,
+                )
+            except ValidationError as exc:
+                raise self._storage_read_error(
+                    "trial_events.metadata_json",
+                    trial_hash,
+                    None,
+                    exc,
+                ) from exc
+            if (
+                isinstance(projection_metadata, ProjectionCompletedEventMetadata)
+                and projection_metadata.transform_hash == transform_hash
+                and projection_metadata.evaluation_hash == evaluation_hash
+            ):
                 return True
         return False
 
@@ -350,6 +440,27 @@ class SqliteEventRepository:
             raise self._storage_read_error(
                 label, trial_hash, candidate_id, exc
             ) from exc
+
+    def _persisted_spec_canonical_hash(
+        self,
+        spec: SpecBase,
+        *,
+        row: StorageRow,
+    ) -> str:
+        persisted_canonical_hash = row["canonical_hash"]
+        if isinstance(persisted_canonical_hash, str) and persisted_canonical_hash:
+            return persisted_canonical_hash
+        try:
+            persisted_spec = spec.__class__.model_validate(
+                json.loads(row["canonical_json"])
+            )
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+            raise StorageError(
+                code=ErrorCode.STORAGE_READ,
+                message="invalid persisted spec payload in specs.canonical_json",
+                details={"spec_hash": spec.spec_hash},
+            ) from exc
+        return persisted_spec.canonical_hash
 
     def _storage_read_error(
         self,

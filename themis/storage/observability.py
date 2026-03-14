@@ -2,75 +2,133 @@ from __future__ import annotations
 
 import json
 
-from themis.records.observability import ObservabilityRefs
-from themis.storage.sqlite_schema import DatabaseManager
+from themis.records.observability import (
+    ObservabilityLink,
+    ObservabilityRefs,
+    ObservabilitySnapshot,
+)
+from themis.storage._protocols import StorageConnectionManager
 
 
 class SqliteObservabilityStore:
     """Projection-side persistence for non-domain observability links."""
 
-    def __init__(self, manager: DatabaseManager):
+    def __init__(self, manager: StorageConnectionManager):
         self.manager = manager
 
-    def save_refs(
+    def save_snapshot(
         self,
         trial_hash: str,
         candidate_id: str | None,
-        eval_revision: str,
-        refs: ObservabilityRefs,
+        overlay_key: str,
+        snapshot: ObservabilitySnapshot,
     ) -> None:
         with self.manager.get_connection() as conn:
             with conn:
                 conn.execute(
                     """
-                    INSERT INTO observability_refs (
+                    DELETE FROM observability_links
+                    WHERE trial_hash = ? AND candidate_id = ? AND overlay_key = ?
+                    """,
+                    (trial_hash, candidate_id or "", overlay_key),
+                )
+                for link in snapshot.links:
+                    self.save_link(
                         trial_hash,
                         candidate_id,
-                        eval_revision,
-                        langfuse_trace_id,
-                        langfuse_url,
-                        wandb_url,
+                        overlay_key,
+                        link,
+                    )
+
+    def save_link(
+        self,
+        trial_hash: str,
+        candidate_id: str | None,
+        overlay_key: str,
+        link: ObservabilityLink,
+    ) -> None:
+        with self.manager.get_connection() as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO observability_links (
+                        trial_hash,
+                        candidate_id,
+                        overlay_key,
+                        provider,
+                        external_id,
+                        url,
                         extras_json
                     )
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(trial_hash, candidate_id, eval_revision) DO UPDATE SET
-                        langfuse_trace_id=excluded.langfuse_trace_id,
-                        langfuse_url=excluded.langfuse_url,
-                        wandb_url=excluded.wandb_url,
+                    ON CONFLICT(trial_hash, candidate_id, overlay_key, provider) DO UPDATE SET
+                        external_id=excluded.external_id,
+                        url=excluded.url,
                         extras_json=excluded.extras_json,
                         updated_at=CURRENT_TIMESTAMP
                     """,
                     (
                         trial_hash,
                         candidate_id or "",
-                        eval_revision,
-                        refs.langfuse_trace_id,
-                        refs.langfuse_url,
-                        refs.wandb_url,
-                        json.dumps(refs.extras, sort_keys=True),
+                        overlay_key,
+                        link.provider,
+                        link.external_id,
+                        link.url,
+                        json.dumps(link.extras, sort_keys=True),
                     ),
                 )
+
+    def get_snapshot(
+        self,
+        trial_hash: str,
+        candidate_id: str | None,
+        overlay_key: str,
+    ) -> ObservabilitySnapshot | None:
+        with self.manager.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT provider, external_id, url, extras_json
+                FROM observability_links
+                WHERE trial_hash = ? AND candidate_id = ? AND overlay_key = ?
+                ORDER BY provider ASC
+                """,
+                (trial_hash, candidate_id or "", overlay_key),
+            ).fetchall()
+        if not rows:
+            return None
+        return ObservabilitySnapshot(
+            links=[
+                ObservabilityLink(
+                    provider=row["provider"],
+                    external_id=row["external_id"],
+                    url=row["url"],
+                    extras=json.loads(row["extras_json"] or "{}"),
+                )
+                for row in rows
+            ]
+        )
+
+    def save_refs(
+        self,
+        trial_hash: str,
+        candidate_id: str | None,
+        overlay_key: str,
+        refs: ObservabilityRefs,
+    ) -> None:
+        self.save_snapshot(
+            trial_hash,
+            candidate_id,
+            overlay_key,
+            ObservabilitySnapshot(links=list(refs.links)),
+        )
 
     def get_refs(
         self,
         trial_hash: str,
         candidate_id: str | None,
-        eval_revision: str,
+        overlay_key: str,
     ) -> ObservabilityRefs | None:
-        with self.manager.get_connection() as conn:
-            row = conn.execute(
-                """
-                SELECT langfuse_trace_id, langfuse_url, wandb_url, extras_json
-                FROM observability_refs
-                WHERE trial_hash = ? AND candidate_id = ? AND eval_revision = ?
-                """,
-                (trial_hash, candidate_id or "", eval_revision),
-            ).fetchone()
-        if row is None:
+        snapshot = self.get_snapshot(trial_hash, candidate_id, overlay_key)
+        if snapshot is None:
             return None
-        return ObservabilityRefs(
-            langfuse_trace_id=row["langfuse_trace_id"],
-            langfuse_url=row["langfuse_url"],
-            wandb_url=row["wandb_url"],
-            extras=json.loads(row["extras_json"] or "{}"),
-        )
+        return ObservabilityRefs(links=list(snapshot.links))

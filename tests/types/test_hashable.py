@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
-from themis.types.hashable import HashableMixin
+from themis.types.hashable import HashableMixin, SHORT_HASH_LENGTH
 
 
 class MockSpec(HashableMixin, BaseModel):
@@ -56,3 +56,17 @@ def test_hashable_mixin_nested_models():
     spec = ParentSpec(nested=NestedSpec(value="inner"))
     canonical = spec.canonical_dict()
     assert canonical == {"nested": {"value": "inner"}}
+
+
+def test_hashable_mixin_short_hash_is_prefix_of_full_identity():
+    spec = MockSpec(
+        name="test",
+        items=["a", "b"],
+        count=7,
+        created_at=datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc),
+    )
+
+    full_hash = spec.compute_hash()
+    short_hash = spec.compute_hash(short=True)
+
+    assert short_hash == full_hash[:SHORT_HASH_LENGTH]

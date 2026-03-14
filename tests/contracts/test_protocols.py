@@ -1,28 +1,38 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+import inspect
+
 from themis.contracts.protocols import (
+    BlobStore,
     DatasetContext,
+    DatasetLoader,
     Extractor,
     InferenceEngine,
     InferenceResult,
     JudgeService,
     MetricContext,
     Metric,
+    ObservabilityStore,
     ProjectionRepository,
+    ProjectionRefreshRepository,
     RuntimeContext,
     TrialEventRepository,
 )
 from themis.records.candidate import CandidateRecord
 from themis.records.conversation import Conversation
+from themis.records.extraction import ExtractionRecord
 from themis.records.inference import InferenceRecord
 from themis.records.judge import JudgeAuditTrail
+from themis.records.observability import ObservabilityLink, ObservabilitySnapshot
 from themis.records.timeline import RecordTimeline
 from themis.records.trial import TrialRecord
 from themis.runtime import RecordTimelineView
 from themis.specs.base import SpecBase
 from themis.specs.experiment import PromptTemplateSpec, TrialSpec
-from themis.specs.foundational import JudgeInferenceSpec
-from themis.storage.events import ScoreRow, TrialEvent, TrialEventType
+from themis.specs.foundational import JudgeInferenceSpec, TaskSpec
+from themis.types.events import ScoreRow, TrialEvent, TrialEventType
+from themis.types.json_types import JSONValueType
 
 
 class MockInferenceEngine(InferenceEngine):
@@ -36,7 +46,13 @@ class MockInferenceEngine(InferenceEngine):
 
 
 class MockExtractor(Extractor):
-    def extract(self, trial: TrialSpec, candidate: CandidateRecord):
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, JSONValueType] | None = None,
+    ) -> ExtractionRecord:
+        del trial, candidate, config
         raise NotImplementedError
 
 
@@ -66,7 +82,8 @@ class MockTrialEventRepository(TrialEventRepository):
     def save_spec(self, spec: SpecBase) -> None:
         self.last_spec = spec
 
-    def append_event(self, event: TrialEvent) -> None:
+    def append_event(self, event: TrialEvent, conn=None) -> None:
+        del conn
         self.last_event = event
 
     def last_event_index(
@@ -77,19 +94,90 @@ class MockTrialEventRepository(TrialEventRepository):
     def get_events(
         self, trial_hash: str, candidate_id: str | None = None
     ) -> list[TrialEvent]:
+        del trial_hash, candidate_id
         return []
 
-    def has_projection_for_revision(self, trial_hash: str, eval_revision: str) -> bool:
+    def has_projection_for_overlay(
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> bool:
+        del trial_hash, transform_hash, evaluation_hash
         return False
 
     def latest_terminal_event_type(self, trial_hash: str) -> TrialEventType | None:
+        del trial_hash
+        return None
+
+
+class MockDatasetLoader(DatasetLoader):
+    def load_task_items(self, task: TaskSpec):
+        del task
+        return []
+
+
+class MockBlobStore(BlobStore):
+    def put_blob(self, blob: bytes, media_type: str) -> str:
+        del blob, media_type
+        return "sha256:blob"
+
+    def get_blob(self, ref: str) -> bytes:
+        del ref
+        return b"{}"
+
+    def write_json(self, data: JSONValueType) -> tuple[str, str]:
+        del data
+        return ("file:///tmp/blob", "sha256:blob")
+
+    def read_json(self, sha256_hash: str) -> JSONValueType:
+        del sha256_hash
+        return {}
+
+    def exists(self, sha256_hash: str) -> bool:
+        del sha256_hash
+        return True
+
+
+class MockObservabilityStore(ObservabilityStore):
+    def save_snapshot(
+        self,
+        trial_hash: str,
+        candidate_id: str | None,
+        overlay_key: str,
+        snapshot: ObservabilitySnapshot,
+    ) -> None:
+        del trial_hash, candidate_id, overlay_key, snapshot
+
+    def save_link(
+        self,
+        trial_hash: str,
+        candidate_id: str | None,
+        overlay_key: str,
+        link: ObservabilityLink,
+    ) -> None:
+        del trial_hash, candidate_id, overlay_key, link
+
+    def get_snapshot(
+        self,
+        trial_hash: str,
+        candidate_id: str | None,
+        overlay_key: str,
+    ) -> ObservabilitySnapshot | None:
+        del trial_hash, candidate_id, overlay_key
         return None
 
 
 class MockProjectionRepository(ProjectionRepository):
     def get_trial_record(
-        self, trial_hash: str, eval_revision: str
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
     ) -> TrialRecord | None:
+        del trial_hash, transform_hash, evaluation_hash
         return None
 
     def get_conversation(
@@ -101,21 +189,34 @@ class MockProjectionRepository(ProjectionRepository):
         self,
         record_id: str,
         record_type: str,
-        eval_revision: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
     ) -> RecordTimeline | None:
+        del record_id, record_type, transform_hash, evaluation_hash
         return None
 
     def get_timeline_view(
         self,
         record_id: str,
         record_type: str,
-        eval_revision: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
     ) -> RecordTimelineView | None:
+        del record_id, record_type, transform_hash, evaluation_hash
         return None
 
     def materialize_trial_record(
-        self, trial_hash: str, eval_revision: str
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+        extra_events: list[TrialEvent] | None = None,
+        conn=None,
     ) -> TrialRecord:
+        del trial_hash, transform_hash, evaluation_hash, extra_events, conn
         raise NotImplementedError
 
     def iter_candidate_scores(
@@ -123,8 +224,9 @@ class MockProjectionRepository(ProjectionRepository):
         *,
         trial_hash: str | None = None,
         metric_id: str | None = None,
-        eval_revision: str = "latest",
+        evaluation_hash: str | None = None,
     ):
+        del trial_hash, metric_id, evaluation_hash
         return iter(
             [
                 ScoreRow(
@@ -137,11 +239,22 @@ class MockProjectionRepository(ProjectionRepository):
         )
 
     def save_trial_record(
-        self, record: TrialRecord, *, eval_revision: str = "latest"
+        self,
+        record: TrialRecord,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
     ) -> None:
-        pass
+        del record, transform_hash, evaluation_hash
 
-    def has_trial(self, trial_hash: str, eval_revision: str = "latest") -> bool:
+    def has_trial(
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> bool:
+        del trial_hash, transform_hash, evaluation_hash
         return False
 
 
@@ -154,6 +267,9 @@ def test_protocols_instantiation():
     judge = MockJudgeService()
     event_repo = MockTrialEventRepository()
     projection_repo = MockProjectionRepository()
+    dataset_loader = MockDatasetLoader()
+    blob_store = MockBlobStore()
+    observability_store = MockObservabilityStore()
 
     # Check that they can be used with isinstance against their protocol definitions
     assert isinstance(engine, InferenceEngine)
@@ -162,6 +278,26 @@ def test_protocols_instantiation():
     assert isinstance(judge, JudgeService)
     assert isinstance(event_repo, TrialEventRepository)
     assert isinstance(projection_repo, ProjectionRepository)
+    assert isinstance(projection_repo, ProjectionRefreshRepository)
+    assert isinstance(dataset_loader, DatasetLoader)
+    assert isinstance(blob_store, BlobStore)
+    assert isinstance(observability_store, ObservabilityStore)
+
+
+def test_storage_protocols_do_not_expose_sqlite_connections() -> None:
+    assert "conn" not in inspect.signature(TrialEventRepository.append_event).parameters
+    assert (
+        "conn"
+        not in inspect.signature(
+            ProjectionRepository.materialize_trial_record
+        ).parameters
+    )
+    assert (
+        "conn"
+        not in inspect.signature(
+            ProjectionRefreshRepository.materialize_trial_record
+        ).parameters
+    )
 
 
 def test_inference_result_envelope_is_frozen() -> None:

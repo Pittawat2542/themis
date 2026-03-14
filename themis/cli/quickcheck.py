@@ -7,6 +7,8 @@ import sqlite3
 from pathlib import Path
 from statistics import mean
 
+from themis.overlays import OverlaySelection
+
 
 def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
@@ -21,14 +23,19 @@ def _build_parser() -> argparse.ArgumentParser:
     failures = subparsers.add_parser("failures")
     failures.add_argument("--db", required=True)
     failures.add_argument("--limit", type=int, default=10)
+    failures.add_argument("--transform-hash")
+    failures.add_argument("--evaluation-hash")
 
     scores = subparsers.add_parser("scores")
     scores.add_argument("--db", required=True)
     scores.add_argument("--metric")
     scores.add_argument("--task")
+    scores.add_argument("--evaluation-hash")
 
     latency = subparsers.add_parser("latency")
     latency.add_argument("--db", required=True)
+    latency.add_argument("--transform-hash")
+    latency.add_argument("--evaluation-hash")
     return parser
 
 
@@ -40,31 +47,56 @@ def main(argv: list[str] | None = None) -> int:
     db_path = Path(args.db)
     with _connect(str(db_path)) as conn:
         if args.command == "failures":
-            return _run_failures(conn, limit=args.limit)
+            return _run_failures(
+                conn,
+                limit=args.limit,
+                transform_hash=args.transform_hash,
+                evaluation_hash=args.evaluation_hash,
+            )
         if args.command == "scores":
-            return _run_scores(conn, metric_id=args.metric, task_id=args.task)
+            return _run_scores(
+                conn,
+                metric_id=args.metric,
+                task_id=args.task,
+                evaluation_hash=args.evaluation_hash,
+            )
         if args.command == "latency":
-            return _run_latency(conn)
+            return _run_latency(
+                conn,
+                transform_hash=args.transform_hash,
+                evaluation_hash=args.evaluation_hash,
+            )
     parser.error("Unknown command.")
     return 2
 
 
-def _run_failures(conn: sqlite3.Connection, *, limit: int) -> int:
+def _run_failures(
+    conn: sqlite3.Connection,
+    *,
+    limit: int,
+    transform_hash: str | None = None,
+    evaluation_hash: str | None = None,
+) -> int:
+    overlay_selection = OverlaySelection(
+        transform_hash=transform_hash,
+        evaluation_hash=evaluation_hash,
+    )
     rows = conn.execute(
         """
-        SELECT trial_hash, model_id, task_id, item_id, error_fingerprint, error_preview
+        SELECT trial_hash, overlay_key, model_id, task_id, item_id, error_fingerprint, error_preview
         FROM trial_summary
-        WHERE status = 'error'
+        WHERE status = 'error' AND overlay_key = ?
         ORDER BY COALESCE(ended_at, updated_at, created_at) DESC, trial_hash ASC
         LIMIT ?
         """,
-        (limit,),
+        (overlay_selection.overlay_key, limit),
     ).fetchall()
     for row in rows:
         print(
             "\t".join(
                 [
                     row["trial_hash"],
+                    row["overlay_key"] or "",
                     row["model_id"] or "",
                     row["task_id"] or "",
                     row["item_id"] or "",
@@ -77,13 +109,19 @@ def _run_failures(conn: sqlite3.Connection, *, limit: int) -> int:
 
 
 def _run_scores(
-    conn: sqlite3.Connection, *, metric_id: str | None, task_id: str | None
+    conn: sqlite3.Connection,
+    *,
+    metric_id: str | None,
+    task_id: str | None,
+    evaluation_hash: str | None,
 ) -> int:
-    clauses = [
-        "candidate_summary.eval_revision = 'latest'",
-        "metric_scores.eval_revision = candidate_summary.eval_revision",
-    ]
+    clauses = ["metric_scores.overlay_key = candidate_summary.overlay_key"]
     params: list[object] = []
+    if evaluation_hash is not None:
+        clauses.append("candidate_summary.overlay_key = ?")
+        params.append(OverlaySelection(evaluation_hash=evaluation_hash).overlay_key)
+    else:
+        clauses.append("candidate_summary.overlay_key LIKE 'ev:%'")
     if metric_id is not None:
         clauses.append("metric_scores.metric_id = ?")
         params.append(metric_id)
@@ -93,16 +131,17 @@ def _run_scores(
     where_clause = f"WHERE {' AND '.join(clauses)}"
     rows = conn.execute(
         f"""
-        SELECT trial_summary.model_id, trial_summary.task_id, metric_scores.metric_id, AVG(metric_scores.score) AS avg_score, COUNT(*) AS row_count
+        SELECT candidate_summary.overlay_key, trial_summary.model_id, trial_summary.task_id, metric_scores.metric_id, AVG(metric_scores.score) AS avg_score, COUNT(*) AS row_count
         FROM metric_scores
         JOIN candidate_summary
           ON candidate_summary.candidate_id = metric_scores.candidate_id
-         AND candidate_summary.eval_revision = metric_scores.eval_revision
+         AND candidate_summary.overlay_key = metric_scores.overlay_key
         JOIN trial_summary
           ON trial_summary.trial_hash = candidate_summary.trial_hash
+         AND trial_summary.overlay_key = candidate_summary.overlay_key
         {where_clause}
-        GROUP BY trial_summary.model_id, trial_summary.task_id, metric_scores.metric_id
-        ORDER BY trial_summary.model_id ASC, metric_scores.metric_id ASC
+        GROUP BY candidate_summary.overlay_key, trial_summary.model_id, trial_summary.task_id, metric_scores.metric_id
+        ORDER BY candidate_summary.overlay_key ASC, trial_summary.model_id ASC, metric_scores.metric_id ASC
         """,
         params,
     ).fetchall()
@@ -110,6 +149,7 @@ def _run_scores(
         print(
             "\t".join(
                 [
+                    row["overlay_key"] or "",
                     row["model_id"] or "",
                     row["task_id"] or "",
                     row["metric_id"] or "",
@@ -121,14 +161,24 @@ def _run_scores(
     return 0
 
 
-def _run_latency(conn: sqlite3.Connection) -> int:
+def _run_latency(
+    conn: sqlite3.Connection,
+    *,
+    transform_hash: str | None = None,
+    evaluation_hash: str | None = None,
+) -> int:
+    overlay_selection = OverlaySelection(
+        transform_hash=transform_hash,
+        evaluation_hash=evaluation_hash,
+    )
     rows = conn.execute(
         """
         SELECT latency_ms, tokens_in, tokens_out
         FROM candidate_summary
-        WHERE eval_revision = 'latest'
+        WHERE overlay_key = ?
         ORDER BY latency_ms ASC
-        """
+        """,
+        (overlay_selection.overlay_key,),
     ).fetchall()
     latencies = [row["latency_ms"] for row in rows if row["latency_ms"] is not None]
     tokens_in = [row["tokens_in"] for row in rows if row["tokens_in"] is not None]

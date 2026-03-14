@@ -38,6 +38,7 @@
 | `providers-vllm` | vLLM runtime dependency for custom inference engines |
 | `stats` | `numpy`, `scipy`, and `pandas` for comparisons and reports |
 | `telemetry` | Langfuse callback support plus observability-link dependencies (`langfuse`, `wandb`) |
+| `storage-postgres` | `psycopg` driver for the `postgres_blob` storage backend |
 | `docs` | MkDocs + mkdocstrings toolchain |
 | `all` | Every runtime extra above except `dev` |
 
@@ -60,8 +61,8 @@ uv sync --all-extras --dev
 
 ### `compression`
 
-Install this when you set `StorageSpec.compression="zstd"` or expect large
-artifact blobs such as judge audits and structured payload snapshots.
+Install this when your `StorageConfig` uses `compression="zstd"` or you expect
+large artifact blobs such as judge audits and structured payload snapshots.
 
 ```bash
 uv add "themis-eval[compression]"
@@ -79,9 +80,8 @@ Install this when your custom dataset loader imports the Hugging Face
 uv add "themis-eval[datasets]"
 ```
 
-Themis does not auto-register a built-in Hugging Face loader in this version.
-You still provide the `dataset_loader` object and its `load_task_items(task)`
-method yourself.
+Themis does not auto-register a built-in Hugging Face loader. Provide the
+`dataset_loader` object and its `load_task_items(task)` method yourself.
 
 See [Write a Dataset Loader](../guides/dataset-loaders.md) for the loader
 contract and a Hugging Face example.
@@ -109,8 +109,8 @@ uv add "themis-eval[providers-openai]"
 ```
 
 Themis does not ship a built-in OpenAI engine in this package. The extra only
-installs the dependency; you still register an `InferenceEngine` under your
-chosen provider name, such as `openai`.
+installs the dependency; register an `InferenceEngine` under your chosen
+provider name, such as `openai`.
 
 ### `providers-litellm`
 
@@ -132,8 +132,8 @@ runtime or talks to a colocated vLLM worker.
 uv add "themis-eval[providers-vllm]"
 ```
 
-As with the other provider extras, you still provide the actual engine
-implementation and register it with `PluginRegistry`.
+As with the other provider extras, provide the engine implementation and
+register it with `PluginRegistry`.
 
 ### `stats`
 
@@ -160,6 +160,14 @@ uv add "themis-eval[telemetry]"
 See [Attach Telemetry & Observability](../guides/telemetry-and-observability.md)
 and [Telemetry API](../api-reference/telemetry.md).
 
+### `storage-postgres`
+
+Install this when your project uses `backend="postgres_blob"`.
+
+```bash
+uv add "themis-eval[storage-postgres]"
+```
+
 ### `docs`
 
 Install this when you want to build or edit the documentation site locally.
@@ -183,8 +191,8 @@ uv add "themis-eval[all]"
 ```
 
 `all` includes `compression`, `datasets`, `docs`, `extractors`,
-`providers-openai`, `providers-litellm`, `providers-vllm`, `stats`, and
-`telemetry`. It does not include `dev`.
+`providers-openai`, `providers-litellm`, `providers-vllm`, `stats`,
+`telemetry`, and `storage-postgres`. It does not include `dev`.
 
 ## Install From Source
 
@@ -214,19 +222,24 @@ If you installed the `telemetry` extra, verify the telemetry primitives:
 uv run python -c "from themis.telemetry import TelemetryBus, LangfuseCallback; print('ok')"
 ```
 
-## Pick a Storage Root Early
+## Pick a Storage Configuration Early
 
-Every `ProjectSpec` needs a `StorageSpec.root_dir`. Themis stores its SQLite
-database and optional artifacts underneath that directory.
+Every `ProjectSpec` needs either a SQLite storage root, or a Postgres URL plus
+blob root. The backend-neutral type is `StorageConfig`; `StorageSpec` remains
+available as the SQLite convenience alias.
 
 ```python
-from themis import ProjectSpec, StorageSpec, ExecutionPolicySpec
+from themis import (
+    ExecutionPolicySpec,
+    ProjectSpec,
+    SqliteBlobStorageSpec,
+)
 
 project = ProjectSpec(
     project_name="docs-demo",
     researcher_id="team-docs",
     global_seed=7,
-    storage=StorageSpec(root_dir=".cache/themis/docs-demo"),
+    storage=SqliteBlobStorageSpec(root_dir=".cache/themis/docs-demo"),
     execution_policy=ExecutionPolicySpec(),
 )
 ```

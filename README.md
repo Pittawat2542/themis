@@ -41,8 +41,8 @@ telemetry, docs tooling, and the contributor toolchain, see
 ## Hello World
 
 The runnable quick-start script lives at
-[`examples/01_hello_world.py`](examples/01_hello_world.py). It uses only local
-fake components, so it works without API keys or provider extras.
+[`examples/01_hello_world.py`](examples/01_hello_world.py). It uses local demo
+components, so it runs without API keys or provider extras.
 
 The workflow is:
 
@@ -53,6 +53,22 @@ The workflow is:
 
 For the full script, use the example file directly or the
 [Quick Start guide](docs/quick-start/index.md), which embeds that same file.
+
+## Package Namespaces
+
+The root `themis` package stays intentionally small. Additional convenience
+namespaces are available when you want lower-level types without long module
+paths:
+
+- `themis.records` re-exports persisted record models such as `TrialRecord`
+  and `CandidateRecord`
+- `themis.types` re-exports shared enums and event/value types used across the
+  runtime
+- `themis.stats` re-exports paired-comparison tooling and requires the
+  `stats` extra
+
+These namespaces are lazy-loaded so the base install keeps a small import
+surface and clear optional-dependency boundaries.
 
 ## Examples
 

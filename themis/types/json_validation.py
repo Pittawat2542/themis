@@ -4,7 +4,7 @@ import json
 
 from pydantic import TypeAdapter, ValidationError
 
-from themis.errors.exceptions import SpecValidationError, StorageError
+from themis.errors import SpecValidationError, StorageError
 from themis.types.enums import ErrorCode
 from themis.types.json_types import JSONDict, JSONValueType
 

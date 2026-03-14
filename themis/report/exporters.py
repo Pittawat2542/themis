@@ -1,10 +1,84 @@
 """Concrete report exporters for CSV, Markdown, and LaTeX outputs."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from themis._optional import import_optional
 from themis.contracts.protocols import ReportExporter
 from themis.records.report import EvaluationReport
+from themis.types.json_types import JSONDict
+
+
+def _table_columns(table_data: list[JSONDict]) -> list[str]:
+    columns: list[str] = []
+    for row in table_data:
+        for key in row:
+            if key not in columns:
+                columns.append(key)
+    return columns
+
+
+def _markdown_cell(value: object) -> str:
+    return str(value).replace("|", "\\|").replace("\n", "<br>")
+
+
+def _render_markdown_table(table_data: list[JSONDict]) -> str:
+    if not table_data:
+        return "_No rows_\n"
+    columns = _table_columns(table_data)
+    header = "| " + " | ".join(columns) + " |"
+    separator = "| " + " | ".join("---" for _ in columns) + " |"
+    rows = [
+        "| "
+        + " | ".join(_markdown_cell(row.get(column, "")) for column in columns)
+        + " |"
+        for row in table_data
+    ]
+    return "\n".join([header, separator, *rows]) + "\n"
+
+
+def _latex_escape(value: object) -> str:
+    text = str(value)
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return text.replace("\n", r"\\")
+
+
+def _render_latex_table(table_data: list[JSONDict]) -> str:
+    if not table_data:
+        return "\\textit{No rows}\n"
+    columns = _table_columns(table_data)
+    align = "l" * len(columns)
+    header = " & ".join(_latex_escape(column) for column in columns) + r" \\"
+    body = [
+        " & ".join(_latex_escape(row.get(column, "")) for column in columns) + r" \\"
+        for row in table_data
+    ]
+    return "\n".join(
+        [
+            f"\\begin{{tabular}}{{{align}}}",
+            "\\hline",
+            header,
+            "\\hline",
+            *body,
+            "\\hline",
+            "\\end{tabular}",
+            "",
+        ]
+    )
 
 
 class CsvExporter(ReportExporter):
@@ -44,7 +118,6 @@ class MarkdownExporter(ReportExporter):
 
     def export(self, report: EvaluationReport, path: str) -> None:
         """Write the report as one Markdown document."""
-        pd = import_optional("pandas", extra="stats")
         if not report.tables:
             Path(path).touch()
             return
@@ -57,9 +130,8 @@ class MarkdownExporter(ReportExporter):
                 if table.description:
                     f.write(f"{table.description}\n")
                 f.write("\n")
-                df = pd.DataFrame(table.data)
-                f.write(df.to_markdown(index=False))
-                f.write("\n\n")
+                f.write(_render_markdown_table(table.data))
+                f.write("\n")
 
             f.write("## Metadata\n")
             f.write(f"* Themis Version: {report.metadata.themis_version}\n")
@@ -75,7 +147,6 @@ class LatexExporter(ReportExporter):
 
     def export(self, report: EvaluationReport, path: str) -> None:
         """Write the report as one LaTeX document."""
-        pd = import_optional("pandas", extra="stats")
         if not report.tables:
             Path(path).touch()
             return
@@ -89,6 +160,5 @@ class LatexExporter(ReportExporter):
                 if table.description:
                     f.write(f"{table.description}\n")
                 f.write("\n")
-                df = pd.DataFrame(table.data)
-                f.write(df.to_latex(index=False))
+                f.write(_render_latex_table(table.data))
                 f.write("\n\n")

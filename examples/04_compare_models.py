@@ -9,8 +9,10 @@ from pathlib import Path
 
 from themis import (
     DatasetSpec,
+    EvaluationSpec,
     ExecutionPolicySpec,
     ExperimentSpec,
+    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -23,8 +25,7 @@ from themis import (
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
-from themis.records.evaluation import MetricScore
-from themis.records.inference import InferenceRecord
+from themis.records import InferenceRecord, MetricScore
 
 
 class ArithmeticDatasetLoader:
@@ -102,7 +103,8 @@ def build_experiment() -> ExperimentSpec:
             TaskSpec(
                 task_id="paired-math",
                 dataset=DatasetSpec(source="memory"),
-                default_metrics=["exact_match"],
+                generation=GenerationSpec(),
+                evaluations=[EvaluationSpec(name="default", metrics=["exact_match"])],
             )
         ],
         prompt_templates=[

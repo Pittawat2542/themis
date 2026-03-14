@@ -25,7 +25,7 @@ def test_conversation_accepts_message_event_variant() -> None:
 
 
 def test_conversation_event_rejects_mismatched_payload_for_kind() -> None:
-    adapter = TypeAdapter(ConversationEvent)
+    adapter: TypeAdapter[ConversationEvent] = TypeAdapter(ConversationEvent)
 
     with pytest.raises(ValidationError):
         adapter.validate_python(
@@ -43,7 +43,7 @@ def test_conversation_event_rejects_mismatched_payload_for_kind() -> None:
 
 
 def test_conversation_event_parses_discriminated_union() -> None:
-    adapter = TypeAdapter(ConversationEvent)
+    adapter: TypeAdapter[ConversationEvent] = TypeAdapter(ConversationEvent)
 
     event = adapter.validate_python(
         {

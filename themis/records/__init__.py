@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from themis.records.base import RecordBase
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from themis.records.provenance import ProvenanceRecord
     from themis.records.timeline import RecordTimeline, TimelineStageRecord
     from themis.records.trial import TrialRecord
+    from themis.records.observability import ObservabilityLink, ObservabilitySnapshot
     from themis.records.observability import ObservabilityRefs
 
 __all__ = [
@@ -41,6 +42,8 @@ __all__ = [
     "InferenceRecord",
     "AnnotationRecord",
     "AdjudicationRecord",
+    "ObservabilityLink",
+    "ObservabilitySnapshot",
     "MessageEvent",
     "MessagePayload",
     "MetricScore",
@@ -88,11 +91,13 @@ _RE_EXPORTS = {
     "NodeExitEvent": ("themis.records.conversation", "NodeExitEvent"),
     "NodeExitPayload": ("themis.records.conversation", "NodeExitPayload"),
     "ProvenanceRecord": ("themis.records.provenance", "ProvenanceRecord"),
+    "ObservabilityLink": ("themis.records.observability", "ObservabilityLink"),
+    "ObservabilitySnapshot": ("themis.records.observability", "ObservabilitySnapshot"),
     "ObservabilityRefs": ("themis.records.observability", "ObservabilityRefs"),
 }
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> object:
     try:
         module_name, attr_name = _RE_EXPORTS[name]
     except KeyError as exc:
@@ -100,3 +105,7 @@ def __getattr__(name: str) -> Any:
 
     module = __import__(module_name, fromlist=[attr_name])
     return getattr(module, attr_name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

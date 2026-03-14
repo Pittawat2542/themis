@@ -1,7 +1,7 @@
 # Registry
 
 Plugin registrations, execution capability metadata, and planning-time
-compatibility checks.
+validation.
 
 ::: themis.registry.plugin_registry
     options:

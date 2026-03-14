@@ -1,5 +1,5 @@
 from themis.types.enums import ErrorCode, ErrorWhere
-from themis.errors.exceptions import (
+from themis.errors import (
     ThemisError,
     InferenceError,
     RetryableProviderError,

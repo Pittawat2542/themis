@@ -41,6 +41,11 @@ Themis splits the system into a write side and a read side:
 
 That separation keeps retries, resume behavior, and analysis tooling predictable.
 
+The intended public surface is the curated root package plus
+`themis.errors`, `themis.specs`, `themis.runtime`, `themis.registry`, and
+`themis.contracts`. Storage and orchestration internals are importable for local
+inspection, but they are not the stable extension surface.
+
 ## What This Documentation Covers
 
 This site is organized around three complementary views:
@@ -59,3 +64,9 @@ Themis is a good fit when you want:
 - post-run inspection through timelines, reports, and paired comparisons
 
 The current focus is local-first execution, persistence, and analysis.
+
+The v2 execution surface also includes explicit planning and run handles:
+
+- `plan()` snapshots the resolved run into deterministic work items
+- `submit()` and `resume()` operate on persisted run manifests
+- `estimate()` provides a best-effort dry run for work-item and token budgets

@@ -72,45 +72,29 @@ external traces, this high-level path is enough.
 ## 3. Persist external trace links into timeline views
 
 `TelemetryBus` does not store external URLs on its own. To hydrate
-`result.view_timeline(...).observability`, share a `SqliteObservabilityStore`
-between the callback and the orchestrator.
+`result.view_timeline(...).observability`, share the storage bundle's
+observability store between the callback and the orchestrator.
 
 ```python
-from pathlib import Path
-
 from themis.orchestration.orchestrator import Orchestrator
-from themis.storage import ArtifactStore, DatabaseManager, SqliteObservabilityStore
+from themis.storage import build_storage_bundle
 from themis.telemetry import LangfuseCallback, TelemetryBus
 
-root_dir = Path(project.storage.root_dir)
-root_dir.mkdir(parents=True, exist_ok=True)
-
-db_manager = DatabaseManager(f"sqlite:///{root_dir / 'themis.sqlite3'}")
-db_manager.initialize()
-observability_store = SqliteObservabilityStore(db_manager)
-artifact_store = (
-    ArtifactStore(root_dir / "artifacts", manager=db_manager)
-    if project.storage.compression == "zstd"
-    else None
-)
+storage_bundle = build_storage_bundle(project.storage)
 
 telemetry_bus = TelemetryBus()
 LangfuseCallback(
     public_key="pk_live_...",
     secret_key="sk_live_...",
     base_url="https://cloud.langfuse.com",
-    observability_store=observability_store,
+    observability_store=storage_bundle.observability_store,
 ).subscribe(telemetry_bus)
 
-orchestrator = Orchestrator(
+orchestrator = Orchestrator.from_project_spec(
+    project,
     registry=registry,
-    db_manager=db_manager,
+    storage_bundle=storage_bundle,
     dataset_loader=dataset_loader,
-    artifact_store=artifact_store,
-    execution_policy=project.execution_policy,
-    project_seed=project.global_seed,
-    store_item_payloads=project.storage.store_item_payloads,
-    observability_store=observability_store,
     telemetry_bus=telemetry_bus,
 )
 ```
@@ -122,7 +106,7 @@ trial = result.get_trial(result.trial_hashes[0])
 candidate_view = result.view_timeline(trial.candidates[0].candidate_id)
 
 if candidate_view.observability is not None:
-    print(candidate_view.observability.langfuse_url)
+    print(candidate_view.observability.url_for("langfuse"))
 ```
 
 Use [Resume and Inspect Runs](resume-and-inspect.md) for the broader

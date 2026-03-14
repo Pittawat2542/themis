@@ -9,7 +9,7 @@ An inference engine must implement `infer(trial, context, runtime)`.
 
 ```python
 from themis.contracts.protocols import InferenceResult
-from themis.records.inference import InferenceRecord
+from themis.records import InferenceRecord
 
 
 class DemoEngine:
@@ -43,13 +43,19 @@ Example:
 task = TaskSpec(
     task_id="example-task",
     dataset=DatasetSpec(source="memory"),
-    default_extractor_chain=ExtractorChainSpec(
-        extractors=[
-            "first_number",
-            {"id": "regex", "config": {"pattern": r"score = (\\d+)", "group": 1}},
-        ]
-    ),
-    default_metrics=["exact_match"],
+    generation=GenerationSpec(),
+    output_transforms=[
+        OutputTransformSpec(
+            name="parsed",
+            extractor_chain=ExtractorChainSpec(
+                extractors=[
+                    "first_number",
+                    {"id": "regex", "config": {"pattern": r"score = (\\d+)", "group": 1}},
+                ]
+            ),
+        )
+    ],
+    evaluations=[EvaluationSpec(name="default", transform="parsed", metrics=["exact_match"])],
 )
 ```
 
@@ -59,8 +65,8 @@ Install `themis-eval[extractors]` when you want to use the built-in
 ## Provider SDK extras
 
 Themis does not ship built-in OpenAI, LiteLLM, or vLLM engines in this package.
-Those extras exist so your own `InferenceEngine` implementations can import the
-matching SDKs without forcing every user to install them.
+These extras install the SDKs used by your own `InferenceEngine`
+implementations without forcing every user to install them.
 
 | Extra | Install it when your engine imports | Typical provider name |
 | --- | --- | --- |
@@ -82,12 +88,15 @@ registry.register_inference_engine("openai", MyOpenAIEngine())
 
 ## 3. Write a custom extractor only when the built-ins do not fit
 
+Custom extractors use the signature `(trial, candidate, config)`.
+
 ```python
-from themis.records.extraction import ExtractionRecord
+from themis.records import ExtractionRecord
 
 
 class FirstWordExtractor:
-    def extract(self, trial, candidate, config=None):
+    def extract(self, trial, candidate, config):
+        del trial, config
         text = candidate.inference.raw_text if candidate.inference else ""
         first_word = text.split()[0] if text else None
         return ExtractionRecord(
@@ -104,7 +113,7 @@ Metrics receive the `TrialSpec`, the current `CandidateRecord`, and a context
 mapping derived from the dataset item.
 
 ```python
-from themis.records.evaluation import MetricScore
+from themis.records import MetricScore
 
 
 class ExactMatchMetric:
@@ -117,7 +126,49 @@ class ExactMatchMetric:
         return MetricScore(metric_id="exact_match", value=float(actual == expected))
 ```
 
-## 5. Register the pieces
+## 5. Emit qualitative tags from metrics
+
+Metrics can return structured details alongside the scalar score. Use that for
+qualitative labeling you want to inspect later:
+
+```python
+class SafetyMetric:
+    def score(self, trial, candidate, context):
+        del trial, context
+        text = candidate.inference.raw_text if candidate.inference else ""
+        tags = ["refusal"] if "cannot help" in text.lower() else []
+        return MetricScore(
+            metric_id="safety",
+            value=float(not tags),
+            details={"tags": tags, "raw_text": text},
+        )
+```
+
+Those tags become queryable through `ExperimentResult.iter_tagged_examples()`.
+
+## 6. Run multiple judge-backed metrics on the same candidates
+
+The same evaluation can run more than one metric:
+
+```python
+task = TaskSpec(
+    task_id="example-task",
+    dataset=DatasetSpec(source="memory"),
+    generation=GenerationSpec(),
+    evaluations=[
+        EvaluationSpec(
+            name="judge-suite",
+            metrics=["helpfulness_judge", "safety_judge"],
+        )
+    ],
+)
+```
+
+Each metric can call `context["judge_service"]` with its own prompt, model, and
+parsing logic. That is how you apply multiple judges or multiple judge prompts
+to the same candidate set without duplicating generation.
+
+## 7. Register the pieces
 
 ```python
 registry.register_inference_engine("demo", DemoEngine())
@@ -125,14 +176,20 @@ registry.register_extractor("first_word", FirstWordExtractor())
 registry.register_metric("exact_match", ExactMatchMetric())
 ```
 
-## 6. Reference them from `TaskSpec`
+## 8. Reference them from `TaskSpec`
 
 ```python
 task = TaskSpec(
     task_id="example-task",
     dataset=DatasetSpec(source="memory"),
-    default_extractor_chain=ExtractorChainSpec(extractors=["first_word"]),
-    default_metrics=["exact_match"],
+    generation=GenerationSpec(),
+    output_transforms=[
+        OutputTransformSpec(
+            name="parsed",
+            extractor_chain=ExtractorChainSpec(extractors=["first_word"]),
+        )
+    ],
+    evaluations=[EvaluationSpec(name="default", transform="parsed", metrics=["exact_match"])],
 )
 ```
 

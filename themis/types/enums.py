@@ -46,3 +46,41 @@ class ErrorCode(str, Enum):
 class IssueSeverity(str, Enum):
     ERROR = "error"
     WARNING = "warning"
+
+
+class PValueCorrection(str, Enum):
+    NONE = "none"
+    HOLM = "holm"
+    BH = "bh"
+
+
+class DatasetSource(str, Enum):
+    HUGGINGFACE = "huggingface"
+    LOCAL = "local"
+    MEMORY = "memory"
+
+
+class StorageBackend(str, Enum):
+    SQLITE_BLOB = "sqlite_blob"
+    POSTGRES_BLOB = "postgres_blob"
+
+
+class CompressionCodec(str, Enum):
+    NONE = "none"
+    ZSTD = "zstd"
+
+
+class ResponseFormat(str, Enum):
+    TEXT = "text"
+    JSON = "json"
+
+
+class SamplingKind(str, Enum):
+    ALL = "all"
+    SUBSET = "subset"
+    STRATIFIED = "stratified"
+
+
+class RecordType(str, Enum):
+    TRIAL = "trial"
+    CANDIDATE = "candidate"

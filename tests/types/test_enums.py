@@ -1,11 +1,18 @@
 from themis.types.enums import (
+    CompressionCodec,
+    DatasetSource,
     ErrorCode,
     ErrorWhere,
     InferenceStatus,
     IssueSeverity,
+    PValueCorrection,
     RecordStatus,
+    RecordType,
+    ResponseFormat,
+    SamplingKind,
+    StorageBackend,
 )
-from themis.types.events import ArtifactRole, TrialEventType
+from themis.types.events import ArtifactRole, TimelineStage, TrialEventType
 
 
 def test_record_status_values():
@@ -88,3 +95,42 @@ def test_artifact_role_values():
 
 def test_issue_severity_values():
     assert set(IssueSeverity) == {IssueSeverity.ERROR, IssueSeverity.WARNING}
+
+
+def test_value_hardening_enum_values():
+    assert set(PValueCorrection) == {
+        PValueCorrection.NONE,
+        PValueCorrection.HOLM,
+        PValueCorrection.BH,
+    }
+    assert set(DatasetSource) == {
+        DatasetSource.HUGGINGFACE,
+        DatasetSource.LOCAL,
+        DatasetSource.MEMORY,
+    }
+    assert set(StorageBackend) == {
+        StorageBackend.SQLITE_BLOB,
+        StorageBackend.POSTGRES_BLOB,
+    }
+    assert set(CompressionCodec) == {
+        CompressionCodec.NONE,
+        CompressionCodec.ZSTD,
+    }
+    assert set(ResponseFormat) == {ResponseFormat.TEXT, ResponseFormat.JSON}
+    assert set(SamplingKind) == {
+        SamplingKind.ALL,
+        SamplingKind.SUBSET,
+        SamplingKind.STRATIFIED,
+    }
+    assert set(RecordType) == {RecordType.TRIAL, RecordType.CANDIDATE}
+
+
+def test_timeline_stage_values():
+    assert set(TimelineStage) == {
+        TimelineStage.ITEM_LOAD,
+        TimelineStage.PROMPT_RENDER,
+        TimelineStage.INFERENCE,
+        TimelineStage.EXTRACTION,
+        TimelineStage.EVALUATION,
+        TimelineStage.PROJECTION,
+    }

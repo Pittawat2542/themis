@@ -32,6 +32,15 @@ self-contained, well-commented, and aligned with the current implementation.
    Demonstrates judge-backed metrics and audit-trail inspection.
    Requires `themis-eval[compression]`.
 
+8. `08_external_stage_handoff.py`
+   Runs generation locally, exports evaluation work for an external scorer, then
+   imports the results back into Themis for comparison and export.
+   Requires `themis-eval[stats]`.
+
+9. `09_experiment_evolution.py`
+   Shows how repeated runs reuse stored work when you add new metrics, prompts,
+   and models to an existing experiment lineage.
+
 ## Run an Example
 
 ```bash

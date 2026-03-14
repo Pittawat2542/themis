@@ -8,7 +8,7 @@
 
 ## Why are my prompt placeholders not being interpolated automatically?
 
-The current runtime stores prompt messages and dataset context separately. Your
+The runtime stores prompt messages and dataset context separately. Your
 inference engine can render those inputs however it wants, but Themis does not
 apply a built-in string templating step during trial execution.
 
@@ -17,11 +17,11 @@ apply a built-in string templating step during trial execution.
 Resume checks are tied to:
 
 - the trial hash
-- the evaluation revision
+- the active overlay hash for transform or evaluation stages
 - the presence of a completed projection
 
-Changing the spec, storage root, or `eval_revision` makes the runtime treat the
-work as new.
+Changing the spec, storage root, `transform_hash`, or `evaluation_hash` makes
+the runtime treat the work as new.
 
 ## Why does `result.compare()` raise an optional dependency error?
 
@@ -33,8 +33,8 @@ uv add "themis-eval[stats]"
 
 ## Why is `view_timeline(...).item_payload` empty?
 
-That happens when `StorageSpec.store_item_payloads` is `False`. The runtime still
-stores events and projections, but omits dataset payload blobs.
+That happens when your `StorageConfig.store_item_payloads` setting is `False`.
+The runtime stores events and projections, but omits dataset payload blobs.
 
 ## Why is `view_timeline(...).observability` empty?
 

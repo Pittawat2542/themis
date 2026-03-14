@@ -1,6 +1,8 @@
 # Write a Dataset Loader
 
-Themis expects a dataset loader object with a `load_task_items(task)` method.
+Themis expects a dataset loader object that satisfies the `DatasetLoader`
+protocol: one `load_task_items(task: TaskSpec)` method returning a sequence of
+execution items.
 
 ## Minimal Contract
 
@@ -12,6 +14,12 @@ class MyDatasetLoader:
             {"item_id": "item-2", "question": "8 * 8", "answer": "64"},
         ]
 ```
+
+That means:
+
+- accept the resolved `TaskSpec`
+- return deterministic items for that task
+- keep the return values JSON-safe or `DataItemContext` objects
 
 Each returned item can be:
 
@@ -53,8 +61,11 @@ class HFDatasetLoader:
         ]
 ```
 
-Themis still expects you to pass this loader explicitly to `Orchestrator`; the
-extra installs the dependency, not a hidden loader implementation.
+Pass this loader explicitly to `Orchestrator`; the extra installs the
+dependency, not a hidden loader implementation.
+
+`dataset_loader` is part of the public orchestration boundary. Storage and
+projection modules stay internal-by-convention even if they are importable.
 
 ## Sampling
 
@@ -63,5 +74,11 @@ extra installs the dependency, not a hidden loader implementation.
 - `kind="all"`
 - `kind="subset"` with `count`
 - `kind="stratified"` with `count` and `strata_field`
+- `item_ids=[...]` to pin the run to explicit rows before sampling
+- `metadata_filters={...}` to keep only rows whose string metadata matches
 
 Sampling is deterministic when you pass `seed`.
+
+`item_ids` and `metadata_filters` are applied before subset or stratified
+sampling, so you can define reproducible slices like "only hard examples" or
+"this exact regression list" without changing the dataset loader itself.

@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from themis.stats.stats_engine import StatsEngine, ComparisonResult
+from themis.types.enums import PValueCorrection
 
 
 def test_stats_engine_aggregation():
@@ -72,3 +73,15 @@ def test_stats_engine_adjusts_p_values_for_holm_and_bh():
     assert engine.adjust_p_values(p_values, method="none") == [0.01, 0.03, 0.04]
     assert engine.adjust_p_values(p_values, method="holm") == [0.03, 0.06, 0.06]
     assert engine.adjust_p_values(p_values, method="bh") == [0.03, 0.04, 0.04]
+    assert engine.adjust_p_values(p_values, method=PValueCorrection.HOLM) == [
+        0.03,
+        0.06,
+        0.06,
+    ]
+
+
+def test_stats_engine_rejects_unsupported_p_value_adjustment_method():
+    engine = StatsEngine()
+
+    with pytest.raises(ValueError, match="Unsupported p-value adjustment method"):
+        engine.adjust_p_values([0.01], method="unsupported")

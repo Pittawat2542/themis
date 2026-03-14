@@ -10,8 +10,10 @@ from pathlib import Path
 
 from themis import (
     DatasetSpec,
+    EvaluationSpec,
     ExecutionPolicySpec,
     ExperimentSpec,
+    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -24,8 +26,7 @@ from themis import (
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
-from themis.records.evaluation import MetricScore
-from themis.records.inference import InferenceRecord
+from themis.records import InferenceRecord, MetricScore
 from themis.specs.foundational import JudgeInferenceSpec
 
 
@@ -111,7 +112,8 @@ def build_experiment() -> ExperimentSpec:
             TaskSpec(
                 task_id="judge-task",
                 dataset=DatasetSpec(source="memory"),
-                default_metrics=["judge_pass"],
+                generation=GenerationSpec(),
+                evaluations=[EvaluationSpec(name="default", metrics=["judge_pass"])],
             )
         ],
         prompt_templates=[

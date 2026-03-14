@@ -1,7 +1,8 @@
 import pytest
+import threading
 
 from themis.storage.artifact_store import ArtifactStore
-from themis.errors.exceptions import StorageError
+from themis.errors import StorageError
 
 
 def test_artifact_store_put_and_get_blob(tmp_path):
@@ -31,3 +32,30 @@ def test_artifact_store_write_json_wraps_non_json_safe_payloads(tmp_path):
 
     with pytest.raises(StorageError, match="application/json"):
         store.write_json({"bad": object()})
+
+
+def test_artifact_store_uses_thread_local_codecs(tmp_path):
+    store = ArtifactStore(base_path=tmp_path)
+    thread_count = 4
+    start = threading.Barrier(thread_count + 1)
+    finish = threading.Barrier(thread_count + 1)
+    compressors: list[object] = []
+    decompressors: list[object] = []
+
+    def capture_codec_ids() -> None:
+        start.wait()
+        compressors.append(store._compressor)
+        decompressors.append(store._decompressor)
+        finish.wait()
+
+    threads = [threading.Thread(target=capture_codec_ids) for _ in range(thread_count)]
+    for thread in threads:
+        thread.start()
+
+    start.wait()
+    finish.wait()
+    for thread in threads:
+        thread.join()
+
+    assert len({id(codec) for codec in compressors}) == thread_count
+    assert len({id(codec) for codec in decompressors}) == thread_count

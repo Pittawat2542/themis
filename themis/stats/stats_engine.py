@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import cast
 
 from pydantic import BaseModel
 
 from themis._optional import import_optional
+from themis.stats._typing import (
+    AggregatedMetricFrame,
+    MetricFrame,
+    NumericVector,
+    NumpyNamespace,
+    ScipyStatsNamespace,
+)
+from themis.types.enums import PValueCorrection
 
-np = import_optional("numpy", extra="stats")
-stats = import_optional("scipy.stats", extra="stats")
+np = cast(NumpyNamespace, import_optional("numpy", extra="stats"))
+stats = cast(ScipyStatsNamespace, import_optional("scipy.stats", extra="stats"))
 
 
 class ComparisonResult(BaseModel):
@@ -32,23 +40,19 @@ class StatsEngine:
 
     def aggregate(
         self,
-        df: object,
+        df: MetricFrame,
         group_by: list[str],
         metric_col: str = "metric_value",
-    ) -> object:
+    ) -> AggregatedMetricFrame:
         """
         Groups data and computes standard mean, median, variance.
         """
-        frame = cast(Any, df)
-        agg = frame.groupby(group_by)[metric_col].agg(
-            ["mean", "median", "var", "count"]
-        )
-        return agg
+        return df.groupby(group_by)[metric_col].agg(["mean", "median", "var", "count"])
 
     def paired_bootstrap(
         self,
-        baseline_scores: object,
-        treatment_scores: object,
+        baseline_scores: NumericVector,
+        treatment_scores: NumericVector,
         n_resamples: int = 9999,
         ci: float = 0.95,
     ) -> ComparisonResult:
@@ -56,22 +60,19 @@ class StatsEngine:
         Performs a paired bootstrap hypothesis test for the mean difference.
         Null hypothesis: mean_delta == 0
         """
-        baseline = cast(Any, baseline_scores)
-        treatment = cast(Any, treatment_scores)
-
-        if len(baseline) != len(treatment):
+        if len(baseline_scores) != len(treatment_scores):
             raise ValueError(
                 "Bootstrap paired testing requires equal length score arrays."
             )
 
-        deltas = treatment - baseline
+        deltas = treatment_scores - baseline_scores
         delta_mean = float(np.mean(deltas))
 
         # Zero variance bypass (scipy bootstrap throws degenerate data warnings)
         if np.all(deltas == deltas[0]):
             return ComparisonResult(
-                baseline_mean=float(np.mean(baseline)),
-                treatment_mean=float(np.mean(treatment)),
+                baseline_mean=float(np.mean(baseline_scores)),
+                treatment_mean=float(np.mean(treatment_scores)),
                 delta_mean=delta_mean,
                 p_value=1.0,
                 ci_lower=delta_mean,
@@ -94,8 +95,8 @@ class StatsEngine:
         _, p_val = stats.wilcoxon(deltas)
 
         return ComparisonResult(
-            baseline_mean=float(np.mean(baseline)),
-            treatment_mean=float(np.mean(treatment)),
+            baseline_mean=float(np.mean(baseline_scores)),
+            treatment_mean=float(np.mean(treatment_scores)),
             delta_mean=float(delta_mean),
             p_value=float(p_val),
             ci_lower=float(res.confidence_interval.low),
@@ -108,12 +109,18 @@ class StatsEngine:
         self,
         p_values: list[float],
         *,
-        method: str = "none",
+        method: PValueCorrection | str = PValueCorrection.NONE,
     ) -> list[float]:
         """Apply a supported multiple-comparison correction to p-values."""
-        if method == "none":
+        try:
+            correction = PValueCorrection(method)
+        except ValueError as exc:
+            raise ValueError(
+                f"Unsupported p-value adjustment method: {method}"
+            ) from exc
+        if correction == PValueCorrection.NONE:
             return list(p_values)
-        if method == "holm":
+        if correction == PValueCorrection.HOLM:
             indexed = sorted(enumerate(p_values), key=lambda item: item[1])
             adjusted = [0.0] * len(p_values)
             running_max = 0.0
@@ -123,7 +130,7 @@ class StatsEngine:
                 running_max = max(running_max, candidate)
                 adjusted[index] = running_max
             return adjusted
-        if method == "bh":
+        if correction == PValueCorrection.BH:
             indexed = sorted(
                 enumerate(p_values), key=lambda item: item[1], reverse=True
             )

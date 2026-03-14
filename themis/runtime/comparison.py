@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from itertools import combinations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from themis._optional import import_optional
+from themis.stats._typing import MetricFrame, NumericVector
+from themis.types.enums import PValueCorrection
 from themis.types.events import ScoreRow, TrialSummaryRow
 
 if TYPE_CHECKING:
@@ -29,7 +31,7 @@ class ComparisonRow(BaseModel):
     delta_mean: float
     p_value: float
     adjusted_p_value: float
-    adjustment_method: str
+    adjustment_method: PValueCorrection
     ci_lower: float
     ci_upper: float
     ci_level: float
@@ -42,42 +44,6 @@ class ComparisonTable(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     rows: list[ComparisonRow] = Field(default_factory=list)
-
-
-def _score_frame(
-    trial_summaries: list[TrialSummaryRow],
-    score_rows: list[ScoreRow],
-):
-    pd = import_optional("pandas", extra="stats")
-
-    trial_metadata = {
-        trial.trial_hash: {
-            "model_id": trial.model_id,
-            "task_id": trial.task_id,
-            "item_id": trial.item_id,
-        }
-        for trial in trial_summaries
-        if trial.model_id is not None
-        and trial.task_id is not None
-        and trial.item_id is not None
-    }
-    rows: list[dict[str, str | float]] = []
-    for row in score_rows:
-        metadata = trial_metadata.get(row.trial_hash)
-        if metadata is None:
-            continue
-        rows.append(
-            {
-                "trial_hash": row.trial_hash,
-                "candidate_id": row.candidate_id,
-                "metric_id": row.metric_id,
-                "score": row.score,
-                "model_id": metadata["model_id"],
-                "task_id": metadata["task_id"],
-                "item_id": metadata["item_id"],
-            }
-        )
-    return pd.DataFrame(rows)
 
 
 def _pair_models(
@@ -118,27 +84,31 @@ def build_comparison_table(
     task_id: str | None = None,
     baseline_model_id: str | None = None,
     treatment_model_id: str | None = None,
-    p_value_correction: str = "none",
+    p_value_correction: PValueCorrection | str = PValueCorrection.NONE,
 ) -> ComparisonTable:
     """Build paired comparison rows from trial summaries and metric scores."""
     stats_module = import_optional("themis.stats.stats_engine", extra="stats")
+    correction = PValueCorrection(p_value_correction)
 
     engine = stats_engine or stats_module.StatsEngine()
-    df = _score_frame(trial_summaries, score_rows)
+    from themis.report.metric_frame_builder import MetricFrameBuilder
+
+    df = MetricFrameBuilder().build_comparison_frame(trial_summaries, score_rows)
     if df.empty:
         return ComparisonTable()
 
+    pandas_df = cast("MetricFrame", df)
     if metric_id is not None:
-        df = df[df["metric_id"] == metric_id]
+        pandas_df = cast("MetricFrame", pandas_df[pandas_df["metric_id"] == metric_id])
     if task_id is not None:
-        df = df[df["task_id"] == task_id]
-    if df.empty:
+        pandas_df = cast("MetricFrame", pandas_df[pandas_df["task_id"] == task_id])
+    if pandas_df.empty:
         return ComparisonTable()
 
     trial_scores = (
-        df.groupby(["task_id", "metric_id", "model_id", "item_id"], dropna=False)[
-            "score"
-        ]
+        pandas_df.groupby(
+            ["task_id", "metric_id", "model_id", "item_id"], dropna=False
+        )["score"]
         .mean()
         .reset_index(name="trial_score")
     )
@@ -161,13 +131,18 @@ def build_comparison_table(
             baseline_model_id=baseline_model_id,
             treatment_model_id=treatment_model_id,
         ):
-            paired = pivot[[baseline_model, treatment_model]].dropna()
+            paired = cast(
+                MetricFrame,
+                pivot[[baseline_model, treatment_model]],
+            ).dropna()
             if paired.empty:
                 continue
 
+            baseline_scores = cast(MetricFrame, paired[baseline_model]).to_numpy()
+            treatment_scores = cast(MetricFrame, paired[treatment_model]).to_numpy()
             result = engine.paired_bootstrap(
-                baseline_scores=paired[baseline_model].to_numpy(),
-                treatment_scores=paired[treatment_model].to_numpy(),
+                baseline_scores=baseline_scores,
+                treatment_scores=treatment_scores,
             )
             rows.append(
                 ComparisonRow(
@@ -175,13 +150,13 @@ def build_comparison_table(
                     metric_id=str(current_metric_id),
                     baseline_model_id=baseline_model,
                     treatment_model_id=treatment_model,
-                    pair_count=int(len(paired)),
+                    pair_count=int(len(cast(NumericVector, baseline_scores))),
                     baseline_mean=result.baseline_mean or 0.0,
                     treatment_mean=result.treatment_mean or 0.0,
                     delta_mean=result.delta_mean or 0.0,
                     p_value=result.p_value or 0.0,
                     adjusted_p_value=result.p_value or 0.0,
-                    adjustment_method="none",
+                    adjustment_method=PValueCorrection.NONE,
                     ci_lower=result.ci_lower or 0.0,
                     ci_upper=result.ci_upper or 0.0,
                     ci_level=result.ci_level,
@@ -191,13 +166,13 @@ def build_comparison_table(
 
     adjusted_p_values = engine.adjust_p_values(
         [row.p_value for row in rows],
-        method=p_value_correction,
+        method=correction,
     )
     rows = [
         row.model_copy(
             update={
                 "adjusted_p_value": adjusted_p_values[index],
-                "adjustment_method": p_value_correction,
+                "adjustment_method": correction,
             }
         )
         for index, row in enumerate(rows)

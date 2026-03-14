@@ -7,8 +7,7 @@ reusable `project.toml` file.
 
 ## Before You Start
 
-Start from the hello-world script in the previous tutorial or from
-`examples/02_project_file.py`.
+Use the hello-world script or start from `examples/02_project_file.py`.
 
 ## Step 1: Write `project.toml`
 
@@ -29,7 +28,19 @@ retry_backoff_factor = 1.5
 circuit_breaker_threshold = 5
 ```
 
-This file now owns the shared execution policy and storage configuration.
+This file holds the shared execution policy and storage configuration.
+
+If you want Postgres-backed events and projections instead, swap the storage
+block for:
+
+```toml
+[storage]
+backend = "postgres_blob"
+database_url = "postgresql://localhost:5432/themis"
+blob_root_dir = ".cache/themis-docs/project-file/blobs"
+store_item_payloads = true
+compression = "zstd"
+```
 
 ## Step 2: Replace the inline `ProjectSpec`
 
@@ -47,12 +58,12 @@ result = orchestrator.run(experiment)
 
 ## Step 3: Run the script again
 
-When you rerun the script, the behavior should stay the same, but the project
-configuration now lives in one reusable file.
+When you run the script again, the behavior should stay the same, but the
+project configuration lives in one reusable file.
 
 Check that:
 
-- the run still completes successfully
+- the run completes successfully
 - the storage root comes from `project.toml`
 - you can change retry or storage policy without editing Python
 
@@ -64,5 +75,5 @@ Check that:
 That split makes it easy to rerun different matrices against the same storage
 layout, retry policy, and seeding strategy.
 
-You now have a portable project config that can be shared across multiple
+This gives you a portable project config that can be shared across multiple
 scripts and experiments.

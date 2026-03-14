@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
-from themis.types.hashable import HashableMixin
+
+from themis.types.hashable import HashableMixin, SHORT_HASH_LENGTH
 
 
 class SpecBase(HashableMixin, BaseModel):
@@ -19,15 +20,11 @@ class SpecBase(HashableMixin, BaseModel):
     )
 
     @property
+    def canonical_hash(self) -> str:
+        """Returns the full canonical hash for internal identity checks."""
+        return self.compute_hash()
+
+    @property
     def spec_hash(self) -> str:
-        """Returns the 12-character canonical hash of this spec."""
-        return self.compute_hash(short=True)
-
-    def validate_semantic(self) -> None:
-        """
-        Backwards-compatible no-op shim.
-
-        Semantic validation now runs during model construction via Pydantic
-        validators.
-        """
-        return None
+        """Returns the 12-character public alias for this spec identity."""
+        return self.canonical_hash[:SHORT_HASH_LENGTH]

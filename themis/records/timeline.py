@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from themis.records.error import ErrorRecord
-from themis.types.enums import RecordStatus
+from themis.types.enums import RecordStatus, RecordType
 from themis.types.events import ArtifactRef, TimelineStage
 from themis.types.json_types import JSONValueType
 
@@ -33,7 +32,7 @@ class RecordTimeline(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     record_id: str
-    record_type: Literal["trial", "candidate"]
+    record_type: RecordType
     trial_hash: str
     candidate_id: str | None = None
     item_id: str

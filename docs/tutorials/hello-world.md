@@ -1,14 +1,14 @@
 # Hello World Walkthrough
 
-In this tutorial you will build a complete Themis script from scratch and end up
-with:
+This tutorial builds a complete Themis script from scratch. The finished script
+includes:
 
 - a local SQLite-backed experiment store
 - two executed trials
 - one `ExperimentResult` object you can inspect in Python
 
-This is the teaching version of the [Quick Start](../quick-start/index.md). The
-Quick Start is optimized for speed; this page is optimized for understanding.
+For a faster path, use the [Quick Start](../quick-start/index.md). This page
+walks through the same workflow step by step.
 
 ## Before You Start
 
@@ -24,8 +24,10 @@ from pathlib import Path
 
 from themis import (
     DatasetSpec,
+    EvaluationSpec,
     ExecutionPolicySpec,
     ExperimentSpec,
+    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -38,8 +40,7 @@ from themis import (
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
-from themis.records.evaluation import MetricScore
-from themis.records.inference import InferenceRecord
+from themis.records import InferenceRecord, MetricScore
 
 
 class DemoDatasetLoader:
@@ -51,12 +52,11 @@ class DemoDatasetLoader:
         ]
 ```
 
-At this point you have not configured any runtime behavior yet. You have only
-defined the data that trial planning will expand over.
+This step defines the data that trial planning expands over.
 
 ## Step 2: Add an engine and a metric
 
-Now add the smallest useful plugin set:
+Add the smallest useful plugin set:
 
 ```python
 class DemoEngine:
@@ -131,6 +131,7 @@ This keeps storage and execution rules out of the experiment matrix.
 
 - the models to try
 - the tasks to run
+- the generation / transform / evaluation stages inside each task
 - the prompt templates to attach
 - the inference parameter grid
 - how many candidates to generate per trial
@@ -142,7 +143,8 @@ experiment = ExperimentSpec(
         TaskSpec(
             task_id="arithmetic",
             dataset=DatasetSpec(source="memory"),
-            default_metrics=["exact_match"],
+            generation=GenerationSpec(),
+            evaluations=[EvaluationSpec(name="default", metrics=["exact_match"])],
         )
     ],
     prompt_templates=[
@@ -160,7 +162,7 @@ produce deterministic `TrialSpec` objects.
 
 ## Step 6: Run the experiment
 
-Now connect the write-side pieces and run them:
+Connect the write-side pieces and run them:
 
 ```python
 orchestrator = Orchestrator.from_project_spec(
@@ -174,6 +176,9 @@ for trial in result.iter_trials():
     print(trial.trial_spec.item_id)
     print(trial.candidates[0].evaluation.aggregate_scores)
 ```
+
+`run()` executes the full three-stage flow: generation first, then any declared
+output transforms, then any declared evaluations.
 
 Expected output:
 
@@ -191,15 +196,15 @@ trial = result.get_trial(result.trial_hashes[0])
 timeline = result.view_timeline(trial.spec_hash, record_type="trial")
 ```
 
-You should now have:
+The run produces:
 
 - stored specs and events on disk
 - hydrated `TrialRecord` projections
 - a timeline view for later inspection
 
-## What You Learned
+## Summary
 
-You used the full Themis loop:
+This walkthrough covers the full Themis loop:
 
 1. declare project policy
 2. declare an experiment matrix

@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from themis.errors.exceptions import ThemisError
-from themis.records.observability import ObservabilityRefs
+from themis.errors import ThemisError
+from themis.overlays import overlay_key_for
+from themis.records.observability import ObservabilityLink, ObservabilitySnapshot
 from themis.storage.observability import SqliteObservabilityStore
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.types.enums import ErrorCode
 
 
 def test_telemetry_bus_emits_structured_events_to_subscribers():
-    from themis.telemetry.bus import TelemetryBus
+    from themis.telemetry.bus import TelemetryBus, TelemetryEventName
 
     bus = TelemetryBus()
     seen = []
@@ -19,9 +20,46 @@ def test_telemetry_bus_emits_structured_events_to_subscribers():
     bus.emit("trial_start", trial_hash="trial-1")
     bus.emit("metric_end", trial_hash="trial-1", candidate_id="cand-1", metric_id="em")
 
-    assert [event.name for event in seen] == ["trial_start", "metric_end"]
+    assert [event.name for event in seen] == [
+        TelemetryEventName.TRIAL_START,
+        TelemetryEventName.METRIC_END,
+    ]
     assert seen[0].payload == {"trial_hash": "trial-1"}
     assert seen[1].payload["candidate_id"] == "cand-1"
+
+
+def test_telemetry_bus_isolates_subscriber_failures_by_default(caplog):
+    from themis.telemetry.bus import TelemetryBus, TelemetryEventName
+
+    bus = TelemetryBus()
+    seen = []
+
+    def explode(event):
+        raise RuntimeError("subscriber boom")
+
+    bus.subscribe(explode)
+    bus.subscribe(seen.append)
+
+    with caplog.at_level("ERROR"):
+        event = bus.emit("trial_end", trial_hash="trial-1", status="ok")
+
+    assert event.name == TelemetryEventName.TRIAL_END
+    assert seen == [event]
+    assert "Telemetry subscriber failed for trial_end" in caplog.text
+
+
+def test_telemetry_bus_can_fail_fast_on_subscriber_errors():
+    from themis.telemetry.bus import TelemetryBus
+
+    bus = TelemetryBus(fail_fast_subscribers=True)
+
+    def explode(event):
+        raise RuntimeError("subscriber boom")
+
+    bus.subscribe(explode)
+
+    with pytest.raises(RuntimeError, match="subscriber boom"):
+        bus.emit("trial_start", trial_hash="trial-1")
 
 
 def test_langfuse_callback_requires_telemetry_extra(monkeypatch):
@@ -68,6 +106,7 @@ def test_langfuse_callback_persists_observability_refs(tmp_path):
         client=MockLangfuseClient(),
         observability_store=store,
         base_url="https://langfuse.example",
+        evaluation_hash="eval-1",
     )
     bus = TelemetryBus()
     callback.subscribe(bus)
@@ -82,14 +121,29 @@ def test_langfuse_callback_persists_observability_refs(tmp_path):
     )
     bus.emit("trial_end", trial_hash="trial-1", status="ok")
 
-    trial_refs = store.get_refs("trial-1", None, "latest")
-    candidate_refs = store.get_refs("trial-1", "cand-1", "latest")
-
-    assert trial_refs == ObservabilityRefs(
-        langfuse_trace_id="trace-1",
-        langfuse_url="https://langfuse.example/trace/trace-1",
+    overlay_key = overlay_key_for(evaluation_hash="eval-1")
+    trial_refs = store.get_snapshot("trial-1", None, overlay_key)
+    candidate_refs = store.get_snapshot(
+        "trial-1",
+        "cand-1",
+        overlay_key,
     )
-    assert candidate_refs == ObservabilityRefs(
-        langfuse_trace_id="trace-1",
-        langfuse_url="https://langfuse.example/trace/trace-1",
+
+    assert trial_refs == ObservabilitySnapshot(
+        links=[
+            ObservabilityLink(
+                provider="langfuse",
+                external_id="trace-1",
+                url="https://langfuse.example/trace/trace-1",
+            )
+        ]
+    )
+    assert candidate_refs == ObservabilitySnapshot(
+        links=[
+            ObservabilityLink(
+                provider="langfuse",
+                external_id="trace-1",
+                url="https://langfuse.example/trace/trace-1",
+            )
+        ]
     )

@@ -3,10 +3,11 @@
 import hashlib
 import json
 from pathlib import Path
+import threading
 
 from themis._optional import import_optional
-from themis.errors.exceptions import StorageError
-from themis.storage.sqlite_schema import DatabaseManager
+from themis.errors import StorageError
+from themis.storage._protocols import StorageConnectionManager
 from themis.types.enums import ErrorCode
 from themis.types.json_types import JSONValueType
 from themis.types.json_validation import dump_storage_json_bytes
@@ -20,13 +21,32 @@ class ArtifactStore:
     large prompt, payload, and audit blobs can be deduplicated on disk.
     """
 
-    def __init__(self, base_path: Path, manager: DatabaseManager | None = None):
+    def __init__(
+        self,
+        base_path: Path,
+        manager: StorageConnectionManager | None = None,
+    ):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.manager = manager
-        zstd = import_optional("zstandard", extra="compression")
-        self.compressor = zstd.ZstdCompressor(level=3)
-        self.decompressor = zstd.ZstdDecompressor()
+        self._zstd = import_optional("zstandard", extra="compression")
+        self._codec_state = threading.local()
+
+    @property
+    def _compressor(self):
+        compressor = getattr(self._codec_state, "compressor", None)
+        if compressor is None:
+            compressor = self._zstd.ZstdCompressor(level=3)
+            self._codec_state.compressor = compressor
+        return compressor
+
+    @property
+    def _decompressor(self):
+        decompressor = getattr(self._codec_state, "decompressor", None)
+        if decompressor is None:
+            decompressor = self._zstd.ZstdDecompressor()
+            self._codec_state.decompressor = decompressor
+        return decompressor
 
     def _get_path(self, hex_hash: str) -> Path:
         """Returns the sharded path: base/ab/cd/abcdef....zst"""
@@ -40,7 +60,7 @@ class ArtifactStore:
             target_path = self._get_path(hex_hash)
             if not target_path.exists():
                 target_path.parent.mkdir(parents=True, exist_ok=True)
-                compressed = self.compressor.compress(blob)
+                compressed = self._compressor.compress(blob)
                 target_path.write_bytes(compressed)
             artifact_ref = f"sha256:{hex_hash}"
             self._index_artifact(
@@ -73,7 +93,7 @@ class ArtifactStore:
 
         try:
             compressed = target_path.read_bytes()
-            return self.decompressor.decompress(compressed)
+            return self._decompressor.decompress(compressed)
         except Exception as e:
             raise StorageError(
                 code=ErrorCode.STORAGE_READ,

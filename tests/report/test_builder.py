@@ -1,5 +1,8 @@
 from themis.report.builder import ReportBuilder
+from themis.report.metric_frame_builder import MetricFrameBuilder
+from themis.report.report_metadata_builder import ReportMetadataBuilder
 import themis
+from themis.overlays import OverlaySelection
 from themis.records.trial import TrialRecord
 from themis.records.candidate import CandidateRecord
 from themis.records.evaluation import EvaluationRecord, MetricScore
@@ -7,9 +10,9 @@ from themis.records.provenance import ProvenanceRecord
 from themis.records.report import ReportMetadata
 from themis.runtime import ExperimentResult
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
-from themis.specs.foundational import DatasetSpec, ModelSpec, TaskSpec
-from themis.storage.events import ScoreRow, TrialSummaryRow
-from themis.types.enums import RecordStatus
+from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
+from themis.types.events import ScoreRow, TrialSummaryRow
+from themis.types.enums import PValueCorrection, RecordStatus
 import tempfile
 import os
 
@@ -71,6 +74,7 @@ class ProjectionBackedReportRepo:
     def __init__(self, trial: TrialRecord, rows: list[ScoreRow]):
         self.trial = trial
         self.rows = rows
+        assert trial.trial_spec is not None
         self.trial_summaries = [
             TrialSummaryRow(
                 trial_hash=trial.spec_hash,
@@ -81,7 +85,14 @@ class ProjectionBackedReportRepo:
             )
         ]
 
-    def get_trial_record(self, trial_hash: str, eval_revision: str):
+    def get_trial_record(
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ):
+        del transform_hash, evaluation_hash
         if trial_hash == self.trial.spec_hash:
             return self.trial
         return None
@@ -100,7 +111,7 @@ def test_report_builder_builds_from_projection_rows_via_experiment_result():
         task=TaskSpec(
             task_id="math",
             dataset=DatasetSpec(source="memory"),
-            default_metrics=["accuracy"],
+            generation=GenerationSpec(),
         ),
         item_id="item-1",
         prompt=PromptTemplateSpec(id="baseline", messages=[]),
@@ -164,6 +175,86 @@ def test_report_builder_builds_from_trial_summaries_without_trials():
     assert report.tables[0].data[0]["task_id"] == "math"
 
 
+def test_metric_frame_builder_reuses_trial_summary_metadata_for_report_and_comparison_frames():
+    frame_builder = MetricFrameBuilder()
+    summaries = [
+        TrialSummaryRow(
+            trial_hash="trial_1",
+            model_id="gpt-4o-mini",
+            task_id="math",
+            item_id="item-1",
+            status=RecordStatus.OK,
+        )
+    ]
+    score_rows = [
+        ScoreRow(
+            trial_hash="trial_1",
+            candidate_id="cand_1",
+            metric_id="accuracy",
+            score=0.75,
+        )
+    ]
+
+    report_frame = frame_builder.build_report_frame(summaries, score_rows)
+    comparison_frame = frame_builder.build_comparison_frame(summaries, score_rows)
+
+    report_row = report_frame.to_dict(orient="records")[0]
+    comparison_row = comparison_frame.to_dict(orient="records")[0]
+
+    assert report_row["model_id"] == "gpt-4o-mini"
+    assert report_row["metric_value"] == 0.75
+    assert comparison_row["task_id"] == "math"
+    assert comparison_row["score"] == 0.75
+
+
+def test_report_metadata_builder_collects_overlay_and_provenance_metadata():
+    trial_spec = TrialSpec(
+        trial_id="report_meta",
+        model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
+        task=TaskSpec(
+            task_id="math",
+            dataset=DatasetSpec(source="memory", revision="rev-a"),
+            generation=GenerationSpec(),
+        ),
+        item_id="item-1",
+        prompt=PromptTemplateSpec(id="baseline", messages=[]),
+        params=InferenceParamsSpec(),
+    )
+    trial = TrialRecord(
+        spec_hash=trial_spec.spec_hash,
+        status=RecordStatus.OK,
+        candidates=[],
+        trial_spec=trial_spec,
+        provenance=ProvenanceRecord(
+            themis_version=themis.__version__,
+            git_commit="abc123",
+            python_version="3.12.0",
+            platform="macOS",
+            library_versions={"openai": "1.0.0"},
+            model_endpoint_meta={},
+        ),
+    )
+
+    metadata = ReportMetadataBuilder().build(
+        [trial],
+        [
+            TrialSummaryRow(
+                trial_hash=trial.spec_hash,
+                model_id=trial_spec.model.model_id,
+                task_id=trial_spec.task.task_id,
+                item_id=trial_spec.item_id,
+                status=trial.status,
+            )
+        ],
+        OverlaySelection(evaluation_hash="eval_1"),
+    )
+
+    assert metadata.spec_hashes == [trial.spec_hash]
+    assert metadata.extras["dataset_revisions"] == ["rev-a"]
+    assert metadata.extras["evaluation_hash"] == "eval_1"
+    assert metadata.extras["provenance"]["git_commits"] == ["abc123"]
+
+
 def test_report_builder_includes_pairwise_comparisons_and_provenance():
     trials: list[TrialRecord] = []
     score_rows: list[ScoreRow] = []
@@ -183,7 +274,7 @@ def test_report_builder_includes_pairwise_comparisons_and_provenance():
                 task=TaskSpec(
                     task_id="math",
                     dataset=DatasetSpec(source="memory", revision="rev-a"),
-                    default_metrics=["exact_match"],
+                    generation=GenerationSpec(),
                 ),
                 item_id=f"item-{index}",
                 prompt=PromptTemplateSpec(id="baseline", messages=[]),
@@ -215,7 +306,7 @@ def test_report_builder_includes_pairwise_comparisons_and_provenance():
             )
 
     report = ReportBuilder(trials, score_rows=score_rows).build(
-        p_value_correction="holm"
+        p_value_correction=PValueCorrection.HOLM
     )
 
     assert {table.id for table in report.tables} >= {
@@ -240,3 +331,34 @@ def test_report_metadata_defaults_to_package_version():
     metadata = ReportMetadata(spec_hash="meta")
 
     assert metadata.themis_version == themis.__version__
+
+
+def test_report_builder_records_overlay_metadata_for_evaluation_views():
+    builder = ReportBuilder(
+        [],
+        trial_summaries=[
+            TrialSummaryRow(
+                trial_hash="trial_1",
+                model_id="gpt-4o-mini",
+                task_id="math",
+                item_id="item-1",
+                status=RecordStatus.OK,
+            )
+        ],
+        score_rows=[
+            ScoreRow(
+                trial_hash="trial_1",
+                candidate_id="cand_1",
+                metric_id="accuracy",
+                score=0.75,
+            )
+        ],
+        overlay_key="ev:eval_1",
+        evaluation_hash="eval_1",
+    )
+
+    report = builder.build()
+
+    assert report.metadata.extras["overlay_key"] == "ev:eval_1"
+    assert report.metadata.extras["evaluation_hash"] == "eval_1"
+    assert "eval_revision" not in report.metadata.extras

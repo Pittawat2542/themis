@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 
 from themis import _optional
-from themis.errors.exceptions import ThemisError
+from themis.errors import ThemisError
 from themis.records.trial import TrialRecord
 from themis.runtime import ExperimentResult
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
-from themis.specs.foundational import DatasetSpec, ModelSpec, TaskSpec
+from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.enums import ErrorCode, RecordStatus
 
 
@@ -18,14 +18,21 @@ class EmptyProjectionRepository:
     def __init__(self, trial_hash: str) -> None:
         self.trial_hash = trial_hash
 
-    def get_trial_record(self, trial_hash: str, eval_revision: str):
+    def get_trial_record(
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ):
+        del transform_hash, evaluation_hash
         trial = TrialSpec(
             trial_id="optional_trial",
             model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
             task=TaskSpec(
                 task_id="math",
                 dataset=DatasetSpec(source="memory"),
-                default_metrics=["em"],
+                generation=GenerationSpec(),
             ),
             item_id="item-1",
             prompt=PromptTemplateSpec(id="baseline", messages=[]),
@@ -51,7 +58,7 @@ def test_experiment_result_compare_honors_stats_extra_boundary(monkeypatch):
         task=TaskSpec(
             task_id="math",
             dataset=DatasetSpec(source="memory"),
-            default_metrics=["em"],
+            generation=GenerationSpec(),
         ),
         item_id="item-1",
         prompt=PromptTemplateSpec(id="baseline", messages=[]),
@@ -101,6 +108,7 @@ def test_pyproject_optional_dependency_groups_match_v2_surface():
         "providers-vllm",
         "stats",
         "telemetry",
+        "storage-postgres",
         "all",
     }
     removed = {

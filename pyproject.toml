@@ -38,11 +38,10 @@ themis-quickcheck = "themis.cli.quickcheck:main"
 [tool.setuptools.packages.find]
 include = [
     "themis*",
-    "experiments*",
 ]
 
 [tool.setuptools.package-data]
-"themis" = ["py.typed"]
+"themis" = ["py.typed", "*.pyi", "records/*.pyi", "stats/*.pyi", "types/*.pyi"]
 
 [project.optional-dependencies]
 dev = [
@@ -86,13 +85,15 @@ telemetry = [
     "langfuse>=3.0.0",
     "wandb>=0.19.0",
 ]
+storage-postgres = [
+    "psycopg[binary]>=3.2.0",
+]
 all = [
-    "themis-eval[compression,datasets,docs,extractors,providers-openai,providers-litellm,providers-vllm,stats,telemetry]",
+    "themis-eval[compression,datasets,docs,extractors,providers-openai,providers-litellm,providers-vllm,stats,telemetry,storage-postgres]",
 ]
 
 [tool.pytest.ini_options]
 addopts = "-q"
-pythonpath = ["."]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
@@ -105,10 +106,16 @@ namespace_packages = true
 module = [
     "bert_score.*",
     "nltk.*",
+    "pandas",
+    "pandas.*",
     "rouge_score.*",
     "vllm.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.stats.test_stats_engine"]
+disable_error_code = ["import-untyped"]
 
 [dependency-groups]
 dev = [

@@ -4,12 +4,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from themis.errors.exceptions import ThemisError
+from themis.errors import ThemisError
 from themis.records.candidate import CandidateRecord
 from themis.records.inference import InferenceRecord
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
-from themis.specs.foundational import DatasetSpec, ModelSpec, TaskSpec
+from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.enums import ErrorCode
 
 
@@ -100,7 +100,7 @@ def _trial() -> TrialSpec:
         task=TaskSpec(
             task_id="math",
             dataset=DatasetSpec(source="memory"),
-            default_metrics=["exact_match"],
+            generation=GenerationSpec(),
         ),
         item_id="item-1",
         prompt=PromptTemplateSpec(id="baseline", messages=[]),

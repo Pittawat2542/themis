@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import hashlib
 import json
-from enum import Enum
 from datetime import datetime, timezone
-from typing import Any, Dict
+from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel
+
+SHORT_HASH_LENGTH = 12
 
 
 class HashableMixin:
@@ -15,7 +19,7 @@ class HashableMixin:
     identity or deduplication depends on serialized content.
     """
 
-    def canonical_dict(self) -> Dict[str, Any]:
+    def canonical_dict(self) -> dict[str, Any]:
         """
         Returns a dict of hash-included fields with sorted keys,
         stable list order, no NaN/Inf, datetimes normalized to UTC ISO8601.
@@ -90,5 +94,5 @@ class HashableMixin:
         hash_hex = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
         if short:
-            return hash_hex[:12]
+            return hash_hex[:SHORT_HASH_LENGTH]
         return hash_hex

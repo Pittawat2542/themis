@@ -1,14 +1,24 @@
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import time
 from typing import cast
 
-from themis.contracts.protocols import DatasetContext, InferenceResult, JudgeService
+from themis.contracts.protocols import (
+    DatasetContext,
+    InferenceEngine,
+    InferenceResult,
+    JudgeService,
+)
 from themis.records.candidate import CandidateRecord
 from themis.records.inference import InferenceRecord
 from themis.records.judge import JudgeCallRecord, JudgeAuditTrail
-from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import PromptTemplateSpec, RuntimeContext, TrialSpec
-from themis.specs.foundational import DatasetSpec, JudgeInferenceSpec, TaskSpec
+from themis.specs.foundational import (
+    DatasetSpec,
+    GenerationSpec,
+    JudgeInferenceSpec,
+    TaskSpec,
+)
+from themis.types.enums import DatasetSource
 
 
 def _coerce_runtime_context(value: object) -> RuntimeContext:
@@ -33,8 +43,12 @@ class DefaultJudgeService(JudgeService):
     Executes inference for judge-dependent metrics and records the calls for auditing.
     """
 
-    def __init__(self, registry: PluginRegistry):
-        self.registry = registry
+    def __init__(
+        self,
+        *,
+        engine_resolver: Callable[[str], InferenceEngine],
+    ) -> None:
+        self.engine_resolver = engine_resolver
         self.calls: dict[str, list[JudgeCallRecord]] = {}
 
     def judge(
@@ -48,7 +62,7 @@ class DefaultJudgeService(JudgeService):
         """
         Executes a judge model endpoint, capturing the audit trail.
         """
-        engine = self.registry.get_inference_engine(judge_spec.model.provider)
+        engine = self._resolve_engine(judge_spec.model.provider)
 
         # We need a temporary trial spec for the judge call to pass to the engine
         # We synthesize a TrialSpec based on the judge config
@@ -56,8 +70,8 @@ class DefaultJudgeService(JudgeService):
         if not isinstance(task_spec, TaskSpec):
             task_spec = TaskSpec(
                 task_id="judge_fallback_task",
-                dataset=DatasetSpec(source="memory"),
-                default_metrics=["judge_implicit"],
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
             )
 
         judge_trial = TrialSpec(
@@ -112,3 +126,6 @@ class DefaultJudgeService(JudgeService):
             judge_calls=calls,
         )
         return trail
+
+    def _resolve_engine(self, provider: str) -> InferenceEngine:
+        return self.engine_resolver(provider)

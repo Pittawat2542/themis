@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from themis.errors.exceptions import InferenceError
+from themis.errors import InferenceError
 from themis.errors.mapping import map_exception_to_error_record
 from themis.types.enums import ErrorCode, ErrorWhere
 

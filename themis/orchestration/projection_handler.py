@@ -2,29 +2,61 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
+from themis.contracts.protocols import (
+    ProjectionRefreshRepository,
+    TrialEventRepository,
+)
+from themis.orchestration.overlay_policy import OverlayRefreshPolicy
+from themis.overlays import OverlaySelection
+from themis.records.trial import TrialRecord
 from themis.types.enums import RecordStatus
-from themis.types.events import TrialEvent, TrialEventType
+from themis.types.events import (
+    ProjectionCompletedEventMetadata,
+    TimelineStage,
+    TrialEvent,
+    TrialEventType,
+)
 
 
 class ProjectionHandler:
     """Materializes trial projections when a terminal trial event is observed."""
 
-    def __init__(self, event_repo, projection_repo, projection_version: str = "v1"):
+    def __init__(
+        self,
+        event_repo: TrialEventRepository,
+        projection_repo: ProjectionRefreshRepository,
+        projection_version: str = "v1",
+        refresh_policy: OverlayRefreshPolicy | None = None,
+    ) -> None:
         self.event_repo = event_repo
         self.projection_repo = projection_repo
         self.projection_version = projection_version
+        self.refresh_policy = refresh_policy or OverlayRefreshPolicy()
 
-    def on_trial_completed(self, trial_hash: str, eval_revision: str = "latest"):
-        """Materialize or refresh projections for one completed trial."""
+    def on_trial_completed(
+        self,
+        trial_hash: str,
+        *,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> TrialRecord:
+        """Materialize or refresh projections for one completed trial overlay."""
         existing_events = self.event_repo.get_events(trial_hash)
-        has_projection_event = any(
-            event.event_type == TrialEventType.PROJECTION_COMPLETED
-            and event.metadata.get("eval_revision") == eval_revision
-            for event in existing_events
+        selection = OverlaySelection(
+            transform_hash=transform_hash,
+            evaluation_hash=evaluation_hash,
         )
-        if has_projection_event:
+        needs_refresh = self.refresh_policy.needs_refresh(
+            existing_events,
+            selection=selection,
+        )
+        if not needs_refresh:
             return self.projection_repo.materialize_trial_record(
-                trial_hash, eval_revision
+                trial_hash,
+                transform_hash=transform_hash,
+                evaluation_hash=evaluation_hash,
             )
 
         next_seq = (self.event_repo.last_event_index(trial_hash) or 0) + 1
@@ -38,15 +70,16 @@ class ProjectionHandler:
             event_seq=next_seq,
             event_id=f"{trial_hash}:{next_seq}",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
+            stage=TimelineStage.PROJECTION,
             status=RecordStatus.OK,
-            metadata={
-                "eval_revision": eval_revision,
-                "projection_version": self.projection_version,
-                "source_event_range": list(source_range)
+            metadata=ProjectionCompletedEventMetadata(
+                transform_hash=transform_hash,
+                evaluation_hash=evaluation_hash,
+                projection_version=self.projection_version,
+                source_event_range=list(source_range)
                 if source_range is not None
                 else None,
-            },
+            ),
         )
 
         shared_manager = getattr(self.event_repo, "manager", None)
@@ -57,16 +90,18 @@ class ProjectionHandler:
                 with conn:
                     record = self._materialize(
                         trial_hash,
-                        eval_revision,
+                        transform_hash=transform_hash,
+                        evaluation_hash=evaluation_hash,
                         projection_event=projection_event,
                         conn=conn,
                     )
-                    self.event_repo.append_event(projection_event, conn=conn)
+                    cast(Any, self.event_repo).append_event(projection_event, conn=conn)
                     return record
 
         record = self._materialize(
             trial_hash,
-            eval_revision,
+            transform_hash=transform_hash,
+            evaluation_hash=evaluation_hash,
             projection_event=projection_event,
         )
         self.event_repo.append_event(projection_event)
@@ -75,29 +110,23 @@ class ProjectionHandler:
     def _materialize(
         self,
         trial_hash: str,
-        eval_revision: str,
         *,
+        transform_hash: str | None,
+        evaluation_hash: str | None,
         projection_event: TrialEvent,
         conn=None,
-    ):
-        try:
-            if conn is not None:
-                return self.projection_repo.materialize_trial_record(
-                    trial_hash,
-                    eval_revision,
-                    extra_events=[projection_event],
-                    conn=conn,
-                )
-            return self.projection_repo.materialize_trial_record(
+    ) -> TrialRecord:
+        if conn is not None:
+            return cast(Any, self.projection_repo).materialize_trial_record(
                 trial_hash,
-                eval_revision,
+                transform_hash=transform_hash,
+                evaluation_hash=evaluation_hash,
                 extra_events=[projection_event],
+                conn=conn,
             )
-        except TypeError:
-            if conn is not None:
-                return self.projection_repo.materialize_trial_record(
-                    trial_hash, eval_revision
-                )
-            return self.projection_repo.materialize_trial_record(
-                trial_hash, eval_revision
-            )
+        return self.projection_repo.materialize_trial_record(
+            trial_hash,
+            transform_hash=transform_hash,
+            evaluation_hash=evaluation_hash,
+            extra_events=[projection_event],
+        )

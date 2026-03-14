@@ -82,7 +82,7 @@ jobs:
         run: uv run ruff check themis tests examples scripts
 
       - name: Run type check
-        run: uv run mypy themis
+        run: uv run mypy themis tests
 
   tests:
     name: Tests (Python ${{ matrix.python-version }})
@@ -115,6 +115,46 @@ jobs:
       - name: Validate examples
         if: matrix.python-version == '3.12'
         run: uv run python scripts/ci/run_examples.py
+
+  tests-postgres:
+    name: Tests (Postgres, Python 3.12)
+    needs: quality
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      THEMIS_TEST_POSTGRES_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: 'latest'
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Run Postgres storage tests
+        run: uv run pytest tests/storage/test_postgres_backend.py tests/storage/test_migrate.py -q
 
   coverage:
     name: Coverage

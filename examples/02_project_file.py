@@ -5,7 +5,9 @@ import textwrap
 
 from themis import (
     DatasetSpec,
+    EvaluationSpec,
     ExperimentSpec,
+    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -16,8 +18,7 @@ from themis import (
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
-from themis.records.evaluation import MetricScore
-from themis.records.inference import InferenceRecord
+from themis.records import InferenceRecord, MetricScore
 
 
 class GreetingDatasetLoader:
@@ -92,7 +93,10 @@ def build_experiment() -> ExperimentSpec:
             TaskSpec(
                 task_id="greetings",
                 dataset=DatasetSpec(source="memory"),
-                default_metrics=["matches_expected"],
+                generation=GenerationSpec(),
+                evaluations=[
+                    EvaluationSpec(name="default", metrics=["matches_expected"])
+                ],
             )
         ],
         prompt_templates=[

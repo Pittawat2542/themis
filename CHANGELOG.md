@@ -22,6 +22,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   than an arbitrary mapping.
 - Comparison and report paths now use projected trial summaries and metric score
   rows when full trial hydration is not required.
+- SQLite overlay stores now use format `stage_overlays_v2`; older
+  `stage_overlays_v1` databases are rejected instead of being migrated in
+  place.
+- `themis-quickcheck failures` can now be filtered by transform or evaluation
+  overlay and prints `overlay_key` so overlay-specific failures are explicit.
+- Internal staged execution now uses only the explicit generation, transform,
+  and evaluation pipeline functions; the old candidate-pipeline wrapper and
+  leaked executor wiring accessors are gone.
+- `SpecBase.validate_semantic()` has been removed now that spec validation runs
+  at construction time, and legacy two-argument extractor plugins are rejected
+  at registry resolution.
+
+### Fixed
+- Overlay projections now keep independent trial-summary state per generation,
+  transform, and evaluation overlay. Failed transform or evaluation overlays
+  remain rerunnable instead of being cached as successful completions across
+  executor resume, `Orchestrator.plan()`, and external handoff work items.
+- Stage-specific orchestration entry points now validate only the plugins they
+  execute. `generate()` no longer requires extractor or metric plugins, and
+  imported-candidate transform or evaluation workflows no longer require an
+  inference engine.
+- Synchronous orchestration APIs now work correctly when called from a running
+  event loop such as Jupyter or an async application shell.
+- SQLite and Postgres-backed storage writes now commit through the shared
+  repository entrypoints, so fresh connections can observe saved specs, events,
+  manifests, observability links, and refreshed projections immediately.
+- `migrate_sqlite_store()` and `migrate_sqlite_to_postgres()` now carry
+  persisted `run_manifests` and `stage_work_items` forward in addition to specs,
+  events, blobs, and observability links.
+
+### Migration Notes
+- `themis.exceptions` and `CompatibilityChecker` remain available as deprecated
+  compatibility shims. Prefer `themis.errors` and the functional helpers in
+  `themis.registry.compatibility` for new code.
+- `StorageConfig` is now part of the curated public API as the backend-neutral
+  type for `ProjectSpec.storage`. `StorageSpec` remains the SQLite convenience
+  alias for compatibility.
 
 ## [1.4.0] - 2026-03-02
 

@@ -3,13 +3,27 @@
 from __future__ import annotations
 
 import itertools
+from typing import Annotated
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 
 from themis._replay import ResumeState
 from themis.specs.base import SpecBase
 from themis.specs.foundational import JudgeInferenceSpec, ModelSpec, TaskSpec
+from themis.types.enums import (
+    CompressionCodec,
+    ResponseFormat,
+    SamplingKind,
+    StorageBackend,
+)
 from themis.types.json_types import JSONDict, JSONValueType
 
 
@@ -80,13 +94,22 @@ class InferenceParamsSpec(SpecBase):
     logprobs: int | None = Field(
         default=None, ge=0, description="Request token logprobs if available."
     )
-    response_format: Literal["text", "json"] | None = Field(default=None)
+    response_format: ResponseFormat | None = Field(default=None)
     seed: int | None = Field(
         default=None, description="Optional deterministic PRNG seed."
     )
     extras: JSONDict = Field(
         default_factory=dict, description="Provider-specific sampling args."
     )
+
+    @field_validator("response_format", mode="before")
+    @classmethod
+    def _coerce_response_format(
+        cls, value: ResponseFormat | str | None
+    ) -> ResponseFormat | str | None:
+        if isinstance(value, str):
+            return ResponseFormat(value)
+        return value
 
 
 class PromptMessage(BaseModel):
@@ -110,44 +133,178 @@ class PromptTemplateSpec(SpecBase):
     )
 
 
-class StorageSpec(SpecBase):
+class _StorageSpecBase(SpecBase):
     """Shared storage defaults attached at the project level."""
 
-    backend: Literal["sqlite_blob"] = Field(default="sqlite_blob")
-    root_dir: str = Field(
-        ..., description="Storage root for event, projection, and blob data."
-    )
+    backend: StorageBackend
     store_item_payloads: bool = Field(
         default=True, description="Persist item payload blobs for replayability."
     )
-    compression: Literal["none", "zstd"] = Field(default="zstd")
+    compression: CompressionCodec = Field(default=CompressionCodec.ZSTD)
+
+    @field_validator("compression", mode="before")
+    @classmethod
+    def _coerce_compression(
+        cls, value: CompressionCodec | str
+    ) -> CompressionCodec | str:
+        if isinstance(value, str):
+            return CompressionCodec(value)
+        return value
+
+
+class SqliteBlobStorageSpec(_StorageSpecBase):
+    """SQLite event/projection store plus local filesystem blob persistence."""
+
+    backend: Literal[StorageBackend.SQLITE_BLOB] = Field(
+        default=StorageBackend.SQLITE_BLOB
+    )
+    root_dir: str = Field(
+        ..., description="Storage root for event, projection, and blob data."
+    )
+
+
+class PostgresBlobStorageSpec(_StorageSpecBase):
+    """Postgres event/projection store plus local filesystem blob persistence."""
+
+    backend: Literal[StorageBackend.POSTGRES_BLOB] = Field(
+        default=StorageBackend.POSTGRES_BLOB
+    )
+    database_url: str = Field(
+        ..., description="Postgres connection URL for events and projections."
+    )
+    blob_root_dir: str = Field(
+        ..., description="Local blob root for content-addressed artifact storage."
+    )
+
+
+StorageConfig = Annotated[
+    SqliteBlobStorageSpec | PostgresBlobStorageSpec,
+    Field(discriminator="backend"),
+]
+
+# Keep the SQLite config as the simple top-level convenience constructor.
+StorageSpec = SqliteBlobStorageSpec
 
 
 class ExecutionPolicySpec(SpecBase):
-    """Retry and circuit-breaker configuration for orchestration."""
+    """Retry, backoff, circuit-breaker, and concurrency controls for orchestration.
+
+    These settings live above provider SDK behavior. Engines are still
+    responsible for classifying provider failures into stable retryable codes.
+    """
 
     max_retries: int = Field(default=3, ge=0)
     retry_backoff_factor: float = Field(default=1.5, gt=0.0)
     circuit_breaker_threshold: int = Field(default=5, ge=1)
+    max_in_flight_work_items: int = Field(default=32, ge=1)
+    retryable_error_codes: list[str] = Field(
+        default_factory=list,
+        description="Stable error-code values treated as retryable for persisted work items.",
+    )
+
+
+class LocalExecutionBackendSpec(SpecBase):
+    """Default in-process backend for synchronous local runs."""
+
+    kind: Literal["local"] = Field(default="local")
+
+
+class WorkerPoolExecutionBackendSpec(SpecBase):
+    """Shared-store backend for externally operated worker pools.
+
+    Themis persists run manifests, work items, and lease metadata; external
+    workers are responsible for actually executing those items.
+    """
+
+    kind: Literal["worker_pool"] = Field(default="worker_pool")
+    lease_ttl_seconds: int = Field(default=180, ge=1)
+    poll_interval_seconds: int = Field(default=5, ge=1)
+    worker_tags: list[str] = Field(default_factory=list)
+
+
+class BatchExecutionBackendSpec(SpecBase):
+    """Async backend shape for externally polled batch systems.
+
+    This spec models persisted batch work and polling cadence, not a built-in
+    provider adapter. Submission and import still belong to your engine or
+    external worker layer.
+    """
+
+    kind: Literal["batch"] = Field(default="batch")
+    provider: str = Field(..., min_length=1)
+    poll_interval_seconds: int = Field(default=30, ge=1)
+    max_batch_items: int = Field(default=250, ge=1)
+
+
+ExecutionBackendConfig = Annotated[
+    LocalExecutionBackendSpec
+    | WorkerPoolExecutionBackendSpec
+    | BatchExecutionBackendSpec,
+    Field(discriminator="kind"),
+]
 
 
 class ItemSamplingSpec(SpecBase):
-    """Controls whether a task runs all items or a deterministic subset."""
+    """Declarative benchmark slicing and deterministic sampling controls."""
 
-    kind: Literal["all", "subset", "stratified"] = Field(default="all")
+    kind: SamplingKind = Field(default=SamplingKind.ALL)
     count: int | None = Field(default=None, gt=0)
     seed: int | None = Field(default=None)
     strata_field: str | None = Field(
         default=None, description="Field name used for stratified sampling."
     )
+    item_ids: list[str] = Field(
+        default_factory=list,
+        description="Optional allow-list of dataset item IDs to retain before sampling.",
+    )
+    metadata_filters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Exact-match metadata filters applied before subset/stratified sampling.",
+    )
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _coerce_kind(cls, value: SamplingKind | str) -> SamplingKind | str:
+        if isinstance(value, str):
+            return SamplingKind(value)
+        return value
+
+    @classmethod
+    def all(cls) -> ItemSamplingSpec:
+        """Return a sampling config that keeps all dataset items."""
+        return cls(kind=SamplingKind.ALL)
+
+    @classmethod
+    def subset(cls, count: int, seed: int | None = None) -> ItemSamplingSpec:
+        """Return a deterministic subset-sampling configuration."""
+        return cls(kind=SamplingKind.SUBSET, count=count, seed=seed)
+
+    @classmethod
+    def stratified(
+        cls,
+        count: int,
+        *,
+        strata_field: str,
+        seed: int | None = None,
+    ) -> ItemSamplingSpec:
+        """Return a stratified-sampling configuration for one dataset field."""
+        return cls(
+            kind=SamplingKind.STRATIFIED,
+            count=count,
+            strata_field=strata_field,
+            seed=seed,
+        )
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> ItemSamplingSpec:
-        if self.kind in {"subset", "stratified"} and self.count is None:
+        if (
+            self.kind in {SamplingKind.SUBSET, SamplingKind.STRATIFIED}
+            and self.count is None
+        ):
             raise ValueError(
-                f"ItemSamplingSpec kind='{self.kind}' requires a positive count."
+                f"ItemSamplingSpec kind='{self.kind.value}' requires a positive count."
             )
-        if self.kind == "stratified" and not self.strata_field:
+        if self.kind == SamplingKind.STRATIFIED and not self.strata_field:
             raise ValueError(
                 "ItemSamplingSpec kind='stratified' requires strata_field."
             )
@@ -155,7 +312,11 @@ class ItemSamplingSpec(SpecBase):
 
 
 class InferenceGridSpec(SpecBase):
-    """Typed inference sweep over base parameter sets and scalar overrides."""
+    """Typed inference sweep over base params and scalar override grids.
+
+    Use this for temperature, top-p, or provider-extra sweeps while keeping
+    unchanged parameter combinations resumable across runs.
+    """
 
     params: list[InferenceParamsSpec] = Field(..., min_length=1)
     overrides: dict[str, list[str | int | float | bool]] = Field(default_factory=dict)
@@ -211,8 +372,10 @@ class TrialSpec(SpecBase):
 
 
 class ExperimentSpec(SpecBase):
-    """
-    Author-facing experiment matrix expanded into `TrialSpec` objects by the planner.
+    """Author-facing experiment matrix expanded into `TrialSpec` objects.
+
+    This is the code-first configuration surface for model lists, prompt sweeps,
+    inference grids, benchmark slices, and task-local stage composition.
     """
 
     models: list[ModelSpec] = Field(..., description="Models to test.")
@@ -242,7 +405,11 @@ class ExperimentSpec(SpecBase):
 
 
 class ProjectSpec(SpecBase):
-    """Shared project-level identity, storage defaults, and execution policy."""
+    """Shared project-level identity, storage defaults, and execution policy.
+
+    Keep this stable across related experiment runs so resume behavior and run
+    manifests refer to the same storage and backend context.
+    """
 
     project_name: str = Field(..., description="Human readable project name.")
     researcher_id: str = Field(
@@ -251,9 +418,13 @@ class ProjectSpec(SpecBase):
     global_seed: int = Field(
         ..., description="Default deterministic seed shared across experiments."
     )
-    storage: StorageSpec = Field(..., description="Shared storage defaults.")
+    storage: StorageConfig = Field(..., description="Shared storage defaults.")
     execution_policy: ExecutionPolicySpec = Field(
         ..., description="Shared retry and circuit-breaker policy."
+    )
+    execution_backend: ExecutionBackendConfig = Field(
+        default_factory=LocalExecutionBackendSpec,
+        description="Execution backend used for local, worker-pool, or batch orchestration.",
     )
     metadata: dict[str, str] = Field(
         default_factory=dict, description="User-defined project metadata."

@@ -1,4 +1,6 @@
-from typing import Dict, Optional
+"""Canonical Themis exception hierarchy used by the v2 runtime."""
+
+from __future__ import annotations
 
 from themis.types.enums import ErrorCode
 from themis.types.json_types import JSONValueType
@@ -14,8 +16,8 @@ class ThemisError(Exception):
         self,
         code: ErrorCode,
         message: str,
-        details: Optional[Dict[str, JSONValueType]] = None,
-    ):
+        details: dict[str, JSONValueType] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message

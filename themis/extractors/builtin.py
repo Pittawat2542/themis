@@ -8,7 +8,7 @@ import re
 from collections.abc import Mapping
 
 from themis._optional import import_optional
-from themis.errors.exceptions import ThemisError
+from themis.errors import ThemisError
 from themis.records.candidate import CandidateRecord
 from themis.records.extraction import ExtractionRecord
 from themis.specs.experiment import TrialSpec

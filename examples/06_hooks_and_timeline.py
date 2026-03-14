@@ -4,8 +4,10 @@ from pathlib import Path
 
 from themis import (
     DatasetSpec,
+    EvaluationSpec,
     ExecutionPolicySpec,
     ExperimentSpec,
+    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -14,13 +16,18 @@ from themis import (
     ProjectSpec,
     PromptMessage,
     PromptTemplateSpec,
-    StorageSpec,
+    SqliteBlobStorageSpec,
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult, RenderedPrompt
-from themis.records.conversation import Conversation, MessageEvent, MessagePayload
-from themis.records.evaluation import MetricScore
-from themis.records.inference import InferenceRecord
+from themis.records import (
+    CandidateRecord,
+    Conversation,
+    InferenceRecord,
+    MessageEvent,
+    MessagePayload,
+    MetricScore,
+)
 from themis.telemetry.bus import TelemetryBus
 
 
@@ -30,7 +37,33 @@ class SingleItemLoader:
         return [{"item_id": "item-1", "question": "Explain what you are doing."}]
 
 
-class InjectSystemPromptHook:
+class _NoOpPipelineHook:
+    def pre_inference(self, trial, prompt: RenderedPrompt) -> RenderedPrompt:
+        del trial
+        return prompt
+
+    def post_inference(self, trial, result: InferenceResult) -> InferenceResult:
+        del trial
+        return result
+
+    def pre_extraction(self, trial, candidate: CandidateRecord) -> CandidateRecord:
+        del trial
+        return candidate
+
+    def post_extraction(self, trial, candidate: CandidateRecord) -> CandidateRecord:
+        del trial
+        return candidate
+
+    def pre_eval(self, trial, candidate: CandidateRecord) -> CandidateRecord:
+        del trial
+        return candidate
+
+    def post_eval(self, trial, candidate: CandidateRecord) -> CandidateRecord:
+        del trial
+        return candidate
+
+
+class InjectSystemPromptHook(_NoOpPipelineHook):
     """Prepends a system message before the engine sees the prompt."""
 
     def pre_inference(self, trial, prompt: RenderedPrompt) -> RenderedPrompt:
@@ -88,7 +121,7 @@ def build_project() -> ProjectSpec:
         project_name="hooks-and-timeline",
         researcher_id="examples",
         global_seed=41,
-        storage=StorageSpec(
+        storage=SqliteBlobStorageSpec(
             root_dir=str(Path(".cache/themis-examples/06-hooks-and-timeline")),
             compression="none",
         ),
@@ -103,7 +136,13 @@ def build_experiment() -> ExperimentSpec:
             TaskSpec(
                 task_id="hooked-task",
                 dataset=DatasetSpec(source="memory"),
-                default_metrics=["contains_system_prompt"],
+                generation=GenerationSpec(),
+                evaluations=[
+                    EvaluationSpec(
+                        name="default",
+                        metrics=["contains_system_prompt"],
+                    )
+                ],
             )
         ],
         prompt_templates=[

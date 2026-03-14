@@ -5,127 +5,15 @@ import threading
 from contextlib import contextmanager
 from typing import Iterator
 
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS specs (
-    spec_hash TEXT PRIMARY KEY,
-    spec_type TEXT NOT NULL,
-    schema_version TEXT NOT NULL,
-    canonical_json TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS artifacts (
-    artifact_hash TEXT PRIMARY KEY,
-    path TEXT NOT NULL,
-    size_bytes INTEGER,
-    compression TEXT,
-    media_type TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS trial_summary (
-    trial_hash TEXT PRIMARY KEY,
-    model_id TEXT,
-    task_id TEXT,
-    item_id TEXT,
-    status TEXT NOT NULL,
-    started_at TEXT,
-    ended_at TEXT,
-    duration_ms INTEGER,
-    has_conversation INTEGER DEFAULT 0,
-    has_logprobs INTEGER DEFAULT 0,
-    has_trace INTEGER DEFAULT 0,
-    tags_json TEXT,
-    error_fingerprint TEXT,
-    error_preview TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS trial_events (
-    trial_hash TEXT NOT NULL,
-    event_seq INTEGER NOT NULL,
-    event_id TEXT NOT NULL UNIQUE,
-    candidate_id TEXT,
-    event_type TEXT NOT NULL,
-    stage TEXT,
-    status TEXT,
-    event_ts TEXT NOT NULL,
-    metadata_json TEXT,
-    payload_json TEXT,
-    artifact_refs_json TEXT,
-    error_json TEXT,
-    PRIMARY KEY (trial_hash, event_seq),
-    FOREIGN KEY(trial_hash) REFERENCES specs(spec_hash)
-);
-
-CREATE TABLE IF NOT EXISTS candidate_summary (
-    candidate_id TEXT NOT NULL,
-    trial_hash TEXT NOT NULL,
-    eval_revision TEXT NOT NULL DEFAULT 'latest',
-    sample_index INTEGER NOT NULL,
-    status TEXT NOT NULL,
-    finish_reason TEXT,
-    tokens_in INTEGER,
-    tokens_out INTEGER,
-    latency_ms INTEGER,
-    PRIMARY KEY (candidate_id, eval_revision),
-    FOREIGN KEY(trial_hash) REFERENCES specs(spec_hash)
-);
-
-CREATE TABLE IF NOT EXISTS metric_scores (
-    candidate_id TEXT NOT NULL,
-    eval_revision TEXT NOT NULL DEFAULT 'latest',
-    metric_id TEXT NOT NULL,
-    score REAL NOT NULL,
-    details_json TEXT,
-    FOREIGN KEY(candidate_id, eval_revision) REFERENCES candidate_summary(candidate_id, eval_revision),
-    PRIMARY KEY (candidate_id, metric_id, eval_revision)
-);
-
-CREATE TABLE IF NOT EXISTS record_timeline (
-    record_id TEXT NOT NULL,
-    record_type TEXT NOT NULL,
-    trial_hash TEXT NOT NULL,
-    eval_revision TEXT NOT NULL DEFAULT 'latest',
-    candidate_id TEXT,
-    stage_order INTEGER NOT NULL,
-    stage_name TEXT NOT NULL,
-    status TEXT NOT NULL,
-    started_at TEXT NOT NULL,
-    ended_at TEXT NOT NULL,
-    duration_ms INTEGER NOT NULL,
-    component_id TEXT,
-    metadata_json TEXT,
-    artifacts_json TEXT,
-    error_json TEXT,
-    source_start_seq INTEGER,
-    source_end_seq INTEGER,
-    PRIMARY KEY (record_id, stage_order, eval_revision),
-    FOREIGN KEY(trial_hash) REFERENCES specs(spec_hash)
-);
-
-CREATE TABLE IF NOT EXISTS observability_refs (
-    trial_hash TEXT NOT NULL,
-    candidate_id TEXT NOT NULL DEFAULT '',
-    eval_revision TEXT NOT NULL DEFAULT 'latest',
-    langfuse_trace_id TEXT,
-    langfuse_url TEXT,
-    wandb_url TEXT,
-    extras_json TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (trial_hash, candidate_id, eval_revision)
-);
-
-CREATE INDEX IF NOT EXISTS idx_trial_events_trial_seq ON trial_events(trial_hash, event_seq);
-CREATE INDEX IF NOT EXISTS idx_trial_events_candidate_seq ON trial_events(trial_hash, candidate_id, event_seq);
-CREATE INDEX IF NOT EXISTS idx_candidate_trial_hash ON candidate_summary(trial_hash, eval_revision);
-CREATE INDEX IF NOT EXISTS idx_metric_candidate_hash ON metric_scores(candidate_id, eval_revision);
-CREATE INDEX IF NOT EXISTS idx_record_timeline_trial ON record_timeline(trial_hash, eval_revision, record_type, candidate_id);
-CREATE INDEX IF NOT EXISTS idx_observability_trial ON observability_refs(trial_hash, eval_revision, candidate_id);
-"""
+from themis.errors import StorageError
+from themis.storage._schema import (
+    SCHEMA,
+    STORE_FORMAT_KEY,
+    STORE_FORMAT_VERSION,
+    THEMIS_TABLES,
+    apply_sql_script,
+)
+from themis.types.enums import ErrorCode
 
 
 class DatabaseManager:
@@ -161,10 +49,73 @@ class DatabaseManager:
         """Create tables, indexes, and lightweight additive migrations."""
         with self.get_connection() as conn:
             with conn:
-                conn.executescript(SCHEMA)
+                self._reject_unsupported_store_format(conn)
+                apply_sql_script(conn, SCHEMA)
+                self._ensure_store_format(conn)
                 self._migrate(conn)
 
+    def _reject_unsupported_store_format(self, conn: sqlite3.Connection) -> None:
+        existing_tables = self._existing_user_tables(conn)
+        if not existing_tables:
+            return
+        if "store_metadata" in existing_tables:
+            return
+        if existing_tables & THEMIS_TABLES:
+            raise StorageError(
+                code=ErrorCode.STORAGE_READ,
+                message=(
+                    "unsupported store format: expected store_metadata row "
+                    f"{STORE_FORMAT_KEY}={STORE_FORMAT_VERSION}"
+                ),
+                details={"db_path": self.db_path},
+            )
+
+    def _ensure_store_format(self, conn: sqlite3.Connection) -> None:
+        row = conn.execute(
+            """
+            SELECT metadata_value
+            FROM store_metadata
+            WHERE metadata_key = ?
+            """,
+            (STORE_FORMAT_KEY,),
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                """
+                INSERT INTO store_metadata (metadata_key, metadata_value)
+                VALUES (?, ?)
+                """,
+                (STORE_FORMAT_KEY, STORE_FORMAT_VERSION),
+            )
+            return
+        if row["metadata_value"] != STORE_FORMAT_VERSION:
+            raise StorageError(
+                code=ErrorCode.STORAGE_READ,
+                message=(
+                    "unsupported store format: expected "
+                    f"{STORE_FORMAT_VERSION}, found {row['metadata_value']}"
+                ),
+                details={"db_path": self.db_path},
+            )
+
+    def _existing_user_tables(self, conn: sqlite3.Connection) -> set[str]:
+        rows = conn.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+            """
+        ).fetchall()
+        return {row["name"] for row in rows}
+
     def _migrate(self, conn: sqlite3.Connection) -> None:
+        self._ensure_columns(
+            conn,
+            "specs",
+            {
+                "canonical_hash": "TEXT",
+            },
+        )
         self._ensure_columns(
             conn,
             "trial_summary",
@@ -177,6 +128,9 @@ class DatabaseManager:
                 "has_trace": "INTEGER DEFAULT 0",
                 "tags_json": "TEXT",
             },
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_specs_canonical_hash ON specs(canonical_hash)"
         )
 
     def _ensure_columns(

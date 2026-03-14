@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 
-from themis.errors.exceptions import ThemisError
+from themis.errors import ThemisError
 from themis.types.enums import ErrorCode
 
 

@@ -7,18 +7,23 @@ import hashlib
 import itertools
 import json
 import random
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Collection, Mapping, Sequence
 
-from themis.errors.exceptions import SpecValidationError
-from themis.registry.compatibility import CompatibilityChecker
+from themis.contracts.protocols import DatasetItem, DatasetLoader
+from themis.errors import SpecValidationError
+from themis.registry.compatibility import (
+    TrialStage,
+    validate_trial,
+    validate_trial_for_stages,
+)
+from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import (
     DataItemContext,
     ExperimentSpec,
     ItemSamplingSpec,
     TrialSpec,
 )
-from themis.types.enums import ErrorCode
+from themis.types.enums import ErrorCode, SamplingKind
 from themis.types.json_types import JSONValueType
 from themis.types.json_validation import validate_json_dict, validate_json_value
 
@@ -36,15 +41,18 @@ class TrialPlanner:
 
     def __init__(
         self,
-        dataset_loader: Any = None,
-        registry: Any = None,
-        compatibility_checker: CompatibilityChecker | None = None,
-    ):
+        dataset_loader: DatasetLoader | None = None,
+        registry: PluginRegistry | None = None,
+    ) -> None:
         self.dataset_loader = dataset_loader
         self.registry = registry
-        self.compatibility_checker = compatibility_checker or CompatibilityChecker()
 
-    def plan_experiment(self, experiment: ExperimentSpec) -> list[PlannedTrial]:
+    def plan_experiment(
+        self,
+        experiment: ExperimentSpec,
+        *,
+        required_stages: Collection[TrialStage] | None = None,
+    ) -> list[PlannedTrial]:
         """Expand an experiment specification into deterministic planned trials."""
         trials: list[PlannedTrial] = []
 
@@ -102,7 +110,14 @@ class TrialPlanner:
                     candidate_count=experiment.num_samples,
                 )
                 if self.registry is not None:
-                    self.compatibility_checker.validate_trial(trial, self.registry)
+                    if required_stages is None:
+                        validate_trial(trial, self.registry)
+                    else:
+                        validate_trial_for_stages(
+                            trial,
+                            self.registry,
+                            stages=required_stages,
+                        )
                 trials.append(PlannedTrial(trial_spec=trial, dataset_context=item))
 
         return trials
@@ -131,13 +146,16 @@ class TrialPlanner:
         item_id = str(item) if item is not None else "null"
         return DataItemContext(item_id=item_id, payload={"value": scalar_value})
 
-    def _sample_items(self, items: list[Any], sampling: ItemSamplingSpec) -> list[Any]:
-        sampling.validate_semantic()
-        item_list = list(items)
-        if sampling.kind == "all" or not item_list:
+    def _sample_items(
+        self,
+        items: Sequence[DatasetItem],
+        sampling: ItemSamplingSpec,
+    ) -> list[DatasetItem]:
+        item_list = self._filter_items(list(items), sampling)
+        if sampling.kind == SamplingKind.ALL or not item_list:
             return item_list
 
-        if sampling.kind == "subset":
+        if sampling.kind == SamplingKind.SUBSET:
             count = min(sampling.count or len(item_list), len(item_list))
             if sampling.seed is None:
                 return item_list[:count]
@@ -149,7 +167,7 @@ class TrialPlanner:
         strata_field = sampling.strata_field
         assert strata_field is not None
 
-        buckets: dict[Any, list[Any]] = {}
+        buckets: dict[object, list[DatasetItem]] = {}
         for item in item_list:
             if isinstance(item, dict):
                 key = item.get(strata_field)
@@ -164,7 +182,7 @@ class TrialPlanner:
 
         count = min(sampling.count or len(item_list), len(item_list))
         picker = random.Random(sampling.seed)
-        sampled: list[Any] = []
+        sampled: list[DatasetItem] = []
         remaining = count
         bucket_items = list(buckets.values())
 
@@ -181,6 +199,40 @@ class TrialPlanner:
                 break
 
         return sampled[:count]
+
+    def _filter_items(
+        self,
+        items: list[DatasetItem],
+        sampling: ItemSamplingSpec,
+    ) -> list[DatasetItem]:
+        filtered = list(items)
+        if sampling.item_ids:
+            allowed_item_ids = set(sampling.item_ids)
+            filtered = [
+                item
+                for item in filtered
+                if self._coerce_data_item_context(item).item_id in allowed_item_ids
+            ]
+        if sampling.metadata_filters:
+            filtered = [
+                item
+                for item in filtered
+                if self._metadata_matches(
+                    self._coerce_data_item_context(item),
+                    sampling.metadata_filters,
+                )
+            ]
+        return filtered
+
+    def _metadata_matches(
+        self,
+        item: DataItemContext,
+        filters: Mapping[str, str],
+    ) -> bool:
+        for key, expected_value in filters.items():
+            if item.metadata.get(key) != expected_value:
+                return False
+        return True
 
     def _fallback_item_id(self, payload: JSONValueType) -> str:
         serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))

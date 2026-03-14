@@ -4,28 +4,29 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from typing import Generic, Literal, TypeVar, cast
+import inspect
+from typing import Generic, TypeVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from themis.contracts.protocols import (
-    CandidateSelectionStrategy,
     Extractor,
     InferenceEngine,
     JudgeService,
     Metric,
+    PipelineHook,
 )
-from themis.errors.exceptions import SpecValidationError
+from themis.errors import SpecValidationError
 from themis.specs.experiment import TrialSpec
-from themis.types.enums import ErrorCode
+from themis.types.enums import ErrorCode, ResponseFormat
 
 
 SUPPORTED_PLUGIN_API_MAJOR = 1
 _PluginT = TypeVar("_PluginT")
 
 
-def _default_response_formats() -> set[Literal["text", "json"]]:
-    return {"text"}
+def _default_response_formats() -> set[ResponseFormat]:
+    return {ResponseFormat.TEXT}
 
 
 class EngineCapabilities(BaseModel):
@@ -33,7 +34,7 @@ class EngineCapabilities(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    supports_response_format: set[Literal["text", "json"]] = Field(
+    supports_response_format: set[ResponseFormat] = Field(
         default_factory=_default_response_formats
     )
     supports_logprobs: bool = False
@@ -67,7 +68,7 @@ class HookRegistration:
     """Ordered pipeline hook registration."""
 
     name: str
-    hook: object
+    hook: PipelineHook
     priority: int = 100
     idempotent: bool = True
     registration_order: int = 0
@@ -83,10 +84,6 @@ class PluginRegistry:
         self._inference_engines: dict[str, InferenceEngineRegistration] = {}
         self._extractors: dict[str, PluginRegistration[Extractor]] = {}
         self._metrics: dict[str, PluginRegistration[Metric]] = {}
-        self._candidate_selectors: dict[
-            str, PluginRegistration[CandidateSelectionStrategy]
-        ] = {}
-        self._repositories: dict[str, PluginRegistration[object]] = {}
         self._judges: dict[str, PluginRegistration[JudgeService]] = {}
         self._hooks: list[HookRegistration] = []
         self._register_builtin_extractors()
@@ -148,44 +145,6 @@ class PluginRegistry:
             registration_order=self._next_registration_order(),
         )
 
-    def register_candidate_selector(
-        self,
-        name: str,
-        factory: (
-            Callable[[], CandidateSelectionStrategy]
-            | type[CandidateSelectionStrategy]
-            | CandidateSelectionStrategy
-        ),
-        *,
-        version: str = "0.0.0",
-        plugin_api: str = "1.0",
-    ) -> None:
-        """Register a candidate-selection strategy."""
-        self._candidate_selectors[name] = PluginRegistration(
-            name=name,
-            factory=factory,
-            version=version,
-            plugin_api=plugin_api,
-            registration_order=self._next_registration_order(),
-        )
-
-    def register_repository(
-        self,
-        name: str,
-        factory: Callable[[], object] | type[object] | object,
-        *,
-        version: str = "0.0.0",
-        plugin_api: str = "1.0",
-    ) -> None:
-        """Register a repository implementation for external integrations."""
-        self._repositories[name] = PluginRegistration(
-            name=name,
-            factory=factory,
-            version=version,
-            plugin_api=plugin_api,
-            registration_order=self._next_registration_order(),
-        )
-
     def register_judge(
         self,
         name: str,
@@ -206,12 +165,19 @@ class PluginRegistry:
     def register_hook(
         self,
         name: str,
-        hook: object,
+        hook: PipelineHook,
         *,
         priority: int = 100,
         idempotent: bool = True,
     ) -> None:
         """Register a pipeline hook and preserve deterministic ordering metadata."""
+        if not isinstance(hook, PipelineHook):
+            raise SpecValidationError(
+                code=ErrorCode.PLUGIN_INCOMPATIBLE,
+                message=(
+                    "Hook registrations must implement the full PipelineHook contract."
+                ),
+            )
         self._hooks.append(
             HookRegistration(
                 name=name,
@@ -237,10 +203,6 @@ class PluginRegistry:
     def has_judge(self, name: str) -> bool:
         """Return whether a judge service exists for ``name``."""
         return name in self._judges
-
-    def has_candidate_selector(self, name: str) -> bool:
-        """Return whether a candidate selector exists for ``name``."""
-        return name in self._candidate_selectors
 
     def get_inference_engine_registration(
         self, name: str
@@ -279,24 +241,17 @@ class PluginRegistry:
     def get_extractor(self, name: str) -> Extractor:
         """Instantiate or return the registered extractor for ``name``."""
         registration = self.get_extractor_registration(name)
-        return self._instantiate(registration.factory, required_methods=("extract",))
+        extractor = self._instantiate(
+            registration.factory,
+            required_methods=("extract",),
+        )
+        self._validate_extractor_signature(name, extractor)
+        return extractor
 
     def get_metric(self, name: str) -> Metric:
         """Instantiate or return the registered metric for ``name``."""
         registration = self.get_metric_registration(name)
         return self._instantiate(registration.factory, required_methods=("score",))
-
-    def get_candidate_selector(self, name: str) -> CandidateSelectionStrategy:
-        """Instantiate or return the registered candidate selector for ``name``."""
-        if name not in self._candidate_selectors:
-            raise SpecValidationError(
-                code=ErrorCode.PLUGIN_INCOMPATIBLE,
-                message=f"Candidate selector {name} not found in registry.",
-            )
-        return self._instantiate(
-            self._candidate_selectors[name].factory,
-            required_methods=("select",),
-        )
 
     def get_judge(self, name: str) -> JudgeService:
         """Instantiate or return the registered judge service for ``name``."""
@@ -319,7 +274,7 @@ class PluginRegistry:
             ),
         )
 
-    def iter_hooks(self) -> Iterator[object]:
+    def iter_hooks(self) -> Iterator[PipelineHook]:
         """Yield hook instances in the same order used by pipeline execution."""
         for registration in self.iter_hook_registrations():
             yield registration.hook
@@ -362,3 +317,33 @@ class PluginRegistry:
         if all(hasattr(factory, method_name) for method_name in required_methods):
             return cast(_PluginT, factory)
         return cast(_PluginT, factory())
+
+    def _validate_extractor_signature(
+        self,
+        name: str,
+        extractor: Extractor,
+    ) -> None:
+        signature = inspect.signature(extractor.extract)
+        parameters = tuple(signature.parameters.values())
+        has_config_parameter = "config" in signature.parameters
+        positional_count = sum(
+            parameter.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+            for parameter in parameters
+        )
+        has_varargs = any(
+            parameter.kind is inspect.Parameter.VAR_POSITIONAL
+            for parameter in parameters
+        )
+        if has_config_parameter or positional_count >= 3 or has_varargs:
+            return
+        raise SpecValidationError(
+            code=ErrorCode.PLUGIN_INCOMPATIBLE,
+            message=(
+                f"Extractor '{name}' must accept (trial, candidate, config); "
+                "legacy two-argument extractors are no longer supported."
+            ),
+        )

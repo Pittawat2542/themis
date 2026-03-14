@@ -2,10 +2,10 @@ from pydantic import TypeAdapter
 
 from themis.records.conversation import MessageEvent, MessagePayload
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
-from themis.specs.foundational import DatasetSpec, ModelSpec, TaskSpec
+from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.storage.event_repo import SqliteEventRepository
-from themis.storage.events import TrialEvent
 from themis.storage.sqlite_schema import DatabaseManager
+from themis.types.events import TrialEvent
 
 
 def test_sqlite_event_repo_conversation_events(tmp_path):
@@ -21,7 +21,7 @@ def test_sqlite_event_repo_conversation_events(tmp_path):
         task=TaskSpec(
             task_id="task",
             dataset=DatasetSpec(source="memory"),
-            default_metrics=["exact_match"],
+            generation=GenerationSpec(),
         ),
         item_id="item-1",
         prompt=PromptTemplateSpec(messages=[]),

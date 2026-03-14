@@ -12,7 +12,7 @@ from themis.records.extraction import ExtractionRecord
 from themis.records.inference import InferenceRecord
 from themis.records.timeline import RecordTimeline
 from themis.types.enums import RecordStatus
-from themis.types.events import ArtifactRole, TrialEvent, TrialEventType
+from themis.types.events import ArtifactRole, TimelineStage, TrialEvent, TrialEventType
 
 _CONVERSATION_EVENT_ADAPTER: TypeAdapter[ConversationEvent] = TypeAdapter(
     ConversationEvent
@@ -64,11 +64,11 @@ class CandidateReplayState:
             self.conversation_events.append(
                 _CONVERSATION_EVENT_ADAPTER.validate_python(event.payload)
             )
-        if event.stage == "inference" and event.payload is not None:
+        if event.stage == TimelineStage.INFERENCE and event.payload is not None:
             self.inference = InferenceRecord.model_validate(event.payload)
-        elif event.stage == "extraction" and event.payload is not None:
+        elif event.stage == TimelineStage.EXTRACTION and event.payload is not None:
             self.extractions.append(ExtractionRecord.model_validate(event.payload))
-        elif event.stage == "evaluation" and event.payload is not None:
+        elif event.stage == TimelineStage.EVALUATION and event.payload is not None:
             self.evaluation = EvaluationRecord.model_validate(event.payload)
             self.judge_audit_refs = [
                 artifact.artifact_hash

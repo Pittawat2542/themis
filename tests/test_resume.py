@@ -6,11 +6,17 @@ from themis.records.evaluation import MetricScore
 from themis.records.inference import InferenceRecord
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
-from themis.specs.foundational import DatasetSpec, ModelSpec, TaskSpec
+from themis.specs.foundational import (
+    DatasetSpec,
+    EvaluationSpec,
+    GenerationSpec,
+    ModelSpec,
+    TaskSpec,
+)
 from themis.storage.event_repo import SqliteEventRepository
-from themis.storage.events import TrialEvent, TrialEventType
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.types.enums import RecordStatus
+from themis.types.events import TrialEvent, TrialEventType
 
 
 class ResumeAwareInferenceEngine:
@@ -65,7 +71,8 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
         task=TaskSpec(
             task_id="math",
             dataset=DatasetSpec(source="memory"),
-            default_metrics=["em"],
+            generation=GenerationSpec(),
+            evaluations=[EvaluationSpec(name="score", metrics=["em"])],
         ),
         item_id="item-1",
         prompt=PromptTemplateSpec(id="baseline", messages=[]),

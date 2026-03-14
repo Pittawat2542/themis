@@ -1,3 +1,5 @@
+import pytest
+
 from themis.evaluation.judge_service import DefaultJudgeService
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import (
@@ -20,12 +22,25 @@ class MockJudgeInferenceEngine:
         return InferenceRecord(spec_hash="judge_inf_hash", raw_text="SCORE: 5/5")
 
 
+def _resolver_from_registry(registry: PluginRegistry):
+    return registry.get_inference_engine
+
+
+def test_default_judge_service_rejects_registry_service_locator():
+    registry = PluginRegistry()
+
+    with pytest.raises(TypeError):
+        DefaultJudgeService(registry)
+
+
 def test_default_judge_service():
     registry = PluginRegistry()
     engine = MockJudgeInferenceEngine()
     registry.register_inference_engine("judge_provider", engine)
 
-    judge_service = DefaultJudgeService(registry)
+    judge_service = DefaultJudgeService(
+        engine_resolver=_resolver_from_registry(registry)
+    )
 
     # Setup inputs
     parent_cand = CandidateRecord(spec_hash="parent_cand_123")
@@ -65,7 +80,9 @@ def test_default_judge_service():
 def test_default_judge_service_multisample():
     registry = PluginRegistry()
     registry.register_inference_engine("judge_provider", MockJudgeInferenceEngine())
-    judge_service = DefaultJudgeService(registry)
+    judge_service = DefaultJudgeService(
+        engine_resolver=_resolver_from_registry(registry)
+    )
 
     parent_cand = CandidateRecord(spec_hash="parent_cand_123")
     judge_spec = JudgeInferenceSpec(
@@ -103,7 +120,9 @@ def test_default_judge_service_multisample():
 def test_default_judge_service_concurrency():
     registry = PluginRegistry()
     registry.register_inference_engine("judge_provider", MockJudgeInferenceEngine())
-    judge_service = DefaultJudgeService(registry)
+    judge_service = DefaultJudgeService(
+        engine_resolver=_resolver_from_registry(registry)
+    )
 
     cand1 = CandidateRecord(spec_hash="cand_1")
     cand2 = CandidateRecord(spec_hash="cand_2")
@@ -129,7 +148,9 @@ def test_default_judge_service_uses_explicit_judge_params():
     registry = PluginRegistry()
     engine = MockJudgeInferenceEngine()
     registry.register_inference_engine("judge_provider", engine)
-    judge_service = DefaultJudgeService(registry)
+    judge_service = DefaultJudgeService(
+        engine_resolver=_resolver_from_registry(registry)
+    )
 
     judge_service.judge(
         metric_id="temperature_metric",
@@ -143,3 +164,27 @@ def test_default_judge_service_uses_explicit_judge_params():
     )
 
     assert engine.params_seen == [InferenceParamsSpec(temperature=0.7, max_tokens=16)]
+
+
+def test_default_judge_service_accepts_explicit_engine_resolver():
+    engine = MockJudgeInferenceEngine()
+    seen: list[str] = []
+
+    def resolve_engine(provider: str):
+        seen.append(provider)
+        return engine
+
+    judge_service = DefaultJudgeService(engine_resolver=resolve_engine)
+
+    inf_record = judge_service.judge(
+        metric_id="resolver_metric",
+        parent_candidate=CandidateRecord(spec_hash="resolver_parent"),
+        judge_spec=JudgeInferenceSpec(
+            model=ModelSpec(model_id="judge-model", provider="judge_provider")
+        ),
+        prompt=PromptTemplateSpec(messages=[{"role": "user", "content": "Rate this."}]),
+        runtime={"dataset_context": {}},
+    )
+
+    assert inf_record.raw_text == "SCORE: 5/5"
+    assert seen == ["judge_provider"]

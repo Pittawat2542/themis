@@ -1,4 +1,4 @@
-"""Public registry helpers for plugins and compatibility checks."""
+"""Public registry helpers for plugin registration metadata."""
 
 from themis.registry.compatibility import CompatibilityChecker
 from themis.registry.plugin_registry import EngineCapabilities, PluginRegistry

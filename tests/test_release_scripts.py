@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import runpy
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -84,3 +85,16 @@ def test_check_built_package_selects_wheel_matching_project_version(tmp_path) ->
     wheel = module._select_built_wheel(dist_dir, project_version="2.0.0")
 
     assert wheel == expected_wheel
+
+
+def test_hooks_and_timeline_example_runs(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    runpy.run_path(
+        str(PROJECT_ROOT / "examples" / "06_hooks_and_timeline.py"),
+        run_name="__main__",
+    )
+
+    captured = capsys.readouterr()
+    assert "Telemetry events:" in captured.out
+    assert "Candidate output:" in captured.out

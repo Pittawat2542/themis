@@ -23,7 +23,8 @@ def test_spec_base_hashing():
     assert spec.spec_hash == hash_val[:12]
 
 
-def test_spec_validation():
+def test_spec_base_does_not_expose_legacy_validate_semantic_shim():
     spec = CustomSpec(name="test", value=42)
-    # validate_semantic should pass by default if unimplemented/empty
-    spec.validate_semantic()
+
+    assert hasattr(spec, "_validate_semantic") is False
+    assert hasattr(spec, "validate_semantic") is False

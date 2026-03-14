@@ -5,14 +5,17 @@ from pathlib import Path
 
 from themis import (
     DatasetSpec,
+    EvaluationSpec,
     ExecutionPolicySpec,
     ExperimentSpec,
     ExtractorChainSpec,
     ExtractorRefSpec,
+    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
     Orchestrator,
+    OutputTransformSpec,
     PluginRegistry,
     ProjectSpec,
     PromptMessage,
@@ -21,9 +24,7 @@ from themis import (
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
-from themis.records.evaluation import MetricScore
-from themis.records.extraction import ExtractionRecord
-from themis.records.inference import InferenceRecord
+from themis.records import ExtractionRecord, InferenceRecord, MetricScore
 
 
 class FactsDatasetLoader:
@@ -47,7 +48,7 @@ class VerboseAnswerEngine:
 
 
 class NumberExtractor:
-    def extract(self, trial, candidate, config=None):
+    def extract(self, trial, candidate, config):
         del trial, config
         text = candidate.inference.raw_text if candidate.inference else ""
         match = re.search(r"(\d+)", text)
@@ -100,10 +101,22 @@ def build_experiment() -> ExperimentSpec:
             TaskSpec(
                 task_id="math-with-extraction",
                 dataset=DatasetSpec(source="memory"),
-                default_extractor_chain=ExtractorChainSpec(
-                    extractors=[ExtractorRefSpec(id="number_extractor")]
-                ),
-                default_metrics=["parsed_exact_match"],
+                generation=GenerationSpec(),
+                output_transforms=[
+                    OutputTransformSpec(
+                        name="parsed",
+                        extractor_chain=ExtractorChainSpec(
+                            extractors=[ExtractorRefSpec(id="number_extractor")]
+                        ),
+                    )
+                ],
+                evaluations=[
+                    EvaluationSpec(
+                        name="parsed-score",
+                        transform="parsed",
+                        metrics=["parsed_exact_match"],
+                    )
+                ],
             )
         ],
         prompt_templates=[
@@ -123,10 +136,16 @@ def main() -> None:
         dataset_loader=FactsDatasetLoader(),
     )
     result = orchestrator.run(build_experiment())
+    transform_result = result.for_transform(result.transform_hashes[0])
 
     for trial in result.iter_trials():
         candidate = trial.candidates[0]
-        extraction = candidate.best_extraction()
+        transform_trial = transform_result.get_trial(trial.spec_hash)
+        if transform_trial is None:
+            raise RuntimeError(f"Missing transform overlay for {trial.spec_hash}.")
+        extraction = transform_trial.candidates[0].best_extraction()
+        if extraction is None:
+            raise RuntimeError(f"Missing extraction for {trial.spec_hash}.")
         score = candidate.evaluation.aggregate_scores["parsed_exact_match"]
         print(
             f"{trial.trial_spec.item_id}: parsed={extraction.parsed_answer!r} "
