@@ -135,6 +135,9 @@ uv add "themis-eval[providers-vllm]"
 As with the other provider extras, provide the engine implementation and
 register it with `PluginRegistry`.
 
+This extra is Linux-only in package metadata because upstream `vllm` wheels are
+not published for macOS or Windows.
+
 ### `stats`
 
 Install this for paired comparisons, report building, and other statistical
@@ -193,6 +196,10 @@ uv add "themis-eval[all]"
 `all` includes `compression`, `datasets`, `docs`, `extractors`,
 `providers-openai`, `providers-litellm`, `providers-vllm`, `stats`,
 `telemetry`, and `storage-postgres`. It does not include `dev`.
+
+On macOS and Windows, the Linux-only `providers-vllm` dependency is skipped
+automatically by the package metadata, so `uv sync --all-extras --dev` still
+resolves successfully.
 
 ## Install From Source
 

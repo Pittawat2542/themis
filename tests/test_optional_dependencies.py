@@ -125,3 +125,10 @@ def test_pyproject_optional_dependency_groups_match_v2_surface():
 
     assert expected.issubset(extras)
     assert removed.isdisjoint(extras)
+
+
+def test_providers_vllm_extra_is_linux_only_in_packaging_metadata() -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    providers_vllm = pyproject["project"]["optional-dependencies"]["providers-vllm"]
+
+    assert providers_vllm == ["vllm>=0.17.0; sys_platform == 'linux'"]
