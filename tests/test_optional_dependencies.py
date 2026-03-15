@@ -11,7 +11,7 @@ from themis.records.trial import TrialRecord
 from themis.runtime import ExperimentResult
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
-from themis.types.enums import ErrorCode, RecordStatus
+from themis.types.enums import ErrorCode, RecordStatus, DatasetSource
 
 
 class EmptyProjectionRepository:
@@ -31,7 +31,7 @@ class EmptyProjectionRepository:
             model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
             task=TaskSpec(
                 task_id="math",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
             ),
             item_id="item-1",
@@ -57,7 +57,7 @@ def test_experiment_result_compare_honors_stats_extra_boundary(monkeypatch):
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
         ),
         item_id="item-1",

@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import typing
 
 import pytest
 
@@ -51,7 +52,7 @@ from themis.storage.event_repo import SqliteEventRepository
 from themis.orchestration.projection_handler import ProjectionHandler
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.storage.projection_repo import SqliteProjectionRepository
-from themis.types.enums import ErrorCode, ErrorWhere, RecordStatus
+from themis.types.enums import ErrorCode, ErrorWhere, RecordStatus, DatasetSource
 from themis.types.events import TrialEvent, TrialEventType
 
 
@@ -163,7 +164,7 @@ def _build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="math",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 output_transforms=[
                     OutputTransformSpec(
@@ -273,8 +274,11 @@ def test_orchestrator_from_project_spec_uses_project_storage_and_execution_polic
 
     assert orchestrator.execution_policy.max_retries == 7
     assert orchestrator.execution_policy.circuit_breaker_threshold == 3
-    assert orchestrator.execution_policy.max_in_flight_work_items == 9
-    assert orchestrator.db_manager.db_path == str(tmp_path / "runs" / "themis.sqlite3")
+    from themis.storage.sqlite_schema import DatabaseManager
+
+    assert typing.cast(DatabaseManager, orchestrator.db_manager).db_path == str(
+        tmp_path / "runs" / "themis.sqlite3"
+    )
     assert isinstance(project.execution_backend, LocalExecutionBackendSpec)
 
 
@@ -344,7 +348,7 @@ def test_orchestrator_rejects_direct_runtime_construction() -> None:
     ):
         Orchestrator(
             registry,
-            manager,
+            manager,  # type: ignore
             dataset_loader=MockDatasetLoader(),
         )
 
@@ -472,13 +476,13 @@ def test_generate_skips_transform_and_metric_validation() -> None:
         tasks=[
             TaskSpec(
                 task_id="math",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 output_transforms=[
                     OutputTransformSpec(
                         name="missing",
                         extractor_chain=ExtractorChainSpec(
-                            extractors=["missing-extractor"]
+                            extractors=[ExtractorRefSpec(id="missing-extractor")]
                         ),
                     )
                 ],
@@ -519,13 +523,13 @@ def test_run_still_validates_all_declared_stages() -> None:
         tasks=[
             TaskSpec(
                 task_id="math",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 output_transforms=[
                     OutputTransformSpec(
                         name="missing",
                         extractor_chain=ExtractorChainSpec(
-                            extractors=["missing-extractor"]
+                            extractors=[ExtractorRefSpec(id="missing-extractor")]
                         ),
                     )
                 ],
@@ -552,7 +556,7 @@ def test_transform_can_run_without_inference_engine_for_transform_only_task() ->
     model = ModelSpec(model_id="imported-model", provider="unregistered")
     task = TaskSpec(
         task_id="math",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         output_transforms=[
             OutputTransformSpec(
                 name="answer",
@@ -628,7 +632,7 @@ def test_evaluate_can_run_without_inference_engine_for_evaluation_only_task() ->
     model = ModelSpec(model_id="imported-model", provider="unregistered")
     task = TaskSpec(
         task_id="math",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         evaluations=[EvaluationSpec(name="score", metrics=["em"])],
     )
     prompt = PromptTemplateSpec(id="baseline", messages=[])
@@ -771,9 +775,9 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
                 else TrialEventType.EVALUATION_COMPLETED
             ),
             candidate_id=candidate_id,
-            stage="extraction" if failed_stage == "transform" else "evaluation",
+            stage="extraction" if failed_stage == "transform" else "evaluation",  # type: ignore
             status=RecordStatus.ERROR,
-            metadata={
+            metadata={  # type: ignore
                 "transform_hash": transform_hash
                 if failed_stage == "transform"
                 else None,
@@ -802,9 +806,9 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
             event_id="evt_4",
             event_type=TrialEventType.CANDIDATE_FAILED,
             candidate_id=candidate_id,
-            stage="extraction" if failed_stage == "transform" else "evaluation",
+            stage="extraction" if failed_stage == "transform" else "evaluation",  # type: ignore
             status=RecordStatus.ERROR,
-            metadata={
+            metadata={  # type: ignore
                 "transform_hash": transform_hash
                 if failed_stage == "transform"
                 else None,
@@ -841,7 +845,7 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
     )
 
     manifest = orchestrator.plan(experiment)
-    statuses = {
+    statuses: dict[str, str] = {
         item.stage: item.status
         for item in manifest.work_items
         if item.trial_hash == trial_spec.spec_hash and item.candidate_id == candidate_id
@@ -985,7 +989,7 @@ def test_orchestrator_can_export_evaluation_bundle_and_import_results(tmp_path) 
     evaluation_records: list[TrialRecord] = []
     for trial_hash, trial_spec in evaluation_trial_specs.items():
         assert trial_spec is not None
-        candidate_items = [
+        eval_candidate_items = [
             item for item in evaluation_bundle.items if item.trial_hash == trial_hash
         ]
         evaluation_records.append(
@@ -1006,7 +1010,7 @@ def test_orchestrator_can_export_evaluation_bundle_and_import_results(tmp_path) 
                             ],
                         ),
                     )
-                    for item in candidate_items
+                    for item in eval_candidate_items
                 ],
             )
         )

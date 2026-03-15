@@ -21,9 +21,9 @@ def test_trial_event_preserves_typed_metadata_payload_and_artifact_refs() -> Non
         event_id="evt_7",
         event_type=TrialEventType.INFERENCE_COMPLETED,
         candidate_id="candidate_1",
-        stage="inference",
+        stage="inference",  # type: ignore
         event_ts=datetime(2026, 3, 8, tzinfo=timezone.utc),
-        metadata={"provider": "openai", "model_id": "gpt-4o-mini"},
+        metadata={"provider": "openai", "model_id": "gpt-4o-mini"},  # type: ignore
         payload={"raw_text": "42"},
         artifact_refs=[
             ArtifactRef(
@@ -56,7 +56,7 @@ def test_trial_event_accepts_typed_metadata_models() -> None:
         event_seq=9,
         event_id="evt_9",
         event_type=TrialEventType.PROJECTION_COMPLETED,
-        stage="projection",
+        stage="projection",  # type: ignore
         metadata=ProjectionCompletedEventMetadata(
             transform_hash="tx_1",
             evaluation_hash="eval_1",

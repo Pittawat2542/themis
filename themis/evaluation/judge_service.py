@@ -22,11 +22,16 @@ from themis.types.enums import DatasetSource
 
 
 def _coerce_runtime_context(value: object) -> RuntimeContext:
+    if value is None:
+        return RuntimeContext()
     if isinstance(value, RuntimeContext):
         return value
     if isinstance(value, Mapping):
         return RuntimeContext.model_validate(dict(value))
-    return RuntimeContext()
+
+    # Strictly validate against the model type and let Pydantic handle it
+    # Pydantic validation handles coercing dicts if needed, or raises ValidationError.
+    return RuntimeContext.model_validate(value)
 
 
 def _coerce_inference_result(

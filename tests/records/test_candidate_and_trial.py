@@ -60,7 +60,7 @@ def test_candidate_record_exposes_v2_public_fields():
         item_id="item1",
         stages=[
             TimelineStageRecord(
-                stage="inference",
+                stage="inference",  # type: ignore
                 status=RecordStatus.OK,
                 started_at=datetime.now(timezone.utc),
                 ended_at=datetime.now(timezone.utc),

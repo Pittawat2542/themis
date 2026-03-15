@@ -26,6 +26,7 @@ from themis.types.events import (
     TrialEvent,
     TrialEventType,
 )
+from themis.types.enums import DatasetSource
 
 
 def _make_trial() -> TrialSpec:
@@ -34,7 +35,7 @@ def _make_trial() -> TrialSpec:
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -62,8 +63,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_overlay.db")
     manager.initialize()
 
-    event_repo = SqliteEventRepository(manager)
-    projection_repo = SqliteProjectionRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
+    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
     trial = _make_trial()
     resolved = resolve_task_stages(trial.task)
     transform_hash = resolved.output_transforms[0].transform_hash
@@ -76,8 +77,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
             event_seq=1,
             event_id="evt_1",
             event_type=TrialEventType.ITEM_LOADED,
-            stage="item_load",
-            metadata={
+            stage="item_load",  # type: ignore
+            metadata={  # type: ignore
                 "item_id": trial.item_id,
                 "dataset_source": "memory",
                 "item_payload_hash": "sha256:item",
@@ -89,8 +90,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
             event_seq=2,
             event_id="evt_2",
             event_type=TrialEventType.PROMPT_RENDERED,
-            stage="prompt_render",
-            metadata={
+            stage="prompt_render",  # type: ignore
+            metadata={  # type: ignore
                 "prompt_template_id": "baseline",
                 "rendered_prompt_hash": "sha256:prompt",
                 "input_field_map": ["question"],
@@ -111,8 +112,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
             event_id="evt_4",
             event_type=TrialEventType.PROMPT_RENDERED,
             candidate_id="candidate_1",
-            stage="prompt_render",
-            metadata={
+            stage="prompt_render",  # type: ignore
+            metadata={  # type: ignore
                 "prompt_template_id": "baseline",
                 "rendered_prompt_hash": "sha256:prompt",
                 "input_field_map": ["question"],
@@ -137,8 +138,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
             event_id="evt_6",
             event_type=TrialEventType.INFERENCE_COMPLETED,
             candidate_id="candidate_1",
-            stage="inference",
-            metadata={"provider": "openai", "model_id": "gpt-4o-mini"},
+            stage="inference",  # type: ignore
+            metadata={"provider": "openai", "model_id": "gpt-4o-mini"},  # type: ignore
             payload={"spec_hash": "inf_hash", "raw_text": "The answer is 42."},
         ),
         TrialEvent(
@@ -147,8 +148,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
             event_id="evt_7",
             event_type=TrialEventType.EXTRACTION_COMPLETED,
             candidate_id="candidate_1",
-            stage="extraction",
-            metadata={
+            stage="extraction",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "extractor_id": "first_number",
                 "success": True,
@@ -166,8 +167,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
             event_id="evt_8",
             event_type=TrialEventType.EVALUATION_COMPLETED,
             candidate_id="candidate_1",
-            stage="evaluation",
-            metadata={
+            stage="evaluation",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "evaluation_hash": evaluation_hash,
                 "metric_id": "exact_match",
@@ -199,8 +200,8 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
             event_seq=11,
             event_id="evt_11",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
-            metadata={
+            stage="projection",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "evaluation_hash": evaluation_hash,
                 "projection_version": "v2",
@@ -285,10 +286,10 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
 def test_projection_repo_hydrates_item_payload_from_blob_refs(tmp_path) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_hydrate.db")
     manager.initialize()
-    artifact_store = ArtifactStore(base_path=tmp_path / "artifacts", manager=manager)
+    artifact_store = ArtifactStore(base_path=tmp_path / "artifacts", manager=manager)  # type: ignore
 
-    event_repo = SqliteEventRepository(manager)
-    projection_repo = SqliteProjectionRepository(manager, artifact_store=artifact_store)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
+    projection_repo = SqliteProjectionRepository(manager, artifact_store=artifact_store)  # type: ignore
 
     trial = _make_trial()
     event_repo.save_spec(trial)
@@ -301,8 +302,8 @@ def test_projection_repo_hydrates_item_payload_from_blob_refs(tmp_path) -> None:
             event_seq=1,
             event_id="evt_1",
             event_type=TrialEventType.ITEM_LOADED,
-            stage="item_load",
-            metadata={
+            stage="item_load",  # type: ignore
+            metadata={  # type: ignore
                 "item_id": trial.item_id,
                 "dataset_source": "memory",
                 "item_payload_hash": blob_ref,
@@ -329,8 +330,8 @@ def test_projection_repo_hydrates_item_payload_from_blob_refs(tmp_path) -> None:
             event_seq=3,
             event_id="evt_3",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
-            metadata={"projection_version": "v2"},
+            stage="projection",  # type: ignore
+            metadata={"projection_version": "v2"},  # type: ignore
         ),
     ]:
         event_repo.append_event(event)
@@ -348,8 +349,8 @@ def test_projection_repo_materializes_same_candidate_for_multiple_evaluations(
     manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_multiple_eval.db")
     manager.initialize()
 
-    event_repo = SqliteEventRepository(manager)
-    projection_repo = SqliteProjectionRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
+    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
     trial = _make_trial()
     resolved = resolve_task_stages(trial.task)
     transform_hash = resolved.output_transforms[0].transform_hash
@@ -372,8 +373,8 @@ def test_projection_repo_materializes_same_candidate_for_multiple_evaluations(
             event_id="evt_2",
             event_type=TrialEventType.EVALUATION_COMPLETED,
             candidate_id="candidate_1",
-            stage="evaluation",
-            metadata={
+            stage="evaluation",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "evaluation_hash": evaluation_hash_a,
                 "metric_id": "exact_match",
@@ -404,8 +405,8 @@ def test_projection_repo_materializes_same_candidate_for_multiple_evaluations(
             event_seq=5,
             event_id="evt_5",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
-            metadata={
+            stage="projection",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "evaluation_hash": evaluation_hash_a,
                 "projection_version": "v2",
@@ -417,8 +418,8 @@ def test_projection_repo_materializes_same_candidate_for_multiple_evaluations(
             event_id="evt_6",
             event_type=TrialEventType.EVALUATION_COMPLETED,
             candidate_id="candidate_1",
-            stage="evaluation",
-            metadata={
+            stage="evaluation",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "evaluation_hash": evaluation_hash_b,
                 "metric_id": "exact_match",
@@ -434,8 +435,8 @@ def test_projection_repo_materializes_same_candidate_for_multiple_evaluations(
             event_seq=7,
             event_id="evt_7",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
-            metadata={
+            stage="projection",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "evaluation_hash": evaluation_hash_b,
                 "projection_version": "v2",
@@ -477,8 +478,8 @@ def test_projection_repo_applies_overlay_visibility_exactly(tmp_path) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_visibility.db")
     manager.initialize()
 
-    event_repo = SqliteEventRepository(manager)
-    projection_repo = SqliteProjectionRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
+    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
     trial = _make_trial()
     resolved = resolve_task_stages(trial.task)
     transform_hash = resolved.output_transforms[0].transform_hash
@@ -500,8 +501,8 @@ def test_projection_repo_applies_overlay_visibility_exactly(tmp_path) -> None:
             event_id="evt_2",
             event_type=TrialEventType.INFERENCE_COMPLETED,
             candidate_id="candidate_1",
-            stage="inference",
-            metadata={"provider": "openai", "model_id": "gpt-4o-mini"},
+            stage="inference",  # type: ignore
+            metadata={"provider": "openai", "model_id": "gpt-4o-mini"},  # type: ignore
             payload={"spec_hash": "inf_hash", "raw_text": "The answer is 42."},
         ),
         TrialEvent(
@@ -510,8 +511,8 @@ def test_projection_repo_applies_overlay_visibility_exactly(tmp_path) -> None:
             event_id="evt_3",
             event_type=TrialEventType.EXTRACTION_COMPLETED,
             candidate_id="candidate_1",
-            stage="extraction",
-            metadata={
+            stage="extraction",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "extractor_id": "first_number",
                 "success": True,
@@ -529,8 +530,8 @@ def test_projection_repo_applies_overlay_visibility_exactly(tmp_path) -> None:
             event_id="evt_4",
             event_type=TrialEventType.EVALUATION_COMPLETED,
             candidate_id="candidate_1",
-            stage="evaluation",
-            metadata={
+            stage="evaluation",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "evaluation_hash": evaluation_hash,
                 "metric_id": "exact_match",
@@ -587,8 +588,8 @@ def test_projection_repo_materializes_transform_only_overlay(tmp_path) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_transform_only.db")
     manager.initialize()
 
-    event_repo = SqliteEventRepository(manager)
-    projection_repo = SqliteProjectionRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
+    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
     trial = _make_trial()
     resolved = resolve_task_stages(trial.task)
     transform_hash = resolved.output_transforms[0].transform_hash
@@ -609,8 +610,8 @@ def test_projection_repo_materializes_transform_only_overlay(tmp_path) -> None:
             event_id="evt_2",
             event_type=TrialEventType.INFERENCE_COMPLETED,
             candidate_id="candidate_1",
-            stage="inference",
-            metadata={"provider": "openai", "model_id": "gpt-4o-mini"},
+            stage="inference",  # type: ignore
+            metadata={"provider": "openai", "model_id": "gpt-4o-mini"},  # type: ignore
             payload={"spec_hash": "inf_hash", "raw_text": "The answer is 42."},
         ),
         TrialEvent(
@@ -619,8 +620,8 @@ def test_projection_repo_materializes_transform_only_overlay(tmp_path) -> None:
             event_id="evt_3",
             event_type=TrialEventType.EXTRACTION_COMPLETED,
             candidate_id="candidate_1",
-            stage="extraction",
-            metadata={
+            stage="extraction",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "extractor_id": "first_number",
                 "success": True,
@@ -652,8 +653,8 @@ def test_projection_repo_materializes_transform_only_overlay(tmp_path) -> None:
             event_seq=6,
             event_id="evt_6",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
-            metadata={"transform_hash": transform_hash, "projection_version": "v2"},
+            stage="projection",  # type: ignore
+            metadata={"transform_hash": transform_hash, "projection_version": "v2"},  # type: ignore
         ),
     ]:
         event_repo.append_event(event)

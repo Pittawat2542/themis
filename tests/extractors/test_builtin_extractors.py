@@ -10,7 +10,7 @@ from themis.records.inference import InferenceRecord
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
-from themis.types.enums import ErrorCode
+from themis.types.enums import ErrorCode, DatasetSource
 
 
 class _FakeSchemaValidationError(Exception):
@@ -99,7 +99,7 @@ def _trial() -> TrialSpec:
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
         ),
         item_id="item-1",

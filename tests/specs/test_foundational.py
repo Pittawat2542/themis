@@ -71,7 +71,7 @@ def test_task_spec_allows_transform_only():
 
     task = TaskSpec(
         task_id="transform_only",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         output_transforms=[
             OutputTransformSpec(
                 name="json",
@@ -92,7 +92,7 @@ def test_task_spec_allows_evaluation_only():
 
     task = TaskSpec(
         task_id="eval_only",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         output_transforms=[
             OutputTransformSpec(
                 name="json",
@@ -115,7 +115,7 @@ def test_task_spec_rejects_duplicate_transform_names():
     with pytest.raises(ValidationError, match="duplicate output transform name"):
         TaskSpec(
             task_id="dup",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -139,7 +139,7 @@ def test_task_spec_rejects_evaluation_with_unknown_transform():
     with pytest.raises(ValidationError, match="unknown output transform"):
         TaskSpec(
             task_id="bad_ref",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             evaluations=[
                 EvaluationSpec(name="judge", transform="missing", metrics=["em"])

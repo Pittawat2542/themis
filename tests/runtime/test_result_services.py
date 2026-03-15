@@ -12,7 +12,7 @@ from themis.runtime.result_services import (
 )
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
-from themis.types.enums import ErrorCode, ErrorWhere, RecordStatus
+from themis.types.enums import ErrorCode, ErrorWhere, RecordStatus, DatasetSource
 from themis.types.events import ScoreRow, TrialSummaryRow
 
 
@@ -22,7 +22,7 @@ def _trial_spec(trial_id: str) -> TrialSpec:
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
         ),
         item_id="item-1",

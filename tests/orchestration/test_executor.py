@@ -12,6 +12,8 @@ from themis.orchestration.projection_handler import ProjectionHandler
 from themis.orchestration.runner_state import TrialExecutionSession
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.orchestration.trial_planner import PlannedTrial
+from themis.orchestration.generation_execution import GenerationExecutionCoordinator
+from themis.orchestration.overlay_execution import OverlayExecutionCoordinator
 from themis.records.provenance import ProvenanceRecord
 from themis.orchestration.work_scheduler import WorkSchedulerStats
 from themis.records.candidate import CandidateRecord
@@ -40,9 +42,18 @@ from themis.specs.foundational import (
 from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.projection_repo import SqliteProjectionRepository
 from themis.storage.sqlite_schema import DatabaseManager
-from themis.types.enums import RecordStatus
+from themis.types.enums import RecordStatus, DatasetSource
 from themis.types.enums import ErrorCode, ErrorWhere
-from themis.types.events import ArtifactRef, TrialEvent, TrialEventType
+from themis.types.events import (
+    ArtifactRef,
+    TrialEvent,
+    TrialEventType,
+    TrialEventMetadata,
+    TimelineStage,
+)
+from themis.storage._protocols import StorageConnectionManager
+from themis.telemetry.bus import TelemetryBus
+from themis.contracts.protocols import TrialEventRepository
 
 
 def _prepared_session(
@@ -186,7 +197,7 @@ def _trial_spec(trial_id: str, *, candidate_count: int) -> TrialSpec:
         model=ModelSpec(model_id="mock-model", provider="mock-provider"),
         task=TaskSpec(
             task_id=f"task-{trial_id}",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
         ),
         item_id=f"item-{trial_id}",
@@ -212,7 +223,7 @@ def _overlay_trial_spec(trial_id: str) -> TrialSpec:
         model=ModelSpec(model_id="mock-model", provider="mock-provider"),
         task=TaskSpec(
             task_id=f"task-{trial_id}",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -374,6 +385,14 @@ class _FakePreparedSession:
     dataset_context: DataItemContext
     runtime_context: RuntimeContext
 
+    def prepare_trial_session(self, *_args: object, **_kwargs: object):  # type: ignore
+        del _kwargs["required_stages"]
+        return _FakePreparedSession(
+            trial=self.trial,
+            dataset_context=self.dataset_context,
+            runtime_context=self.runtime_context or RuntimeContext(),
+        )
+
     @property
     def trial_hash(self) -> str:
         return self.trial.spec_hash
@@ -425,14 +444,14 @@ def test_generation_work_items_can_interleave_across_trials() -> None:
 
 def test_executor_requires_concrete_trial_execution_sessions() -> None:
     class InvalidSessionRunner(RecordingRunner):
-        def prepare_trial_session(
+        def prepare_trial_session(  # type: ignore[override]
             self,
             trial: TrialSpec,
             dataset_context: DataItemContext,
             runtime_context: RuntimeContext | None,
             *,
             required_stages=None,
-        ) -> _FakePreparedSession:
+        ) -> _FakePreparedSession:  # type: ignore
             del required_stages
             return _FakePreparedSession(
                 trial=trial,
@@ -458,13 +477,13 @@ def test_executor_stores_internal_runtime_collaborators_privately() -> None:
     runner = RecordingRunner()
     event_repo = object()
     projection_handler = StubProjectionHandler()
-    telemetry_bus = object()
+    telemetry_bus = cast(TelemetryBus, object())
     executor = TrialExecutor(
         runner=cast(_ExecutionRunner, runner),
         projection_repo=StubProjectionRepository(),
-        event_repo=cast(object, event_repo),
+        event_repo=cast(TrialEventRepository, event_repo),
         projection_handler=projection_handler,
-        telemetry_bus=cast(object, telemetry_bus),
+        telemetry_bus=telemetry_bus,
     )
 
     assert "_support" in executor.__dict__
@@ -501,9 +520,9 @@ def test_executor_internal_attrs_are_not_public_api(attr_name: str) -> None:
     executor = TrialExecutor(
         runner=cast(_ExecutionRunner, runner),
         projection_repo=projection_repo,
-        event_repo=cast(object, event_repo),
+        event_repo=cast(TrialEventRepository, event_repo),
         projection_handler=projection_handler,
-        telemetry_bus=cast(object, telemetry_bus),
+        telemetry_bus=cast(TelemetryBus, telemetry_bus),
     )
 
     with pytest.raises(AttributeError, match=attr_name):
@@ -572,12 +591,14 @@ def test_executor_delegates_generation_execution_to_generation_coordinator() -> 
             self.calls.append((list(trials), runtime_context, dataset_context, resume))
             return expected_stats
 
-    stub = StubGenerationExecution()
+    stub = cast(GenerationExecutionCoordinator, StubGenerationExecution())  # type: ignore
     executor._generation_execution = stub
 
     executor.execute_generation_trials([planned_trial], runtime, resume=False)
 
-    assert stub.calls == [([planned_trial], runtime, None, False)]
+    assert cast(StubGenerationExecution, stub).calls == [
+        ([planned_trial], runtime, None, False)
+    ]
     assert executor.last_scheduler_stats == expected_stats
 
 
@@ -615,12 +636,14 @@ def test_executor_delegates_transform_execution_to_overlay_coordinator() -> None
             )
             return expected_stats
 
-    stub = StubOverlayExecution()
+    stub = cast(OverlayExecutionCoordinator, StubOverlayExecution())  # type: ignore
     executor._overlay_execution = stub
 
     executor.execute_transforms([planned_trial], runtime, resume=False)
 
-    assert stub.transform_calls == [([planned_trial], runtime, None, False)]
+    assert cast(StubOverlayExecution, stub).transform_calls == [
+        ([planned_trial], runtime, None, False)
+    ]
     assert executor.last_scheduler_stats == expected_stats
 
 
@@ -658,12 +681,14 @@ def test_executor_delegates_evaluation_execution_to_overlay_coordinator() -> Non
             )
             return expected_stats
 
-    stub = StubOverlayExecution()
+    stub = cast(OverlayExecutionCoordinator, StubOverlayExecution())  # type: ignore
     executor._overlay_execution = stub
 
     executor.execute_evaluations([planned_trial], runtime, resume=False)
 
-    assert stub.evaluation_calls == [([planned_trial], runtime, None, False)]
+    assert cast(StubOverlayExecution, stub).evaluation_calls == [
+        ([planned_trial], runtime, None, False)
+    ]
     assert executor.last_scheduler_stats == expected_stats
 
 
@@ -748,10 +773,13 @@ def test_executor_resume_does_not_skip_failed_overlay_projection(
     tmp_path,
     failed_stage: str,
 ) -> None:
-    manager = DatabaseManager(f"sqlite:///{tmp_path}/executor_resume.db")
-    manager.initialize()
-    event_repo = SqliteEventRepository(manager)
-    projection_repo = SqliteProjectionRepository(manager)
+    manager = cast(
+        StorageConnectionManager,
+        DatabaseManager(f"sqlite:///{tmp_path}/executor_resume.db"),
+    )
+    cast(DatabaseManager, manager).initialize()
+    event_repo = SqliteEventRepository(manager)  # type: ignore
+    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
     projection_handler = ProjectionHandler(event_repo, projection_repo)
     support = ExecutionSupport(
         projection_repo=projection_repo,
@@ -781,16 +809,21 @@ def test_executor_resume_does_not_skip_failed_overlay_projection(
             event_id="evt_2",
             event_type=TrialEventType.CANDIDATE_FAILED,
             candidate_id="candidate_1",
-            stage="extraction" if failed_stage == "transform" else "evaluation",
+            stage=TimelineStage.EXTRACTION
+            if failed_stage == "transform"
+            else TimelineStage.EVALUATION,
             status=RecordStatus.ERROR,
-            metadata={
-                "transform_hash": transform_hash
-                if failed_stage == "transform"
-                else None,
-                "evaluation_hash": (
-                    evaluation_hash if failed_stage == "evaluation" else None
-                ),
-            },
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "transform_hash": transform_hash
+                    if failed_stage == "transform"
+                    else None,
+                    "evaluation_hash": (
+                        evaluation_hash if failed_stage == "evaluation" else None
+                    ),
+                },
+            ),
             error=ErrorRecord(
                 code=ErrorCode.PARSE_ERROR
                 if failed_stage == "transform"

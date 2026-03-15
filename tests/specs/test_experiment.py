@@ -33,6 +33,7 @@ from themis.specs.foundational import (
 )
 from themis.errors import SpecValidationError
 from themis.types.enums import (
+    DatasetSource,
     CompressionCodec,
     ErrorCode,
     ResponseFormat,
@@ -48,7 +49,7 @@ def _make_model():
 def _make_task():
     return TaskSpec(
         task_id="t1",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         generation=GenerationSpec(),
         output_transforms=[
             OutputTransformSpec(
@@ -70,7 +71,7 @@ def test_inference_params():
         temperature=0.5,
         top_p=0.9,
         max_tokens=100,
-        response_format="json",
+        response_format=ResponseFormat.JSON,
     )
     assert params.temperature == 0.5
     assert params.top_p == 0.9
@@ -367,7 +368,7 @@ def test_evaluation_identity_changes_when_referenced_transform_changes():
 
     task = TaskSpec(
         task_id="qa",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         generation=GenerationSpec(),
         output_transforms=[
             OutputTransformSpec(
@@ -403,7 +404,7 @@ def test_evaluation_identity_ignores_display_name():
 
     task_a = TaskSpec(
         task_id="qa",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         generation=GenerationSpec(),
         output_transforms=[
             OutputTransformSpec(
@@ -452,7 +453,7 @@ def test_resolve_task_stages_rejects_transform_short_hash_collisions(monkeypatch
 
     task = TaskSpec(
         task_id="qa",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         generation=GenerationSpec(),
         output_transforms=[
             OutputTransformSpec(

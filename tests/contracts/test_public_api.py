@@ -26,7 +26,14 @@ from themis.specs.foundational import (
     OutputTransformSpec,
     TaskSpec,
 )
-from themis.types.enums import PValueCorrection, RecordStatus, RecordType
+from themis.types.enums import (
+    PValueCorrection,
+    RecordStatus,
+    RecordType,
+    DatasetSource,
+    ErrorWhere,
+    ErrorCode,
+)
 from themis.types.events import ScoreRow, TimelineStage, TrialSummaryRow
 
 
@@ -67,7 +74,7 @@ def _make_trial_record() -> TrialRecord:
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -110,7 +117,7 @@ def _make_analysis_trial_record() -> TrialRecord:
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -136,8 +143,8 @@ def _make_analysis_trial_record() -> TrialRecord:
         spec_hash="candidate_analysis",
         status=RecordStatus.ERROR,
         error=themis.records.ErrorRecord(
-            where="extractor",
-            code="parse_error",
+            where=ErrorWhere.EXTRACTOR,
+            code=ErrorCode.PARSE_ERROR,
             message="Extractor could not parse response",
             retryable=False,
             details={"reason": "missing field"},
@@ -166,8 +173,8 @@ def _make_analysis_trial_record() -> TrialRecord:
         spec_hash=trial_spec.spec_hash,
         status=RecordStatus.ERROR,
         error=themis.records.ErrorRecord(
-            where="executor",
-            code="metric_computation",
+            where=ErrorWhere.EXECUTOR,
+            code=ErrorCode.METRIC_COMPUTATION,
             message="One or more candidates failed",
             retryable=False,
             details={},
@@ -448,7 +455,7 @@ def test_experiment_result_compare_returns_statistical_rows() -> None:
                 model=ModelSpec(model_id=model_id, provider="openai"),
                 task=TaskSpec(
                     task_id="math",
-                    dataset=DatasetSpec(source="memory"),
+                    dataset=DatasetSpec(source=DatasetSource.MEMORY),
                     generation=GenerationSpec(),
                     output_transforms=[
                         OutputTransformSpec(

@@ -41,7 +41,7 @@ from themis.storage.sqlite_schema import DatabaseManager
 from themis.storage.artifact_store import ArtifactStore
 from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.projection_repo import SqliteProjectionRepository
-from themis.types.enums import ErrorCode, RecordStatus as EventStatus
+from themis.types.enums import ErrorCode, RecordStatus as EventStatus, DatasetSource
 from themis.types.events import (
     EvaluationCompletedEventMetadata,
     ExtractionCompletedEventMetadata,
@@ -201,7 +201,7 @@ def trial_spec():
         model=ModelSpec(model_id="gpt-4", provider="openai"),
         task=TaskSpec(
             task_id="t1",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -514,7 +514,7 @@ def test_trial_runner_skips_completed_candidates_when_resuming(tmp_path, trial_s
 
     manager = DatabaseManager(f"sqlite:///{tmp_path}/resume_skip.db")
     manager.initialize()
-    event_repo = SqliteEventRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
     runner = TrialRunner(
         registry,
         event_repo=event_repo,
@@ -678,7 +678,7 @@ def test_trial_runner_emits_all_transform_and_evaluation_overlays():
         model=ModelSpec(model_id="gpt-4", provider="openai"),
         task=TaskSpec(
             task_id="multi_overlay_task",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -737,8 +737,8 @@ def test_projection_repo_materializes_overlay_from_runner_events(tmp_path, trial
 
     manager = DatabaseManager(f"sqlite:///{tmp_path}/runner_projection.db")
     manager.initialize()
-    event_repo = SqliteEventRepository(manager)
-    projection_repo = SqliteProjectionRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
+    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
     runner = TrialRunner(registry, event_repo=event_repo, parallel_candidates=1)
     trial = trial_spec.model_copy(update={"candidate_count": 1})
     resolved = resolve_task_stages(trial.task)
@@ -778,7 +778,7 @@ def test_trial_runner_persists_emitted_artifacts_in_blob_store_and_index(
     manager = DatabaseManager(f"sqlite:///{tmp_path}/artifacts.db")
     manager.initialize()
     artifact_store = ArtifactStore(base_path=tmp_path / "artifacts", manager=manager)
-    event_repo = SqliteEventRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
     runner = TrialRunner(
         registry,
         event_repo=event_repo,
@@ -822,7 +822,7 @@ def test_trial_runner_persists_judge_audit_artifacts_and_projection_hydrates_the
     manager = DatabaseManager(f"sqlite:///{tmp_path}/judge_audit.db")
     manager.initialize()
     artifact_store = ArtifactStore(base_path=tmp_path / "artifacts")
-    event_repo = SqliteEventRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
     projection_repo = SqliteProjectionRepository(manager, artifact_store=artifact_store)
     runner = TrialRunner(
         registry,
@@ -836,7 +836,7 @@ def test_trial_runner_persists_judge_audit_artifacts_and_projection_hydrates_the
         model=ModelSpec(model_id="gpt-4", provider="openai"),
         task=TaskSpec(
             task_id="judge_task",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             evaluations=[EvaluationSpec(name="judge", metrics=["judge_metric"])],
         ),
@@ -905,7 +905,7 @@ def test_trial_runner_maps_provider_failures_with_context() -> None:
         model=ModelSpec(model_id="gpt-4", provider="openai"),
         task=TaskSpec(
             task_id="t1",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             evaluations=[EvaluationSpec(name="score", metrics=["em"])],
         ),

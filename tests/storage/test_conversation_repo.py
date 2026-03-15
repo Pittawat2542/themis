@@ -1,4 +1,5 @@
 from pydantic import TypeAdapter
+from themis.types.enums import DatasetSource
 
 from themis.records.conversation import MessageEvent, MessagePayload
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
@@ -12,7 +13,7 @@ def test_sqlite_event_repo_conversation_events(tmp_path):
     manager = DatabaseManager(f"sqlite:///{tmp_path}/conv_test.db")
     manager.initialize()
 
-    repo = SqliteEventRepository(manager)
+    repo = SqliteEventRepository(manager)  # type: ignore
 
     # Must save a spec to satisfy the foreign key constraints on trial_hash
     spec = TrialSpec(
@@ -20,7 +21,7 @@ def test_sqlite_event_repo_conversation_events(tmp_path):
         model=ModelSpec(model_id="gpt-4", provider="openai"),
         task=TaskSpec(
             task_id="task",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
         ),
         item_id="item-1",

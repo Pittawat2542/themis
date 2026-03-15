@@ -19,7 +19,7 @@ from themis.specs.foundational import (
 )
 from themis.errors import SpecValidationError
 from themis.registry.plugin_registry import PluginRegistry
-from themis.types.enums import SamplingKind
+from themis.types.enums import SamplingKind, DatasetSource
 
 
 def test_trial_planner_unrolling():
@@ -33,7 +33,7 @@ def test_trial_planner_unrolling():
     tasks = [
         TaskSpec(
             task_id="t1",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -47,7 +47,7 @@ def test_trial_planner_unrolling():
         ),
         TaskSpec(
             task_id="t2",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -135,7 +135,7 @@ def test_trial_planner_missing_dataset_loader():
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
             )
         ],
@@ -160,7 +160,7 @@ def test_trial_planner_validates_trial_compatibility_before_execution():
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
             )
         ],
@@ -188,7 +188,7 @@ def test_trial_planner_validates_output_transform_compatibility_before_execution
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 output_transforms=[
                     OutputTransformSpec(
@@ -229,7 +229,7 @@ def test_trial_planner_validates_evaluation_compatibility_before_execution():
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 output_transforms=[
                     OutputTransformSpec(
@@ -275,7 +275,7 @@ def test_trial_planner_filters_items_before_sampling():
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
             )
         ],
@@ -338,7 +338,7 @@ def test_trial_planner_rejects_non_json_safe_dataset_items():
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
             )
         ],
@@ -359,7 +359,7 @@ def test_trial_planner_rejects_non_json_safe_dataset_items():
 def test_trial_hash_does_not_change_when_transforms_or_evaluations_change():
     task_a = TaskSpec(
         task_id="qa",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         generation=GenerationSpec(),
         output_transforms=[
             OutputTransformSpec(
@@ -386,7 +386,7 @@ def test_trial_planner_can_validate_generation_stage_without_transform_or_metric
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 output_transforms=[
                     OutputTransformSpec(
@@ -436,7 +436,7 @@ def test_trial_planner_can_validate_transform_only_task_without_provider_plugin(
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 output_transforms=[
                     OutputTransformSpec(
                         name="json",
@@ -476,7 +476,7 @@ def test_trial_planner_can_validate_evaluation_only_task_without_provider_plugin
         tasks=[
             TaskSpec(
                 task_id="t1",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 evaluations=[EvaluationSpec(name="judge", metrics=["em"])],
             )
         ],
@@ -519,7 +519,7 @@ def test_item_sampling_classmethods_preserve_sampling_behavior():
     planner = TrialPlanner(dataset_loader=MockDatasetLoader())
     task = TaskSpec(
         task_id="t1",
-        dataset=DatasetSpec(source="memory"),
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
         generation=GenerationSpec(),
     )
     items = MockDatasetLoader().load_task_items(task)

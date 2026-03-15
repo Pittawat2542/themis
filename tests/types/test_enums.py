@@ -1,6 +1,6 @@
 from themis.types.enums import (
-    CompressionCodec,
     DatasetSource,
+    CompressionCodec,
     ErrorCode,
     ErrorWhere,
     InferenceStatus,

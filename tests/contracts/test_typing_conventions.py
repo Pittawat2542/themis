@@ -75,13 +75,13 @@ def test_v2_core_modules_avoid_any_and_optional_annotations() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.arg):
                 annotation = node.annotation
-                label = f"{path.relative_to(PROJECT_ROOT)}:{node.lineno}"
+                label = f"{path.relative_to(PROJECT_ROOT)}:{getattr(node, 'lineno', 0)}"
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 annotation = node.returns
-                label = f"{path.relative_to(PROJECT_ROOT)}:{node.lineno}"
+                label = f"{path.relative_to(PROJECT_ROOT)}:{getattr(node, 'lineno', 0)}"
             elif isinstance(node, ast.AnnAssign):
                 annotation = node.annotation
-                label = f"{path.relative_to(PROJECT_ROOT)}:{node.lineno}"
+                label = f"{path.relative_to(PROJECT_ROOT)}:{getattr(node, 'lineno', 0)}"
             else:
                 continue
 
@@ -104,7 +104,7 @@ def test_selected_runtime_modules_avoid_any_imports_and_cast_any() -> None:
                     violations.append(f"{path.relative_to(PROJECT_ROOT)} imports Any")
             if _call_is_cast_any(node):
                 violations.append(
-                    f"{path.relative_to(PROJECT_ROOT)}:{node.lineno} uses cast(Any, ...)"
+                    f"{path.relative_to(PROJECT_ROOT)}:{getattr(node, 'lineno', 0)} uses cast(Any, ...)"
                 )
 
     assert violations == []
@@ -118,11 +118,11 @@ def test_selected_runtime_helpers_have_explicit_return_annotations() -> None:
         for node in ast.walk(tree):
             if (
                 isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name in function_names
+                and node.name in function_names  # type: ignore
                 and node.returns is None
             ):
                 violations.append(
-                    f"{path.relative_to(PROJECT_ROOT)}:{node.lineno} missing return annotation"
+                    f"{path.relative_to(PROJECT_ROOT)}:{getattr(node, 'lineno', 0)} missing return annotation"
                 )
 
     assert violations == []

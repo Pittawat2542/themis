@@ -12,7 +12,7 @@ from themis.runtime import ExperimentResult
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.events import ScoreRow, TrialSummaryRow
-from themis.types.enums import PValueCorrection, RecordStatus
+from themis.types.enums import PValueCorrection, RecordStatus, DatasetSource
 import tempfile
 import os
 
@@ -110,7 +110,7 @@ def test_report_builder_builds_from_projection_rows_via_experiment_result():
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
         ),
         item_id="item-1",

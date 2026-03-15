@@ -13,6 +13,14 @@ from themis.orchestration._orchestrator_services import (
     OrchestratorServices,
     build_orchestrator_services,
 )
+from themis.orchestration.run_manifest import (
+    CostEstimate,
+    EvaluationWorkBundle,
+    GenerationWorkBundle,
+    RunDiff,
+    RunHandle,
+    RunManifest,
+)
 from themis.orchestration.run_services import (
     RunImportService,
     RunPlanningService,
@@ -276,7 +284,7 @@ class Orchestrator:
             trial_hashes=list(trial_hashes),
         )
 
-    def plan(self, experiment: ExperimentSpec):
+    def plan(self, experiment: ExperimentSpec) -> RunManifest:
         """Build and persist a deterministic run manifest for one experiment."""
         return self._run_planning.plan(experiment)
 
@@ -284,7 +292,7 @@ class Orchestrator:
         self,
         baseline: ExperimentSpec,
         treatment: ExperimentSpec,
-    ):
+    ) -> RunDiff:
         """Return a high-level diff between two experiment specifications."""
         return self._run_planning.diff_specs(baseline, treatment)
 
@@ -293,7 +301,7 @@ class Orchestrator:
         experiment: ExperimentSpec,
         *,
         runtime: RuntimeContext | None = None,
-    ):
+    ) -> RunHandle:
         """Persist one run manifest and start execution if the backend is local."""
         return self._run_planning.submit(
             experiment,
@@ -309,7 +317,7 @@ class Orchestrator:
         run_id: str,
         *,
         runtime: RuntimeContext | None = None,
-    ):
+    ) -> RunHandle | ExperimentResult:
         """Refresh a persisted run and continue it when possible."""
         return self._run_planning.resume(
             run_id,
@@ -320,20 +328,20 @@ class Orchestrator:
             ),
         )
 
-    def estimate(self, experiment: ExperimentSpec):
+    def estimate(self, experiment: ExperimentSpec) -> CostEstimate:
         """Return a best-effort work-item and token estimate for an experiment."""
         return self._run_planning.estimate(experiment)
 
     def export_generation_bundle(
         self,
         experiment: ExperimentSpec,
-    ):
+    ) -> GenerationWorkBundle:
         """Export only pending generation items for an experiment."""
         return self._run_planning.export_generation_bundle(experiment)
 
     def import_generation_results(
         self,
-        bundle,
+        bundle: GenerationWorkBundle,
         trial_records: list[TrialRecord],
     ) -> ExperimentResult:
         """Import externally generated results for a previously exported bundle."""
@@ -344,13 +352,13 @@ class Orchestrator:
     def export_evaluation_bundle(
         self,
         experiment: ExperimentSpec,
-    ):
+    ) -> EvaluationWorkBundle:
         """Export only pending evaluation items for an experiment."""
         return self._run_planning.export_evaluation_bundle(experiment)
 
     def import_evaluation_results(
         self,
-        bundle,
+        bundle: EvaluationWorkBundle,
         trial_records: list[TrialRecord],
     ) -> ExperimentResult:
         """Import externally evaluated results for a previously exported bundle."""

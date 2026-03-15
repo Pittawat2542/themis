@@ -14,6 +14,7 @@ from themis.registry.compatibility import (
     resolve_trial_plugins,
     validate_output_transform,
 )
+from themis.types.enums import DatasetSource, ResponseFormat
 from themis.registry.plugin_registry import EngineCapabilities, PluginRegistry
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import (
@@ -55,7 +56,7 @@ def _make_trial() -> TrialSpec:
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -137,7 +138,7 @@ def test_compatibility_passes_for_registered_stage_plugins() -> None:
         version="1.0.0",
         plugin_api="1.0",
         capabilities=EngineCapabilities(
-            supports_response_format={"text", "json"},
+            supports_response_format={ResponseFormat.TEXT, ResponseFormat.JSON},
             supports_logprobs=True,
             max_context_tokens=32_000,
         ),
@@ -223,7 +224,7 @@ def test_compatibility_rejects_unsupported_response_format_and_logprobs() -> Non
         version="1.0.0",
         plugin_api="1.0",
         capabilities=EngineCapabilities(
-            supports_response_format={"text"},
+            supports_response_format={ResponseFormat.JSON},
             supports_logprobs=False,
             max_context_tokens=4_096,
         ),
@@ -237,7 +238,11 @@ def test_compatibility_rejects_unsupported_response_format_and_logprobs() -> Non
 
     issues = check_generation_trial(
         _make_trial().model_copy(
-            update={"params": InferenceParamsSpec(response_format="json", logprobs=5)}
+            update={
+                "params": InferenceParamsSpec(
+                    response_format=ResponseFormat.TEXT, logprobs=5
+                )
+            }
         ),
         registry,
     )
@@ -274,7 +279,7 @@ def test_compatibility_skips_generation_for_transform_only_tasks() -> None:
         model=ModelSpec(model_id="imported-model", provider="unregistered"),
         task=TaskSpec(
             task_id="transform-only",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             output_transforms=[
                 OutputTransformSpec(
                     name="json",

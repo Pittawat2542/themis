@@ -15,7 +15,7 @@ from themis.specs.foundational import (
 )
 from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.sqlite_schema import DatabaseManager
-from themis.types.enums import RecordStatus
+from themis.types.enums import RecordStatus, DatasetSource
 from themis.types.events import TrialEvent, TrialEventType
 
 
@@ -58,7 +58,7 @@ class PassthroughMetric:
 def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
     manager = DatabaseManager(f"sqlite:///{tmp_path}/resume.db")
     manager.initialize()
-    event_repo = SqliteEventRepository(manager)
+    event_repo = SqliteEventRepository(manager)  # type: ignore
     registry = PluginRegistry()
     engine = ResumeAwareInferenceEngine()
     registry.register_inference_engine("openai", engine)
@@ -70,7 +70,7 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
         task=TaskSpec(
             task_id="math",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             evaluations=[EvaluationSpec(name="score", metrics=["em"])],
         ),
@@ -94,9 +94,9 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_seq=2,
             event_id=f"{trial.spec_hash}:2",
             event_type=TrialEventType.ITEM_LOADED,
-            stage="item_load",
+            stage="item_load",  # type: ignore
             status=RecordStatus.OK,
-            metadata={"item_id": trial.item_id, "dataset_source": "memory"},
+            metadata={"item_id": trial.item_id, "dataset_source": "memory"},  # type: ignore
             payload={"question": "6 * 7"},
         ),
         TrialEvent(
@@ -104,9 +104,9 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_seq=3,
             event_id=f"{trial.spec_hash}:3",
             event_type=TrialEventType.PROMPT_RENDERED,
-            stage="prompt_render",
+            stage="prompt_render",  # type: ignore
             status=RecordStatus.OK,
-            metadata={"prompt_template_id": "baseline"},
+            metadata={"prompt_template_id": "baseline"},  # type: ignore
             payload={"messages": []},
         ),
         TrialEvent(
@@ -123,9 +123,9 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_id=f"{trial.spec_hash}:5",
             event_type=TrialEventType.PROMPT_RENDERED,
             candidate_id=candidate_id,
-            stage="prompt_render",
+            stage="prompt_render",  # type: ignore
             status=RecordStatus.OK,
-            metadata={"prompt_template_id": "baseline"},
+            metadata={"prompt_template_id": "baseline"},  # type: ignore
             payload={"messages": []},
         ),
         TrialEvent(

@@ -16,7 +16,13 @@ from themis.specs.foundational import (
 )
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.types.events import ScoreRow, TrialSummaryRow
-from themis.types.enums import ErrorCode, ErrorWhere, RecordStatus, RecordType
+from themis.types.enums import (
+    ErrorCode,
+    ErrorWhere,
+    RecordStatus,
+    RecordType,
+    DatasetSource,
+)
 from themis.types.events import TimelineStage, TrialEvent, TrialEventType
 
 
@@ -24,15 +30,15 @@ def test_projection_repo_materializes_trial_record_from_event_log(tmp_path):
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_test.db")
     manager.initialize()
 
-    repo = SqliteProjectionRepository(manager)
-    event_repo = SqliteEventRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)  # type: ignore
 
     trial = TrialSpec(
         trial_id="trial_projection",
         model=ModelSpec(model_id="test", provider="fake"),
         task=TaskSpec(
             task_id="task",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
         ),
         item_id="item-1",
@@ -46,16 +52,16 @@ def test_projection_repo_materializes_trial_record_from_event_log(tmp_path):
             event_seq=1,
             event_id="evt_1",
             event_type="item_loaded",
-            stage="item_load",
-            metadata={"item_id": trial.item_id, "dataset_source": "memory"},
+            stage="item_load",  # type: ignore
+            metadata={"item_id": trial.item_id, "dataset_source": "memory"},  # type: ignore
         ),
         TrialEvent(
             trial_hash=trial.spec_hash,
             event_seq=2,
             event_id="evt_2",
             event_type="prompt_rendered",
-            stage="prompt_render",
-            metadata={"prompt_template_id": "baseline"},
+            stage="prompt_render",  # type: ignore
+            metadata={"prompt_template_id": "baseline"},  # type: ignore
         ),
         TrialEvent(
             trial_hash=trial.spec_hash,
@@ -71,8 +77,8 @@ def test_projection_repo_materializes_trial_record_from_event_log(tmp_path):
             event_id="evt_4",
             event_type="inference_completed",
             candidate_id="candidate_1",
-            stage="inference",
-            metadata={"provider": "fake", "model_id": "test"},
+            stage="inference",  # type: ignore
+            metadata={"provider": "fake", "model_id": "test"},  # type: ignore
             payload={"spec_hash": "inf_hash", "raw_text": "42"},
         ),
         TrialEvent(
@@ -81,8 +87,8 @@ def test_projection_repo_materializes_trial_record_from_event_log(tmp_path):
             event_id="evt_5",
             event_type="evaluation_completed",
             candidate_id="candidate_1",
-            stage="evaluation",
-            metadata={
+            stage="evaluation",  # type: ignore
+            metadata={  # type: ignore
                 "metric_id": "exact_match",
                 "score": 1.0,
                 "transform_hash": None,
@@ -106,8 +112,8 @@ def test_projection_repo_materializes_trial_record_from_event_log(tmp_path):
             event_seq=7,
             event_id="evt_7",
             event_type="projection_completed",
-            stage="projection",
-            metadata={
+            stage="projection",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": None,
                 "evaluation_hash": "eval_1",
                 "projection_version": "v1",
@@ -152,7 +158,7 @@ def test_projection_repo_materializes_trial_record_from_event_log(tmp_path):
 def test_projection_repo_delegates_materialization_to_materializer(tmp_path) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_delegate_materializer.db")
     manager.initialize()
-    repo = SqliteProjectionRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
     expected = object()
 
     class StubMaterializer:
@@ -176,7 +182,7 @@ def test_projection_repo_delegates_materialization_to_materializer(tmp_path) -> 
             return expected
 
     stub = StubMaterializer()
-    repo._materializer = stub
+    repo._materializer = stub  # type: ignore
 
     result = repo.materialize_trial_record(
         "trial_hash",
@@ -193,7 +199,7 @@ def test_projection_repo_get_trial_record_uses_query_service_and_materializer(
 ) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_delegate_record.db")
     manager.initialize()
-    repo = SqliteProjectionRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
     expected = object()
 
     class StubQueries:
@@ -231,8 +237,8 @@ def test_projection_repo_get_trial_record_uses_query_service_and_materializer(
 
     queries = StubQueries()
     materializer = StubMaterializer()
-    repo._queries = queries
-    repo._materializer = materializer
+    repo._queries = queries  # type: ignore
+    repo._materializer = materializer  # type: ignore
 
     result = repo.get_trial_record(
         "trial_hash",
@@ -248,7 +254,7 @@ def test_projection_repo_get_trial_record_uses_query_service_and_materializer(
 def test_projection_repo_delegates_query_methods_to_query_service(tmp_path) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_delegate_queries.db")
     manager.initialize()
-    repo = SqliteProjectionRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
     expected_score = ScoreRow(
         trial_hash="trial_hash",
         candidate_id="candidate_1",
@@ -297,7 +303,7 @@ def test_projection_repo_delegates_query_methods_to_query_service(tmp_path) -> N
             return iter([expected_summary])
 
     stub = StubQueries()
-    repo._queries = stub
+    repo._queries = stub  # type: ignore
 
     score_rows = list(
         repo.iter_candidate_scores(
@@ -323,7 +329,7 @@ def test_projection_repo_delegates_query_methods_to_query_service(tmp_path) -> N
 def test_projection_repo_delegates_timeline_reads_to_view_service(tmp_path) -> None:
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_delegate_views.db")
     manager.initialize()
-    repo = SqliteProjectionRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
     expected_timeline = object()
     expected_view = object()
 
@@ -359,7 +365,7 @@ def test_projection_repo_delegates_timeline_reads_to_view_service(tmp_path) -> N
             return expected_view
 
     stub = StubTimelineViews()
-    repo._timeline_views = stub
+    repo._timeline_views = stub  # type: ignore
 
     timeline = repo.get_record_timeline(
         "candidate_1",
@@ -387,7 +393,7 @@ def test_projection_repo_delegates_timeline_reads_to_view_service(tmp_path) -> N
 def test_projection_repo_wraps_invalid_persisted_trial_specs(tmp_path):
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_invalid.db")
     manager.initialize()
-    repo = SqliteProjectionRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
 
     with manager.get_connection() as conn:
         with conn:
@@ -421,14 +427,14 @@ def test_projection_repo_marks_failed_transform_overlay_as_error_and_not_cached(
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_overlay_error.db")
     manager.initialize()
 
-    repo = SqliteProjectionRepository(manager)
-    event_repo = SqliteEventRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)  # type: ignore
     trial = TrialSpec(
         trial_id="trial_overlay_error",
         model=ModelSpec(model_id="test", provider="fake"),
         task=TaskSpec(
             task_id="task",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -459,8 +465,8 @@ def test_projection_repo_marks_failed_transform_overlay_as_error_and_not_cached(
             event_id="evt_2",
             event_type=TrialEventType.INFERENCE_COMPLETED,
             candidate_id="candidate_1",
-            stage="inference",
-            metadata={"provider": "fake", "model_id": "test"},
+            stage="inference",  # type: ignore
+            metadata={"provider": "fake", "model_id": "test"},  # type: ignore
             payload={"spec_hash": "inf_hash", "raw_text": "42"},
         ),
         TrialEvent(
@@ -469,9 +475,9 @@ def test_projection_repo_marks_failed_transform_overlay_as_error_and_not_cached(
             event_id="evt_3",
             event_type=TrialEventType.CANDIDATE_FAILED,
             candidate_id="candidate_1",
-            stage="extraction",
+            stage="extraction",  # type: ignore
             status=RecordStatus.ERROR,
-            metadata={"transform_hash": transform_hash},
+            metadata={"transform_hash": transform_hash},  # type: ignore
             error=ErrorRecord(
                 code=ErrorCode.PARSE_ERROR,
                 message="extractor boom",
@@ -491,8 +497,8 @@ def test_projection_repo_marks_failed_transform_overlay_as_error_and_not_cached(
             event_seq=5,
             event_id="evt_5",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
-            metadata={
+            stage="projection",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "projection_version": "v2",
             },
@@ -517,14 +523,14 @@ def test_projection_repo_iter_trial_summaries_filters_to_selected_overlay(tmp_pa
     manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_summary_filter.db")
     manager.initialize()
 
-    repo = SqliteProjectionRepository(manager)
-    event_repo = SqliteEventRepository(manager)
+    repo = SqliteProjectionRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)  # type: ignore
     trial = TrialSpec(
         trial_id="trial_summary_filter",
         model=ModelSpec(model_id="test", provider="fake"),
         task=TaskSpec(
             task_id="task",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             generation=GenerationSpec(),
             output_transforms=[
                 OutputTransformSpec(
@@ -555,8 +561,8 @@ def test_projection_repo_iter_trial_summaries_filters_to_selected_overlay(tmp_pa
             event_id="evt_2",
             event_type=TrialEventType.INFERENCE_COMPLETED,
             candidate_id="candidate_1",
-            stage="inference",
-            metadata={"provider": "fake", "model_id": "test"},
+            stage="inference",  # type: ignore
+            metadata={"provider": "fake", "model_id": "test"},  # type: ignore
             payload={"spec_hash": "inf_hash", "raw_text": "42"},
         ),
         TrialEvent(
@@ -565,9 +571,9 @@ def test_projection_repo_iter_trial_summaries_filters_to_selected_overlay(tmp_pa
             event_id="evt_3",
             event_type=TrialEventType.CANDIDATE_FAILED,
             candidate_id="candidate_1",
-            stage="extraction",
+            stage="extraction",  # type: ignore
             status=RecordStatus.ERROR,
-            metadata={"transform_hash": transform_hash},
+            metadata={"transform_hash": transform_hash},  # type: ignore
             error=ErrorRecord(
                 code=ErrorCode.PARSE_ERROR,
                 message="extractor boom",
@@ -587,8 +593,8 @@ def test_projection_repo_iter_trial_summaries_filters_to_selected_overlay(tmp_pa
             event_seq=5,
             event_id="evt_5",
             event_type=TrialEventType.PROJECTION_COMPLETED,
-            stage="projection",
-            metadata={
+            stage="projection",  # type: ignore
+            metadata={  # type: ignore
                 "transform_hash": transform_hash,
                 "projection_version": "v2",
             },
