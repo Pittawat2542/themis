@@ -65,7 +65,7 @@ class PostgresConnectionManager:
 
     @contextmanager
     def get_connection(self) -> Iterator[StorageConnection]:
-        if not hasattr(self._local, "conn"):
+        if self._needs_new_connection():
             psycopg = import_optional("psycopg", extra="storage-postgres")
             rows = getattr(psycopg, "rows")
             self._local.conn = psycopg.connect(
@@ -73,6 +73,12 @@ class PostgresConnectionManager:
                 row_factory=rows.dict_row,
             )
         yield _PostgresStorageConnection(self._local.conn)
+
+    def _needs_new_connection(self) -> bool:
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            return True
+        return bool(getattr(conn, "closed", False) or getattr(conn, "broken", False))
 
     def initialize(self) -> None:
         with self.get_connection() as conn:

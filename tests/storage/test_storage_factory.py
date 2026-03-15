@@ -172,3 +172,60 @@ def test_postgres_connection_manager_returns_explicit_storage_contract(monkeypat
     assert executed == [
         ("SELECT %s, %s", ("a", 1)),
     ]
+
+
+def test_postgres_connection_manager_reopens_closed_cached_connections(monkeypatch):
+    connect_calls: list[int] = []
+
+    class FakeCursor:
+        def fetchone(self):
+            return None
+
+        def fetchall(self):
+            return []
+
+    class FakeRawConnection:
+        def __init__(self, index: int) -> None:
+            self.index = index
+            self.closed = False
+
+        def execute(self, query: str, params: tuple[object, ...] = ()) -> FakeCursor:
+            if self.closed:
+                raise AssertionError("stale closed connection reused")
+            return FakeCursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self.closed = True
+            return None
+
+    class FakeRows:
+        dict_row = object()
+
+    class FakePsycopgModule:
+        rows = FakeRows()
+
+        @staticmethod
+        def connect(database_url: str, *, row_factory: object) -> FakeRawConnection:
+            assert database_url == "postgresql://localhost:5432/themis"
+            assert row_factory is FakeRows.dict_row
+            connect_calls.append(len(connect_calls) + 1)
+            return FakeRawConnection(connect_calls[-1])
+
+    monkeypatch.setattr(
+        "themis.storage.postgres.manager.import_optional",
+        lambda module_name, *, extra: FakePsycopgModule,
+    )
+
+    manager = PostgresConnectionManager("postgresql://localhost:5432/themis")
+
+    with manager.get_connection() as conn:
+        with conn:
+            conn.execute("SELECT 1")
+
+    with manager.get_connection() as conn:
+        conn.execute("SELECT 1")
+
+    assert connect_calls == [1, 2]
