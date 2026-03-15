@@ -10,6 +10,7 @@ import typing
 import pytest
 
 from themis.contracts.protocols import InferenceResult
+from themis.errors import SpecValidationError
 from themis.orchestration.orchestrator import Orchestrator
 from themis.orchestration.run_manifest import CostEstimate, RunHandle
 from themis.orchestration.task_resolution import resolve_task_stages
@@ -358,6 +359,97 @@ def test_orchestrator_rejects_direct_runtime_construction() -> None:
             manager,  # type: ignore[arg-type]  # Intentional invalid argument type to test init validation
             dataset_loader=cast(Any, MockDatasetLoader()),
         )
+
+
+def test_orchestrator_rejects_incomplete_internal_construction() -> None:
+    with pytest.raises(
+        TypeError,
+        match="Internal orchestrator construction requires registry",
+    ):
+        Orchestrator(_allow_runtime_construction=True)
+
+
+def test_orchestrator_from_project_file_loads_toml(tmp_path) -> None:
+    registry, _engine = _build_registry()
+    project_path = tmp_path / "project.toml"
+    project_path.write_text(
+        """
+project_name = "lab-project"
+researcher_id = "researcher-1"
+global_seed = 7
+
+[storage]
+backend = "sqlite_blob"
+root_dir = "runs"
+store_item_payloads = true
+compression = "zstd"
+
+[execution_policy]
+max_retries = 3
+retry_backoff_factor = 1.5
+circuit_breaker_threshold = 3
+max_in_flight_work_items = 9
+retryable_error_codes = []
+""".strip()
+    )
+
+    orchestrator = Orchestrator.from_project_file(
+        str(project_path),
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    assert orchestrator.project_spec is not None
+    assert orchestrator.project_spec.project_name == "lab-project"
+    assert orchestrator.execution_policy.max_retries == 3
+
+
+def test_orchestrator_from_project_file_loads_json(tmp_path) -> None:
+    registry, _engine = _build_registry()
+    project = _build_project_spec(tmp_path)
+    project_path = tmp_path / "project.json"
+    project_path.write_text(json.dumps(project.model_dump(mode="json")))
+
+    orchestrator = Orchestrator.from_project_file(
+        str(project_path),
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    assert orchestrator.project_spec == project
+    assert typing.cast(DatabaseManager, orchestrator.db_manager).db_path == str(
+        tmp_path / "runs" / "themis.sqlite3"
+    )
+
+
+def test_orchestrator_from_project_file_rejects_unsupported_suffix(tmp_path) -> None:
+    project_path = tmp_path / "project.yaml"
+    project_path.write_text("project_name: lab-project\n")
+
+    with pytest.raises(ValueError, match=r"\.toml or \.json"):
+        Orchestrator.from_project_file(str(project_path))
+
+
+def test_orchestrator_from_project_file_wraps_toml_parse_errors(tmp_path) -> None:
+    project_path = tmp_path / "project.toml"
+    project_path.write_text("project_name = 'lab-project'\n[storage\n")
+
+    with pytest.raises(SpecValidationError) as exc_info:
+        Orchestrator.from_project_file(str(project_path))
+
+    assert exc_info.value.code is ErrorCode.SCHEMA_MISMATCH
+    assert "Failed to parse project config project.toml" in exc_info.value.message
+
+
+def test_orchestrator_from_project_file_wraps_validation_errors(tmp_path) -> None:
+    project_path = tmp_path / "project.json"
+    project_path.write_text(json.dumps({"project_name": "lab-project"}))
+
+    with pytest.raises(SpecValidationError) as exc_info:
+        Orchestrator.from_project_file(str(project_path))
+
+    assert exc_info.value.code is ErrorCode.SCHEMA_MISMATCH
+    assert "Failed to parse project config project.json" in exc_info.value.message
 
 
 def test_orchestrator_removes_legacy_planning_and_storage_helpers(tmp_path) -> None:
