@@ -2,7 +2,7 @@ import pytest
 from themis.report.exporters import CsvExporter, MarkdownExporter, LatexExporter
 from themis.records.report import EvaluationReport, ReportTable, ReportMetadata
 import pandas as pd
-import tempfile
+from pathlib import Path
 
 
 @pytest.fixture
@@ -27,40 +27,37 @@ def mock_report():
     return EvaluationReport(spec_hash="rpt1", tables=[t1], metadata=meta)
 
 
-def test_csv_exporter(mock_report):
+def test_csv_exporter(mock_report, tmp_path: Path):
     exporter = CsvExporter()
-    with tempfile.NamedTemporaryFile(suffix=".csv") as f:
-        exporter.export(mock_report, f.name)
+    output_path = tmp_path / "report.csv"
+    exporter.export(mock_report, str(output_path))
 
-        # Read back
-        df = pd.read_csv(f.name)
-        row = df[df["Model"] == "gpt-4"].iloc[0]
-        assert row["Score"] == 0.95
+    df = pd.read_csv(output_path)
+    row = df[df["Model"] == "gpt-4"].iloc[0]
+    assert row["Score"] == 0.95
 
 
-def test_markdown_exporter(mock_report):
+def test_markdown_exporter(mock_report, tmp_path: Path):
     exporter = MarkdownExporter()
-    with tempfile.NamedTemporaryFile(suffix=".md") as f:
-        exporter.export(mock_report, f.name)
+    output_path = tmp_path / "report.md"
+    exporter.export(mock_report, str(output_path))
 
-        with open(f.name, "r") as r:
-            content = r.read()
-            assert "# Evaluation Report" in content
-            assert "## Main Results" in content
-            assert "Core scores." in content
-            assert "gpt-4" in content
-            assert "0.95" in content
-            assert "Environment: Test" in content
+    content = output_path.read_text()
+    assert "# Evaluation Report" in content
+    assert "## Main Results" in content
+    assert "Core scores." in content
+    assert "gpt-4" in content
+    assert "0.95" in content
+    assert "Environment: Test" in content
 
 
-def test_latex_exporter(mock_report):
+def test_latex_exporter(mock_report, tmp_path: Path):
     exporter = LatexExporter()
-    with tempfile.NamedTemporaryFile(suffix=".tex") as f:
-        exporter.export(mock_report, f.name)
+    output_path = tmp_path / "report.tex"
+    exporter.export(mock_report, str(output_path))
 
-        with open(f.name, "r") as r:
-            content = r.read()
-            assert "\\section*{Evaluation Report}" in content
-            assert "\\subsection*{Main Results}" in content
-            assert "gpt-4" in content
-            assert "0.95" in content
+    content = output_path.read_text()
+    assert "\\section*{Evaluation Report}" in content
+    assert "\\subsection*{Main Results}" in content
+    assert "gpt-4" in content
+    assert "0.95" in content

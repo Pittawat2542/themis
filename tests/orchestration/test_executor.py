@@ -403,11 +403,14 @@ class _FakePreparedSession:
 def test_scheduler_uses_bounded_global_work_queue() -> None:
     runner = RecordingRunner()
     projection_handler = StubProjectionHandler()
+    max_in_flight_work_items = 8
     executor = TrialExecutor(
         runner=cast(_ExecutionRunner, runner),
         projection_repo=StubProjectionRepository(),
         projection_handler=projection_handler,
-        execution_policy=ExecutionPolicySpec(max_in_flight_work_items=8),
+        execution_policy=ExecutionPolicySpec(
+            max_in_flight_work_items=max_in_flight_work_items
+        ),
     )
 
     trials = [
@@ -418,8 +421,9 @@ def test_scheduler_uses_bounded_global_work_queue() -> None:
 
     executor.execute_generation_trials(trials, RuntimeContext(), resume=False)
 
-    assert runner.max_seen_in_flight == 8
     assert executor.last_scheduler_stats is not None
+    assert executor.last_scheduler_stats.max_seen_in_flight == max_in_flight_work_items
+    assert runner.max_seen_in_flight <= max_in_flight_work_items
     assert executor.last_scheduler_stats.max_buffered_work_items <= 16
     assert sorted(projection_handler.completed_trial_hashes) == sorted(
         planned_trial.trial_spec.spec_hash for planned_trial in trials
