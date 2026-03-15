@@ -2,7 +2,7 @@ import asyncio
 import threading
 import time
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -46,10 +46,10 @@ from themis.types.enums import RecordStatus, DatasetSource
 from themis.types.enums import ErrorCode, ErrorWhere
 from themis.types.events import (
     ArtifactRef,
-    TrialEvent,
-    TrialEventType,
-    TrialEventMetadata,
     TimelineStage,
+    TrialEvent,
+    TrialEventMetadata,
+    TrialEventType,
 )
 from themis.storage._protocols import StorageConnectionManager
 from themis.telemetry.bus import TelemetryBus
@@ -385,7 +385,9 @@ class _FakePreparedSession:
     dataset_context: DataItemContext
     runtime_context: RuntimeContext
 
-    def prepare_trial_session(self, *_args: object, **_kwargs: object):  # type: ignore
+    def prepare_trial_session(
+        self, *_args: Any, **_kwargs: Any
+    ) -> Any:  # Use Any to explicitly test invalid duck-typing
         del _kwargs["required_stages"]
         return _FakePreparedSession(
             trial=self.trial,
@@ -444,19 +446,22 @@ def test_generation_work_items_can_interleave_across_trials() -> None:
 
 def test_executor_requires_concrete_trial_execution_sessions() -> None:
     class InvalidSessionRunner(RecordingRunner):
-        def prepare_trial_session(  # type: ignore[override]
+        def prepare_trial_session(
             self,
             trial: TrialSpec,
             dataset_context: DataItemContext,
             runtime_context: RuntimeContext | None,
             *,
             required_stages=None,
-        ) -> _FakePreparedSession:  # type: ignore
+        ) -> Any:  # Intentional invalid return type to trigger TypeError
             del required_stages
-            return _FakePreparedSession(
-                trial=trial,
-                dataset_context=dataset_context,
-                runtime_context=runtime_context or RuntimeContext(),
+            return cast(
+                Any,
+                _FakePreparedSession(
+                    trial=trial,
+                    dataset_context=dataset_context,
+                    runtime_context=runtime_context or RuntimeContext(),
+                ),
             )
 
     executor = TrialExecutor(
@@ -591,7 +596,7 @@ def test_executor_delegates_generation_execution_to_generation_coordinator() -> 
             self.calls.append((list(trials), runtime_context, dataset_context, resume))
             return expected_stats
 
-    stub = cast(GenerationExecutionCoordinator, StubGenerationExecution())  # type: ignore
+    stub = cast(GenerationExecutionCoordinator, StubGenerationExecution())
     executor._generation_execution = stub
 
     executor.execute_generation_trials([planned_trial], runtime, resume=False)
@@ -636,7 +641,7 @@ def test_executor_delegates_transform_execution_to_overlay_coordinator() -> None
             )
             return expected_stats
 
-    stub = cast(OverlayExecutionCoordinator, StubOverlayExecution())  # type: ignore
+    stub = cast(OverlayExecutionCoordinator, StubOverlayExecution())
     executor._overlay_execution = stub
 
     executor.execute_transforms([planned_trial], runtime, resume=False)
@@ -681,7 +686,7 @@ def test_executor_delegates_evaluation_execution_to_overlay_coordinator() -> Non
             )
             return expected_stats
 
-    stub = cast(OverlayExecutionCoordinator, StubOverlayExecution())  # type: ignore
+    stub = cast(OverlayExecutionCoordinator, StubOverlayExecution())
     executor._overlay_execution = stub
 
     executor.execute_evaluations([planned_trial], runtime, resume=False)
@@ -778,8 +783,8 @@ def test_executor_resume_does_not_skip_failed_overlay_projection(
         DatabaseManager(f"sqlite:///{tmp_path}/executor_resume.db"),
     )
     cast(DatabaseManager, manager).initialize()
-    event_repo = SqliteEventRepository(manager)  # type: ignore
-    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)
+    projection_repo = SqliteProjectionRepository(manager)
     projection_handler = ProjectionHandler(event_repo, projection_repo)
     support = ExecutionSupport(
         projection_repo=projection_repo,
@@ -820,7 +825,9 @@ def test_executor_resume_does_not_skip_failed_overlay_projection(
                     if failed_stage == "transform"
                     else None,
                     "evaluation_hash": (
-                        evaluation_hash if failed_stage == "evaluation" else None
+                        evaluation_hash
+                        if failed_stage == TimelineStage.EVALUATION
+                        else None
                     ),
                 },
             ),

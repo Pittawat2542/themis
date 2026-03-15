@@ -19,12 +19,16 @@ from themis.specs.foundational import (
 from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.projection_repo import SqliteProjectionRepository
 from themis.storage.sqlite_schema import DatabaseManager
+from themis.storage._protocols import StorageConnectionManager
 from themis.types.enums import RecordStatus, DatasetSource
 from themis.types.events import (
     ProjectionCompletedEventMetadata,
+    TimelineStage,
     TrialEvent,
+    TrialEventMetadata,
     TrialEventType,
 )
+from typing import Any, cast
 
 
 def _make_trial() -> TrialSpec:
@@ -61,8 +65,10 @@ def test_projection_handler_appends_projection_event_and_materializes_overlay(tm
     manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_handler.db")
     manager.initialize()
 
-    event_repo = SqliteEventRepository(manager)  # type: ignore
-    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(cast(StorageConnectionManager, manager))
+    projection_repo = SqliteProjectionRepository(
+        cast(StorageConnectionManager, manager)
+    )
     handler = ProjectionHandler(
         event_repo=event_repo,
         projection_repo=projection_repo,
@@ -81,8 +87,11 @@ def test_projection_handler_appends_projection_event_and_materializes_overlay(tm
             event_seq=1,
             event_id="evt_1",
             event_type=TrialEventType.ITEM_LOADED,
-            stage="item_load",  # type: ignore
-            metadata={"item_id": trial.item_id, "dataset_source": "memory"},  # type: ignore
+            stage=TimelineStage.ITEM_LOAD,
+            metadata=cast(
+                TrialEventMetadata,
+                {"item_id": trial.item_id, "dataset_source": "memory"},
+            ),
         ),
         TrialEvent(
             trial_hash=trial.spec_hash,
@@ -98,13 +107,16 @@ def test_projection_handler_appends_projection_event_and_materializes_overlay(tm
             event_id="evt_3",
             event_type=TrialEventType.EVALUATION_COMPLETED,
             candidate_id="candidate_1",
-            stage="evaluation",  # type: ignore
-            metadata={  # type: ignore
-                "transform_hash": transform_hash,
-                "evaluation_hash": evaluation_hash,
-                "metric_id": "exact_match",
-                "score": 1.0,
-            },
+            stage=TimelineStage.EVALUATION,
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "transform_hash": transform_hash,
+                    "evaluation_hash": evaluation_hash,
+                    "metric_id": "exact_match",
+                    "score": 1.0,
+                },
+            ),
             payload={
                 "spec_hash": evaluation_hash,
                 "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
@@ -191,7 +203,8 @@ def test_projection_handler_does_not_record_projection_completion_when_materiali
 
     event_repo = InMemoryEventRepo()
     handler = ProjectionHandler(
-        event_repo=event_repo, projection_repo=FailingProjectionRepo()
+        event_repo=cast(Any, event_repo),
+        projection_repo=cast(Any, FailingProjectionRepo()),
     )
 
     with pytest.raises(RuntimeError, match="projection failed"):
@@ -235,8 +248,8 @@ def test_projection_handler_uses_explicit_refresh_policy() -> None:
             )
 
     handler = ProjectionHandler(
-        event_repo=InMemoryEventRepo(),  # type: ignore
-        projection_repo=RecordingProjectionRepo(),  # type: ignore
+        event_repo=cast(Any, InMemoryEventRepo()),
+        projection_repo=cast(Any, RecordingProjectionRepo()),
     )
 
     assert hasattr(handler, "refresh_policy")
@@ -247,8 +260,10 @@ def test_projection_handler_refreshes_overlay_when_newer_events_exist(tmp_path):
     manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_refresh.db")
     manager.initialize()
 
-    event_repo = SqliteEventRepository(manager)  # type: ignore
-    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(cast(StorageConnectionManager, manager))
+    projection_repo = SqliteProjectionRepository(
+        cast(StorageConnectionManager, manager)
+    )
     handler = ProjectionHandler(
         event_repo=event_repo,
         projection_repo=projection_repo,
@@ -276,13 +291,16 @@ def test_projection_handler_refreshes_overlay_when_newer_events_exist(tmp_path):
             event_id="evt_2",
             event_type=TrialEventType.EVALUATION_COMPLETED,
             candidate_id="candidate_1",
-            stage="evaluation",  # type: ignore
-            metadata={  # type: ignore
-                "transform_hash": transform_hash,
-                "evaluation_hash": evaluation_hash,
-                "metric_id": "exact_match",
-                "score": 1.0,
-            },
+            stage=TimelineStage.EVALUATION,
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "transform_hash": transform_hash,
+                    "evaluation_hash": evaluation_hash,
+                    "metric_id": "exact_match",
+                    "score": 1.0,
+                },
+            ),
             payload={
                 "spec_hash": evaluation_hash,
                 "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
@@ -321,13 +339,16 @@ def test_projection_handler_refreshes_overlay_when_newer_events_exist(tmp_path):
             event_id="evt_6",
             event_type=TrialEventType.EVALUATION_COMPLETED,
             candidate_id="candidate_1",
-            stage="evaluation",  # type: ignore
-            metadata={  # type: ignore
-                "transform_hash": transform_hash,
-                "evaluation_hash": evaluation_hash,
-                "metric_id": "exact_match",
-                "score": 0.0,
-            },
+            stage=TimelineStage.EVALUATION,
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "transform_hash": transform_hash,
+                    "evaluation_hash": evaluation_hash,
+                    "metric_id": "exact_match",
+                    "score": 0.0,
+                },
+            ),
             payload={
                 "spec_hash": evaluation_hash,
                 "metric_scores": [{"metric_id": "exact_match", "value": 0.0}],
@@ -369,11 +390,14 @@ def test_projection_handler_ignores_newer_events_for_other_overlays() -> None:
                     event_seq=2,
                     event_id="evt_2",
                     event_type=TrialEventType.PROJECTION_COMPLETED,
-                    stage="projection",  # type: ignore
-                    metadata={  # type: ignore
-                        "transform_hash": "tx_a",
-                        "projection_version": "v2",
-                    },
+                    stage=TimelineStage.PROJECTION,
+                    metadata=cast(
+                        TrialEventMetadata,
+                        {
+                            "transform_hash": "tx_a",
+                            "projection_version": "v2",
+                        },
+                    ),
                 ),
                 TrialEvent(
                     trial_hash="trial_hash",
@@ -381,12 +405,15 @@ def test_projection_handler_ignores_newer_events_for_other_overlays() -> None:
                     event_id="evt_3",
                     event_type=TrialEventType.EXTRACTION_COMPLETED,
                     candidate_id="candidate_1",
-                    stage="extraction",  # type: ignore
-                    metadata={  # type: ignore
-                        "transform_hash": "tx_b",
-                        "extractor_id": "other",
-                        "success": True,
-                    },
+                    stage=TimelineStage.EXTRACTION,
+                    metadata=cast(
+                        TrialEventMetadata,
+                        {
+                            "transform_hash": "tx_b",
+                            "extractor_id": "other",
+                            "success": True,
+                        },
+                    ),
                 ),
             ]
 
@@ -434,7 +461,9 @@ def test_projection_handler_ignores_newer_events_for_other_overlays() -> None:
 
     event_repo = InMemoryEventRepo()
     projection_repo = RecordingProjectionRepo()
-    handler = ProjectionHandler(event_repo=event_repo, projection_repo=projection_repo)  # type: ignore
+    handler = ProjectionHandler(
+        event_repo=cast(Any, event_repo), projection_repo=cast(Any, projection_repo)
+    )
 
     handler.on_trial_completed("trial_hash", transform_hash="tx_a")
 

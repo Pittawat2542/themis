@@ -6,7 +6,6 @@ Requires the optional stats extra:
 """
 
 from __future__ import annotations
-
 from collections import defaultdict
 from pathlib import Path
 
@@ -35,6 +34,7 @@ from themis.records import (
     MetricScore,
     TrialRecord,
 )
+from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
 
 
 class ArithmeticDatasetLoader:
@@ -90,7 +90,7 @@ def build_project() -> ProjectSpec:
         global_seed=61,
         storage=StorageSpec(
             root_dir=str(Path(".cache/themis-examples/08-external-stage-handoff")),
-            compression="none",
+            compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
@@ -105,7 +105,7 @@ def build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="external-eval-math",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 evaluations=[
                     EvaluationSpec(
@@ -119,7 +119,9 @@ def build_experiment() -> ExperimentSpec:
             PromptTemplateSpec(
                 id="baseline",
                 messages=[
-                    PromptMessage(role="user", content="Answer the arithmetic problem.")
+                    PromptMessage(
+                        role=PromptRole.USER, content="Answer the arithmetic problem."
+                    )
                 ],
             )
         ],

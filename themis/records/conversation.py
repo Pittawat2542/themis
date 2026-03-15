@@ -3,6 +3,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from themis.types.enums import PromptRole
 from themis.types.json_types import JSONDict, JSONValueType
 
 
@@ -44,7 +45,7 @@ class BaseConversationEvent(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    role: Literal["system", "user", "assistant", "tool"]
+    role: PromptRole
     timestamp: datetime = Field(default_factory=_now_utc)
     event_index: int
 

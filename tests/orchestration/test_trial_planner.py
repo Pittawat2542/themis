@@ -19,7 +19,7 @@ from themis.specs.foundational import (
 )
 from themis.errors import SpecValidationError
 from themis.registry.plugin_registry import PluginRegistry
-from themis.types.enums import SamplingKind, DatasetSource
+from themis.types.enums import SamplingKind, DatasetSource, RunStage
 
 
 def test_trial_planner_unrolling():
@@ -424,7 +424,7 @@ def test_trial_planner_can_validate_generation_stage_without_transform_or_metric
 
     planned_trials = planner.plan_experiment(
         experiment,
-        required_stages={"generation"},
+        required_stages={RunStage.GENERATION},
     )
 
     assert len(planned_trials) == 1
@@ -464,7 +464,7 @@ def test_trial_planner_can_validate_transform_only_task_without_provider_plugin(
 
     planned_trials = planner.plan_experiment(
         experiment,
-        required_stages={"transform"},
+        required_stages={RunStage.TRANSFORM},
     )
 
     assert len(planned_trials) == 1
@@ -499,7 +499,7 @@ def test_trial_planner_can_validate_evaluation_only_task_without_provider_plugin
 
     planned_trials = planner.plan_experiment(
         experiment,
-        required_stages={"evaluation"},
+        required_stages={RunStage.EVALUATION},
     )
 
     assert len(planned_trials) == 1

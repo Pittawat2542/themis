@@ -1,3 +1,4 @@
+from themis.types.enums import PromptRole
 from pydantic import TypeAdapter
 from themis.types.enums import DatasetSource
 
@@ -13,7 +14,7 @@ def test_sqlite_event_repo_conversation_events(tmp_path):
     manager = DatabaseManager(f"sqlite:///{tmp_path}/conv_test.db")
     manager.initialize()
 
-    repo = SqliteEventRepository(manager)  # type: ignore
+    repo = SqliteEventRepository(manager)
 
     # Must save a spec to satisfy the foreign key constraints on trial_hash
     spec = TrialSpec(
@@ -32,12 +33,12 @@ def test_sqlite_event_repo_conversation_events(tmp_path):
     trial_hash = spec.spec_hash
 
     user_msg = MessageEvent(
-        role="user",
+        role=PromptRole.USER,
         payload=MessagePayload(content="Hello world"),
         event_index=0,
     )
     asst_msg = MessageEvent(
-        role="assistant",
+        role=PromptRole.ASSISTANT,
         payload=MessagePayload(content="Hi there!"),
         event_index=1,
     )

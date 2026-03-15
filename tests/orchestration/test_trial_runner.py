@@ -1,3 +1,4 @@
+from themis.types.enums import PromptRole, RunStage
 import asyncio
 
 import pytest
@@ -49,6 +50,7 @@ from themis.types.events import (
     ItemLoadedEventMetadata,
     ProjectionCompletedEventMetadata,
     PromptRenderedEventMetadata,
+    TimelineStage,
     TrialEvent,
     TrialEventType,
 )
@@ -136,7 +138,7 @@ class MockInferenceEngine(InferenceEngine):
             conversation=Conversation(
                 events=[
                     MessageEvent(
-                        role="assistant",
+                        role=PromptRole.ASSISTANT,
                         payload=MessagePayload(content="The answer is 42."),
                         event_index=0,
                     )
@@ -316,7 +318,7 @@ def test_trial_runner_can_prepare_generation_only_runtime(trial_spec):
         trial_spec,
         {},
         RuntimeContext(),
-        required_stages={"generation"},
+        required_stages={RunStage.GENERATION},
     )
 
     assert session.resolved_plugins is not None
@@ -514,7 +516,7 @@ def test_trial_runner_skips_completed_candidates_when_resuming(tmp_path, trial_s
 
     manager = DatabaseManager(f"sqlite:///{tmp_path}/resume_skip.db")
     manager.initialize()
-    event_repo = SqliteEventRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)
     runner = TrialRunner(
         registry,
         event_repo=event_repo,
@@ -567,7 +569,9 @@ def test_trial_runner_emits_required_stage_metadata_and_artifact_refs(trial_spec
         RuntimeContext(environment={"suite": "tests"}),
     )
 
-    item_event = next(event for event in repo.events if event.stage == "item_load")
+    item_event = next(
+        event for event in repo.events if event.stage == TimelineStage.ITEM_LOAD
+    )
     assert item_event.status == EventStatus.OK
     assert item_event.payload == {"question": "6 * 7", "answer": "42"}
     assert item_event.metadata.item_payload_hash is not None
@@ -577,7 +581,7 @@ def test_trial_runner_emits_required_stage_metadata_and_artifact_refs(trial_spec
     prompt_event = next(
         event
         for event in repo.events
-        if event.stage == "prompt_render" and event.candidate_id is None
+        if event.stage == TimelineStage.PROMPT_RENDER and event.candidate_id is None
     )
     assert prompt_event.status == EventStatus.OK
     assert prompt_event.metadata.rendered_prompt_hash is not None
@@ -585,7 +589,9 @@ def test_trial_runner_emits_required_stage_metadata_and_artifact_refs(trial_spec
     assert prompt_event.artifact_refs[0].role == "rendered_prompt"
     assert isinstance(prompt_event.metadata, PromptRenderedEventMetadata)
 
-    inference_event = next(event for event in repo.events if event.stage == "inference")
+    inference_event = next(
+        event for event in repo.events if event.stage == TimelineStage.INFERENCE
+    )
     assert inference_event.status == EventStatus.OK
     assert inference_event.metadata.provider_request_id == "req_123"
     assert inference_event.metadata.token_usage["total_tokens"] == 13
@@ -593,13 +599,13 @@ def test_trial_runner_emits_required_stage_metadata_and_artifact_refs(trial_spec
     assert isinstance(inference_event.metadata, InferenceCompletedEventMetadata)
 
     extraction_event = next(
-        event for event in repo.events if event.stage == "extraction"
+        event for event in repo.events if event.stage == TimelineStage.EXTRACTION
     )
     assert extraction_event.status == EventStatus.OK
     assert extraction_event.metadata.failure_reason is None
 
     evaluation_event = next(
-        event for event in repo.events if event.stage == "evaluation"
+        event for event in repo.events if event.stage == TimelineStage.EVALUATION
     )
     assert evaluation_event.status == EventStatus.OK
     assert evaluation_event.metadata.details_hash is not None
@@ -624,10 +630,10 @@ def test_trial_runner_emits_overlay_hashes_for_stage_events(trial_spec):
     )
 
     extraction_event = next(
-        event for event in repo.events if event.stage == "extraction"
+        event for event in repo.events if event.stage == TimelineStage.EXTRACTION
     )
     evaluation_event = next(
-        event for event in repo.events if event.stage == "evaluation"
+        event for event in repo.events if event.stage == TimelineStage.EVALUATION
     )
 
     assert isinstance(extraction_event.metadata, ExtractionCompletedEventMetadata)
@@ -716,8 +722,12 @@ def test_trial_runner_emits_all_transform_and_evaluation_overlays():
 
     runner.run_trial(trial, {}, RuntimeContext())
 
-    extraction_events = [event for event in repo.events if event.stage == "extraction"]
-    evaluation_events = [event for event in repo.events if event.stage == "evaluation"]
+    extraction_events = [
+        event for event in repo.events if event.stage == TimelineStage.EXTRACTION
+    ]
+    evaluation_events = [
+        event for event in repo.events if event.stage == TimelineStage.EVALUATION
+    ]
 
     assert len(extraction_events) == 2
     assert {event.metadata.transform_hash for event in extraction_events} == {
@@ -737,8 +747,8 @@ def test_projection_repo_materializes_overlay_from_runner_events(tmp_path, trial
 
     manager = DatabaseManager(f"sqlite:///{tmp_path}/runner_projection.db")
     manager.initialize()
-    event_repo = SqliteEventRepository(manager)  # type: ignore
-    projection_repo = SqliteProjectionRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)
+    projection_repo = SqliteProjectionRepository(manager)
     runner = TrialRunner(registry, event_repo=event_repo, parallel_candidates=1)
     trial = trial_spec.model_copy(update={"candidate_count": 1})
     resolved = resolve_task_stages(trial.task)
@@ -778,7 +788,7 @@ def test_trial_runner_persists_emitted_artifacts_in_blob_store_and_index(
     manager = DatabaseManager(f"sqlite:///{tmp_path}/artifacts.db")
     manager.initialize()
     artifact_store = ArtifactStore(base_path=tmp_path / "artifacts", manager=manager)
-    event_repo = SqliteEventRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)
     runner = TrialRunner(
         registry,
         event_repo=event_repo,
@@ -822,7 +832,7 @@ def test_trial_runner_persists_judge_audit_artifacts_and_projection_hydrates_the
     manager = DatabaseManager(f"sqlite:///{tmp_path}/judge_audit.db")
     manager.initialize()
     artifact_store = ArtifactStore(base_path=tmp_path / "artifacts")
-    event_repo = SqliteEventRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)
     projection_repo = SqliteProjectionRepository(manager, artifact_store=artifact_store)
     runner = TrialRunner(
         registry,
@@ -857,7 +867,7 @@ def test_trial_runner_persists_judge_audit_artifacts_and_projection_hydrates_the
     evaluation_event = next(
         event
         for event in event_repo.get_events(trial.spec_hash)
-        if event.stage == "evaluation"
+        if event.stage == TimelineStage.EVALUATION
     )
     judge_artifact = next(
         artifact
@@ -877,7 +887,7 @@ def test_trial_runner_persists_judge_audit_artifacts_and_projection_hydrates_the
     assert timeline_view.judge_audit.candidate_hash == candidate_id
     assert timeline_view.judge_audit.judge_calls[0].metric_id == "judge_metric"
     assert timeline_view.judge_audit.judge_calls[0].rendered_prompt == [
-        PromptMessage(role="user", content="Rate this answer.")
+        PromptMessage(role=PromptRole.USER, content="Rate this answer.")
     ]
     assert timeline_view.judge_audit.judge_calls[0].inference.raw_text == "SCORE: 5/5"
 

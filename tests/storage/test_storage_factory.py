@@ -165,9 +165,9 @@ def test_postgres_connection_manager_returns_explicit_storage_contract(monkeypat
         assert isinstance(conn, StorageConnection)
         conn.execute("SELECT ?, ?", ("a", 1))
         with pytest.raises(AttributeError):
-            conn.executescript("SELECT 1; ; SELECT 2;")  # type: ignore[attr-defined]
+            conn.executescript("SELECT 1; ; SELECT 2;")
         with pytest.raises(AttributeError):
-            conn.secret_method()  # type: ignore[attr-defined]
+            conn.secret_method()
 
     assert executed == [
         ("SELECT %s, %s", ("a", 1)),

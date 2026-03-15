@@ -43,7 +43,7 @@ from themis.storage.factory import StorageBundle, build_storage_bundle
 from themis.storage._protocols import StorageConnectionManager
 from themis.storage.run_manifest_repo import RunManifestRepository
 from themis.telemetry.bus import TelemetryBus
-from themis.types.enums import ErrorCode
+from themis.types.enums import ErrorCode, RunStage
 from themis.types.json_validation import format_validation_error
 
 
@@ -215,7 +215,7 @@ class Orchestrator:
         planned_trials = generation_trials(
             self._services.planner.plan_experiment(
                 experiment,
-                required_stages={"generation"},
+                required_stages={RunStage.GENERATION},
             )
         )
         if planned_trials:
@@ -232,7 +232,7 @@ class Orchestrator:
         planned_trials = transform_trials(
             self._services.planner.plan_experiment(
                 experiment,
-                required_stages={"transform"},
+                required_stages={RunStage.TRANSFORM},
             )
         )
         transform_hashes = collect_transform_hashes(planned_trials)
@@ -253,7 +253,7 @@ class Orchestrator:
         planned_trials = evaluation_trials(
             self._services.planner.plan_experiment(
                 experiment,
-                required_stages={"transform", "evaluation"},
+                required_stages={RunStage.TRANSFORM, RunStage.EVALUATION},
             )
         )
         if planned_trials:

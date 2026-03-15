@@ -22,9 +22,18 @@ from themis import (
     PromptTemplateSpec,
     StorageSpec,
     TaskSpec,
+    TrialSpec,
 )
 from themis.contracts.protocols import InferenceResult
-from themis.records import ExtractionRecord, InferenceRecord, MetricScore
+from themis.records import (
+    ExtractionRecord,
+    InferenceRecord,
+    MetricScore,
+    CandidateRecord,
+)
+from themis.specs.experiment import RuntimeContext
+from typing import Any, Mapping
+from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
 
 
 class FactsDatasetLoader:
@@ -37,7 +46,9 @@ class FactsDatasetLoader:
 
 
 class VerboseAnswerEngine:
-    def infer(self, trial, context, runtime):
+    def infer(
+        self, trial: TrialSpec, context: Any, runtime: RuntimeContext
+    ) -> InferenceResult:
         del trial, runtime
         return InferenceResult(
             inference=InferenceRecord(
@@ -48,10 +59,15 @@ class VerboseAnswerEngine:
 
 
 class NumberExtractor:
-    def extract(self, trial, candidate, config):
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, Any] | None = None,
+    ) -> ExtractionRecord:
         del trial, config
         text = candidate.inference.raw_text if candidate.inference else ""
-        match = re.search(r"(\d+)", text)
+        match = re.search(r"(\d+)", text or "")
         return ExtractionRecord(
             spec_hash=f"ext_{candidate.spec_hash}",
             extractor_id="number_extractor",
@@ -62,7 +78,9 @@ class NumberExtractor:
 
 
 class ParsedExactMatchMetric:
-    def score(self, trial, candidate, context):
+    def score(
+        self, trial: TrialSpec, candidate: CandidateRecord, context: Any
+    ) -> MetricScore:
         del trial
         extraction = candidate.best_extraction()
         parsed = extraction.parsed_answer if extraction is not None else None
@@ -88,7 +106,7 @@ def build_project() -> ProjectSpec:
         global_seed=17,
         storage=StorageSpec(
             root_dir=str(Path(".cache/themis-examples/03-custom-extractor")),
-            compression="none",
+            compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
@@ -100,7 +118,7 @@ def build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="math-with-extraction",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 output_transforms=[
                     OutputTransformSpec(
@@ -122,7 +140,9 @@ def build_experiment() -> ExperimentSpec:
         prompt_templates=[
             PromptTemplateSpec(
                 id="baseline",
-                messages=[PromptMessage(role="user", content="Answer the question.")],
+                messages=[
+                    PromptMessage(role=PromptRole.USER, content="Answer the question.")
+                ],
             )
         ],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=64)]),
@@ -146,7 +166,9 @@ def main() -> None:
         extraction = transform_trial.candidates[0].best_extraction()
         if extraction is None:
             raise RuntimeError(f"Missing extraction for {trial.spec_hash}.")
+        assert candidate.evaluation is not None
         score = candidate.evaluation.aggregate_scores["parsed_exact_match"]
+        assert trial.trial_spec is not None
         print(
             f"{trial.trial_spec.item_id}: parsed={extraction.parsed_answer!r} "
             f"score={score:.1f}"

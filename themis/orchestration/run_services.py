@@ -34,7 +34,7 @@ from themis.records.trial import TrialRecord
 from themis.runtime import ExperimentResult
 from themis.specs.experiment import ExperimentSpec, ProjectSpec, RuntimeContext
 from themis.storage.run_manifest_repo import RunManifestRepository
-from themis.types.enums import ErrorCode, RecordStatus
+from themis.types.enums import ErrorCode, RecordStatus, RunStage
 from themis.types.events import (
     EvaluationCompletedEventMetadata,
     ExtractionCompletedEventMetadata,
@@ -401,7 +401,7 @@ class RunPlanningService:
                             trial_hash=trial.spec_hash,
                             candidate_id=candidate_id,
                         ),
-                        stage="generation",
+                        stage=RunStage.GENERATION,
                         status=_generation_status(candidate_events),
                         trial_hash=trial.spec_hash,
                         candidate_index=candidate_index,
@@ -417,7 +417,7 @@ class RunPlanningService:
                                 candidate_id=candidate_id,
                                 transform_hash=transform.transform_hash,
                             ),
-                            stage="transform",
+                            stage=RunStage.TRANSFORM,
                             status=_transform_status(
                                 candidate_events,
                                 transform_hash=transform.transform_hash,
@@ -442,7 +442,7 @@ class RunPlanningService:
                                 ),
                                 evaluation_hash=evaluation.evaluation_hash,
                             ),
-                            stage="evaluation",
+                            stage=RunStage.EVALUATION,
                             status=_evaluation_status(
                                 candidate_events,
                                 evaluation_hash=evaluation.evaluation_hash,
@@ -493,7 +493,7 @@ class RunPlanningService:
             {
                 item.evaluation_hash
                 for item in manifest.work_items
-                if item.stage == "evaluation"
+                if item.stage == RunStage.EVALUATION
                 and item.status == WorkItemStatus.COMPLETED
                 and item.evaluation_hash is not None
             }

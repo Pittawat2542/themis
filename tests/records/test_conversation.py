@@ -1,4 +1,5 @@
 from __future__ import annotations
+from themis.types.enums import PromptRole
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -14,7 +15,7 @@ from themis.records.conversation import (
 
 def test_conversation_accepts_message_event_variant() -> None:
     event = MessageEvent(
-        role="assistant",
+        role=PromptRole.ASSISTANT,
         payload=MessagePayload(content="42"),
         event_index=0,
     )

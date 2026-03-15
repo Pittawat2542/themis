@@ -1,6 +1,7 @@
 """Internal generation-stage execution coordinator for the trial executor."""
 
 from __future__ import annotations
+from themis.types.enums import RunStage
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
@@ -94,7 +95,7 @@ class GenerationExecutionCoordinator:
                         trial,
                         trial_dataset_context,
                         runtime_context,
-                        required_stages=("generation",),
+                        required_stages=(RunStage.GENERATION,),
                     )
                 )
             )

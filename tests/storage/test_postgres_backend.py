@@ -26,8 +26,8 @@ from themis.storage.migrate import migrate_sqlite_to_postgres
 from themis.storage.observability import SqliteObservabilityStore
 from themis.storage.run_manifest_repo import RunManifestRepository
 from themis.storage.sqlite_schema import DatabaseManager
-from themis.types.enums import RecordStatus, DatasetSource
-from themis.types.events import TrialEvent
+from themis.types.enums import RecordStatus, DatasetSource, RunStage
+from themis.types.events import TrialEvent, TimelineStage
 
 
 def _require_postgres_env() -> tuple[object, str]:
@@ -96,16 +96,16 @@ def test_postgres_bundle_materializes_trial_record_from_event_log(tmp_path):
                 event_seq=1,
                 event_id="evt_1",
                 event_type="item_loaded",
-                stage="item_load",  # type: ignore
-                metadata={"item_id": trial.item_id, "dataset_source": "memory"},  # type: ignore
+                stage=TimelineStage.ITEM_LOAD,
+                metadata={"item_id": trial.item_id, "dataset_source": "memory"},
             ),
             TrialEvent(
                 trial_hash=trial.spec_hash,
                 event_seq=2,
                 event_id="evt_2",
                 event_type="prompt_rendered",
-                stage="prompt_render",  # type: ignore
-                metadata={"prompt_template_id": "baseline"},  # type: ignore
+                stage=TimelineStage.PROMPT_RENDER,
+                metadata={"prompt_template_id": "baseline"},
             ),
             TrialEvent(
                 trial_hash=trial.spec_hash,
@@ -121,8 +121,8 @@ def test_postgres_bundle_materializes_trial_record_from_event_log(tmp_path):
                 event_id="evt_4",
                 event_type="inference_completed",
                 candidate_id="candidate_1",
-                stage="inference",  # type: ignore
-                metadata={"provider": "fake", "model_id": "test"},  # type: ignore
+                stage=TimelineStage.INFERENCE,
+                metadata={"provider": "fake", "model_id": "test"},
                 payload={"spec_hash": "inf_hash", "raw_text": "42"},
             ),
             TrialEvent(
@@ -131,8 +131,8 @@ def test_postgres_bundle_materializes_trial_record_from_event_log(tmp_path):
                 event_id="evt_5",
                 event_type="evaluation_completed",
                 candidate_id="candidate_1",
-                stage="evaluation",  # type: ignore
-                metadata={  # type: ignore
+                stage="evaluation",
+                metadata={
                     "metric_id": "exact_match",
                     "score": 1.0,
                     "transform_hash": None,
@@ -156,8 +156,8 @@ def test_postgres_bundle_materializes_trial_record_from_event_log(tmp_path):
                 event_seq=7,
                 event_id="evt_7",
                 event_type="projection_completed",
-                stage="projection",  # type: ignore
-                metadata={  # type: ignore
+                stage=TimelineStage.PROJECTION,
+                metadata={
                     "transform_hash": None,
                     "evaluation_hash": "eval_1",
                     "projection_version": "v1",
@@ -293,8 +293,8 @@ def test_postgres_bundle_commits_repo_and_store_writes_to_fresh_connections(tmp_
                 event_id="evt_2",
                 event_type="evaluation_completed",
                 candidate_id="candidate_1",
-                stage="evaluation",  # type: ignore
-                metadata={  # type: ignore
+                stage="evaluation",
+                metadata={
                     "metric_id": "exact_match",
                     "score": 1.0,
                     "evaluation_hash": "eval_1",
@@ -317,8 +317,8 @@ def test_postgres_bundle_commits_repo_and_store_writes_to_fresh_connections(tmp_
                 event_seq=4,
                 event_id="evt_4",
                 event_type="projection_completed",
-                stage="projection",  # type: ignore
-                metadata={  # type: ignore
+                stage=TimelineStage.PROJECTION,
+                metadata={
                     "evaluation_hash": "eval_1",
                     "projection_version": "v1",
                 },
@@ -376,7 +376,7 @@ def test_migrate_sqlite_to_postgres_copies_run_manifests_and_stage_work_items(tm
             work_items=[
                 StageWorkItem(
                     work_item_id="work_pending",
-                    stage="generation",  # type: ignore
+                    stage=RunStage.GENERATION,
                     status=WorkItemStatus.PENDING,
                     trial_hash="trial_hash_1",
                     candidate_index=0,

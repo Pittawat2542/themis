@@ -1,3 +1,4 @@
+from themis.types.enums import PromptRole
 import importlib
 import importlib.util
 
@@ -93,7 +94,7 @@ def test_prompt_template_spec_rejects_unknown_message_keys():
 
 
 def test_prompt_message_requires_role_and_content():
-    message = PromptMessage(role="assistant", content="Done")
+    message = PromptMessage(role=PromptRole.ASSISTANT, content="Done")
 
     assert message.role == "assistant"
     assert message.content == "Done"

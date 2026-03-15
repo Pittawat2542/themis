@@ -20,7 +20,7 @@ from themis.orchestration.work_scheduler import WorkScheduler, WorkSchedulerStat
 from themis.records.candidate import CandidateRecord
 from themis.records.trial import TrialRecord
 from themis.specs.experiment import ExecutionPolicySpec, RuntimeContext, TrialSpec
-from themis.types.enums import ErrorCode
+from themis.types.enums import ErrorCode, RunStage
 
 
 class _OverlayRunner(Protocol):
@@ -145,7 +145,7 @@ class OverlayExecutionCoordinator:
                         trial,
                         trial_dataset_context,
                         runtime_context,
-                        required_stages=("transform",),
+                        required_stages=(RunStage.TRANSFORM,),
                     )
                 )
             )
@@ -215,7 +215,7 @@ class OverlayExecutionCoordinator:
                         trial,
                         trial_dataset_context,
                         runtime_context,
-                        required_stages=("evaluation",),
+                        required_stages=(RunStage.EVALUATION,),
                     )
                 )
             )

@@ -84,3 +84,16 @@ class SamplingKind(str, Enum):
 class RecordType(str, Enum):
     TRIAL = "trial"
     CANDIDATE = "candidate"
+
+
+class PromptRole(str, Enum):
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
+
+
+class RunStage(str, Enum):
+    GENERATION = "generation"
+    TRANSFORM = "transform"
+    EVALUATION = "evaluation"

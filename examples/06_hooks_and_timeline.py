@@ -29,6 +29,7 @@ from themis.records import (
     MetricScore,
 )
 from themis.telemetry.bus import TelemetryBus
+from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
 
 
 class SingleItemLoader:
@@ -68,7 +69,9 @@ class InjectSystemPromptHook(_NoOpPipelineHook):
 
     def pre_inference(self, trial, prompt: RenderedPrompt) -> RenderedPrompt:
         del trial
-        messages = [PromptMessage(role="system", content="Be concise and explicit.")]
+        messages = [
+            PromptMessage(role=PromptRole.SYSTEM, content="Be concise and explicit.")
+        ]
         messages.extend(prompt.messages)
         return prompt.model_copy(update={"messages": messages})
 
@@ -88,7 +91,7 @@ class PromptAwareEngine:
             conversation=Conversation(
                 events=[
                     MessageEvent(
-                        role="assistant",
+                        role=PromptRole.ASSISTANT,
                         event_index=0,
                         payload=MessagePayload(content=answer),
                     )
@@ -123,7 +126,7 @@ def build_project() -> ProjectSpec:
         global_seed=41,
         storage=SqliteBlobStorageSpec(
             root_dir=str(Path(".cache/themis-examples/06-hooks-and-timeline")),
-            compression="none",
+            compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
@@ -135,7 +138,7 @@ def build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="hooked-task",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 evaluations=[
                     EvaluationSpec(
@@ -148,7 +151,11 @@ def build_experiment() -> ExperimentSpec:
         prompt_templates=[
             PromptTemplateSpec(
                 id="baseline",
-                messages=[PromptMessage(role="user", content="Summarize the request.")],
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Summarize the request."
+                    )
+                ],
             )
         ],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=64)]),
@@ -170,9 +177,16 @@ def main() -> None:
 
     trial_hash = result.trial_hashes[0]
     trial_view = result.view_timeline(trial_hash, record_type="trial")
+    assert trial_view is not None
+    assert trial_view.timeline is not None
+
     trial = result.get_trial(trial_hash)
+    assert trial is not None
     candidate_id = trial.candidates[0].candidate_id
+    assert candidate_id is not None
     candidate_view = result.view_timeline(candidate_id)
+    assert candidate_view is not None
+    assert candidate_view.inference is not None
 
     print("Telemetry events:", ", ".join(sorted(set(seen_events))))
     print(

@@ -1,7 +1,6 @@
 """Show how stored work is reused as an experiment grows over time."""
 
 from __future__ import annotations
-
 from pathlib import Path
 
 from themis import (
@@ -22,8 +21,9 @@ from themis import (
     StorageSpec,
     TaskSpec,
 )
-from themis.contracts.protocols import InferenceResult
+from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
 from themis.records import InferenceRecord, MetricScore
+from themis.contracts.protocols import InferenceResult
 
 
 class ArithmeticDatasetLoader:
@@ -108,7 +108,7 @@ def build_project() -> ProjectSpec:
         global_seed=71,
         storage=StorageSpec(
             root_dir=str(Path(".cache/themis-examples/09-experiment-evolution")),
-            compression="none",
+            compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
@@ -120,7 +120,7 @@ def build_base_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="evolution-math",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 evaluations=[EvaluationSpec(name="default", metrics=["exact_match"])],
             )
@@ -129,7 +129,9 @@ def build_base_experiment() -> ExperimentSpec:
             PromptTemplateSpec(
                 id="zero-shot",
                 messages=[
-                    PromptMessage(role="user", content="Solve the arithmetic problem.")
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve the arithmetic problem."
+                    )
                 ],
             )
         ],
@@ -165,9 +167,10 @@ def build_matrix_expansion(base: ExperimentSpec) -> ExperimentSpec:
                 PromptTemplateSpec(
                     id="few-shot",
                     messages=[
-                        PromptMessage(role="user", content="Q: 2 + 2\nA: 4"),
+                        PromptMessage(role=PromptRole.USER, content="Q: 2 + 2\nA: 4"),
                         PromptMessage(
-                            role="user", content="Solve the next arithmetic problem."
+                            role=PromptRole.USER,
+                            content="Solve the next arithmetic problem.",
                         ),
                     ],
                 ),

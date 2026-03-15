@@ -5,6 +5,7 @@ from themis.types.enums import (
     ErrorWhere,
     InferenceStatus,
     IssueSeverity,
+    PromptRole,
     PValueCorrection,
     RecordStatus,
     RecordType,
@@ -90,6 +91,15 @@ def test_artifact_role_values():
         ArtifactRole.INFERENCE_OUTPUT,
         ArtifactRole.METRIC_DETAILS,
         ArtifactRole.JUDGE_AUDIT,
+    }
+
+
+def test_prompt_role_values():
+    assert set(PromptRole) == {
+        PromptRole.SYSTEM,
+        PromptRole.USER,
+        PromptRole.ASSISTANT,
+        PromptRole.TOOL,
     }
 
 

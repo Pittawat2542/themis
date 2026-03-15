@@ -147,7 +147,8 @@ class StageResultImporter:
         evaluation_items = {
             (item.trial_hash, item.candidate_id): item
             for item in manifest.work_items
-            if item.stage == "evaluation" and item.evaluation_hash is not None
+            if item.stage == TimelineStage.EVALUATION
+            and item.evaluation_hash is not None
         }
         imported_trial_hashes: list[str] = []
         touched_overlays: dict[str, set[str]] = {}

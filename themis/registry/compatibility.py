@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from collections.abc import Collection
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, TypeAlias
 
 from themis.errors import SpecValidationError
 from themis.registry.plugin_registry import PluginRegistry, SUPPORTED_PLUGIN_API_MAJOR
 from themis.specs.experiment import TrialSpec
 from themis.specs.foundational import EvaluationSpec, OutputTransformSpec
-from themis.types.enums import ErrorCode
+from themis.types.enums import ErrorCode, RunStage
 from themis.types.issues import Issue
 
 if TYPE_CHECKING:
     from themis.orchestration.resolved_plugins import ResolvedTrialPlugins
 
-TrialStage = Literal["generation", "transform", "evaluation"]
+TrialStage: TypeAlias = RunStage
 
 
 class CompatibilityChecker:
@@ -348,9 +348,9 @@ def _plugin_api_major(plugin_api: str) -> int | None:
 def _declared_trial_stages(trial: TrialSpec) -> tuple[TrialStage, ...]:
     stages: list[TrialStage] = []
     if trial.task.generation is not None:
-        stages.append("generation")
+        stages.append(RunStage.GENERATION)
     if trial.task.output_transforms:
-        stages.append("transform")
+        stages.append(RunStage.TRANSFORM)
     if trial.task.evaluations:
-        stages.append("evaluation")
+        stages.append(RunStage.EVALUATION)
     return tuple(stages)

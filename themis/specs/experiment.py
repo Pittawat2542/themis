@@ -20,6 +20,7 @@ from themis.specs.base import SpecBase
 from themis.specs.foundational import JudgeInferenceSpec, ModelSpec, TaskSpec
 from themis.types.enums import (
     CompressionCodec,
+    PromptRole,
     ResponseFormat,
     SamplingKind,
     StorageBackend,
@@ -117,8 +118,15 @@ class PromptMessage(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
-    role: Literal["system", "user", "assistant", "tool"]
+    role: PromptRole
     content: str
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _coerce_role(cls, value: PromptRole | str) -> PromptRole | str:
+        if isinstance(value, str):
+            return PromptRole(value)
+        return value
 
 
 class PromptTemplateSpec(SpecBase):

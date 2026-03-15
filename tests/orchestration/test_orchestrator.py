@@ -52,8 +52,15 @@ from themis.storage.event_repo import SqliteEventRepository
 from themis.orchestration.projection_handler import ProjectionHandler
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.storage.projection_repo import SqliteProjectionRepository
+from themis.storage._protocols import StorageConnectionManager
 from themis.types.enums import ErrorCode, ErrorWhere, RecordStatus, DatasetSource
-from themis.types.events import TrialEvent, TrialEventType
+from themis.types.events import (
+    TrialEvent,
+    TrialEventType,
+    TimelineStage,
+    TrialEventMetadata,
+)
+from typing import cast, Any
 
 
 class MockDatasetLoader:
@@ -118,7 +125,7 @@ class SingleItemDatasetLoader:
 
 class FailingExtractor:
     def __init__(self) -> None:
-        self.calls = 0
+        self.calls: int = 0
 
     def extract(self, trial, candidate, config=None):
         del trial, candidate, config
@@ -347,9 +354,9 @@ def test_orchestrator_rejects_direct_runtime_construction() -> None:
         match="Orchestrator.from_project_spec",
     ):
         Orchestrator(
-            registry,
-            manager,  # type: ignore
-            dataset_loader=MockDatasetLoader(),
+            cast(Any, registry),
+            manager,  # type: ignore[arg-type]  # Intentional invalid argument type to test init validation
+            dataset_loader=cast(Any, MockDatasetLoader()),
         )
 
 
@@ -742,9 +749,15 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
     resolved = resolve_task_stages(trial_spec.task)
     transform_hash = resolved.output_transforms[0].transform_hash
     evaluation_hash = resolved.evaluations[0].evaluation_hash
-    event_repo = SqliteEventRepository(orchestrator.db_manager)
-    projection_repo = SqliteProjectionRepository(orchestrator.db_manager)
-    projection_handler = ProjectionHandler(event_repo, projection_repo)
+    event_repo = SqliteEventRepository(
+        cast(StorageConnectionManager, orchestrator.db_manager)
+    )
+    projection_repo = SqliteProjectionRepository(
+        cast(StorageConnectionManager, orchestrator.db_manager)
+    )
+    projection_handler = ProjectionHandler(
+        cast(Any, event_repo), cast(Any, projection_repo)
+    )
     candidate_id = bundle.items[0].candidate_id
 
     event_repo.save_spec(trial_spec)
@@ -775,17 +788,24 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
                 else TrialEventType.EVALUATION_COMPLETED
             ),
             candidate_id=candidate_id,
-            stage="extraction" if failed_stage == "transform" else "evaluation",  # type: ignore
+            stage=TimelineStage.EXTRACTION
+            if failed_stage == "transform"
+            else TimelineStage.EVALUATION,
             status=RecordStatus.ERROR,
-            metadata={  # type: ignore
-                "transform_hash": transform_hash
-                if failed_stage == "transform"
-                else None,
-                "evaluation_hash": (
-                    evaluation_hash if failed_stage == "evaluation" else None
-                ),
-                "success": False if failed_stage == "transform" else None,
-            },
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "transform_hash": transform_hash
+                    if failed_stage == "transform"
+                    else None,
+                    "evaluation_hash": (
+                        evaluation_hash
+                        if failed_stage == TimelineStage.EVALUATION
+                        else None
+                    ),
+                    "success": False if failed_stage == "transform" else None,
+                },
+            ),
             payload={
                 "spec_hash": "extract_failed"
                 if failed_stage == "transform"
@@ -806,16 +826,23 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
             event_id="evt_4",
             event_type=TrialEventType.CANDIDATE_FAILED,
             candidate_id=candidate_id,
-            stage="extraction" if failed_stage == "transform" else "evaluation",  # type: ignore
+            stage=TimelineStage.EXTRACTION
+            if failed_stage == "transform"
+            else TimelineStage.EVALUATION,
             status=RecordStatus.ERROR,
-            metadata={  # type: ignore
-                "transform_hash": transform_hash
-                if failed_stage == "transform"
-                else None,
-                "evaluation_hash": (
-                    evaluation_hash if failed_stage == "evaluation" else None
-                ),
-            },
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "transform_hash": transform_hash
+                    if failed_stage == "transform"
+                    else None,
+                    "evaluation_hash": (
+                        evaluation_hash
+                        if failed_stage == TimelineStage.EVALUATION
+                        else None
+                    ),
+                },
+            ),
             error=ErrorRecord(
                 where=ErrorWhere.EXTRACTOR
                 if failed_stage == "transform"
@@ -841,7 +868,9 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
     projection_handler.on_trial_completed(
         trial_spec.spec_hash,
         transform_hash=transform_hash if failed_stage == "transform" else None,
-        evaluation_hash=evaluation_hash if failed_stage == "evaluation" else None,
+        evaluation_hash=evaluation_hash
+        if failed_stage == TimelineStage.EVALUATION
+        else None,
     )
 
     manifest = orchestrator.plan(experiment)
@@ -978,7 +1007,7 @@ def test_orchestrator_can_export_evaluation_bundle_and_import_results(tmp_path) 
 
     evaluation_bundle = orchestrator.export_evaluation_bundle(experiment)
 
-    assert evaluation_bundle.stage == "evaluation"
+    assert evaluation_bundle.stage == TimelineStage.EVALUATION
     assert len(evaluation_bundle.items) == 4
     evaluation_hashes = {item.evaluation_hash for item in evaluation_bundle.items}
     assert len(evaluation_hashes) == 1

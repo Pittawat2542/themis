@@ -19,6 +19,7 @@ from themis import (
 )
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
+from themis.types.enums import PromptRole, DatasetSource
 
 
 class GreetingDatasetLoader:
@@ -92,7 +93,7 @@ def build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="greetings",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 evaluations=[
                     EvaluationSpec(name="default", metrics=["matches_expected"])
@@ -102,7 +103,9 @@ def build_experiment() -> ExperimentSpec:
         prompt_templates=[
             PromptTemplateSpec(
                 id="hello",
-                messages=[PromptMessage(role="user", content="Greet the user.")],
+                messages=[
+                    PromptMessage(role=PromptRole.USER, content="Greet the user.")
+                ],
             )
         ],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),

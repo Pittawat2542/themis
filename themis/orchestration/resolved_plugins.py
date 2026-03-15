@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TypeAlias
 
 from themis.contracts.protocols import (
     Extractor,
@@ -23,13 +23,14 @@ from themis.orchestration.task_resolution import (
 from themis.records.candidate import CandidateRecord
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import TrialSpec
+from themis.types.enums import RunStage
 from themis.types.json_types import JSONValueType
 
 PreInferenceHook = Callable[[TrialSpec, RenderedPrompt], RenderedPrompt]
 PostInferenceHook = Callable[[TrialSpec, InferenceResult], InferenceResult]
 CandidateHook = Callable[[TrialSpec, CandidateRecord], CandidateRecord]
 JudgeEngineResolver = Callable[[str], InferenceEngine]
-ResolvedStage = Literal["generation", "transform", "evaluation"]
+ResolvedStage: TypeAlias = RunStage
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,9 +323,9 @@ def resolve_evaluation_plugins(
 def _declared_trial_stages(trial: TrialSpec) -> set[ResolvedStage]:
     stages: set[ResolvedStage] = set()
     if trial.task.generation is not None:
-        stages.add("generation")
+        stages.add(RunStage.GENERATION)
     if trial.task.output_transforms:
-        stages.add("transform")
+        stages.add(RunStage.TRANSFORM)
     if trial.task.evaluations:
-        stages.add("evaluation")
+        stages.add(RunStage.EVALUATION)
     return stages

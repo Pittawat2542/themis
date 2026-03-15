@@ -14,7 +14,7 @@ from themis.registry.compatibility import (
     resolve_trial_plugins,
     validate_output_transform,
 )
-from themis.types.enums import DatasetSource, ResponseFormat
+from themis.types.enums import DatasetSource, ResponseFormat, RunStage
 from themis.registry.plugin_registry import EngineCapabilities, PluginRegistry
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import (
@@ -267,7 +267,7 @@ def test_compatibility_can_scope_validation_to_generation_only() -> None:
         check_trial_for_stages(
             _make_trial(),
             registry,
-            stages={"generation"},
+            stages={RunStage.GENERATION},
         )
         == []
     )

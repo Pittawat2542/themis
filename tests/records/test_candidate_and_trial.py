@@ -1,3 +1,5 @@
+from themis.types.events import TimelineStage
+from themis.types.enums import PromptRole
 from datetime import datetime, timezone
 
 from themis.records.candidate import CandidateRecord
@@ -46,7 +48,7 @@ def test_candidate_record_exposes_v2_public_fields():
     conversation = Conversation(
         events=[
             MessageEvent(
-                role="assistant",
+                role=PromptRole.ASSISTANT,
                 payload=MessagePayload(content="42"),
                 event_index=0,
             )
@@ -60,7 +62,7 @@ def test_candidate_record_exposes_v2_public_fields():
         item_id="item1",
         stages=[
             TimelineStageRecord(
-                stage="inference",  # type: ignore
+                stage=TimelineStage.INFERENCE,
                 status=RecordStatus.OK,
                 started_at=datetime.now(timezone.utc),
                 ended_at=datetime.now(timezone.utc),

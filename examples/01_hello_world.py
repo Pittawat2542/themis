@@ -21,6 +21,7 @@ from themis import (
 )
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
+from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
 
 
 class ArithmeticDatasetLoader:
@@ -77,7 +78,7 @@ def build_project() -> ProjectSpec:
         global_seed=7,
         storage=StorageSpec(
             root_dir=str(Path(".cache/themis-examples/01-hello-world")),
-            compression="none",
+            compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
@@ -89,7 +90,7 @@ def build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="arithmetic",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 evaluations=[EvaluationSpec(name="default", metrics=["exact_match"])],
             )
@@ -98,7 +99,9 @@ def build_experiment() -> ExperimentSpec:
             PromptTemplateSpec(
                 id="baseline",
                 messages=[
-                    PromptMessage(role="user", content="Solve the arithmetic problem.")
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve the arithmetic problem."
+                    )
                 ],
             )
         ],
@@ -119,7 +122,9 @@ def main() -> None:
         ".cache/themis-examples/01-hello-world/themis.sqlite3",
     )
     for trial in result.iter_trials():
+        assert trial.candidates[0].evaluation is not None
         score = trial.candidates[0].evaluation.aggregate_scores["exact_match"]
+        assert trial.trial_spec is not None
         print(f"{trial.trial_spec.item_id}: exact_match={score:.1f}")
 
 

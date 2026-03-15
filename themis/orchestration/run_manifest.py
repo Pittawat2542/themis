@@ -15,6 +15,7 @@ from themis.specs.experiment import (
     ProjectSpec,
     TrialSpec,
 )
+from themis.types.enums import RunStage
 
 
 def _now_utc() -> datetime:
@@ -42,7 +43,7 @@ class StageWorkItem(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     work_item_id: str
-    stage: Literal["generation", "transform", "evaluation"]
+    stage: RunStage
     status: WorkItemStatus = WorkItemStatus.PENDING
     trial_hash: str
     candidate_index: int
@@ -158,7 +159,7 @@ class GenerationWorkBundle(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    stage: Literal["generation"] = "generation"
+    stage: Literal[RunStage.GENERATION] = RunStage.GENERATION
     manifest: RunManifest
     items: list[GenerationBundleItem] = Field(default_factory=list)
 
@@ -168,6 +169,6 @@ class EvaluationWorkBundle(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    stage: Literal["evaluation"] = "evaluation"
+    stage: Literal[RunStage.EVALUATION] = RunStage.EVALUATION
     manifest: RunManifest
     items: list[EvaluationBundleItem] = Field(default_factory=list)

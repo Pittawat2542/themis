@@ -6,6 +6,7 @@ artifacts when the project uses compressed storage:
     uv add "themis-eval[compression]"
 """
 
+from themis.types.enums import PromptRole
 from pathlib import Path
 
 from themis import (
@@ -25,6 +26,7 @@ from themis import (
     StorageSpec,
     TaskSpec,
 )
+from themis.types.enums import CompressionCodec, DatasetSource
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
 from themis.specs.foundational import JudgeInferenceSpec
@@ -71,7 +73,8 @@ class JudgeBackedMetric:
                 id="judge-prompt",
                 messages=[
                     PromptMessage(
-                        role="user", content="Does the answer match the reference?"
+                        role=PromptRole.USER,
+                        content="Does the answer match the reference?",
                     )
                 ],
             ),
@@ -99,7 +102,7 @@ def build_project() -> ProjectSpec:
         global_seed=53,
         storage=StorageSpec(
             root_dir=str(Path(".cache/themis-examples/07-judge-metric")),
-            compression="zstd",
+            compression=CompressionCodec.ZSTD,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
@@ -111,7 +114,7 @@ def build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="judge-task",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 evaluations=[EvaluationSpec(name="default", metrics=["judge_pass"])],
             )
@@ -120,7 +123,9 @@ def build_experiment() -> ExperimentSpec:
             PromptTemplateSpec(
                 id="baseline",
                 messages=[
-                    PromptMessage(role="user", content="Solve the arithmetic problem.")
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve the arithmetic problem."
+                    )
                 ],
             )
         ],
@@ -137,13 +142,19 @@ def main() -> None:
     result = orchestrator.run(build_experiment())
 
     trial = result.get_trial(result.trial_hashes[0])
+    assert trial is not None
     candidate_id = trial.candidates[0].candidate_id
+    assert candidate_id is not None
     candidate_view = result.view_timeline(candidate_id)
+    assert candidate_view is not None
+    assert candidate_view.judge_audit is not None
+    assert trial.candidates[0].evaluation is not None
 
     print(
         "Metric score:", trial.candidates[0].evaluation.aggregate_scores["judge_pass"]
     )
     print("Judge audit calls:", len(candidate_view.judge_audit.judge_calls))
+    assert candidate_view.judge_audit.judge_calls[0].inference is not None
     print(
         "Judge raw text:", candidate_view.judge_audit.judge_calls[0].inference.raw_text
     )

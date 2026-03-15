@@ -1,4 +1,5 @@
 from __future__ import annotations
+from themis.types.enums import PromptRole
 
 from themis.orchestration.trial_runner import TrialRunner, candidate_hash_for_index
 from themis.records.conversation import Conversation, MessageEvent, MessagePayload
@@ -16,7 +17,7 @@ from themis.specs.foundational import (
 from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.types.enums import RecordStatus, DatasetSource
-from themis.types.events import TrialEvent, TrialEventType
+from themis.types.events import TrialEvent, TrialEventType, TimelineStage
 
 
 class ResumeAwareInferenceEngine:
@@ -31,17 +32,17 @@ class ResumeAwareInferenceEngine:
             conversation=Conversation(
                 events=[
                     MessageEvent(
-                        role="user",
+                        role=PromptRole.USER,
                         payload=MessagePayload(content="Turn 0"),
                         event_index=0,
                     ),
                     MessageEvent(
-                        role="assistant",
+                        role=PromptRole.ASSISTANT,
                         payload=MessagePayload(content="Turn 1"),
                         event_index=1,
                     ),
                     MessageEvent(
-                        role="assistant",
+                        role=PromptRole.ASSISTANT,
                         payload=MessagePayload(content="Turn 2"),
                         event_index=2,
                     ),
@@ -58,7 +59,7 @@ class PassthroughMetric:
 def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
     manager = DatabaseManager(f"sqlite:///{tmp_path}/resume.db")
     manager.initialize()
-    event_repo = SqliteEventRepository(manager)  # type: ignore
+    event_repo = SqliteEventRepository(manager)
     registry = PluginRegistry()
     engine = ResumeAwareInferenceEngine()
     registry.register_inference_engine("openai", engine)
@@ -94,9 +95,9 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_seq=2,
             event_id=f"{trial.spec_hash}:2",
             event_type=TrialEventType.ITEM_LOADED,
-            stage="item_load",  # type: ignore
+            stage=TimelineStage.ITEM_LOAD,
             status=RecordStatus.OK,
-            metadata={"item_id": trial.item_id, "dataset_source": "memory"},  # type: ignore
+            metadata={"item_id": trial.item_id, "dataset_source": "memory"},
             payload={"question": "6 * 7"},
         ),
         TrialEvent(
@@ -104,9 +105,9 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_seq=3,
             event_id=f"{trial.spec_hash}:3",
             event_type=TrialEventType.PROMPT_RENDERED,
-            stage="prompt_render",  # type: ignore
+            stage=TimelineStage.PROMPT_RENDER,
             status=RecordStatus.OK,
-            metadata={"prompt_template_id": "baseline"},  # type: ignore
+            metadata={"prompt_template_id": "baseline"},
             payload={"messages": []},
         ),
         TrialEvent(
@@ -123,9 +124,9 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_id=f"{trial.spec_hash}:5",
             event_type=TrialEventType.PROMPT_RENDERED,
             candidate_id=candidate_id,
-            stage="prompt_render",  # type: ignore
+            stage=TimelineStage.PROMPT_RENDER,
             status=RecordStatus.OK,
-            metadata={"prompt_template_id": "baseline"},  # type: ignore
+            metadata={"prompt_template_id": "baseline"},
             payload={"messages": []},
         ),
         TrialEvent(
@@ -135,7 +136,7 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_type=TrialEventType.CONVERSATION_EVENT,
             candidate_id=candidate_id,
             payload=MessageEvent(
-                role="user",
+                role=PromptRole.USER,
                 payload=MessagePayload(content="Turn 0"),
                 event_index=0,
             ).model_dump(mode="json"),
@@ -147,7 +148,7 @@ def test_trial_runner_resumes_conversation_from_last_persisted_event(tmp_path):
             event_type=TrialEventType.CONVERSATION_EVENT,
             candidate_id=candidate_id,
             payload=MessageEvent(
-                role="assistant",
+                role=PromptRole.ASSISTANT,
                 payload=MessagePayload(content="Turn 1"),
                 event_index=1,
             ).model_dump(mode="json"),

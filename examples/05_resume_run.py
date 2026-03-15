@@ -21,6 +21,7 @@ from themis import (
 )
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
+from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
 
 
 class ResumeDatasetLoader:
@@ -72,7 +73,7 @@ def build_project() -> ProjectSpec:
         global_seed=31,
         storage=StorageSpec(
             root_dir=str(Path(".cache/themis-examples/05-resume-run")),
-            compression="none",
+            compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
@@ -84,7 +85,7 @@ def build_experiment() -> ExperimentSpec:
         tasks=[
             TaskSpec(
                 task_id="resume-math",
-                dataset=DatasetSpec(source="memory"),
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
                 evaluations=[EvaluationSpec(name="default", metrics=["exact_match"])],
             )
@@ -93,7 +94,9 @@ def build_experiment() -> ExperimentSpec:
             PromptTemplateSpec(
                 id="baseline",
                 messages=[
-                    PromptMessage(role="user", content="Solve the arithmetic problem.")
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve the arithmetic problem."
+                    )
                 ],
             )
         ],

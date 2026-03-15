@@ -118,7 +118,7 @@ def test_selected_runtime_helpers_have_explicit_return_annotations() -> None:
         for node in ast.walk(tree):
             if (
                 isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name in function_names  # type: ignore
+                and node.name in function_names
                 and node.returns is None
             ):
                 violations.append(
