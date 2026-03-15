@@ -185,7 +185,7 @@ jobs:
         run: python scripts/check_coverage_thresholds.py coverage.json
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -245,7 +245,7 @@ jobs:
         run: uv run python scripts/ci/check_built_package.py
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
