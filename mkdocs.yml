@@ -1,5 +1,5 @@
 site_name: Themis
-site_description: Modern LLM evaluation framework for researchers and practitioners
+site_description: Typed, code-first orchestration for reproducible LLM evaluation
 site_url: https://pittawat2542.github.io/themis/
 repo_url: https://github.com/pittawat2542/themis
 repo_name: pittawat2542/themis
@@ -95,7 +95,7 @@ markdown_extensions:
       toc_depth: 3
 
 extra:
-  announcement: "🎉 <strong>Themis 1.1.1.post1 is out:</strong> execution-metric fixes, staged-file Ruff guardrails, and CI-gated release publishing. <a href='/themis/releases/1.1.1.post1/'>See what's new</a>."
+  announcement: "<strong>Documentation reset:</strong> this site now documents the implementation directly instead of the retired design handoff docs."
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/pittawat2542/themis
@@ -109,54 +109,66 @@ extra:
     property: G-XXXXXXXXXX # Replace with your GA4 property ID
 
 nav:
-  - Home: index.md
+  - Introduction:
+      - Overview: index.md
+      - Public Surface: introduction/index.md
 
-  - Releases:
-      - 1.2.1: releases/1.2.1.md
-      - 1.2.0: releases/1.2.0.md
-      - 1.1.1.post1: releases/1.1.1.post1.md
-      - 1.1.1: releases/1.1.1.md
-      - 1.1.0: releases/1.1.0.md
+  - Installation & Setup:
+      - Overview: installation-setup/index.md
 
-  - Getting Started:
-      - Installation: getting-started/installation.md
-      - Quick Start: getting-started/quickstart.md
-      - Core Concepts: getting-started/concepts.md
+  - Quick Start:
+      - Hello World: quick-start/index.md
+
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - Hello World Walkthrough: tutorials/hello-world.md
+      - Load a Project File: tutorials/project-files.md
+      - Analyze Results: tutorials/analyze-results.md
+
+  - Concepts:
+      - Overview: concepts/index.md
+      - Architecture: concepts/architecture.md
+      - Specs and Records: concepts/specs-and-records.md
+      - Storage and Resume: concepts/storage-and-resume.md
+      - Plugins and Hooks: concepts/plugins-and-hooks.md
 
   - Guides:
-      - Evaluation: guides/evaluation.md
-      - Advanced Orchestration: guides/advanced-orchestration.md
-      - Countdown Tutorial: guides/countdown-tutorial.md
-      - Comparison: guides/comparison.md
-      - Interoperability: guides/interoperability.md
-      - Providers and Models: guides/providers.md
-      - Storage: guides/storage.md
-      - Observability: guides/observability.md
-      - CI/CD: guides/ci-cd.md
-      - Releasing and Publishing: guides/releasing.md
+      - Overview: guides/index.md
+      - Release Checklist: guides/releasing.md
+      - Advanced Workflows: guides/advanced-workflows.md
+      - Write a Dataset Loader: guides/dataset-loaders.md
+      - Add a Minimal Plugin Set: guides/plugins.md
+      - Attach Telemetry & Observability: guides/telemetry-and-observability.md
+      - Author Project Files: guides/project-files.md
+      - Resume and Inspect Runs: guides/resume-and-inspect.md
+      - Hand Off Generation or Evaluation: guides/external-stage-handoffs.md
+      - Evolve an Experiment: guides/evolve-an-experiment.md
+      - Scale Execution: guides/scaling-execution.md
+      - Compare and Export Results: guides/compare-and-export.md
+      - Use the Quickcheck CLI: guides/quickcheck.md
 
-  - Reference:
-      - CLI Reference: guides/cli.md
-      - Benchmarks: reference/benchmarks.md
-      - API Server: reference/api-server.md
+  - API Reference:
+      - Overview: api-reference/index.md
+      - Root Package: api-reference/root.md
+      - Specs: api-reference/specs.md
+      - Orchestration: api-reference/orchestration.md
+      - Runtime: api-reference/runtime.md
+      - Registry: api-reference/registry.md
+      - Extractors: api-reference/extractors.md
+      - Protocols: api-reference/protocols.md
+      - Telemetry: api-reference/telemetry.md
+      - Records: api-reference/records.md
+      - Storage: api-reference/storage.md
+      - Reporting & Stats: api-reference/reporting-and-stats.md
+      - CLI: api-reference/cli.md
 
-      - Python API:
-          - Overview: api/overview.md
-          - evaluate(): api/evaluate.md
-          - Comparison: api/comparison.md
-          - Presets: api/presets.md
-          - Metrics: api/metrics.md
-          - Backends: api/backends.md
+  - Changelog:
+      - Release Notes: changelog/index.md
 
-  - Architecture:
-      - Philosophy: PHILOSOPHY.md
-      - Architecture: ARCHITECTURE.md
-
-  - Project:
-      - Changelog: CHANGELOG.md
-      - Contributing: CONTRIBUTING.md
+  - FAQ / Troubleshooting:
+      - FAQ: faq/index.md
 
 extra_css:
   - stylesheets/extra.css
 
-copyright: Copyright &copy; 2024 Themis Contributors
+copyright: Copyright &copy; 2024-2026 Themis Contributors

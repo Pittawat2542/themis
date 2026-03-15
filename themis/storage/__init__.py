@@ -1,60 +1,25 @@
-"""Storage backends and adapters for vNext workflows."""
+"""Storage primitives for specs, events, projections, and artifacts."""
 
-from pathlib import Path
-from typing import Any
-from themis.storage.core import (
-    ExperimentStorage,
-    evaluation_cache_key,
-    task_cache_key,
-)
-from themis.storage.filesystem import STORAGE_FORMAT_VERSION
-from themis.storage.models import (
-    ConcurrentAccessError,
-    DataIntegrityError,
-    RetentionPolicy,
-    RunMetadata,
-    RunStatus,
-    StorageConfig,
-)
-from themis.exceptions import ConfigurationError
+from themis.storage import factory
+from themis.storage.sqlite_schema import DatabaseManager
+from themis.storage.event_repo import SqliteEventRepository
+from themis.storage.projection_repo import SqliteProjectionRepository
+from themis.storage.artifact_store import ArtifactStore
+from themis.storage.blobs.local_fs import LocalBlobStore
+from themis.storage.factory import StorageBundle, build_storage_bundle
+from themis.storage.migrate import migrate_sqlite_store, migrate_sqlite_to_postgres
+from themis.storage.observability import SqliteObservabilityStore
 
 __all__ = [
-    "ExperimentStorage",
-    "RunStatus",
-    "RunMetadata",
-    "StorageConfig",
-    "RetentionPolicy",
-    "DataIntegrityError",
-    "ConcurrentAccessError",
-    "task_cache_key",
-    "evaluation_cache_key",
-    "STORAGE_FORMAT_VERSION",
+    "StorageBundle",
+    "build_storage_bundle",
+    "migrate_sqlite_store",
+    "migrate_sqlite_to_postgres",
+    "LocalBlobStore",
+    "DatabaseManager",
+    "SqliteEventRepository",
+    "SqliteProjectionRepository",
+    "ArtifactStore",
+    "SqliteObservabilityStore",
+    "factory",
 ]
-
-
-def resolve_storage(storage_path: Any | None, storage_backend: Any | None = None):
-    """Resolve storage backend from path or explicit backend."""
-    # Allow users to pass a backend object directly to the first argument
-    if (
-        storage_backend is None
-        and storage_path is not None
-        and not isinstance(storage_path, (str, Path))
-    ):
-        storage_backend = storage_path
-        storage_path = None
-
-    if storage_backend is not None:
-        backend = storage_backend
-        if hasattr(backend, "experiment_storage"):
-            return backend.experiment_storage
-        if not hasattr(backend, "start_run"):
-            raise ConfigurationError(
-                "storage_backend must be ExperimentStorage-compatible."
-            )
-        return backend
-
-    if storage_path is None:
-        return None
-
-    root = Path(storage_path)
-    return ExperimentStorage(root)

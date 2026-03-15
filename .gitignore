@@ -97,3 +97,5 @@ examples/logging_demo.py
 .\!12484\!.coverage
 coverage.json
 /outputs
+plan.md
+pytest.log

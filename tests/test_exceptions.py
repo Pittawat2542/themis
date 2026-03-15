@@ -1,16 +1,21 @@
 """Tests for the Themis exception hierarchy."""
 
+import importlib
+
 import pytest
 
-from themis.exceptions import (
+import themis
+from themis.errors import (
     ThemisError,
-    ConfigurationError,
-    ProviderError,
-    DatasetError,
+    ExtractionError,
+    InferenceError,
     MetricError,
-    EvaluationError,
+    OrchestrationAbortedError,
+    RetryableProviderError,
+    SpecValidationError,
     StorageError,
 )
+from themis.types.enums import ErrorCode
 
 
 class TestExceptionHierarchy:
@@ -19,12 +24,12 @@ class TestExceptionHierarchy:
     @pytest.mark.parametrize(
         "exc_cls",
         [
-            ConfigurationError,
-            ProviderError,
-            DatasetError,
+            SpecValidationError,
+            InferenceError,
+            ExtractionError,
             MetricError,
-            EvaluationError,
             StorageError,
+            OrchestrationAbortedError,
         ],
     )
     def test_inherits_from_themis_error(self, exc_cls):
@@ -33,43 +38,15 @@ class TestExceptionHierarchy:
     def test_catch_all_with_themis_error(self):
         """Users can catch any Themis error with a single except clause."""
         for exc_cls in (
-            ConfigurationError,
-            ProviderError,
-            DatasetError,
+            SpecValidationError,
+            InferenceError,
+            ExtractionError,
             MetricError,
-            EvaluationError,
             StorageError,
+            OrchestrationAbortedError,
         ):
             with pytest.raises(ThemisError):
-                raise exc_cls("test")
-
-
-class TestBackwardCompatibility:
-    """Domain exceptions are also catchable by stdlib types."""
-
-    def test_configuration_error_is_value_error(self):
-        with pytest.raises(ValueError):
-            raise ConfigurationError("bad config")
-
-    def test_provider_error_is_key_error(self):
-        with pytest.raises(KeyError):
-            raise ProviderError("missing provider")
-
-    def test_dataset_error_is_value_error(self):
-        with pytest.raises(ValueError):
-            raise DatasetError("bad dataset")
-
-    def test_metric_error_is_value_error(self):
-        with pytest.raises(ValueError):
-            raise MetricError("bad metric")
-
-    def test_evaluation_error_is_runtime_error(self):
-        with pytest.raises(RuntimeError):
-            raise EvaluationError("eval failed")
-
-    def test_storage_error_is_runtime_error(self):
-        with pytest.raises(RuntimeError):
-            raise StorageError("storage failed")
+                raise exc_cls(code=ErrorCode.SCHEMA_MISMATCH, message="test")
 
 
 class TestExceptionMessages:
@@ -77,9 +54,19 @@ class TestExceptionMessages:
 
     def test_message_preserved(self):
         msg = "Something went wrong with configuration"
-        err = ConfigurationError(msg)
+        err = StorageError(code=ErrorCode.STORAGE_READ, message=msg)
         assert str(err) == msg
 
     def test_themis_error_is_exception(self):
         assert issubclass(ThemisError, Exception)
-        assert not issubclass(ThemisError, (ValueError, KeyError, RuntimeError))
+
+    def test_root_namespace_re_exports_canonical_error_class(self):
+        assert themis.ThemisError is ThemisError
+
+    def test_retryable_provider_error_is_inference_error(self):
+        assert issubclass(RetryableProviderError, InferenceError)
+
+    def test_legacy_exception_module_is_deprecated_shim(self):
+        with pytest.deprecated_call():
+            legacy_module = importlib.import_module("themis.exceptions")
+        assert legacy_module.ThemisError is ThemisError

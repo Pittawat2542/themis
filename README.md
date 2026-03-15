@@ -1,6 +1,6 @@
 # Themis
 
-> Lightweight, practical evaluation workflows for LLM experiments.
+> Typed, code-first orchestration for reproducible LLM evaluation.
 
 [![CI](https://github.com/Pittawat2542/themis/actions/workflows/ci.yml/badge.svg)](https://github.com/Pittawat2542/themis/actions/workflows/ci.yml)
 [![Docs](https://github.com/Pittawat2542/themis/actions/workflows/docs.yml/badge.svg)](https://github.com/Pittawat2542/themis/actions/workflows/docs.yml)
@@ -8,154 +8,89 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-Themis gives you two clean entry points:
+Themis centers on a small public surface:
 
-- `themis.evaluate(...)` for quick benchmark and custom dataset evaluation.
-- `ExperimentSession().run(...)` for explicit, step-by-step evaluation pipelines.
-
-It includes built-in benchmarks, auto-configured metric pipelines, caching and resumability, statistical comparison utilities, and a web server for run inspection.
+- `ProjectSpec` for shared storage and execution policy
+- `ExperimentSpec` for the experiment matrix
+- `PluginRegistry` for engines, extractors, metrics, judges, and hooks
+- `Orchestrator` for planning, running, and materializing trials
+- `ExperimentResult` for timelines, reports, and paired comparisons
+- `themis-quickcheck` for fast SQLite summary inspection
 
 ## Why Themis
 
-- **Fast start**: run your first evaluation in a few lines.
-- **Structured control**: `ExperimentSession` API for reproducible workflows.
-- **Built-in presets**: Curated benchmark definitions with prompts, metrics, and extractors included.
-- **Extensible**: Register your own datasets, custom metrics, LLM providers, and benchmark presets.
-- **Practical storage**: Local cache, resumable runs, and a robust storage backend.
-- **Production-minded CI/CD**: Strict docs build, package validation, and release automation.
+- **Deterministic planning**: typed specs expand into stable trial hashes.
+- **Local-first storage**: append-only events plus projection tables in SQLite.
+- **Extensible runtime**: register your own engines, extractors, metrics, judges, and hooks.
+- **Inspectable outputs**: read trials, timelines, reports, and paired comparisons from one result object.
+- **Predictable resume behavior**: completed trials are skipped when storage, specs, and revision match.
 
 ## Installation
 
 ```bash
-# stable release
 uv add themis-eval
 
-# with optional extras
-uv add "themis-eval[math,nlp,code,server]"
+# add extras as needed
+uv add "themis-eval[stats,compression]"
 ```
 
-## Quick Start (No API key required)
+For the full optional-extra matrix, including `datasets`, provider SDKs,
+telemetry, docs tooling, and the contributor toolchain, see
+[docs/installation-setup/index.md](docs/installation-setup/index.md).
 
-Use our built-in `fake` model provider with the `demo` benchmark to ensure everything is installed correctly:
+## Hello World
 
-```python
-from themis import evaluate
+The runnable quick-start script lives at
+[`examples/01_hello_world.py`](examples/01_hello_world.py). It uses local demo
+components, so it runs without API keys or provider extras.
 
-report = evaluate(
-    "demo",
-    model="fake:fake-math-llm", # Uses the built-in fake provider
-    limit=10,
-)
+The workflow is:
 
-exact_match = report.evaluation_report.metrics["ExactMatch"]
-print(f"ExactMatch: {exact_match.mean:.2%} (n={exact_match.count})")
-```
+- create a `PluginRegistry` with one fake engine and one metric
+- build `ProjectSpec` and `ExperimentSpec` from top-level `themis` imports
+- run `Orchestrator.from_project_spec(...)`
+- inspect scores from the returned `ExperimentResult`
 
-## Quick Start (Real models)
+For the full script, use the example file directly or the
+[Quick Start guide](docs/quick-start/index.md), which embeds that same file.
 
-Evaluating real models requires the corresponding provider's API key (e.g., `OPENAI_API_KEY`). By default, Themis uses [LiteLLM](https://github.com/BerriAI/litellm) for robust multi-provider routing.
+## Package Namespaces
 
-```python
-import os
-from themis import evaluate
+The root `themis` package stays intentionally small. Additional convenience
+namespaces are available when you want lower-level types without long module
+paths:
 
-os.environ["OPENAI_API_KEY"] = "sk-..."
+- `themis.records` re-exports persisted record models such as `TrialRecord`
+  and `CandidateRecord`
+- `themis.types` re-exports shared enums and event/value types used across the
+  runtime
+- `themis.stats` re-exports paired-comparison tooling and requires the
+  `stats` extra
 
-# Run the GSM8K math benchmark with GPT-4
-report = evaluate(
-    "gsm8k",
-    model="openai/gpt-4o", # Model string parsed by LiteLLM
-    limit=100,
-)
-
-# Extract and print the aggregated metric score
-accuracy = report.evaluation_report.metrics["ExactMatch"].mean
-print(f"Accuracy: {accuracy:.2%}")
-```
-
-## CLI Workflow
-
-```bash
-# Run two experiments
-themis eval gsm8k --model gpt-4 --limit 100 --run-id run-a
-themis eval gsm8k --model gpt-4 --temperature 0.7 --limit 100 --run-id run-b
-
-# Compare them
-themis compare run-a run-b
-
-# Explore in browser
-themis serve --storage .cache/experiments
-```
-
-Helpful commands:
-
-```bash
-themis list benchmarks
-themis list runs --storage .cache/experiments
-themis list metrics
-```
-
-
-## Built-in Coverage
-
-Themis ships with math, reasoning, science, and QA presets (for example: `gsm8k`, `math500`, `aime24`, `aime25`, `mmlu-pro`, `supergpqa`, `gpqa`, `commonsense_qa`, `coqa`, `demo`).
-
-List everything from CLI:
-
-```bash
-themis list benchmarks
-```
-
-Supported metric families include:
-
-- exact/verification metrics (for math/structured outputs)
-- NLP metrics (`BLEU`, `ROUGE`, `BERTScore`, `METEOR`)
-- code metrics (`PassAtK`, `CodeBLEU`, execution-based checks)
-
-## Extending Themis
-
-Top-level extension APIs are available directly from `themis`:
-
-```python
-import themis
-
-# themis.register_metric(name, metric_cls)
-# themis.register_dataset(name, factory)
-# themis.register_provider(name, factory)
-# themis.register_benchmark(preset)
-```
-
-See the extension guides:
-
-- [Extending Themis](https://pittawat2542.github.io/themis/)
-- [API Backends Reference](docs/api/backends.md)
-
-## Documentation
-
-- Docs site: https://pittawat2542.github.io/themis/
-- Getting started: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
-- Evaluation guide: [docs/guides/evaluation.md](docs/guides/evaluation.md)
-- Comparison guide: [docs/guides/comparison.md](docs/guides/comparison.md)
-
-- CI/CD and release process: [docs/guides/ci-cd.md](docs/guides/ci-cd.md)
+These namespaces are lazy-loaded so the base install keeps a small import
+surface and clear optional-dependency boundaries.
 
 ## Examples
 
 Runnable examples live in [`examples/`](examples/):
 
-- `01_quickstart.py`
-- `02_custom_dataset.py`
-- `04_comparison.py`
-- `05_api_server.py`
-- `07_provider_ready.py`
-- `08_resume_cache.py`
-- `09_research_loop.py`
+- `01_hello_world.py`
+- `02_project_file.py`
+- `03_custom_extractor_metric.py`
+- `04_compare_models.py`
+- `05_resume_run.py`
+- `06_hooks_and_timeline.py`
+- `07_judge_metric.py`
 
-Run one:
+## Documentation
 
-```bash
-uv run python examples/01_quickstart.py
-```
+- Docs site: https://pittawat2542.github.io/themis/
+- Quick Start: [docs/quick-start/index.md](docs/quick-start/index.md)
+- Concepts: [docs/concepts/index.md](docs/concepts/index.md)
+- Guides: [docs/guides/index.md](docs/guides/index.md)
+- Release Checklist: [docs/guides/releasing.md](docs/guides/releasing.md)
+- API Reference: [docs/api-reference/index.md](docs/api-reference/index.md)
+- FAQ: [docs/faq/index.md](docs/faq/index.md)
 
 ## Development
 
@@ -169,8 +104,8 @@ uv run pytest
 # strict docs build
 uv run mkdocs build --strict
 
-# baseline syntax/runtime lint used in CI
-uv run ruff check --select E9,F63,F7 themis tests
+# baseline lint
+uv run ruff check
 ```
 
 ## Contributing

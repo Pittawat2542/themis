@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     tags:
       - 'v*.*.*'
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -78,8 +78,11 @@ jobs:
           mapfile -t changed_files < changed_python_files.txt
           uv run ruff check "${changed_files[@]}"
 
-      - name: Run baseline lint (syntax/runtime safety)
-        run: uv run ruff check --select E9,F63,F7 themis tests
+      - name: Run full repo lint
+        run: uv run ruff check themis tests examples scripts
+
+      - name: Run type check
+        run: uv run mypy themis tests
 
   tests:
     name: Tests (Python ${{ matrix.python-version }})
@@ -110,7 +113,48 @@ jobs:
         run: uv run pytest -q
 
       - name: Validate examples
+        if: matrix.python-version == '3.12'
         run: uv run python scripts/ci/run_examples.py
+
+  tests-postgres:
+    name: Tests (Postgres, Python 3.12)
+    needs: quality
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      THEMIS_TEST_POSTGRES_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: 'latest'
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Run Postgres storage tests
+        run: uv run pytest tests/storage/test_postgres_backend.py tests/storage/test_migrate.py -q
 
   coverage:
     name: Coverage
@@ -188,11 +232,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
+
       - name: Build package
         run: uv build
 
       - name: Validate package metadata
         run: uvx --from twine twine check dist/*
+
+      - name: Smoke test built wheel
+        run: uv run python scripts/ci/check_built_package.py
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v6

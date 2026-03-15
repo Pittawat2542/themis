@@ -8,12 +8,12 @@ import sys
 from pathlib import Path
 
 THRESHOLDS = {
-    "themis/api/__init__.py": 75.0,
-    "themis/experiment/orchestrator.py": 75.0,
-    "themis/storage/core.py": 80.0,
-    "themis/experiment/comparison/engine.py": 80.0,
-    "themis/evaluation/statistics/comparison_tests.py": 80.0,
-    "themis/evaluation/metrics/code/execution.py": 50.0,
+    "themis/cli/quickcheck.py": 80.0,
+    "themis/extractors/builtin.py": 80.0,
+    "themis/orchestration/orchestrator.py": 90.0,
+    "themis/registry/plugin_registry.py": 75.0,
+    "themis/stats/stats_engine.py": 85.0,
+    "themis/storage/projection_repo.py": 70.0,
 }
 
 
