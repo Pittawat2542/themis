@@ -18,19 +18,36 @@ def _load_module(relative_path: str, module_name: str):
     return module
 
 
-def test_validate_release_uses_docs_changelog_index_link(tmp_path) -> None:
-    module = _load_module("scripts/ci/validate_release.py", "validate_release")
-
-    repo_root = tmp_path / "repo"
-    (repo_root / "docs" / "changelog").mkdir(parents=True)
-    (repo_root / "pyproject.toml").write_text('[project]\nversion = "2.0.0"\n')
-    (repo_root / "CHANGELOG.md").write_text("# Changelog\n\n## [2.0.0] - 2026-03-10\n")
+def _write_release_fixture(
+    repo_root: Path,
+    *,
+    version: str = "2.0.0",
+    changelog_date: str = "2026-03-10",
+    citation_date: str = "2026-03-10",
+    classifier: str = "Development Status :: 5 - Production/Stable",
+) -> None:
+    (repo_root / "docs" / "changelog").mkdir(parents=True, exist_ok=True)
+    (repo_root / "pyproject.toml").write_text(
+        f'[project]\nversion = "{version}"\nclassifiers = [\n    "{classifier}",\n]\n'
+    )
+    (repo_root / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n## [{version}] - {changelog_date}\n"
+    )
     (repo_root / "docs" / "changelog" / "index.md").write_text(
         "# Changelog\n\n"
         "The canonical release history lives in the repository root:\n\n"
         "- [Root changelog on GitHub](https://github.com/Pittawat2542/themis/blob/main/CHANGELOG.md)\n"
     )
-    (repo_root / "CITATION.cff").write_text("version: 2.0.0\n")
+    (repo_root / "CITATION.cff").write_text(
+        f"date-released: {citation_date}\nversion: {version}\n"
+    )
+
+
+def test_validate_release_uses_docs_changelog_index_link(tmp_path) -> None:
+    module = _load_module("scripts/ci/validate_release.py", "validate_release")
+
+    repo_root = tmp_path / "repo"
+    _write_release_fixture(repo_root)
 
     failures = module.collect_validation_failures(repo_root, tag="v2.0.0")
 
@@ -42,13 +59,43 @@ def test_validate_release_reports_missing_docs_index_cleanly(tmp_path) -> None:
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
-    (repo_root / "pyproject.toml").write_text('[project]\nversion = "2.0.0"\n')
+    (repo_root / "pyproject.toml").write_text(
+        '[project]\nversion = "2.0.0"\nclassifiers = ["Development Status :: 5 - Production/Stable"]\n'
+    )
     (repo_root / "CHANGELOG.md").write_text("# Changelog\n\n## [2.0.0] - 2026-03-10\n")
-    (repo_root / "CITATION.cff").write_text("version: 2.0.0\n")
+    (repo_root / "CITATION.cff").write_text(
+        "date-released: 2026-03-10\nversion: 2.0.0\n"
+    )
 
     failures = module.collect_validation_failures(repo_root, tag="v2.0.0")
 
     assert failures == ["docs/changelog/index.md is missing"]
+
+
+def test_validate_release_rejects_mismatched_citation_release_date(tmp_path) -> None:
+    module = _load_module("scripts/ci/validate_release.py", "validate_release")
+
+    repo_root = tmp_path / "repo"
+    _write_release_fixture(repo_root, citation_date="2026-03-11")
+
+    failures = module.collect_validation_failures(repo_root, tag="v2.0.0")
+
+    assert failures == [
+        "CITATION.cff date-released '2026-03-11' does not match CHANGELOG.md date '2026-03-10' for version [2.0.0]"
+    ]
+
+
+def test_validate_release_rejects_beta_classifier_for_stable_release(tmp_path) -> None:
+    module = _load_module("scripts/ci/validate_release.py", "validate_release")
+
+    repo_root = tmp_path / "repo"
+    _write_release_fixture(repo_root, classifier="Development Status :: 4 - Beta")
+
+    failures = module.collect_validation_failures(repo_root, tag="v2.0.0")
+
+    assert failures == [
+        "pyproject.toml must declare 'Development Status :: 5 - Production/Stable' for stable release 2.0.0"
+    ]
 
 
 def test_check_built_package_sanitizes_verification_environment() -> None:

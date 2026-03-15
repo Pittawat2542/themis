@@ -134,6 +134,7 @@ nav:
 
   - Guides:
       - Overview: guides/index.md
+      - Release Checklist: guides/releasing.md
       - Advanced Workflows: guides/advanced-workflows.md
       - Write a Dataset Loader: guides/dataset-loaders.md
       - Add a Minimal Plugin Set: guides/plugins.md

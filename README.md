@@ -88,6 +88,7 @@ Runnable examples live in [`examples/`](examples/):
 - Quick Start: [docs/quick-start/index.md](docs/quick-start/index.md)
 - Concepts: [docs/concepts/index.md](docs/concepts/index.md)
 - Guides: [docs/guides/index.md](docs/guides/index.md)
+- Release Checklist: [docs/guides/releasing.md](docs/guides/releasing.md)
 - API Reference: [docs/api-reference/index.md](docs/api-reference/index.md)
 - FAQ: [docs/faq/index.md](docs/faq/index.md)
 

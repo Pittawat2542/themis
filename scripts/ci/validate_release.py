@@ -14,9 +14,11 @@ CHANGELOG_HEADER_RE = re.compile(
     r"^## \[(?P<version>[^\]]+)\] - (?P<date>\d{4}-\d{2}-\d{2})$"
 )
 CITATION_VERSION_RE = re.compile(r"^version:\s*(?P<version>[^\s#]+)\s*$")
+CITATION_DATE_RE = re.compile(r"^date-released:\s*(?P<date>\d{4}-\d{2}-\d{2})\s*$")
 CANONICAL_CHANGELOG_URL = (
     "https://github.com/Pittawat2542/themis/blob/main/CHANGELOG.md"
 )
+STABLE_RELEASE_CLASSIFIER = "Development Status :: 5 - Production/Stable"
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,19 +40,35 @@ def normalize_tag(tag: str) -> str:
     return normalized
 
 
-def read_project_version(pyproject_path: Path) -> str:
+def read_project_metadata(pyproject_path: Path) -> dict[str, object]:
     with pyproject_path.open("rb") as fh:
         data = tomllib.load(fh)
-    return data["project"]["version"]
+    project_data = data.get("project")
+    if not isinstance(project_data, dict):
+        raise KeyError("project")
+    return project_data
 
 
-def extract_versions_from_changelog(path: Path) -> set[str]:
-    versions: set[str] = set()
+def read_project_version(pyproject_path: Path) -> str:
+    project_data = read_project_metadata(pyproject_path)
+    return str(project_data["version"])
+
+
+def read_project_classifiers(pyproject_path: Path) -> list[str]:
+    project_data = read_project_metadata(pyproject_path)
+    classifiers = project_data.get("classifiers", [])
+    if not isinstance(classifiers, list):
+        return []
+    return [str(classifier) for classifier in classifiers]
+
+
+def extract_release_dates_from_changelog(path: Path) -> dict[str, str]:
+    releases: dict[str, str] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         match = CHANGELOG_HEADER_RE.match(line.strip())
         if match:
-            versions.add(match.group("version"))
-    return versions
+            releases[match.group("version")] = match.group("date")
+    return releases
 
 
 def extract_citation_version(path: Path) -> str | None:
@@ -59,6 +77,18 @@ def extract_citation_version(path: Path) -> str | None:
         if match:
             return match.group("version").strip("\"'")
     return None
+
+
+def extract_citation_release_date(path: Path) -> str | None:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = CITATION_DATE_RE.match(line.strip())
+        if match:
+            return match.group("date")
+    return None
+
+
+def is_stable_release(version: str) -> bool:
+    return bool(re.fullmatch(r"\d+\.\d+\.\d+", version))
 
 
 def docs_changelog_references_root(path: Path) -> bool:
@@ -73,23 +103,32 @@ def collect_validation_failures(repo_root: Path, *, tag: str = "") -> list[str]:
 
     failures: list[str] = []
     package_version: str | None = None
-    changelog_versions: set[str] = set()
+    project_classifiers: list[str] = []
+    changelog_releases: dict[str, str] = {}
 
     if not pyproject_path.exists():
         failures.append("pyproject.toml is missing")
     else:
         package_version = read_project_version(pyproject_path)
+        project_classifiers = read_project_classifiers(pyproject_path)
         if not SEMVER_RE.match(package_version):
             failures.append(
                 f"pyproject.toml version '{package_version}' is not a valid semantic version"
+            )
+        elif is_stable_release(package_version) and (
+            STABLE_RELEASE_CLASSIFIER not in project_classifiers
+        ):
+            failures.append(
+                "pyproject.toml must declare "
+                f"'{STABLE_RELEASE_CLASSIFIER}' for stable release {package_version}"
             )
 
     if not changelog_path.exists():
         failures.append("CHANGELOG.md is missing")
     else:
-        changelog_versions = extract_versions_from_changelog(changelog_path)
+        changelog_releases = extract_release_dates_from_changelog(changelog_path)
 
-    if package_version is not None and package_version not in changelog_versions:
+    if package_version is not None and package_version not in changelog_releases:
         failures.append(
             f"CHANGELOG.md is missing release heading for version [{package_version}]"
         )
@@ -105,12 +144,23 @@ def collect_validation_failures(repo_root: Path, *, tag: str = "") -> list[str]:
         failures.append("CITATION.cff is missing")
     else:
         citation_version = extract_citation_version(citation_path)
+        citation_release_date = extract_citation_release_date(citation_path)
         if citation_version is None:
             failures.append("CITATION.cff is missing a version field")
         elif package_version is not None and citation_version != package_version:
             failures.append(
                 f"CITATION.cff version '{citation_version}' does not match pyproject version '{package_version}'"
             )
+        elif package_version is not None:
+            changelog_date = changelog_releases.get(package_version)
+            if citation_release_date is None:
+                failures.append("CITATION.cff is missing a date-released field")
+            elif changelog_date is not None and citation_release_date != changelog_date:
+                failures.append(
+                    "CITATION.cff date-released "
+                    f"'{citation_release_date}' does not match CHANGELOG.md date "
+                    f"'{changelog_date}' for version [{package_version}]"
+                )
 
     if tag:
         tag_version = normalize_tag(tag)
@@ -118,7 +168,7 @@ def collect_validation_failures(repo_root: Path, *, tag: str = "") -> list[str]:
             failures.append(
                 f"Release tag '{tag}' resolves to '{tag_version}', but pyproject version is '{package_version}'"
             )
-        if tag_version not in changelog_versions:
+        if tag_version not in changelog_releases:
             failures.append(
                 f"CHANGELOG.md is missing release heading for tag version [{tag_version}]"
             )

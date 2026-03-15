@@ -25,12 +25,8 @@ from themis import (
     TrialSpec,
 )
 from themis.contracts.protocols import InferenceResult
-from themis.records import (
-    ExtractionRecord,
-    InferenceRecord,
-    MetricScore,
-    CandidateRecord,
-)
+from themis.records import ExtractionRecord, InferenceRecord, MetricScore
+from themis.records import CandidateRecord
 from themis.specs.experiment import RuntimeContext
 from typing import Any, Mapping
 from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
