@@ -2,9 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
-    tags:
-      - 'v*.*.*'
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -14,6 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -83,6 +81,49 @@ jobs:
 
       - name: Run type check
         run: uv run mypy themis tests
+
+  docs-changes:
+    name: Detect docs changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed docs files
+        id: detect
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            : > changed_docs_files.txt
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if [[ "${{ github.ref_type }}" != "tag" ]]; then
+            if [[ -z "${BASE_SHA}" || "${BASE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
+              git ls-files -- docs mkdocs.yml pyproject.toml uv.lock .github/workflows/docs.yml > changed_docs_files.txt
+            else
+              git diff --name-only --diff-filter=ACMRT "${BASE_SHA}" "${{ github.sha }}" -- docs mkdocs.yml pyproject.toml uv.lock .github/workflows/docs.yml > changed_docs_files.txt
+            fi
+          fi
+
+          COUNT="$(wc -l < changed_docs_files.txt | tr -d ' ')"
+          if [[ "${COUNT}" == "0" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Detected ${COUNT} docs-related changed files"
 
   tests:
     name: Tests (Python ${{ matrix.python-version }})
@@ -192,7 +233,8 @@ jobs:
 
   docs-build:
     name: Build Documentation
-    needs: quality
+    if: needs.docs-changes.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [quality, docs-changes]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -262,10 +304,108 @@ jobs:
       - name: Dependency vulnerability review
         uses: actions/dependency-review-action@v4
 
+  compatibility-precheck:
+    name: Compatibility Precheck
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.evaluate.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v6
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        with:
+          fetch-depth: 0
+
+      - name: Resolve target SHA
+        id: resolve-sha
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/v* ]]; then
+            SHA="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+          else
+            SHA="${GITHUB_SHA}"
+          fi
+
+          if [[ -z "${SHA}" ]]; then
+            echo "Unable to determine target SHA" >&2
+            exit 1
+          fi
+
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Resolved compatibility target SHA ${SHA}"
+
+      - name: Check for prior successful compatibility matrix
+        id: evaluate
+        uses: actions/github-script@v8
+        env:
+          TARGET_SHA: ${{ steps.resolve-sha.outputs.sha }}
+        with:
+          script: |
+            if (!(context.eventName === "push" && context.ref.startsWith("refs/tags/v"))) {
+              core.setOutput("skip", "false");
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const targetSha = process.env.TARGET_SHA;
+            const workflowId = "ci.yml";
+            const checkName = "Compatibility Matrix";
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner,
+              repo,
+              workflow_id: workflowId,
+              head_sha: targetSha,
+              per_page: 100,
+            });
+
+            for (const run of runs) {
+              if (run.id === context.runId) {
+                continue;
+              }
+
+              if (run.status !== "completed" || run.conclusion !== "success") {
+                continue;
+              }
+
+              if (run.event !== "push" && run.event !== "workflow_dispatch") {
+                continue;
+              }
+
+              if (!run.head_branch) {
+                continue;
+              }
+
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                owner,
+                repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+
+              const compatibilityJobs = jobs.filter((job) =>
+                job.name.startsWith(checkName),
+              );
+
+              if (
+                compatibilityJobs.length > 0 &&
+                compatibilityJobs.every((job) => job.conclusion === "success")
+              ) {
+                core.info(
+                  `Found prior compatibility success in run ${run.id} for ${targetSha}.`,
+                );
+                core.setOutput("skip", "true");
+                return;
+              }
+            }
+
+            core.info(`No prior compatibility success found for ${targetSha}.`);
+            core.setOutput("skip", "false");
+
   release-compatibility:
-    name: Release Compatibility Matrix
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [quality, tests, docs-build, package]
+    name: Compatibility Matrix
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/v') || needs.compatibility-precheck.outputs.skip != 'true')
+    needs: [quality, tests, package, compatibility-precheck]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
