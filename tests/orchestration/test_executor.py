@@ -596,6 +596,7 @@ def test_executor_delegates_generation_execution_to_generation_coordinator() -> 
             *,
             dataset_context=None,
             resume: bool = True,
+            progress_tracker=None,
         ) -> WorkSchedulerStats:
             self.calls.append((list(trials), runtime_context, dataset_context, resume))
             return expected_stats
@@ -639,6 +640,7 @@ def test_executor_delegates_transform_execution_to_overlay_coordinator() -> None
             *,
             dataset_context=None,
             resume: bool = True,
+            progress_tracker=None,
         ) -> WorkSchedulerStats:
             self.transform_calls.append(
                 (list(trials), runtime_context, dataset_context, resume)
@@ -684,6 +686,7 @@ def test_executor_delegates_evaluation_execution_to_overlay_coordinator() -> Non
             *,
             dataset_context=None,
             resume: bool = True,
+            progress_tracker=None,
         ) -> WorkSchedulerStats:
             self.evaluation_calls.append(
                 (list(trials), runtime_context, dataset_context, resume)

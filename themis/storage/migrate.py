@@ -69,7 +69,8 @@ def migrate_sqlite_store(
             """
             SELECT work_item_id, run_id, stage, status, trial_hash, candidate_index,
                    candidate_id, transform_hash, evaluation_hash, attempt_count,
-                   lease_owner, lease_expires_at, external_job_id, artifact_refs_json
+                   lease_owner, lease_expires_at, external_job_id, artifact_refs_json,
+                   started_at, ended_at, last_error_code, last_error_message
             FROM stage_work_items
             """,
         )
@@ -221,9 +222,13 @@ def migrate_sqlite_store(
                         lease_owner,
                         lease_expires_at,
                         external_job_id,
-                        artifact_refs_json
+                        artifact_refs_json,
+                        started_at,
+                        ended_at,
+                        last_error_code,
+                        last_error_message
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(work_item_id) DO UPDATE SET
                         run_id=excluded.run_id,
                         stage=excluded.stage,
@@ -237,7 +242,11 @@ def migrate_sqlite_store(
                         lease_owner=excluded.lease_owner,
                         lease_expires_at=excluded.lease_expires_at,
                         external_job_id=excluded.external_job_id,
-                        artifact_refs_json=excluded.artifact_refs_json
+                        artifact_refs_json=excluded.artifact_refs_json,
+                        started_at=excluded.started_at,
+                        ended_at=excluded.ended_at,
+                        last_error_code=excluded.last_error_code,
+                        last_error_message=excluded.last_error_message
                     """,
                     (
                         row["work_item_id"],
@@ -254,6 +263,10 @@ def migrate_sqlite_store(
                         row["lease_expires_at"],
                         row["external_job_id"],
                         row["artifact_refs_json"],
+                        row["started_at"],
+                        row["ended_at"],
+                        row["last_error_code"],
+                        row["last_error_message"],
                     ),
                 )
 

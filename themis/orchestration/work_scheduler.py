@@ -6,7 +6,7 @@ import asyncio
 import inspect
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 
 from themis.orchestration._async import run_coroutine_sync
 
@@ -43,30 +43,75 @@ class WorkScheduler:
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed generation work items under the bounded scheduler."""
-        return run_coroutine_sync(lambda: self._run_bounded(work_items, worker))
+        return run_coroutine_sync(
+            lambda: self._run_bounded(
+                work_items,
+                worker,
+                on_work_item_started=on_work_item_started,
+                on_work_item_finished=on_work_item_finished,
+            )
+        )
 
     def run_transforms(
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed transform work items under the bounded scheduler."""
-        return run_coroutine_sync(lambda: self._run_bounded(work_items, worker))
+        return run_coroutine_sync(
+            lambda: self._run_bounded(
+                work_items,
+                worker,
+                on_work_item_started=on_work_item_started,
+                on_work_item_finished=on_work_item_finished,
+            )
+        )
 
     def run_evaluations(
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed evaluation work items under the bounded scheduler."""
-        return run_coroutine_sync(lambda: self._run_bounded(work_items, worker))
+        return run_coroutine_sync(
+            lambda: self._run_bounded(
+                work_items,
+                worker,
+                on_work_item_started=on_work_item_started,
+                on_work_item_finished=on_work_item_finished,
+            )
+        )
 
     async def _run_bounded(
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         queue: asyncio.Queue[tuple[int, T] | None] = asyncio.Queue(
             maxsize=self.max_in_flight_work_items * 2
@@ -97,22 +142,50 @@ class WorkScheduler:
                 async with result_lock:
                     in_flight += 1
                     max_seen_in_flight = max(max_seen_in_flight, in_flight)
+                value: R | None = None
+                error: BaseException | None = None
                 try:
                     if inspect.iscoroutinefunction(worker):
+                        await _invoke_hook(on_work_item_started, work_item)
                         value = await worker(work_item)
                     else:
-                        value = await asyncio.to_thread(worker, work_item)
+                        sync_worker = cast(Callable[[T], R], worker)
+                        if on_work_item_started is not None:
+                            value = await asyncio.to_thread(
+                                _run_sync_worker,
+                                sync_worker,
+                                on_work_item_started,
+                                work_item,
+                            )
+                        else:
+                            value = await asyncio.to_thread(sync_worker, work_item)
                         if inspect.isawaitable(value):
                             value = await value
+                    if value is None:
+                        raise RuntimeError("Work scheduler worker returned None.")
                     async with result_lock:
                         results[index] = ScheduledResult(
                             work_item=work_item,
                             result=value,
                         )
-                except BaseException as exc:
+                except BaseException as caught_error:
+                    error = caught_error
                     async with result_lock:
-                        errors.append(exc)
+                        errors.append(caught_error)
                 finally:
+                    if on_work_item_finished is not None:
+                        try:
+                            await _invoke_hook(
+                                on_work_item_finished,
+                                work_item,
+                                value,
+                                error,
+                            )
+                        except BaseException as callback_error:
+                            if error is None:
+                                error = callback_error
+                            async with result_lock:
+                                errors.append(callback_error)
                     async with result_lock:
                         in_flight -= 1
                     queue.task_done()
@@ -137,3 +210,24 @@ class WorkScheduler:
             raise errors[0]
 
         return [results[index] for index in sorted(results)]
+
+
+def _run_sync_worker(
+    worker: Callable[[T], R],
+    on_work_item_started: Callable[[T], None | Awaitable[None]],
+    work_item: T,
+) -> R:
+    on_work_item_started(work_item)
+    return worker(work_item)
+
+
+async def _invoke_hook(
+    hook: Callable[..., None | Awaitable[None]] | None,
+    *args: object,
+) -> None:
+    if hook is None:
+        return
+    if inspect.iscoroutinefunction(hook):
+        await hook(*args)
+        return
+    await asyncio.to_thread(hook, *args)
