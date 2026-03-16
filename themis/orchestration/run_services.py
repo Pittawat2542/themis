@@ -187,7 +187,7 @@ class RunPlanningService:
         manifest = self.plan(experiment)
         if self.backend_kind == "local":
             execute_run(experiment, runtime)
-            manifest = self.manifest_repo.get_manifest(manifest.run_id) or manifest
+            manifest = self.plan(experiment)
         return self.run_handle_from_manifest(manifest)
 
     def resume(
@@ -228,7 +228,7 @@ class RunPlanningService:
             for item in manifest.work_items
         ):
             execute_run(stored_manifest.experiment_spec, runtime)
-            manifest = self.manifest_repo.get_manifest(manifest.run_id) or manifest
+            manifest = self.plan(stored_manifest.experiment_spec)
 
         handle = self.run_handle_from_manifest(manifest)
         if handle.pending_work_items == 0:
@@ -753,13 +753,27 @@ def _latest_matching_event(
 
 
 def _completed_event_status(event: TrialEvent) -> WorkItemStatus:
-    if event.status == RecordStatus.OK:
+    resolved_status = _event_record_status(event)
+    if resolved_status == RecordStatus.OK:
         return WorkItemStatus.COMPLETED
-    if event.status == RecordStatus.SKIPPED:
+    if resolved_status == RecordStatus.SKIPPED:
         return WorkItemStatus.SKIPPED
-    if event.status == RecordStatus.ERROR:
+    if resolved_status == RecordStatus.ERROR:
         return WorkItemStatus.FAILED
     return WorkItemStatus.PENDING
+
+
+def _event_record_status(event: TrialEvent) -> RecordStatus | None:
+    if event.status is not None:
+        return event.status
+    if isinstance(event.payload, dict):
+        raw_status = event.payload.get("status")
+        if isinstance(raw_status, str):
+            try:
+                return RecordStatus(raw_status)
+            except ValueError:
+                return None
+    return None
 
 
 def _transform_status(
