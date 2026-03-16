@@ -44,10 +44,13 @@ jobs:
         id: changed-python
         shell: bash
         run: |
+          : > changed_python_files.txt
+
           if [[ "${{ github.ref_type }}" == "tag" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            : > changed_python_files.txt
+            true
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            git diff --name-only --diff-filter=ACMRT "${BASE_SHA}" "${{ github.sha }}" -- '*.py' > changed_python_files.txt
           else
             BASE_SHA="${{ github.event.before }}"
 
