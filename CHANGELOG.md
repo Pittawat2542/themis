@@ -4,6 +4,29 @@ All notable changes to Themis will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [2.1.0] - 2026-03-16
+
+### Added
+- Added persisted run progress tracking, stage progress status coverage, and
+  public progress helpers for inspecting long-running orchestration work.
+- Added a typed config-report API with renderer registration plus the
+  `themis report` CLI for exporting reproducibility and project configuration
+  snapshots.
+- Added operator and API documentation for progress inspection, resume
+  workflows, and config-report generation and extension.
+
+### Changed
+- Improved runtime logging and manifest reconciliation so resume and external
+  handoff workflows surface clearer run state.
+- Expanded the curated public API and CLI routing to expose the new progress
+  and config-report capabilities directly from the package surface.
+
+### Fixed
+- Fixed verified run progress persistence and resume edge cases across
+  orchestration, executor, and work-scheduler paths.
+- Fixed config-report redaction and rendering issues, parent CLI dispatch, and
+  Windows path handling in report generation.
+
 ## [2.0.0] - 2026-03-10
 
 ### Added
