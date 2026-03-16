@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import pytest
 
 from themis.orchestration.generation_execution import GenerationExecutionCoordinator
@@ -10,7 +8,9 @@ from themis.orchestration.run_manifest import WorkItemStatus
 from themis.orchestration.runner_state import TrialExecutionSession
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.orchestration.trial_planner import PlannedTrial
+from themis.progress.tracker import RunProgressTracker
 from themis.records.candidate import CandidateRecord
+from themis.records.provenance import ProvenanceRecord
 from themis.records.trial import TrialRecord
 from themis.specs.experiment import (
     DataItemContext,
@@ -31,6 +31,7 @@ from themis.specs.foundational import (
     TaskSpec,
 )
 from themis.types.enums import DatasetSource, RecordStatus
+from themis.types.events import ArtifactRef
 
 
 def _trial() -> TrialSpec:
@@ -64,24 +65,44 @@ def _trial() -> TrialSpec:
     )
 
 
+def _provenance() -> ProvenanceRecord:
+    return ProvenanceRecord(
+        themis_version="test",
+        git_commit=None,
+        python_version="3.12",
+        platform="test",
+        library_versions={},
+        model_endpoint_meta={},
+    )
+
+
 def _session(trial: TrialSpec) -> TrialExecutionSession:
     return TrialExecutionSession(
         trial=trial,
         dataset_context=DataItemContext(item_id=trial.item_id, payload={}),
         base_runtime=RuntimeContext(),
-        provenance=None,
+        provenance=_provenance(),
         resolved_stages=resolve_task_stages(trial.task),
         prompt_payload={"messages": []},
-        prompt_artifact=None,
+        prompt_artifact=(
+            ArtifactRef(
+                artifact_hash="sha256:test-prompt",
+                media_type="application/json",
+                label="rendered_prompt",
+            ),
+            "sha256:test-prompt",
+        ),
         item_payload={},
         dataset_metadata={},
         event_seq=0,
     )
 
 
-@dataclass
-class _Tracker:
+class _Tracker(RunProgressTracker):
     finished_statuses: list[WorkItemStatus]
+
+    def __init__(self, *, finished_statuses: list[WorkItemStatus]) -> None:
+        self.finished_statuses = finished_statuses
 
     def stage_started(self) -> None:
         return None

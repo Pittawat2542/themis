@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
+
 from themis.orchestration.run_manifest import RunManifest, StageWorkItem, WorkItemStatus
 from themis.orchestration.run_services import (
     RunPlanningService,
@@ -7,6 +9,11 @@ from themis.orchestration.run_services import (
     _generation_status,
     _transform_status,
 )
+from themis.orchestration.trial_planner import PlannedTrial, TrialPlanner
+from themis.records.conversation import Conversation
+from themis.records.timeline import RecordTimeline
+from themis.records.trial import TrialRecord
+from themis.runtime import RecordTimelineView
 from themis.specs.experiment import (
     ExperimentSpec,
     ExecutionPolicySpec,
@@ -17,14 +24,18 @@ from themis.specs.experiment import (
     RuntimeContext,
     SqliteBlobStorageSpec,
 )
+from themis.specs.base import SpecBase
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.enums import DatasetSource, RecordStatus, RunStage
 from themis.types.events import (
     EvaluationCompletedEventMetadata,
     ExtractionCompletedEventMetadata,
+    ScoreRow,
     TrialEvent,
     TrialEventType,
+    TrialSummaryRow,
 )
+from themis.storage.run_manifest_repo import RunManifestRepository
 
 
 def _experiment() -> ExperimentSpec:
@@ -150,12 +161,150 @@ def test_resume_reexecutes_local_runs_with_running_items() -> None:
     planned_manifest = stored_manifest.model_copy()
     execute_calls: list[tuple[ExperimentSpec, RuntimeContext | None]] = []
 
-    class FakePlanner:
-        def plan_experiment(self, experiment_spec: ExperimentSpec):
-            del experiment_spec
+    class FakePlanner(TrialPlanner):
+        def plan_experiment(
+            self,
+            experiment_spec: ExperimentSpec,
+            *,
+            required_stages=None,
+        ) -> list[PlannedTrial]:
+            del experiment_spec, required_stages
             return []
 
-    class FakeManifestRepo:
+    class FakeEventRepo:
+        def save_spec(self, spec: SpecBase) -> None:
+            del spec
+
+        def append_event(self, event: TrialEvent) -> None:
+            del event
+
+        def last_event_index(
+            self, trial_hash: str, candidate_id: str | None = None
+        ) -> int | None:
+            del trial_hash, candidate_id
+            return None
+
+        def get_events(
+            self, trial_hash: str, candidate_id: str | None = None
+        ) -> list[TrialEvent]:
+            del trial_hash, candidate_id
+            return []
+
+        def has_projection_for_overlay(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> bool:
+            del trial_hash, transform_hash, evaluation_hash
+            return False
+
+        def latest_terminal_event_type(self, trial_hash: str) -> TrialEventType | None:
+            del trial_hash
+            return None
+
+    class FakeProjectionRepo:
+        def get_trial_record(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> TrialRecord | None:
+            del trial_hash, transform_hash, evaluation_hash
+            return None
+
+        def get_conversation(
+            self, trial_hash: str, candidate_id: str
+        ) -> Conversation | None:
+            del trial_hash, candidate_id
+            return None
+
+        def get_record_timeline(
+            self,
+            record_id: str,
+            record_type: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> RecordTimeline | None:
+            del record_id, record_type, transform_hash, evaluation_hash
+            return None
+
+        def get_timeline_view(
+            self,
+            record_id: str,
+            record_type: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> RecordTimelineView | None:
+            del record_id, record_type, transform_hash, evaluation_hash
+            return None
+
+        def materialize_trial_record(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+            extra_events: list[TrialEvent] | None = None,
+        ) -> TrialRecord:
+            del trial_hash, transform_hash, evaluation_hash, extra_events
+            raise NotImplementedError
+
+        def iter_candidate_scores(
+            self,
+            *,
+            trial_hash: str | None = None,
+            metric_id: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> Iterator[ScoreRow]:
+            del trial_hash, metric_id, evaluation_hash
+            return iter(())
+
+        def iter_trial_summaries(
+            self,
+            *,
+            trial_hashes: Sequence[str] | None = None,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> Iterator[TrialSummaryRow]:
+            del trial_hashes, transform_hash, evaluation_hash
+            return iter(())
+
+        def save_trial_record(
+            self,
+            record: TrialRecord,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> None:
+            del record, transform_hash, evaluation_hash
+
+        def has_trial(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> bool:
+            del trial_hash, transform_hash, evaluation_hash
+            return False
+
+    class FakeProjectionHandler:
+        def on_trial_completed(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> TrialRecord | None:
+            del trial_hash, transform_hash, evaluation_hash
+            return None
+
+    class FakeManifestRepo(RunManifestRepository):
         def __init__(self) -> None:
             self._after_execute = False
 
@@ -173,7 +322,13 @@ def test_resume_reexecutes_local_runs_with_running_items() -> None:
                 )
             return stored_manifest
 
-        def reconcile_manifest(self, manifest: RunManifest) -> RunManifest:
+        def reconcile_manifest(
+            self,
+            manifest: RunManifest,
+            *,
+            stored_manifest: RunManifest | None = None,
+        ) -> RunManifest:
+            del manifest, stored_manifest
             return planned_manifest
 
         def save_manifest(self, manifest: RunManifest) -> None:
@@ -182,9 +337,9 @@ def test_resume_reexecutes_local_runs_with_running_items() -> None:
     manifest_repo = FakeManifestRepo()
     service = RunPlanningService(
         planner=FakePlanner(),
-        event_repo=object(),
-        projection_repo=object(),
-        projection_handler=object(),
+        event_repo=FakeEventRepo(),
+        projection_repo=FakeProjectionRepo(),
+        projection_handler=FakeProjectionHandler(),
         manifest_repo=manifest_repo,
         project_spec=ProjectSpec(
             project_name="project",
