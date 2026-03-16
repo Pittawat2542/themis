@@ -8,6 +8,8 @@ from datetime import datetime
 from pydantic import TypeAdapter
 
 from themis.orchestration.run_manifest import RunManifest, StageWorkItem, WorkItemStatus
+from themis.errors import StorageError
+from themis.types.enums import ErrorCode
 from themis.progress.models import RunProgressSnapshot, StageProgressSnapshot
 from themis.types.enums import RunStage
 
@@ -271,7 +273,7 @@ class RunManifestRepository:
                     assignments.append("last_error_message = ?")
                     params.append(last_error_message)
                 params.extend([run_id, work_item_id])
-                conn.execute(
+                result = conn.execute(
                     f"""
                     UPDATE stage_work_items
                     SET {", ".join(assignments)}
@@ -279,6 +281,14 @@ class RunManifestRepository:
                     """,
                     params,
                 )
+                if result.rowcount == 0:
+                    raise StorageError(
+                        code=ErrorCode.STORAGE_WRITE,
+                        message=(
+                            "Failed to update stage work item because it does not "
+                            f"exist: run_id='{run_id}', work_item_id='{work_item_id}'."
+                        ),
+                    )
 
     def get_progress_snapshot(self, run_id: str) -> RunProgressSnapshot | None:
         with self.manager.get_connection() as conn:

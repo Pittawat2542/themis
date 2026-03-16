@@ -132,15 +132,7 @@ class GenerationExecutionCoordinator:
                             work_item.session.trial_hash,
                             work_item.candidate_index,
                         ),
-                        status=(
-                            WorkItemStatus.FAILED
-                            if error is not None
-                            or (
-                                result is not None
-                                and result.status == RecordStatus.ERROR
-                            )
-                            else WorkItemStatus.COMPLETED
-                        ),
+                        status=_generation_work_item_status(result=result, error=error),
                         last_error_code=(
                             result.error.code.value
                             if result is not None and result.error is not None
@@ -203,3 +195,19 @@ def _require_trial_execution_session(
             "prepare_trial_session()."
         )
     return session
+
+
+def _generation_work_item_status(
+    *,
+    result: CandidateRecord | None,
+    error: BaseException | None,
+) -> WorkItemStatus:
+    if error is not None:
+        return WorkItemStatus.FAILED
+    if result is None:
+        return WorkItemStatus.FAILED
+    if result.status == RecordStatus.OK:
+        return WorkItemStatus.COMPLETED
+    if result.status == RecordStatus.SKIPPED:
+        return WorkItemStatus.SKIPPED
+    return WorkItemStatus.FAILED

@@ -219,7 +219,12 @@ class RunPlanningService:
 
         manifest = self.plan(stored_manifest.experiment_spec)
         if self.backend_kind == "local" and any(
-            item.status in {WorkItemStatus.PENDING, WorkItemStatus.FAILED}
+            item.status
+            in {
+                WorkItemStatus.PENDING,
+                WorkItemStatus.RUNNING,
+                WorkItemStatus.FAILED,
+            }
             for item in manifest.work_items
         ):
             execute_run(stored_manifest.experiment_spec, runtime)
@@ -719,18 +724,41 @@ def _work_item_id(
 
 
 def _generation_status(candidate_events: Sequence[TrialEvent]) -> WorkItemStatus:
-    if any(
-        event.event_type == TrialEventType.CANDIDATE_FAILED
-        and _metadata_value(event.metadata, "transform_hash") is None
-        and _metadata_value(event.metadata, "evaluation_hash") is None
-        for event in candidate_events
-    ):
+    terminal_event = _latest_matching_event(
+        candidate_events,
+        lambda event: (
+            (
+                event.event_type == TrialEventType.CANDIDATE_FAILED
+                and _metadata_value(event.metadata, "transform_hash") is None
+                and _metadata_value(event.metadata, "evaluation_hash") is None
+            )
+            or event.event_type == TrialEventType.CANDIDATE_COMPLETED
+        ),
+    )
+    if terminal_event is None:
+        return WorkItemStatus.PENDING
+    if terminal_event.event_type == TrialEventType.CANDIDATE_FAILED:
         return WorkItemStatus.FAILED
-    if any(
-        event.event_type == TrialEventType.CANDIDATE_COMPLETED
-        for event in candidate_events
-    ):
+    return _completed_event_status(terminal_event)
+
+
+def _latest_matching_event(
+    candidate_events: Sequence[TrialEvent],
+    predicate: Callable[[TrialEvent], bool],
+) -> TrialEvent | None:
+    matches = [event for event in candidate_events if predicate(event)]
+    if not matches:
+        return None
+    return max(matches, key=lambda event: event.event_seq)
+
+
+def _completed_event_status(event: TrialEvent) -> WorkItemStatus:
+    if event.status == RecordStatus.OK:
         return WorkItemStatus.COMPLETED
+    if event.status == RecordStatus.SKIPPED:
+        return WorkItemStatus.SKIPPED
+    if event.status == RecordStatus.ERROR:
+        return WorkItemStatus.FAILED
     return WorkItemStatus.PENDING
 
 
@@ -739,20 +767,32 @@ def _transform_status(
     *,
     transform_hash: str,
 ) -> WorkItemStatus:
-    for event in candidate_events:
-        metadata = event.metadata
-        if event.event_type == TrialEventType.EXTRACTION_COMPLETED and (
-            isinstance(metadata, ExtractionCompletedEventMetadata)
-            and metadata.transform_hash == transform_hash
-        ):
-            if metadata.success is True and event.status != RecordStatus.ERROR:
-                return WorkItemStatus.COMPLETED
-            return WorkItemStatus.FAILED
-        if event.event_type == TrialEventType.CANDIDATE_FAILED and (
-            _metadata_value(metadata, "transform_hash") == transform_hash
-        ):
-            return WorkItemStatus.FAILED
-    return WorkItemStatus.PENDING
+    terminal_event = _latest_matching_event(
+        candidate_events,
+        lambda event: (
+            (
+                event.event_type == TrialEventType.EXTRACTION_COMPLETED
+                and isinstance(event.metadata, ExtractionCompletedEventMetadata)
+                and event.metadata.transform_hash == transform_hash
+            )
+            or (
+                event.event_type == TrialEventType.CANDIDATE_FAILED
+                and _metadata_value(event.metadata, "transform_hash") == transform_hash
+            )
+        ),
+    )
+    if terminal_event is None:
+        return WorkItemStatus.PENDING
+    if terminal_event.event_type == TrialEventType.CANDIDATE_FAILED:
+        return WorkItemStatus.FAILED
+    metadata = terminal_event.metadata
+    if (
+        isinstance(metadata, ExtractionCompletedEventMetadata)
+        and metadata.success is True
+        and terminal_event.status == RecordStatus.OK
+    ):
+        return WorkItemStatus.COMPLETED
+    return _completed_event_status(terminal_event)
 
 
 def _metadata_value(metadata: object, key: str) -> object | None:
@@ -770,17 +810,23 @@ def _evaluation_status(
     *,
     evaluation_hash: str,
 ) -> WorkItemStatus:
-    for event in candidate_events:
-        metadata = event.metadata
-        if event.event_type == TrialEventType.EVALUATION_COMPLETED and (
-            isinstance(metadata, EvaluationCompletedEventMetadata)
-            and metadata.evaluation_hash == evaluation_hash
-        ):
-            if event.status != RecordStatus.ERROR:
-                return WorkItemStatus.COMPLETED
-            return WorkItemStatus.FAILED
-        if event.event_type == TrialEventType.CANDIDATE_FAILED and (
-            _metadata_value(metadata, "evaluation_hash") == evaluation_hash
-        ):
-            return WorkItemStatus.FAILED
-    return WorkItemStatus.PENDING
+    terminal_event = _latest_matching_event(
+        candidate_events,
+        lambda event: (
+            (
+                event.event_type == TrialEventType.EVALUATION_COMPLETED
+                and isinstance(event.metadata, EvaluationCompletedEventMetadata)
+                and event.metadata.evaluation_hash == evaluation_hash
+            )
+            or (
+                event.event_type == TrialEventType.CANDIDATE_FAILED
+                and _metadata_value(event.metadata, "evaluation_hash")
+                == evaluation_hash
+            )
+        ),
+    )
+    if terminal_event is None:
+        return WorkItemStatus.PENDING
+    if terminal_event.event_type == TrialEventType.CANDIDATE_FAILED:
+        return WorkItemStatus.FAILED
+    return _completed_event_status(terminal_event)

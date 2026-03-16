@@ -36,6 +36,7 @@ left to do.
 ## Inspect Runtime Progress
 
 ```python
+from themis.progress import ProgressConfig
 from themis.types.enums import RunStage
 
 progress = orchestrator.get_run_progress(handle.run_id)

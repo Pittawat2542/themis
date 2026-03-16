@@ -420,6 +420,8 @@ class Orchestrator:
         progress: ProgressConfig | None,
         allowed_stages: set[RunStage],
     ) -> RunProgressTracker | None:
+        if progress is None:
+            return None
         manifest = self._run_planning.plan_from_trials(experiment, planned_trials)
         return RunProgressTracker(
             manifest,

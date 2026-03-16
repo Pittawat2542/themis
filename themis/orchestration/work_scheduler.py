@@ -44,8 +44,10 @@ class WorkScheduler:
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
         *,
-        on_work_item_started: Callable[[T], None] | None = None,
-        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
         | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed generation work items under the bounded scheduler."""
@@ -63,8 +65,10 @@ class WorkScheduler:
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
         *,
-        on_work_item_started: Callable[[T], None] | None = None,
-        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
         | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed transform work items under the bounded scheduler."""
@@ -82,8 +86,10 @@ class WorkScheduler:
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
         *,
-        on_work_item_started: Callable[[T], None] | None = None,
-        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
         | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed evaluation work items under the bounded scheduler."""
@@ -101,8 +107,10 @@ class WorkScheduler:
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
         *,
-        on_work_item_started: Callable[[T], None] | None = None,
-        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        on_work_item_started: Callable[[T], None | Awaitable[None]] | None = None,
+        on_work_item_finished: Callable[
+            [T, R | None, BaseException | None], None | Awaitable[None]
+        ]
         | None = None,
     ) -> list[ScheduledResult[T, R]]:
         queue: asyncio.Queue[tuple[int, T] | None] = asyncio.Queue(
@@ -137,13 +145,20 @@ class WorkScheduler:
                 value: R | None = None
                 error: BaseException | None = None
                 try:
-                    if on_work_item_started is not None:
-                        on_work_item_started(work_item)
                     if inspect.iscoroutinefunction(worker):
+                        await _invoke_hook(on_work_item_started, work_item)
                         value = await worker(work_item)
                     else:
                         sync_worker = cast(Callable[[T], R], worker)
-                        value = await asyncio.to_thread(sync_worker, work_item)
+                        if on_work_item_started is not None:
+                            value = await asyncio.to_thread(
+                                _run_sync_worker,
+                                sync_worker,
+                                on_work_item_started,
+                                work_item,
+                            )
+                        else:
+                            value = await asyncio.to_thread(sync_worker, work_item)
                         if inspect.isawaitable(value):
                             value = await value
                     if value is None:
@@ -160,7 +175,12 @@ class WorkScheduler:
                 finally:
                     if on_work_item_finished is not None:
                         try:
-                            on_work_item_finished(work_item, value, error)
+                            await _invoke_hook(
+                                on_work_item_finished,
+                                work_item,
+                                value,
+                                error,
+                            )
                         except BaseException as callback_error:
                             if error is None:
                                 error = callback_error
@@ -190,3 +210,24 @@ class WorkScheduler:
             raise errors[0]
 
         return [results[index] for index in sorted(results)]
+
+
+def _run_sync_worker(
+    worker: Callable[[T], R],
+    on_work_item_started: Callable[[T], None | Awaitable[None]],
+    work_item: T,
+) -> R:
+    on_work_item_started(work_item)
+    return worker(work_item)
+
+
+async def _invoke_hook(
+    hook: Callable[..., None | Awaitable[None]] | None,
+    *args: object,
+) -> None:
+    if hook is None:
+        return
+    if inspect.iscoroutinefunction(hook):
+        await hook(*args)
+        return
+    await asyncio.to_thread(hook, *args)

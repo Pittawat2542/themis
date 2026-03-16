@@ -88,7 +88,13 @@ class RunProgressTracker:
         }
 
     def generation_work_item_id(self, trial_hash: str, candidate_index: int) -> str:
-        return self._generation_ids[(trial_hash, candidate_index)]
+        key = (trial_hash, candidate_index)
+        if key not in self._generation_ids:
+            raise KeyError(
+                "Missing generation work item for "
+                f"trial_hash='{trial_hash}', candidate_index={candidate_index}."
+            )
+        return self._generation_ids[key]
 
     def transform_work_item_id(
         self,
@@ -96,7 +102,14 @@ class RunProgressTracker:
         candidate_index: int,
         transform_hash: str,
     ) -> str:
-        return self._transform_ids[(trial_hash, candidate_index, transform_hash)]
+        key = (trial_hash, candidate_index, transform_hash)
+        if key not in self._transform_ids:
+            raise KeyError(
+                "Missing transform work item for "
+                f"trial_hash='{trial_hash}', candidate_index={candidate_index}, "
+                f"transform_hash='{transform_hash}'."
+            )
+        return self._transform_ids[key]
 
     def evaluation_work_item_id(
         self,
@@ -104,7 +117,14 @@ class RunProgressTracker:
         candidate_index: int,
         evaluation_hash: str,
     ) -> str:
-        return self._evaluation_ids[(trial_hash, candidate_index, evaluation_hash)]
+        key = (trial_hash, candidate_index, evaluation_hash)
+        if key not in self._evaluation_ids:
+            raise KeyError(
+                "Missing evaluation work item for "
+                f"trial_hash='{trial_hash}', candidate_index={candidate_index}, "
+                f"evaluation_hash='{evaluation_hash}'."
+            )
+        return self._evaluation_ids[key]
 
     def start_run(self) -> None:
         self._emit(ProgressEventType.RUN_STARTED)
@@ -245,8 +265,16 @@ class RunProgressTracker:
                 if started_at is not None
                 else work_item.started_at,
                 "ended_at": ended_at if ended_at is not None else work_item.ended_at,
-                "last_error_code": last_error_code,
-                "last_error_message": last_error_message,
+                **(
+                    {"last_error_code": last_error_code}
+                    if last_error_code is not None
+                    else {}
+                ),
+                **(
+                    {"last_error_message": last_error_message}
+                    if last_error_message is not None
+                    else {}
+                ),
             }
         )
         self._work_items[work_item_id] = updated_item

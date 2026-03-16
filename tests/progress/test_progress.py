@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 
 def test_progress_bus_emits_structured_events_to_subscribers():
     from themis.progress import (
@@ -197,3 +199,162 @@ def test_run_progress_tracker_uses_cached_snapshots_for_work_item_events():
         ("work-1", WorkItemStatus.RUNNING),
         ("work-1", WorkItemStatus.COMPLETED),
     ]
+
+
+def test_run_progress_tracker_preserves_previous_error_fields_when_not_overridden():
+    from themis.orchestration.run_manifest import (
+        RunManifest,
+        StageWorkItem,
+        WorkItemStatus,
+    )
+    from themis.progress import ProgressConfig, RunProgressSnapshot, RunProgressTracker
+    from themis.progress.models import StageProgressSnapshot
+    from themis.specs.experiment import (
+        ExperimentSpec,
+        InferenceGridSpec,
+        InferenceParamsSpec,
+        PromptTemplateSpec,
+    )
+    from themis.specs.foundational import (
+        DatasetSpec,
+        GenerationSpec,
+        ModelSpec,
+        TaskSpec,
+    )
+    from themis.types.enums import DatasetSource, RunStage
+
+    class FakeRunManifestRepository:
+        def get_progress_snapshot(self, run_id: str) -> RunProgressSnapshot | None:
+            assert run_id == "run-1"
+            return snapshot
+
+        def update_work_item(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+    snapshot = RunProgressSnapshot(
+        run_id="run-1",
+        backend_kind="local",
+        active_stage=RunStage.GENERATION,
+        processed_items=0,
+        remaining_items=1,
+        in_flight_items=0,
+        stage_counts={
+            RunStage.GENERATION: StageProgressSnapshot(
+                stage=RunStage.GENERATION,
+                total_items=1,
+                pending_items=1,
+                running_items=0,
+                completed_items=0,
+                failed_items=0,
+                skipped_items=0,
+            )
+        },
+    )
+    tracker = RunProgressTracker(
+        RunManifest(
+            run_id="run-1",
+            backend_kind="local",
+            experiment_spec=ExperimentSpec(
+                models=[ModelSpec(model_id="mock-model", provider="mock")],
+                tasks=[
+                    TaskSpec(
+                        task_id="task",
+                        dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                        generation=GenerationSpec(),
+                    )
+                ],
+                prompt_templates=[PromptTemplateSpec(id="baseline", messages=[])],
+                inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
+            ),
+            work_items=[
+                StageWorkItem(
+                    work_item_id="work-1",
+                    stage=RunStage.GENERATION,
+                    status=WorkItemStatus.FAILED,
+                    trial_hash="trial-1",
+                    candidate_index=0,
+                    candidate_id="candidate-1",
+                    last_error_code="existing-code",
+                    last_error_message="existing-message",
+                )
+            ],
+        ),
+        FakeRunManifestRepository(),
+        ProgressConfig(enabled=False),
+    )
+
+    tracker.mark_finished("work-1", status=WorkItemStatus.COMPLETED)
+
+    updated = tracker._work_items["work-1"]
+    assert updated.last_error_code == "existing-code"
+    assert updated.last_error_message == "existing-message"
+
+
+def test_run_progress_tracker_lookup_errors_include_context():
+    from themis.orchestration.run_manifest import RunManifest
+    from themis.progress import ProgressConfig, RunProgressSnapshot, RunProgressTracker
+    from themis.progress.models import StageProgressSnapshot
+    from themis.specs.experiment import (
+        ExperimentSpec,
+        InferenceGridSpec,
+        InferenceParamsSpec,
+        PromptTemplateSpec,
+    )
+    from themis.specs.foundational import (
+        DatasetSpec,
+        GenerationSpec,
+        ModelSpec,
+        TaskSpec,
+    )
+    from themis.types.enums import DatasetSource, RunStage
+
+    class FakeRunManifestRepository:
+        def get_progress_snapshot(self, run_id: str) -> RunProgressSnapshot | None:
+            assert run_id == "run-1"
+            return snapshot
+
+        def update_work_item(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+    snapshot = RunProgressSnapshot(
+        run_id="run-1",
+        backend_kind="local",
+        active_stage=RunStage.GENERATION,
+        processed_items=0,
+        remaining_items=0,
+        in_flight_items=0,
+        stage_counts={
+            RunStage.GENERATION: StageProgressSnapshot(
+                stage=RunStage.GENERATION,
+                total_items=0,
+                pending_items=0,
+                running_items=0,
+                completed_items=0,
+                failed_items=0,
+                skipped_items=0,
+            )
+        },
+    )
+    tracker = RunProgressTracker(
+        RunManifest(
+            run_id="run-1",
+            backend_kind="local",
+            experiment_spec=ExperimentSpec(
+                models=[ModelSpec(model_id="mock-model", provider="mock")],
+                tasks=[
+                    TaskSpec(
+                        task_id="task",
+                        dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                        generation=GenerationSpec(),
+                    )
+                ],
+                prompt_templates=[PromptTemplateSpec(id="baseline", messages=[])],
+                inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
+            ),
+        ),
+        FakeRunManifestRepository(),
+        ProgressConfig(enabled=False),
+    )
+
+    with pytest.raises(KeyError, match="trial_hash='trial-1'.*candidate_index=0"):
+        tracker.generation_work_item_id("trial-1", 0)

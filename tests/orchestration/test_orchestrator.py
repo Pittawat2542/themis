@@ -1377,6 +1377,25 @@ def test_orchestrator_submit_preserves_failed_progress_snapshot(tmp_path) -> Non
     assert persisted.ended_at == snapshots[-1].ended_at
 
 
+def test_build_progress_tracker_skips_planning_when_progress_disabled(tmp_path) -> None:
+    registry, _engine = _build_registry()
+    project = _build_project_spec(tmp_path)
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    tracker = orchestrator._build_progress_tracker(
+        _build_experiment(),
+        [],
+        progress=None,
+        allowed_stages={RunStage.GENERATION},
+    )
+
+    assert tracker is None
+
+
 @pytest.mark.parametrize("entrypoint_name", ["generate", "transform", "evaluate"])
 def test_stage_entrypoints_preserve_full_run_progress_snapshot(
     tmp_path,

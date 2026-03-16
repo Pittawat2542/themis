@@ -168,7 +168,7 @@ and does not attach the Rich renderer automatically.
 
 ## Inspect Persisted Run Progress
 
-Use `get_run_progress(run_id)` when the user needs the canonical stored
+Use `orchestrator.get_run_progress(run_id)` when the user needs the canonical stored
 snapshot for a run handle:
 
 ```python
@@ -179,7 +179,9 @@ snapshot = orchestrator.get_run_progress(handle.run_id)
 
 print(snapshot.active_stage)
 print(snapshot.processed_items, snapshot.remaining_items)
-print(snapshot.stage_counts[RunStage.EVALUATION].failed_items)
+evaluation_counts = snapshot.stage_counts.get(RunStage.EVALUATION)
+if evaluation_counts is not None:
+    print(evaluation_counts.failed_items)
 ```
 
 The returned snapshot covers the full run for that `run_id`, even if the work

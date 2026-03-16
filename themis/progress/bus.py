@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 import logging
+import threading
 
 from themis.progress.models import RunProgressSnapshot
 
@@ -42,16 +43,19 @@ class ProgressBus:
 
     def __init__(self, *, fail_fast_subscribers: bool = False) -> None:
         self._subscribers: list[ProgressSubscriber] = []
+        self._lock = threading.Lock()
         self.fail_fast_subscribers = fail_fast_subscribers
 
     def subscribe(self, subscriber: ProgressSubscriber) -> None:
-        if subscriber not in self._subscribers:
-            self._subscribers.append(subscriber)
+        with self._lock:
+            if subscriber not in self._subscribers:
+                self._subscribers.append(subscriber)
 
     def unsubscribe(self, subscriber: ProgressSubscriber) -> None:
-        self._subscribers = [
-            existing for existing in self._subscribers if existing is not subscriber
-        ]
+        with self._lock:
+            self._subscribers = [
+                existing for existing in self._subscribers if existing is not subscriber
+            ]
 
     def emit(
         self,
@@ -60,7 +64,9 @@ class ProgressBus:
         snapshot: RunProgressSnapshot,
     ) -> ProgressEvent:
         event = ProgressEvent(event_type=event_type, snapshot=snapshot)
-        for subscriber in tuple(self._subscribers):
+        with self._lock:
+            subscribers = tuple(self._subscribers)
+        for subscriber in subscribers:
             try:
                 subscriber(event)
             except Exception:

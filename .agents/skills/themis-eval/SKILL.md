@@ -1,6 +1,6 @@
 ---
 name: themis-eval
-description: Use when working with the themis-eval Python package to build, run, inspect, resume, compare, or monitor LLM evaluations. This skill is for package users writing evaluation code, attaching operator-facing progress logging with `ProgressConfig`, inspecting persisted run status with `get_run_progress()`, or debugging evaluation workflows with ProjectSpec, ExperimentSpec, PluginRegistry, Orchestrator, ExperimentResult, custom engines, metrics, extractors, hooks, judge-backed metrics, project files, external handoffs, or the themis-quickcheck CLI.
+description: Use when working with the themis-eval Python package to build, run, inspect, resume, compare, or monitor LLM evaluations. This skill is for package users writing evaluation code, attaching operator-facing progress logging with `ProgressConfig`, inspecting persisted run status with `orchestrator.get_run_progress()`, or debugging evaluation workflows with ProjectSpec, ExperimentSpec, PluginRegistry, Orchestrator, ExperimentResult, custom engines, metrics, extractors, hooks, judge-backed metrics, project files, external handoffs, or the themis-quickcheck CLI.
 ---
 
 # themis-eval
@@ -52,8 +52,8 @@ into package internals unless the public package surface requires it.
   user needs event-level observability or external telemetry sinks.
 - Use `result.for_transform(...)` or `result.for_evaluation(...)` before
   comparing or exporting when multiple overlays exist.
-- Use `get_run_progress(run_id)` for persisted run state after `plan()`,
-  `submit()`, `resume()`, or stage-specific execution.
+- Use `orchestrator.get_run_progress(run_id)` for persisted run state after
+  `plan()`, `submit()`, `resume()`, or stage-specific execution.
 - Use timeline views for one bad example and aggregate helpers for overall
   behavior.
 
@@ -66,7 +66,8 @@ into package internals unless the public package surface requires it.
 5. Build `Orchestrator` from a project spec or project file.
 6. Run, submit, resume, or export work, adding `progress=` when the user wants
    live status or logs.
-7. Inspect the returned `ExperimentResult`, query `get_run_progress(run_id)`,
+7. Inspect the returned `ExperimentResult`, query
+   `orchestrator.get_run_progress(run_id)`,
    compare overlays, or query SQLite summaries with `themis-quickcheck`.
 
 ## Pattern Map
@@ -89,6 +90,7 @@ When helping the user, produce code that is runnable in their project:
 - a minimal registry and dataset loader
 - `ProjectSpec` and `ExperimentSpec`
 - the right extras to install
-- `ProgressConfig` or `get_run_progress()` calls when the user asks for logging,
+- `ProgressConfig` or `orchestrator.get_run_progress()` calls when the user asks
+  for logging,
   status inspection, or monitoring
 - the matching inspection or export calls after execution

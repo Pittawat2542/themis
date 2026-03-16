@@ -195,15 +195,7 @@ class OverlayExecutionCoordinator:
                             work_item.candidate.sample_index,
                             work_item.transform.transform_hash,
                         ),
-                        status=(
-                            WorkItemStatus.FAILED
-                            if error is not None
-                            or (
-                                result is not None
-                                and result.status == RecordStatus.ERROR
-                            )
-                            else WorkItemStatus.COMPLETED
-                        ),
+                        status=_overlay_work_item_status(result=result, error=error),
                         last_error_code=(
                             result.error.code.value
                             if result is not None and result.error is not None
@@ -337,15 +329,7 @@ class OverlayExecutionCoordinator:
                             work_item.candidate.sample_index,
                             work_item.evaluation.evaluation_hash,
                         ),
-                        status=(
-                            WorkItemStatus.FAILED
-                            if error is not None
-                            or (
-                                result is not None
-                                and result.status == RecordStatus.ERROR
-                            )
-                            else WorkItemStatus.COMPLETED
-                        ),
+                        status=_overlay_work_item_status(result=result, error=error),
                         last_error_code=(
                             result.error.code.value
                             if result is not None and result.error is not None
@@ -384,3 +368,17 @@ def _require_trial_execution_session(
             "prepare_trial_session()."
         )
     return session
+
+
+def _overlay_work_item_status(
+    *,
+    result: CandidateRecord | None,
+    error: BaseException | None,
+) -> WorkItemStatus:
+    if error is not None:
+        return WorkItemStatus.FAILED
+    if result is None:
+        return WorkItemStatus.FAILED
+    if result.status == RecordStatus.OK:
+        return WorkItemStatus.COMPLETED
+    return WorkItemStatus.FAILED
