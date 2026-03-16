@@ -14,7 +14,11 @@ from themis.errors import SpecValidationError
 from themis.orchestration.orchestrator import Orchestrator
 from themis.orchestration.run_manifest import CostEstimate, RunHandle
 from themis.orchestration.task_resolution import resolve_task_stages
-from themis.progress import ProgressConfig, ProgressRendererType
+from themis.progress import (
+    ProgressConfig,
+    ProgressRendererType,
+    RunProgressSnapshot,
+)
 from themis.records.candidate import CandidateRecord
 from themis.records.evaluation import MetricScore
 from themis.records.evaluation import EvaluationRecord
@@ -1301,7 +1305,7 @@ def test_orchestrator_run_emits_progress_snapshots_to_callback(tmp_path) -> None
         registry=registry,
         dataset_loader=MockDatasetLoader(),
     )
-    snapshots = []
+    snapshots: list[RunProgressSnapshot] = []
 
     result = orchestrator.run(
         _build_experiment(),
@@ -1331,7 +1335,7 @@ def test_orchestrator_submit_preserves_terminal_progress_snapshot(tmp_path) -> N
         registry=registry,
         dataset_loader=MockDatasetLoader(),
     )
-    snapshots = []
+    snapshots: list[RunProgressSnapshot] = []
 
     handle = orchestrator.submit(
         _build_experiment(),
@@ -1358,7 +1362,7 @@ def test_orchestrator_submit_preserves_failed_progress_snapshot(tmp_path) -> Non
         registry=registry,
         dataset_loader=SingleItemDatasetLoader(),
     )
-    snapshots = []
+    snapshots: list[RunProgressSnapshot] = []
 
     handle = orchestrator.submit(
         _build_experiment().model_copy(update={"num_samples": 1}),
@@ -1387,7 +1391,7 @@ def test_stage_entrypoints_preserve_full_run_progress_snapshot(
     )
     experiment = _build_experiment()
     orchestrator.run(experiment, runtime=RuntimeContext())
-    snapshots = []
+    snapshots: list[RunProgressSnapshot] = []
 
     getattr(orchestrator, entrypoint_name)(
         experiment,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Protocol
+from typing import Protocol, TypedDict
 
 from themis.contracts.protocols import (
     DatasetContext,
@@ -33,6 +33,12 @@ from themis.specs.experiment import (
 from themis.telemetry.bus import TelemetryBus
 
 logger = logging.getLogger(__name__)
+
+
+class _ExecutionKwargs(TypedDict):
+    dataset_context: DatasetContext | None
+    resume: bool
+    progress_tracker: RunProgressTracker | None
 
 
 class _ExecutionRunner(Protocol):
@@ -149,12 +155,11 @@ class TrialExecutor:
                 logger.info("Skipping cached generation: %s", trial.trial_id)
             else:
                 logger.info("Executing generation for trial: %s", trial.trial_id)
-        kwargs = {
+        kwargs: _ExecutionKwargs = {
             "dataset_context": dataset_context,
             "resume": resume,
+            "progress_tracker": progress_tracker,
         }
-        if progress_tracker is not None:
-            kwargs["progress_tracker"] = progress_tracker
         self.last_scheduler_stats = (
             self._generation_execution.execute_generation_trials(
                 trials,
@@ -173,12 +178,11 @@ class TrialExecutor:
         progress_tracker: RunProgressTracker | None = None,
     ) -> None:
         """Run declared output transforms against existing generation candidates."""
-        kwargs = {
+        kwargs: _ExecutionKwargs = {
             "dataset_context": dataset_context,
             "resume": resume,
+            "progress_tracker": progress_tracker,
         }
-        if progress_tracker is not None:
-            kwargs["progress_tracker"] = progress_tracker
         self.last_scheduler_stats = self._overlay_execution.execute_transforms(
             trials,
             runtime_context,
@@ -195,12 +199,11 @@ class TrialExecutor:
         progress_tracker: RunProgressTracker | None = None,
     ) -> None:
         """Run declared evaluations against generation or transformed candidates."""
-        kwargs = {
+        kwargs: _ExecutionKwargs = {
             "dataset_context": dataset_context,
             "resume": resume,
+            "progress_tracker": progress_tracker,
         }
-        if progress_tracker is not None:
-            kwargs["progress_tracker"] = progress_tracker
         self.last_scheduler_stats = self._overlay_execution.execute_evaluations(
             trials,
             runtime_context,

@@ -6,7 +6,7 @@ import asyncio
 import inspect
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 
 from themis.orchestration._async import run_coroutine_sync
 
@@ -142,9 +142,12 @@ class WorkScheduler:
                     if inspect.iscoroutinefunction(worker):
                         value = await worker(work_item)
                     else:
-                        value = await asyncio.to_thread(worker, work_item)
+                        sync_worker = cast(Callable[[T], R], worker)
+                        value = await asyncio.to_thread(sync_worker, work_item)
                         if inspect.isawaitable(value):
                             value = await value
+                    if value is None:
+                        raise RuntimeError("Work scheduler worker returned None.")
                     async with result_lock:
                         results[index] = ScheduledResult(
                             work_item=work_item,

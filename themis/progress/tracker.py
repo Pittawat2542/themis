@@ -50,10 +50,11 @@ class RunProgressTracker:
         if self.allowed_stages is None:
             self.allowed_stages = frozenset(RunStage)
         if self.config is not None and self.config.enabled:
-            if self.config.callback is not None:
-                self.bus.subscribe(lambda event: self.config.callback(event.snapshot))
+            callback = self.config.callback
+            if callback is not None:
+                self.bus.subscribe(lambda event: callback(event.snapshot))
             renderer = self.config.renderer
-            if renderer is None and self.config.callback is None:
+            if renderer is None and callback is None:
                 renderer = ProgressRendererType.RICH
             if renderer == ProgressRendererType.LOG:
                 self.bus.subscribe(ProgressLogRenderer(self.config.verbosity))
@@ -155,11 +156,10 @@ class RunProgressTracker:
     def finish_run(self) -> None:
         ended_at = None
         if self.snapshot.remaining_items == 0:
-            ended_candidates = [
-                item.ended_at
-                for item in self._work_items.values()
-                if getattr(item, "ended_at", None) is not None
-            ]
+            ended_candidates: list[datetime] = []
+            for item in self._work_items.values():
+                if item.ended_at is not None:
+                    ended_candidates.append(item.ended_at)
             ended_at = max(ended_candidates) if ended_candidates else _now_utc()
         self.snapshot = self.snapshot.model_copy(update={"ended_at": ended_at})
         self._emit(ProgressEventType.RUN_FINISHED)
@@ -174,7 +174,7 @@ class RunProgressTracker:
             for item in self.manifest.work_items
             if item.started_at is not None
         ]
-        ended_candidates = [
+        ended_candidates: list[datetime] = [
             item.ended_at
             for item in self.manifest.work_items
             if item.ended_at is not None

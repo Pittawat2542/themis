@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+from typing import TYPE_CHECKING
 
 from themis.progress.bus import ProgressEvent
 from themis.progress.models import ProgressVerbosity, RunProgressSnapshot
 from themis.types.enums import RunStage
+
+if TYPE_CHECKING:
+    from rich.console import RenderableType
+    from rich.live import Live
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +63,7 @@ class RichProgressRenderer:
         from rich.console import Console
 
         self.console = Console(stderr=True)
-        self._live = None
+        self._live: Live | None = None
 
     def __call__(self, event: ProgressEvent) -> None:
         table = self._build_table(event.snapshot)
@@ -76,7 +81,7 @@ class RichProgressRenderer:
             return
         self.console.print(table)
 
-    def _build_table(self, snapshot: RunProgressSnapshot) -> object:
+    def _build_table(self, snapshot: RunProgressSnapshot) -> RenderableType:
         from rich.table import Table
 
         table = Table(
