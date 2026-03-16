@@ -219,9 +219,7 @@ uv run python -c "from themis import Orchestrator, ProjectSpec, ExperimentSpec; 
 
 Expected output:
 
-```text
-ok
-```
+    ok
 
 If you installed the `stats` extra, also verify the operator CLI:
 
@@ -231,9 +229,7 @@ uv run themis-quickcheck --help
 
 Expected output starts with:
 
-```text
-usage: themis-quickcheck [-h] {failures,scores,latency} ...
-```
+    usage: themis-quickcheck [-h] {failures,scores,latency} ...
 
 If you installed the `telemetry` extra, verify the telemetry primitives:
 
@@ -243,9 +239,7 @@ uv run python -c "from themis.telemetry import TelemetryBus, LangfuseCallback; p
 
 Expected output:
 
-```text
-ok
-```
+    ok
 
 ## Optional Dependency Failure Examples
 

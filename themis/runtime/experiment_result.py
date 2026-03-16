@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from themis._optional import import_optional
 from themis.records.trial import TrialRecord
+from themis.report.builder import ReportBuilder
+from themis.runtime.comparison import ComparisonTable
 from themis.runtime.result_services import (
     ExperimentResultAnalysisService,
     ExperimentResultDiagnosticsService,
@@ -15,10 +17,6 @@ from themis.runtime.result_services import (
 from themis.runtime.timeline_view import RecordTimelineView
 from themis.types.enums import PValueCorrection, RecordType
 from themis.types.events import ScoreRow, TrialSummaryRow
-
-if TYPE_CHECKING:
-    from themis.report.builder import ReportBuilder
-    from themis.runtime.comparison import ComparisonTable
 
 
 class _ExperimentProjectionRepository(Protocol):

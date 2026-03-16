@@ -12,20 +12,36 @@ CACHE_DIRS = [
     PROJECT_ROOT / ".cache",
     PROJECT_ROOT / ".themis_cache",
 ]
+DOCS_CMD_TIMEOUT = 120
+EXAMPLE_CACHE_DIRS = [cache_dir / "themis-examples" for cache_dir in CACHE_DIRS]
 
 
 def _reset_example_state() -> None:
-    for cache_dir in CACHE_DIRS:
+    for cache_dir in EXAMPLE_CACHE_DIRS:
         shutil.rmtree(cache_dir, ignore_errors=True)
 
 
-def _run_command(*args: str) -> str:
-    result = subprocess.run(
-        args,
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-    )
+def _run_command(*args: str, timeout: int = DOCS_CMD_TIMEOUT) -> str:
+    try:
+        result = subprocess.run(
+            args,
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = (
+            exc.stdout.decode() if isinstance(exc.stdout, bytes) else exc.stdout or ""
+        )
+        stderr = (
+            exc.stderr.decode() if isinstance(exc.stderr, bytes) else exc.stderr or ""
+        )
+        assert False, (
+            f"Command timed out after {timeout}s: {args}\n"
+            f"stdout:\n{stdout}\n"
+            f"stderr:\n{stderr}"
+        )
     assert result.returncode == 0, result.stderr
     return result.stdout
 

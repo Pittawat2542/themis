@@ -32,6 +32,7 @@ need exact fields, signatures, and docstrings.
     into separate prose pages.
 
     Pages that include planner, executor, repository, or schema modules keep the
-    implementation detail in view for power users, but those modules are not the
-    stable extension surface. Prefer the root package, namespace re-exports, and
-    documented protocol interfaces when choosing imports for application code.
+    implementation details in view for power users, but those modules are not
+    the stable extension surface. Prefer the root package, namespace re-exports,
+    and documented protocol interfaces when choosing imports for application
+    code.

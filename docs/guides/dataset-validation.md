@@ -79,12 +79,22 @@ only after you have ruled out the explicit `Mapping` or `DataItemContext`
 shapes:
 
 ```python
+from collections.abc import Mapping
+
+from themis.specs import DataItemContext
+
 hard_items = [
     item
     for item in items
     if (
-        isinstance(item, dict)
-        and ((item.get("metadata", {}) or {}).get("difficulty") == "hard")
+        (
+            isinstance(item, Mapping)
+            and ((item.get("metadata", {}) or {}).get("difficulty") == "hard")
+        )
+        or (
+            isinstance(item, DataItemContext)
+            and item.metadata.get("difficulty") == "hard"
+        )
     )
 ]
 print(len(hard_items))

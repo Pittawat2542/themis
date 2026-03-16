@@ -180,6 +180,9 @@ same trial context plus the candidate payload that should be scored externally.
 If dataset payloads are sensitive, disable them at the project level:
 
 ```python
+# `project.model_copy(...)` returns a new `ProjectSpec`, and
+# `project.storage.model_copy(...)` replaces the nested storage config with a
+# copy where `store_item_payloads` is disabled.
 project = project.model_copy(
     update={"storage": project.storage.model_copy(update={"store_item_payloads": False})}
 )

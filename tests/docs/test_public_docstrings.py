@@ -92,6 +92,48 @@ QUALITY_EXPECTATIONS = {
 }
 
 
+def _annotation_is_explicit_none(annotation: ast.expr | None) -> bool:
+    if annotation is None:
+        return False
+    if isinstance(annotation, ast.Constant):
+        return annotation.value is None
+    if isinstance(annotation, ast.Name):
+        return annotation.id == "None"
+    return False
+
+
+def _iter_relevant_body_nodes(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.AST]:
+    relevant_nodes: list[ast.AST] = []
+    stack = list(ast.iter_child_nodes(node))
+    while stack:
+        child = stack.pop()
+        if isinstance(
+            child,
+            (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
+        ):
+            continue
+        relevant_nodes.append(child)
+        stack.extend(ast.iter_child_nodes(child))
+    return relevant_nodes
+
+
+def _requires_returns_section(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    if node.returns is not None and not _annotation_is_explicit_none(node.returns):
+        return True
+    return any(
+        isinstance(child, ast.Return) and child.value is not None
+        for child in _iter_relevant_body_nodes(node)
+    )
+
+
+def _requires_raises_section(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    return any(
+        isinstance(child, ast.Raise) for child in _iter_relevant_body_nodes(node)
+    )
+
+
 def test_public_reference_modules_have_public_docstrings() -> None:
     missing: list[str] = []
 
@@ -139,9 +181,13 @@ def test_key_reference_docstrings_include_google_style_sections() -> None:
                         missing_sections.append(
                             f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Args"
                         )
-                    if "Returns:" not in doc and "Raises:" not in doc:
+                    if _requires_returns_section(node) and "Returns:" not in doc:
                         missing_sections.append(
-                            f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Returns/Raises"
+                            f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Returns"
+                        )
+                    if _requires_raises_section(node) and "Raises:" not in doc:
+                        missing_sections.append(
+                            f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Raises"
                         )
             elif isinstance(node, ast.ClassDef):
                 for child in node.body:
@@ -160,9 +206,16 @@ def test_key_reference_docstrings_include_google_style_sections() -> None:
                                 missing_sections.append(
                                     f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Args"
                                 )
-                            if "Returns:" not in doc and "Raises:" not in doc:
+                            if (
+                                _requires_returns_section(child)
+                                and "Returns:" not in doc
+                            ):
                                 missing_sections.append(
-                                    f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Returns/Raises"
+                                    f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Returns"
+                                )
+                            if _requires_raises_section(child) and "Raises:" not in doc:
+                                missing_sections.append(
+                                    f"{path.relative_to(PROJECT_ROOT)}:{symbol}:Raises"
                                 )
 
         missing_symbols = sorted(expected_symbols - seen)

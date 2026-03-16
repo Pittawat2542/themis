@@ -39,10 +39,12 @@ snapshot rather than the current local Python code.
 ## Reload the Run in Python
 
 ```python
+from themis import Orchestrator
 from themis.orchestration.run_manifest import RunHandle
 from themis.runtime import ExperimentResult
 
-
+# Recreate `orchestrator` from the same project wiring used for the original
+# run, for example with `Orchestrator.from_project_spec(...)`.
 resumed = orchestrator.resume(run_id)
 
 if isinstance(resumed, RunHandle):
@@ -57,6 +59,8 @@ pending work remains, it returns a `RunHandle`.
 ## Export a Portable Analysis Payload
 
 ```python
+# `result` is the `ExperimentResult` returned by `orchestrator.run(...)` or by
+# `orchestrator.resume(run_id)` once the run has fully completed.
 evaluation_result = result.for_evaluation(result.evaluation_hashes[0])
 payload = evaluation_result.export_json("result.json")
 print(payload["overlay"])

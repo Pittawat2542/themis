@@ -6,10 +6,13 @@ the models, and confirm the stored SQLite summaries.
 
 ## Before You Start
 
-Install the stats extra and run the example from the repository root:
+Install the `stats` extra in the environment that will run the example. If you
+are working from a source checkout, follow the repository sync workflow in
+[Installation & Setup](../installation-setup/index.md#install-from-source)
+instead of running `uv add` from the checkout root. Then run the example from
+the repository root:
 
 ```bash
-uv add "themis-eval[stats]"
 uv run python examples/04_compare_models.py
 ```
 
@@ -92,7 +95,7 @@ Use the operator CLI when you want a lightweight check without hydrating the
 full trial records:
 
 ```bash
-themis-quickcheck scores \
+uv run themis-quickcheck scores \
   --db .cache/themis-examples/04-compare-models/themis.sqlite3 \
   --metric exact_match
 ```

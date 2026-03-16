@@ -82,7 +82,7 @@ class TelemetryBus:
         self._subscribers = [
             existing_subscriber
             for existing_subscriber in self._subscribers
-            if existing_subscriber is not subscriber
+            if existing_subscriber != subscriber
         ]
 
     def emit(

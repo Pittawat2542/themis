@@ -162,8 +162,10 @@ root:
 
 ```latex
 \section*{Configuration Report}
+\begin{description}
 \item[Verbosity] default
 \item[Project Name] report-demo
+\end{description}
 \subsection*{experiment}
 \begin{longtable}{lllllll}
 \textbf{Parameter} & \textbf{Value} & \textbf{Type} & \textbf{Default} & \textbf{Declared In} & \textbf{Source} & \textbf{Notes} \\

@@ -25,9 +25,6 @@ def add_report_arguments(parser: argparse.ArgumentParser) -> None:
 
     Args:
         parser: The parser that should receive config-report arguments.
-
-    Returns:
-        None.
     """
 
     input_group = parser.add_mutually_exclusive_group(required=True)

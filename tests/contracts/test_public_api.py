@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+from typing import get_type_hints
 
 import themis
 import themis.config_report
@@ -11,6 +12,7 @@ import themis.specs
 import themis.stats
 import themis.types
 
+from themis.report import ReportBuilder
 from themis.records.candidate import CandidateRecord
 from themis.records.evaluation import EvaluationRecord, MetricScore
 from themis.records.extraction import ExtractionRecord
@@ -135,6 +137,11 @@ def _make_trial_record() -> TrialRecord:
         candidates=[candidate],
         trial_spec=trial_spec,
     )
+
+
+def test_experiment_result_methods_resolve_runtime_type_hints() -> None:
+    assert get_type_hints(ExperimentResult.compare)["return"] is ComparisonTable
+    assert get_type_hints(ExperimentResult.report)["return"] is ReportBuilder
 
 
 def _make_analysis_trial_record() -> TrialRecord:

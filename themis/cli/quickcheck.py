@@ -23,9 +23,6 @@ def add_quickcheck_arguments(subparsers: argparse._SubParsersAction[Any]) -> Non
     Args:
         subparsers: The argparse subparser collection that should receive the
             `failures`, `scores`, and `latency` commands.
-
-    Returns:
-        None.
     """
 
     failures = subparsers.add_parser("failures")

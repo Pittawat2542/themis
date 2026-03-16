@@ -5,7 +5,7 @@ Planning, execution, projection, and orchestration facades.
 !!! warning "Implementation detail pages"
     `Orchestrator` is the stable extension surface on this page. The linked
     planner, executor, runner, and pipeline modules are importable for
-    inspection, but they are implementation detail rather than the stable
+    inspection, but they are implementation details rather than the stable
     extension surface for application code.
 
 ## Execution Semantics
