@@ -112,6 +112,10 @@ def build_experiment() -> ExperimentSpec:
     )
 
 
+def _format_display_path(path: Path) -> str:
+    return path.as_posix()
+
+
 def main() -> None:
     project_path = write_project_file(
         Path(".cache/themis-examples/02-project-file-config")
@@ -123,7 +127,7 @@ def main() -> None:
     )
     result = orchestrator.run(build_experiment())
 
-    print("Loaded project file:", project_path)
+    print("Loaded project file:", _format_display_path(project_path))
     print("Trial hashes:", ", ".join(result.trial_hashes))
 
 

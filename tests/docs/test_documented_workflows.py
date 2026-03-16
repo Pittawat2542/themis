@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import runpy
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -44,6 +45,24 @@ def _run_parent_cli(*args: str) -> str:
         "-c",
         "from themis.cli.main import main; raise SystemExit(main())",
         *args,
+    )
+
+
+def test_project_file_example_formats_display_path_with_forward_slashes() -> None:
+    module_globals = runpy.run_path(
+        str(PROJECT_ROOT / "examples/02_project_file.py"),
+        run_name="themis_example_02_project_file",
+    )
+
+    format_display_path = module_globals["_format_display_path"]
+
+    assert (
+        format_display_path(
+            PureWindowsPath(
+                ".cache/themis-examples/02-project-file-config/project.toml"
+            )
+        )
+        == ".cache/themis-examples/02-project-file-config/project.toml"
     )
 
 
