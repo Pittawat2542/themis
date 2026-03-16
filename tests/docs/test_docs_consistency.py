@@ -228,7 +228,8 @@ def test_docs_workflows_run_docs_verification_suite_before_build() -> None:
     verification_command = (
         "uv run pytest tests/docs/test_docs_consistency.py "
         "tests/docs/test_public_docstrings.py "
-        "tests/docs/test_documented_workflows.py"
+        "tests/docs/test_documented_workflows.py "
+        "tests/docs/test_example_display_paths.py"
     )
 
     assert verification_command in docs_workflow
