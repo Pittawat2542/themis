@@ -67,6 +67,59 @@ builder.to_csv("report.csv")
 Use `compare()` for a direct answer, `leaderboard()` for a quick aggregate
 table, and `report()` for a handoff artifact.
 
+## Export Project And Experiment Config Reports
+
+Use config reports when the user wants a reproducibility snapshot of the exact
+project and experiment setup, wants to inspect defaults and source metadata, or
+asks for a paper-ready config appendix.
+
+Prefer the root helper when both objects are already in memory:
+
+```python
+from pathlib import Path
+
+from themis import generate_config_report
+
+bundle = {"project": project, "experiment": experiment}
+
+markdown_report = generate_config_report(bundle, format="markdown")
+full_json_report = generate_config_report(
+    bundle,
+    format="json",
+    verbosity="full",
+)
+generate_config_report(
+    bundle,
+    format="latex",
+    output=Path("config-report.tex"),
+)
+```
+
+Supported built-in formats are `json`, `yaml`, `markdown`, and `latex`.
+`verbosity="default"` keeps the paper-facing subset. `verbosity="full"` keeps
+the complete collected tree for audits and debugging.
+
+Use the CLI when the user wants an artifact from a config factory or a
+persisted run:
+
+```bash
+themis report \
+  --factory my_package.evals.paper_run:build_config_bundle \
+  --format markdown \
+  --output config-report.md
+
+themis report \
+  --project-file project.json \
+  --run-id run_123 \
+  --format latex \
+  --verbosity full \
+  --output config-report.tex
+```
+
+Use factory mode when config lives in Python. Use `--project-file` plus
+`--run-id` when the user wants the persisted manifest snapshot for an existing
+run.
+
 ## Surface Failures And Tagged Examples
 
 Use aggregate helpers before drilling into timelines:
