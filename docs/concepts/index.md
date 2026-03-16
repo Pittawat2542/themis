@@ -13,6 +13,13 @@ Themis is easiest to understand if you keep three mental models in view:
 - storage layout and resume behavior
 - how plugins and hooks fit into execution
 
+Start with:
+
+- [Architecture](architecture.md) for component boundaries and data flow
+- [Specs and Records](specs-and-records.md) for the write-side versus read-side split
+- [Storage and Resume](storage-and-resume.md) for persistence, replay, and timelines
+- [Statistical Comparisons](statistical-comparisons.md) for paired-analysis interpretation
+
 ## Concept Map
 
 ```mermaid

@@ -9,6 +9,12 @@ reusable `project.toml` file.
 
 Use the hello-world script or start from `examples/02_project_file.py`.
 
+To verify the shipped example first, run:
+
+```bash
+uv run python examples/02_project_file.py
+```
+
 ## Step 1: Write `project.toml`
 
 ```toml
@@ -18,9 +24,9 @@ global_seed = 11
 
 [storage]
 backend = "sqlite_blob"
-root_dir = ".cache/themis-docs/project-file"
+root_dir = ".cache/themis-examples/02-project-file"
 store_item_payloads = true
-compression = "zstd"
+compression = "none"
 
 [execution_policy]
 max_retries = 3
@@ -37,9 +43,9 @@ block for:
 [storage]
 backend = "postgres_blob"
 database_url = "postgresql://localhost:5432/themis"
-blob_root_dir = ".cache/themis-docs/project-file/blobs"
+blob_root_dir = ".cache/themis-examples/02-project-file/blobs"
 store_item_payloads = true
-compression = "zstd"
+compression = "none"
 ```
 
 ## Step 2: Replace the inline `ProjectSpec`
@@ -66,6 +72,13 @@ Check that:
 - the run completes successfully
 - the storage root comes from `project.toml`
 - you can change retry or storage policy without editing Python
+
+Expected output from `examples/02_project_file.py`:
+
+```text
+Loaded project file: .cache/themis-examples/02-project-file-config/project.toml
+Trial hashes: 4842354de2b4, defddb7e8085
+```
 
 ## Step 4: Understand the split
 

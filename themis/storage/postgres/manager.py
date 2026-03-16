@@ -65,6 +65,8 @@ class PostgresConnectionManager:
 
     @contextmanager
     def get_connection(self) -> Iterator[StorageConnection]:
+        """Yields a live storage connection, creating one per thread as needed."""
+
         if self._needs_new_connection():
             psycopg = import_optional("psycopg", extra="storage-postgres")
             rows = getattr(psycopg, "rows")
@@ -81,6 +83,8 @@ class PostgresConnectionManager:
         return bool(getattr(conn, "closed", False) or getattr(conn, "broken", False))
 
     def initialize(self) -> None:
+        """Creates the storage schema and validates the store format version."""
+
         with self.get_connection() as conn:
             with conn:
                 apply_sql_script(conn, SCHEMA)

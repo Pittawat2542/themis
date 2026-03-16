@@ -3,6 +3,10 @@
 Use this guide when Themis should keep planning, storage, and reporting, but
 generation or evaluation needs to happen in another system.
 
+!!! note "Illustrative snippets"
+    The snippets on this page show the minimum record shapes and handoff points.
+    They are intentionally schematic unless an expected output block is shown.
+
 ## Choose the Handoff Shape
 
 | Workflow | Themis entry point | External system responsibility |
@@ -62,6 +66,13 @@ result = orchestrator.import_generation_results(generation_bundle, trial_records
 print(result.trial_hashes)
 ```
 
+Minimum imported generation fields:
+
+- `TrialRecord.spec_hash` matching the exported `trial_hash`
+- one `CandidateRecord` per exported candidate ID
+- `CandidateRecord.candidate_id`
+- `InferenceRecord` on each imported candidate
+
 This is the bridge for "bring your own generation results." Once the candidates
 exist in storage, you can keep using Themis for transforms, evaluation, reports,
 and comparisons.
@@ -111,6 +122,13 @@ evaluation_result = result.for_evaluation(result.evaluation_hashes[0])
 print(evaluation_result.leaderboard())
 ```
 
+Minimum imported evaluation fields:
+
+- `TrialRecord.spec_hash` matching the exported `trial_hash`
+- `CandidateRecord.candidate_id` matching the exported candidate ID
+- `EvaluationRecord` on each imported candidate
+- at least one `MetricScore` per evaluation you want persisted
+
 This is the bridge for "bring your own evaluation results." Your adapter script
 is responsible for translating external payloads into Themis-compatible metric
 rows, warnings, and optional qualitative tags in `MetricScore.details`.
@@ -145,7 +163,7 @@ print(payload["overlay"])
 ```
 
 Use [Compare and Export Results](compare-and-export.md) and
-[Analyze Results](../tutorials/analyze-results.md) from that point onward.
+[Analyze Results](analyze-results.md) from that point onward.
 
 ## OpenAI Batch and Other Provider Batch APIs
 

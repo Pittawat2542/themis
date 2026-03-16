@@ -86,6 +86,9 @@ Then register your engine as usual:
 registry.register_inference_engine("openai", MyOpenAIEngine())
 ```
 
+Use [Build a Provider Engine](provider-engines.md) when you want the full
+provider-backed skeleton with auth and retry guidance.
+
 ## 3. Write a custom extractor only when the built-ins do not fit
 
 Custom extractors use the signature `(trial, candidate, config)`.

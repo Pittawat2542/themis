@@ -1,3 +1,5 @@
+"""In-process progress event fan-out for orchestration runs."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -47,11 +49,15 @@ class ProgressBus:
         self.fail_fast_subscribers = fail_fast_subscribers
 
     def subscribe(self, subscriber: ProgressSubscriber) -> None:
+        """Registers a subscriber for future progress events."""
+
         with self._lock:
             if subscriber not in self._subscribers:
                 self._subscribers.append(subscriber)
 
     def unsubscribe(self, subscriber: ProgressSubscriber) -> None:
+        """Removes a previously registered subscriber if it is present."""
+
         with self._lock:
             self._subscribers = [
                 existing for existing in self._subscribers if existing is not subscriber
@@ -63,6 +69,8 @@ class ProgressBus:
         *,
         snapshot: RunProgressSnapshot,
     ) -> ProgressEvent:
+        """Emits a progress event to all current subscribers."""
+
         event = ProgressEvent(event_type=event_type, snapshot=snapshot)
         with self._lock:
             subscribers = tuple(self._subscribers)

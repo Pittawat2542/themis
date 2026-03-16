@@ -1,3 +1,5 @@
+"""Helpers for converting exceptions into persisted ``ErrorRecord`` values."""
+
 from __future__ import annotations
 
 import traceback
@@ -29,6 +31,8 @@ def map_exception_to_error_record(
     candidate_id: str | None = None,
     attempt: int | None = None,
 ) -> ErrorRecord:
+    """Maps an exception into a normalized error record for storage and reporting."""
+
     resolved_where = where or _infer_where(exc)
     code, message, details = _extract_error_fields(exc, resolved_where)
     merged_details = dict(details)

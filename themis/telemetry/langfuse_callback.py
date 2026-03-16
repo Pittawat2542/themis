@@ -1,3 +1,5 @@
+"""Langfuse-backed telemetry subscriber for persisted Themis runs."""
+
 from __future__ import annotations
 
 from typing import Protocol, cast
@@ -83,9 +85,25 @@ class LangfuseCallback:
         )
 
     def subscribe(self, bus: TelemetryBus) -> None:
+        """Subscribe this callback to one telemetry bus.
+
+        Args:
+            bus: Telemetry bus that should forward events to this callback.
+
+        Returns:
+            None.
+        """
         bus.subscribe(self.on_event)
 
     def on_event(self, event: TelemetryEvent) -> None:
+        """Handle one telemetry event from the subscribed runtime bus.
+
+        Args:
+            event: Telemetry event emitted by the Themis runtime.
+
+        Returns:
+            None.
+        """
         trial_hash = self._trial_hash(event)
         if trial_hash is None:
             return

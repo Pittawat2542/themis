@@ -47,6 +47,9 @@ self-contained, well-commented, and aligned with the current implementation.
 uv run python examples/01_hello_world.py
 ```
 
+Prefer the matching docs page when you want the surrounding explanation. The
+docs catalog is [docs/guides/examples.md](../docs/guides/examples.md).
+
 ## Design Rules For This Folder
 
 - Use only the current `ProjectSpec` + `ExperimentSpec` + `Orchestrator` flow.

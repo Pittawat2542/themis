@@ -6,6 +6,13 @@ Install the `stats` extra first:
 uv add "themis-eval[stats]"
 ```
 
+Prerequisites:
+
+- start from `examples/04_compare_models.py` or a similar run with at least one
+  evaluation overlay
+- use `.cache/themis-examples/04-compare-models` if you want paths and output
+  that match the shipped example
+
 ## Paired Comparison
 
 ```python
@@ -16,12 +23,25 @@ comparison = evaluation_result.compare(
     treatment_model_id="candidate",
     p_value_correction="holm",
 )
+row = comparison.rows[0]
+print("delta_mean=", row.delta_mean, "adjusted_p_value=", row.adjusted_p_value, "pairs=", row.pair_count)
+```
+
+Expected output from `examples/04_compare_models.py`:
+
+```text
+delta_mean= 0.5 adjusted_p_value= 0.25 pairs= 6
 ```
 
 Comparison rows are paired by `task_id`, `metric_id`, and `item_id`.
 
 If a run has multiple evaluation overlays, pick the one you want first with
 `result.for_evaluation(...)` so the comparison reads from the intended score set.
+To inspect the exact overlay hash first:
+
+```python
+print(result.evaluation_hashes[0])
+```
 
 Each comparison row includes:
 
@@ -55,8 +75,8 @@ score rows instead of materializing every stored artifact.
 ```python
 builder = result.report()
 builder.build(p_value_correction="holm")
-builder.to_markdown("report.md")
-builder.to_csv("report.csv")
+builder.to_markdown(".cache/themis-examples/04-compare-models/report.md")
+builder.to_csv(".cache/themis-examples/04-compare-models/report.csv")
 ```
 
 `compare()` and `report()` read from the active `ExperimentResult` overlay. Use
@@ -75,7 +95,9 @@ when you need programmatic downstream processing.
 ## Export the Active Overlay as JSON
 
 ```python
-payload = evaluation_result.export_json("result.json")
+payload = evaluation_result.export_json(
+    ".cache/themis-examples/04-compare-models/result.json"
+)
 print(payload["overlay"])
 print(len(payload["trial_summaries"]))
 ```
@@ -132,6 +154,9 @@ print(candidate_view.evaluation.aggregate_scores)
 
 Use this when you want to inspect the concrete response, extraction chain,
 evaluation payload, or judge audit tied to a bad example.
+
+Use [Statistical Comparisons](../concepts/statistical-comparisons.md) when you
+need the interpretation behind paired outputs.
 
 Use `examples/04_compare_models.py` for a full runnable script, and the
 [Reporting & Stats API reference](../api-reference/reporting-and-stats.md) when

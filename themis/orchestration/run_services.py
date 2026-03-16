@@ -47,6 +47,8 @@ RunExecutor = Callable[[ExperimentSpec, RuntimeContext | None], ExperimentResult
 
 
 def generation_trials(planned_trials: Sequence[PlannedTrial]) -> list[PlannedTrial]:
+    """Returns planned trials that still include a generation stage."""
+
     return [
         planned_trial
         for planned_trial in planned_trials
@@ -55,6 +57,8 @@ def generation_trials(planned_trials: Sequence[PlannedTrial]) -> list[PlannedTri
 
 
 def transform_trials(planned_trials: Sequence[PlannedTrial]) -> list[PlannedTrial]:
+    """Returns planned trials that declare one or more output transforms."""
+
     return [
         planned_trial
         for planned_trial in planned_trials
@@ -63,6 +67,8 @@ def transform_trials(planned_trials: Sequence[PlannedTrial]) -> list[PlannedTria
 
 
 def evaluation_trials(planned_trials: Sequence[PlannedTrial]) -> list[PlannedTrial]:
+    """Returns planned trials that declare one or more evaluations."""
+
     return [
         planned_trial
         for planned_trial in planned_trials
@@ -71,6 +77,8 @@ def evaluation_trials(planned_trials: Sequence[PlannedTrial]) -> list[PlannedTri
 
 
 def collect_transform_hashes(planned_trials: Sequence[PlannedTrial]) -> list[str]:
+    """Collects unique transform hashes referenced by ``planned_trials``."""
+
     hashes: list[str] = []
     for planned_trial in planned_trials:
         resolved = resolve_task_stages(planned_trial.trial_spec.task)
@@ -81,6 +89,8 @@ def collect_transform_hashes(planned_trials: Sequence[PlannedTrial]) -> list[str
 
 
 def collect_evaluation_hashes(planned_trials: Sequence[PlannedTrial]) -> list[str]:
+    """Collects unique evaluation hashes referenced by ``planned_trials``."""
+
     hashes: list[str] = []
     for planned_trial in planned_trials:
         resolved = resolve_task_stages(planned_trial.trial_spec.task)
@@ -103,11 +113,15 @@ class RunPlanningService:
 
     @property
     def backend_kind(self) -> str:
+        """Returns the execution backend kind for planned runs."""
+
         if self.project_spec is None:
             return "local"
         return self.project_spec.execution_backend.kind
 
     def plan(self, experiment: ExperimentSpec) -> RunManifest:
+        """Plans one experiment and persists the reconciled run manifest."""
+
         planned_trials = self.planner.plan_experiment(experiment)
         return self.plan_from_trials(experiment, planned_trials)
 
@@ -116,6 +130,8 @@ class RunPlanningService:
         experiment: ExperimentSpec,
         planned_trials: Sequence[PlannedTrial],
     ) -> RunManifest:
+        """Builds, reconciles, and saves a manifest from preplanned trials."""
+
         manifest = self.build_manifest(experiment, planned_trials)
         manifest = self.manifest_repo.reconcile_manifest(manifest)
         self.manifest_repo.save_manifest(manifest)
@@ -126,6 +142,8 @@ class RunPlanningService:
         baseline: ExperimentSpec,
         treatment: ExperimentSpec,
     ) -> RunDiff:
+        """Diffs two experiments at the manifest and top-level field level."""
+
         baseline_manifest = self.build_manifest(
             baseline,
             self.planner.plan_experiment(baseline),
@@ -184,6 +202,8 @@ class RunPlanningService:
         runtime: RuntimeContext | None,
         execute_run: RunExecutor,
     ) -> RunHandle:
+        """Plans a run and executes it immediately when using the local backend."""
+
         manifest = self.plan(experiment)
         if self.backend_kind == "local":
             execute_run(experiment, runtime)
@@ -197,6 +217,8 @@ class RunPlanningService:
         runtime: RuntimeContext | None,
         execute_run: RunExecutor,
     ) -> RunHandle | ExperimentResult:
+        """Resumes a persisted run and returns a handle or final result."""
+
         stored_manifest = self.manifest_repo.get_manifest(run_id)
         if stored_manifest is None:
             raise SpecValidationError(
@@ -236,9 +258,13 @@ class RunPlanningService:
         return handle
 
     def get_progress_snapshot(self, run_id: str) -> RunProgressSnapshot | None:
+        """Returns the latest stored progress snapshot for ``run_id``."""
+
         return self.manifest_repo.get_progress_snapshot(run_id)
 
     def estimate(self, experiment: ExperimentSpec) -> CostEstimate:
+        """Produces a heuristic cost estimate for a planned experiment."""
+
         planned_trials = self.planner.plan_experiment(experiment)
         manifest = self.build_manifest(experiment, planned_trials)
         prompt_char_budget = 0
@@ -285,6 +311,8 @@ class RunPlanningService:
         self,
         experiment: ExperimentSpec,
     ) -> GenerationWorkBundle:
+        """Exports pending generation work for execution outside Themis."""
+
         planned_trials = self.planner.plan_experiment(experiment)
         manifest = self.build_manifest(experiment, planned_trials)
         self.manifest_repo.save_manifest(manifest)
@@ -310,6 +338,8 @@ class RunPlanningService:
         self,
         experiment: ExperimentSpec,
     ) -> EvaluationWorkBundle:
+        """Exports pending evaluation work after generation has completed."""
+
         planned_trials = self.planner.plan_experiment(experiment)
         manifest = self.build_manifest(experiment, planned_trials)
         self.manifest_repo.save_manifest(manifest)
@@ -361,6 +391,8 @@ class RunPlanningService:
         transform_hashes: Sequence[str] | None = None,
         evaluation_hashes: Sequence[str] | None = None,
     ) -> ExperimentResult:
+        """Builds an ``ExperimentResult`` view over the planned trial set."""
+
         resolved_transform_hashes = list(transform_hashes or [])
         resolved_evaluation_hashes = list(evaluation_hashes or [])
         active_transform_hash = (
@@ -389,6 +421,8 @@ class RunPlanningService:
         experiment: ExperimentSpec,
         planned_trials: Sequence[PlannedTrial],
     ) -> RunManifest:
+        """Constructs a manifest and stage work items from planned trials."""
+
         event_cache: dict[tuple[str, str], list[TrialEvent]] = {}
         work_items: list[StageWorkItem] = []
         transform_hashes: list[str] = []
@@ -498,6 +532,8 @@ class RunPlanningService:
         )
 
     def result_from_manifest(self, manifest: RunManifest) -> ExperimentResult:
+        """Creates a result view from completed stages in ``manifest``."""
+
         completed_transform_hashes = sorted(
             {
                 item.transform_hash
@@ -535,6 +571,8 @@ class RunPlanningService:
         )
 
     def run_handle_from_manifest(self, manifest: RunManifest) -> RunHandle:
+        """Builds a lightweight run handle summarizing manifest state."""
+
         pending_work_items = sum(
             1
             for item in manifest.work_items
@@ -595,6 +633,8 @@ class RunImportService:
     projection_handler: ProjectionHandlerProtocol
 
     def import_candidates(self, trial_records: Sequence[TrialRecord]) -> list[str]:
+        """Imports fully materialized candidate records into run storage."""
+
         importer = CandidateImporter(
             event_repo=self.event_repo,
             projection_repo=self.projection_repo,
@@ -607,6 +647,8 @@ class RunImportService:
         bundle: GenerationWorkBundle,
         trial_records: Sequence[TrialRecord],
     ) -> None:
+        """Validates and imports externally executed generation results."""
+
         self._validate_generation_import(bundle, trial_records)
         importer = CandidateImporter(
             event_repo=self.event_repo,
@@ -620,6 +662,8 @@ class RunImportService:
         bundle: EvaluationWorkBundle,
         trial_records: Sequence[TrialRecord],
     ) -> None:
+        """Validates and imports externally executed evaluation results."""
+
         self._validate_evaluation_import(bundle, trial_records)
         importer = StageResultImporter(
             event_repo=self.event_repo,

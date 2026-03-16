@@ -1,3 +1,5 @@
+"""Progress tracking and snapshot updates for persisted run manifests."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -90,6 +92,8 @@ class RunProgressTracker:
         }
 
     def generation_work_item_id(self, trial_hash: str, candidate_index: int) -> str:
+        """Returns the generation work item ID for one trial candidate."""
+
         key = (trial_hash, candidate_index)
         if key not in self._generation_ids:
             raise KeyError(
@@ -104,6 +108,8 @@ class RunProgressTracker:
         candidate_index: int,
         transform_hash: str,
     ) -> str:
+        """Returns the transform work item ID for a candidate overlay."""
+
         key = (trial_hash, candidate_index, transform_hash)
         if key not in self._transform_ids:
             raise KeyError(
@@ -119,6 +125,8 @@ class RunProgressTracker:
         candidate_index: int,
         evaluation_hash: str,
     ) -> str:
+        """Returns the evaluation work item ID for a candidate overlay."""
+
         key = (trial_hash, candidate_index, evaluation_hash)
         if key not in self._evaluation_ids:
             raise KeyError(
@@ -129,14 +137,20 @@ class RunProgressTracker:
         return self._evaluation_ids[key]
 
     def start_run(self) -> None:
+        """Emits the initial run-started progress snapshot."""
+
         with self._lock:
             self._emit(ProgressEventType.RUN_STARTED)
 
     def stage_started(self) -> None:
+        """Emits a snapshot after orchestration advances to a new stage."""
+
         with self._lock:
             self._emit(ProgressEventType.STAGE_STARTED)
 
     def mark_running(self, work_item_id: str) -> None:
+        """Marks a work item as running and emits an updated snapshot."""
+
         with self._lock:
             started_at = _now_utc()
             self.manifest_repo.update_work_item(
@@ -160,6 +174,8 @@ class RunProgressTracker:
         last_error_code: str | None = None,
         last_error_message: str | None = None,
     ) -> None:
+        """Marks a work item terminal and emits an updated snapshot."""
+
         with self._lock:
             ended_at = _now_utc()
             self.manifest_repo.update_work_item(
@@ -180,6 +196,8 @@ class RunProgressTracker:
             self._emit(ProgressEventType.WORK_ITEM_FINISHED)
 
     def finish_run(self) -> None:
+        """Finalizes the run snapshot and emits the run-finished event."""
+
         with self._lock:
             ended_at = None
             if self.snapshot.remaining_items == 0:

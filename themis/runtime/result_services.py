@@ -31,6 +31,8 @@ class _ScoreQueryRepository(Protocol):
 
 
 class OptionalImporter(Protocol):
+    """Callable signature used to import optional dependencies lazily."""
+
     def __call__(self, module_name: str, *, extra: str) -> object: ...
 
 
@@ -45,6 +47,8 @@ class ResultOverlayContext:
     active_evaluation_hash: str | None
 
     def overlay_selection(self) -> OverlaySelection:
+        """Returns the active overlay selection for this result view."""
+
         return OverlaySelection(
             transform_hash=self.active_transform_hash,
             evaluation_hash=self.active_evaluation_hash,
@@ -79,6 +83,8 @@ class ExperimentResultAnalysisService:
         treatment_model_id: str | None = None,
         p_value_correction: PValueCorrection | str = PValueCorrection.NONE,
     ) -> ComparisonTable:
+        """Builds a statistical comparison table for the current result view."""
+
         self.require_optional("themis.stats.stats_engine", extra="stats")
         correction = PValueCorrection(p_value_correction)
         return build_comparison_table(
@@ -103,6 +109,8 @@ class ExperimentResultAnalysisService:
         metric_id: str | None = None,
         task_id: str | None = None,
     ) -> list[dict[str, object]]:
+        """Aggregates candidate scores into model/task leaderboard rows."""
+
         summary_by_trial = {
             row.trial_hash: row
             for row in self.iter_trial_summaries()
@@ -147,6 +155,8 @@ class ExperimentResultAnalysisService:
         *,
         include_trials: bool = True,
     ) -> dict[str, object]:
+        """Exports trial summaries and score rows for downstream consumers."""
+
         payload: dict[str, object] = {
             "trial_hashes": list(self.context.trial_hashes),
             "transform_hashes": list(self.context.transform_hashes),
@@ -171,6 +181,8 @@ class ExperimentResultAnalysisService:
         return payload
 
     def report(self) -> ReportBuilder:
+        """Builds a report builder for the current overlay selection."""
+
         from themis.report.builder import ReportBuilder
 
         self.require_optional("themis.stats.stats_engine", extra="stats")
@@ -203,6 +215,8 @@ class ExperimentResultDiagnosticsService:
         self.iter_trials = iter_trials
 
     def iter_invalid_extractions(self) -> Iterator[dict[str, object]]:
+        """Yields rows describing extraction failures in the current result view."""
+
         for trial in self.iter_trials():
             trial_spec = trial.trial_spec
             if trial_spec is None:
@@ -226,6 +240,8 @@ class ExperimentResultDiagnosticsService:
                     }
 
     def iter_failures(self) -> Iterator[dict[str, object]]:
+        """Yields trial- and candidate-level failure rows."""
+
         for trial in self.iter_trials():
             trial_spec = trial.trial_spec
             if trial_spec is None:
@@ -254,6 +270,8 @@ class ExperimentResultDiagnosticsService:
         *,
         tag: str | None = None,
     ) -> Iterator[dict[str, object]]:
+        """Yields examples tagged in metric details, optionally filtered by tag."""
+
         for trial in self.iter_trials():
             trial_spec = trial.trial_spec
             if trial_spec is None:

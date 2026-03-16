@@ -5,9 +5,9 @@ project and experiment configuration used by Themis.
 
 `generate_config_report(...)` walks nested config objects bottom-up, preserving
 the hierarchy of `ProjectSpec`, `ExperimentSpec`, and their sub-configs. It
-captures field values, types, defaults, source locations, and best-effort
-comments/docstrings in one canonical structure that can be rendered in multiple
-formats.
+captures field values, types, defaults, source locations, and any retrievable
+comments or docstrings in one canonical structure that can be rendered in
+multiple formats.
 
 It also supports two verbosity levels:
 
@@ -52,6 +52,10 @@ complete collected tree instead of the paper-oriented summary.
 
 The parent CLI now exposes config reporting under `themis report`.
 
+Custom renderers registered with `register_config_report_renderer(...)` are
+available through the Python API immediately. They do not become CLI formats
+unless the CLI choices are extended as well.
+
 ### Factory Mode
 
 Use this when your experiment config is defined directly in Python and you want
@@ -64,6 +68,14 @@ themis report \
   --format markdown \
   --verbosity default \
   --output config-report.md
+```
+
+CLI help:
+
+```text
+usage: themis report [-h] (--factory FACTORY | --project-file PROJECT_FILE)
+                     [--run-id RUN_ID] [--format {json,yaml,markdown,latex}]
+                     [--verbosity {default,full}] [--output OUTPUT]
 ```
 
 ### Persisted Run Manifest Mode
@@ -134,6 +146,7 @@ root:
 
 - Project Name: report-demo
 - Verbosity: default
+- Generated At: 2026-03-16T00:00:00Z
 
 <details>
 <summary><strong>experiment</strong> <code>$.experiment</code></summary>
@@ -141,6 +154,8 @@ root:
 | Parameter | Value | Type | Default | Declared In | Source | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | num_samples | 1 | int | 1 | ExperimentSpec | experiment.py:397 | How many samples per trial to draw by default. |
+
+</details>
 ```
 
 ### LaTeX
@@ -148,8 +163,11 @@ root:
 ```latex
 \section*{Configuration Report}
 \item[Verbosity] default
+\item[Project Name] report-demo
 \subsection*{experiment}
-\begin{longtable}{...}
+\begin{longtable}{lllllll}
+\textbf{Parameter} & \textbf{Value} & \textbf{Type} & \textbf{Default} & \textbf{Declared In} & \textbf{Source} & \textbf{Notes} \\
+\end{longtable}
 ```
 
 All four outputs represent the same underlying nested report tree. Only the
@@ -172,21 +190,25 @@ audit trail.
 Each report includes:
 
 - generation timestamp in UTC
-- best-effort git commit hash
+- git commit hash when the current working tree is inside a readable Git checkout
 - project name when available
 - entrypoint used to create the report
 - root object type
 - selected verbosity level
 
-Each parameter row also carries best-effort source metadata:
+Each parameter row also carries source metadata when it can be recovered:
 
 - declared config class
-- source file and line
+- source file and line for local Python classes with readable source
 - field description
-- inline or leading comments when available in source
+- inline or leading comments when they exist in the source text
 
-When a class has no retrievable Python source, the report still renders and
-leaves source metadata empty instead of failing.
+Degradation rules:
+
+- local Python classes with source on disk: full class and field metadata
+- dynamic classes: class name plus values, but line-level source metadata may be partial
+- third-party classes: class name plus values, but comments and source paths may be empty
+- compiled extensions: values still render, but source metadata is empty instead of failing
 
 ## Extending Formats
 

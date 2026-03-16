@@ -1,3 +1,5 @@
+"""Conversation event payloads stored alongside inference traces."""
+
 from datetime import datetime, timezone
 from typing import Annotated, Literal, TypeAlias
 
@@ -8,11 +10,15 @@ from themis.types.json_types import JSONDict, JSONValueType
 
 
 class MessagePayload(BaseModel):
+    """Payload for a rendered assistant or user message."""
+
     model_config = ConfigDict(frozen=True)
     content: str
 
 
 class ToolCallPayload(BaseModel):
+    """Payload describing a tool invocation emitted by an agent."""
+
     model_config = ConfigDict(frozen=True)
     tool_name: str
     tool_arguments: JSONDict
@@ -20,6 +26,8 @@ class ToolCallPayload(BaseModel):
 
 
 class ToolResultPayload(BaseModel):
+    """Payload carrying the structured result of a tool invocation."""
+
     model_config = ConfigDict(frozen=True)
     call_id: str
     result: JSONValueType
@@ -27,11 +35,15 @@ class ToolResultPayload(BaseModel):
 
 
 class NodeEnterPayload(BaseModel):
+    """Payload emitted when execution enters a graph or workflow node."""
+
     model_config = ConfigDict(frozen=True)
     node_id: str
 
 
 class NodeExitPayload(BaseModel):
+    """Payload emitted when execution exits a graph or workflow node."""
+
     model_config = ConfigDict(frozen=True)
     node_id: str
 
@@ -51,26 +63,36 @@ class BaseConversationEvent(BaseModel):
 
 
 class MessageEvent(BaseConversationEvent):
+    """Conversation event for plain text exchanged with the model."""
+
     kind: Literal["message"] = "message"
     payload: MessagePayload
 
 
 class ToolCallEvent(BaseConversationEvent):
+    """Conversation event for a requested tool call."""
+
     kind: Literal["tool_call"] = "tool_call"
     payload: ToolCallPayload
 
 
 class ToolResultEvent(BaseConversationEvent):
+    """Conversation event for a tool result delivered back to the model."""
+
     kind: Literal["tool_result"] = "tool_result"
     payload: ToolResultPayload
 
 
 class NodeEnterEvent(BaseConversationEvent):
+    """Conversation event emitted when entering an execution node."""
+
     kind: Literal["node_enter"] = "node_enter"
     payload: NodeEnterPayload
 
 
 class NodeExitEvent(BaseConversationEvent):
+    """Conversation event emitted when exiting an execution node."""
+
     kind: Literal["node_exit"] = "node_exit"
     payload: NodeExitPayload
 

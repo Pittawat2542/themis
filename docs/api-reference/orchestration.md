@@ -2,10 +2,17 @@
 
 Planning, execution, projection, and orchestration facades.
 
+!!! warning "Implementation detail pages"
+    `Orchestrator` is the stable extension surface on this page. The linked
+    planner, executor, runner, and pipeline modules are importable for
+    inspection, but they are implementation detail rather than the stable
+    extension surface for application code.
+
 ## Execution Semantics
 
 - `Orchestrator` exposes stage-specific entry points: `generate()`,
-  `transform()`, `evaluate()`, `run()`, and `import_candidates()`.
+  `transform()`, `evaluate()`, `run()`, `import_candidates()`, and the
+  run-manifest helpers documented on [Run Planning](run-planning.md).
 - Stage-specific entry points validate only the plugins required for the stages
   they execute. `generate()` validates generation plugins, `transform()`
   validates transforms, and `evaluate()` validates transforms plus evaluations.
