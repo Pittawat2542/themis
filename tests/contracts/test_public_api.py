@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 
 import themis
+import themis.config_report
 import themis.records
 import themis.specs
 import themis.stats
@@ -41,6 +42,7 @@ EXPECTED_ROOT_EXPORTS = {
     "__version__",
     "Orchestrator",
     "ExperimentResult",
+    "generate_config_report",
     "ProjectSpec",
     "ExperimentSpec",
     "StorageConfig",
@@ -65,6 +67,29 @@ EXPECTED_ROOT_EXPORTS = {
     "RuntimeContext",
     "PluginRegistry",
     "ThemisError",
+}
+
+EXPECTED_CONFIG_REPORT_EXPORTS = {
+    "ConfigReportDocument",
+    "ConfigReportHeader",
+    "ConfigReportNode",
+    "ConfigReportParameter",
+    "ConfigReportOptions",
+    "ConfigReportMixin",
+    "ConfigReportRenderer",
+    "ConfigReportFormat",
+    "ConfigReportVerbosity",
+    "JsonConfigReportRenderer",
+    "YamlConfigReportRenderer",
+    "MarkdownConfigReportRenderer",
+    "LatexConfigReportRenderer",
+    "build_config_report_document",
+    "get_config_report_renderer",
+    "list_config_report_renderers",
+    "render_config_report",
+    "register_config_report_renderer",
+    "generate_config_report",
+    "config_reportable",
 }
 
 
@@ -386,6 +411,10 @@ def test_root_public_api_exports_stage_specs() -> None:
     assert "OutputTransformSpec" in themis.specs.__all__
     assert "EvaluationSpec" in themis.specs.__all__
     assert "StorageConfig" in themis.specs.__all__
+
+
+def test_config_report_public_api_exports_curated_surface() -> None:
+    assert set(themis.config_report.__all__) == EXPECTED_CONFIG_REPORT_EXPORTS
 
 
 def test_root_public_api_excludes_removed_v1_helpers_and_internal_storage_types() -> (
