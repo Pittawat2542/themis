@@ -66,6 +66,42 @@ def test_project_file_example_formats_display_path_with_forward_slashes() -> Non
     )
 
 
+def test_compare_models_example_formats_display_path_with_forward_slashes() -> None:
+    module_globals = runpy.run_path(
+        str(PROJECT_ROOT / "examples/04_compare_models.py"),
+        run_name="themis_example_04_compare_models",
+    )
+
+    format_display_path = module_globals["_format_display_path"]
+
+    assert (
+        format_display_path(
+            PureWindowsPath(".cache/themis-examples/04-compare-models/report.md")
+        )
+        == ".cache/themis-examples/04-compare-models/report.md"
+    )
+
+
+def test_external_stage_handoff_example_formats_display_path_with_forward_slashes() -> (
+    None
+):
+    module_globals = runpy.run_path(
+        str(PROJECT_ROOT / "examples/08_external_stage_handoff.py"),
+        run_name="themis_example_08_external_stage_handoff",
+    )
+
+    format_display_path = module_globals["_format_display_path"]
+
+    assert (
+        format_display_path(
+            PureWindowsPath(
+                ".cache/themis-examples/08-external-stage-handoff/external-result.json"
+            )
+        )
+        == ".cache/themis-examples/08-external-stage-handoff/external-result.json"
+    )
+
+
 def test_documented_example_outputs_match_runnable_examples() -> None:
     _reset_example_state()
 
