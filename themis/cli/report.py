@@ -102,7 +102,10 @@ def _load_project_spec(path: str) -> ProjectSpec:
                 f"{format_validation_error(exc)}"
             ),
         ) from exc
-    raise ValueError("Project files must use .toml or .json.")
+    raise SpecValidationError(
+        code=ErrorCode.SCHEMA_MISMATCH,
+        message="Project files must use .toml or .json.",
+    )
 
 
 def _load_run_manifest_bundle(project_file: str, run_id: str) -> dict[str, object]:

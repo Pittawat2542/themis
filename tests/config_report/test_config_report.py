@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import get_args, overload
 
+import pytest
+
 from themis import (
     DatasetSpec,
     EvaluationSpec,
@@ -29,6 +31,17 @@ from themis.config_report import (
 from themis.config_report.renderers import ConfigReportRenderer
 from themis.config_report.types import ConfigReportFormat, ConfigReportVerbosity
 from themis.types.enums import DatasetSource, PromptRole
+
+
+@pytest.fixture(autouse=True)
+def _isolated_renderer_registry(monkeypatch) -> None:
+    import themis.config_report.renderers as renderers_module
+
+    monkeypatch.setattr(
+        renderers_module,
+        "_RENDERERS",
+        renderers_module._RENDERERS.copy(),
+    )
 
 
 def _build_project() -> ProjectSpec:
@@ -223,7 +236,7 @@ def test_generate_config_report_renders_json_yaml_markdown_and_latex(
     assert payload["root"]["children"][0]["name"] == "project"
 
     assert "header:" in yaml_output
-    assert "project_name: report-demo" in yaml_output
+    assert 'project_name: "report-demo"' in yaml_output
     assert "root:" in yaml_output
     assert "children:" in yaml_output
 
@@ -458,6 +471,60 @@ def test_build_config_report_document_tolerates_pydantic_model_without_source(
     assert root.source_line is None
 
 
+def test_build_config_report_document_tolerates_sourcefile_type_error(
+    monkeypatch,
+) -> None:
+    import themis.config_report.collector as collector_module
+
+    @dataclasses.dataclass(frozen=True)
+    class DynamicDataclass:
+        alpha: int = 1
+
+    original_getsourcefile = collector_module.inspect.getsourcefile
+
+    def raising_getsourcefile(obj):
+        if obj is DynamicDataclass:
+            raise TypeError("built-in class")
+        return original_getsourcefile(obj)
+
+    monkeypatch.setattr(
+        collector_module.inspect,
+        "getsourcefile",
+        raising_getsourcefile,
+    )
+
+    root = build_config_report_document(DynamicDataclass()).root
+
+    assert root.class_name == "DynamicDataclass"
+    assert root.source_file is None
+
+
+def test_build_config_report_document_tolerates_source_index_type_error(
+    monkeypatch,
+) -> None:
+    import themis.config_report.collector as collector_module
+
+    @dataclasses.dataclass(frozen=True)
+    class DynamicDataclass:
+        alpha: int = 1
+
+    class BrokenSourceIndex:
+        def get_class_info(self, qualname: str):
+            raise TypeError(f"bad source index for {qualname}")
+
+    monkeypatch.setattr(
+        collector_module,
+        "load_source_index",
+        lambda path: BrokenSourceIndex(),
+    )
+
+    root = build_config_report_document(DynamicDataclass()).root
+
+    assert root.class_name == "DynamicDataclass"
+    assert root.source_file is not None
+    assert root.source_line is not None
+
+
 def test_build_config_report_document_redacts_defaults_and_nested_children() -> None:
     @dataclasses.dataclass(frozen=True)
     class SecretChild:
@@ -482,6 +549,28 @@ def test_build_config_report_document_redacts_defaults_and_nested_children() -> 
     assert secret_value.value == "***REDACTED***"
     assert secret_value.default == "***REDACTED***"
     assert child_token.value == "***REDACTED***"
+
+
+def test_build_config_report_document_redacts_secret_like_mapping_keys() -> None:
+    root = build_config_report_document(
+        {
+            "api_key": "top-secret",
+            "nested": {
+                "token": "nested-secret",
+            },
+        }
+    ).root
+
+    api_key = next(
+        parameter for parameter in root.parameters if parameter.name == "api_key"
+    )
+    nested = _find_child(root, "nested")
+    token = next(
+        parameter for parameter in nested.parameters if parameter.name == "token"
+    )
+
+    assert api_key.value == "***REDACTED***"
+    assert token.value == "***REDACTED***"
 
 
 def test_build_config_report_document_reports_default_factory_without_calling_it() -> (
@@ -639,6 +728,18 @@ def test_list_config_report_renderers_includes_builtins_and_custom_registration(
     assert {"json", "yaml", "markdown", "latex", "xml-list"} <= set(
         list_config_report_renderers()
     )
+
+
+def test_get_config_report_renderer_lists_live_registry_formats_in_error() -> None:
+    import pytest
+
+    from themis.config_report import register_config_report_renderer
+    from themis.config_report.renderers import get_config_report_renderer
+
+    register_config_report_renderer("xml-live", _XmlRenderer())
+
+    with pytest.raises(ValueError, match="json, latex, markdown, xml-live, yaml"):
+        get_config_report_renderer("missing")
 
 
 def test_config_report_renderer_protocol_is_publicly_usable() -> None:

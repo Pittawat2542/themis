@@ -184,13 +184,16 @@ def _dataclass_default(
 
 
 def _source_info_for_class(cls: type[object]) -> ClassSourceInfo | None:
-    source_file = inspect.getsourcefile(cls)
+    try:
+        source_file = inspect.getsourcefile(cls)
+    except (OSError, TypeError):
+        return None
     qualname = cls.__qualname__
     if source_file is None:
         return None
     try:
         return load_source_index(source_file).get_class_info(qualname)
-    except (OSError, SyntaxError, UnicodeDecodeError):
+    except (OSError, SyntaxError, TypeError, UnicodeDecodeError):
         return None
 
 
@@ -479,11 +482,12 @@ class ConfigReportCollector:
         for key, item in value.items():
             key_name = str(key)
             child_path = f"{path}.{key_name}" if path != "$" else f"$.{key_name}"
+            child_redacted = redacted or _looks_secret(key_name)
             if _is_scalar(item):
                 parameters.append(
                     ConfigReportParameter(
                         name=key_name,
-                        value=_json_safe(item, redacted=redacted),
+                        value=_json_safe(item, redacted=child_redacted),
                         type_repr=_display_type(type(item)),
                     )
                 )
@@ -495,7 +499,7 @@ class ConfigReportCollector:
                         path=child_path,
                         depth=depth + 1,
                         parent_path=path,
-                        redacted=redacted,
+                        redacted=child_redacted,
                     )
                 )
         return ConfigReportNode(

@@ -39,6 +39,8 @@ def _yaml_scalar(value: object) -> str:
         return "null"
     if isinstance(value, (int, float)):
         return str(value)
+    if isinstance(value, str):
+        return json.dumps(value)
     text = str(value)
     if text == "" or any(char in text for char in ":#[]{}&*!?|>'\"%@`\\\n"):
         return json.dumps(text)
@@ -273,9 +275,10 @@ def get_config_report_renderer(name: ConfigReportFormat | str) -> ConfigReportRe
     try:
         return _RENDERERS[name]
     except KeyError as exc:
+        supported_formats = ", ".join(sorted(_RENDERERS))
         raise ValueError(
             f"Unsupported config report format '{name}'. "
-            "Expected one of: json, yaml, markdown, latex."
+            f"Expected one of: {supported_formats}."
         ) from exc
 
 
