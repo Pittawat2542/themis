@@ -1,6 +1,8 @@
 # Use the Quickcheck CLI
 
 `themis-quickcheck` reads the SQLite projection tables produced by the runtime.
+The same commands are also available under the parent CLI as `themis
+quickcheck ...`.
 Generation rows use `gen`, transform rows use `tf:<transform_hash>`, and
 evaluation rows use `ev:<evaluation_hash>`.
 
