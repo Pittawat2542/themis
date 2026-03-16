@@ -33,6 +33,7 @@ Changelog = "https://github.com/Pittawat2542/themis/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Pittawat2542/themis/issues"
 
 [project.scripts]
+themis = "themis.cli.main:main"
 themis-quickcheck = "themis.cli.quickcheck:main"
 
 [tool.setuptools.packages.find]
