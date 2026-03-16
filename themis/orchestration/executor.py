@@ -11,6 +11,7 @@ from themis.contracts.protocols import (
     ProjectionHandler,
     TrialEventRepository,
 )
+from themis.progress.tracker import RunProgressTracker
 from themis.orchestration._executor_support import ExecutionSupport
 from themis.orchestration.generation_execution import GenerationExecutionCoordinator
 from themis.orchestration.overlay_execution import OverlayExecutionCoordinator
@@ -137,6 +138,7 @@ class TrialExecutor:
         *,
         dataset_context: DatasetContext | None = None,
         resume: bool = True,
+        progress_tracker: RunProgressTracker | None = None,
     ) -> None:
         """Run generation work items with one bounded global scheduler."""
         for trial, _trial_dataset_context in self._iter_trials(
@@ -147,12 +149,17 @@ class TrialExecutor:
                 logger.info("Skipping cached generation: %s", trial.trial_id)
             else:
                 logger.info("Executing generation for trial: %s", trial.trial_id)
+        kwargs = {
+            "dataset_context": dataset_context,
+            "resume": resume,
+        }
+        if progress_tracker is not None:
+            kwargs["progress_tracker"] = progress_tracker
         self.last_scheduler_stats = (
             self._generation_execution.execute_generation_trials(
                 trials,
                 runtime_context,
-                dataset_context=dataset_context,
-                resume=resume,
+                **kwargs,
             )
         )
 
@@ -163,13 +170,19 @@ class TrialExecutor:
         *,
         dataset_context: DatasetContext | None = None,
         resume: bool = True,
+        progress_tracker: RunProgressTracker | None = None,
     ) -> None:
         """Run declared output transforms against existing generation candidates."""
+        kwargs = {
+            "dataset_context": dataset_context,
+            "resume": resume,
+        }
+        if progress_tracker is not None:
+            kwargs["progress_tracker"] = progress_tracker
         self.last_scheduler_stats = self._overlay_execution.execute_transforms(
             trials,
             runtime_context,
-            dataset_context=dataset_context,
-            resume=resume,
+            **kwargs,
         )
 
     def execute_evaluations(
@@ -179,13 +192,19 @@ class TrialExecutor:
         *,
         dataset_context: DatasetContext | None = None,
         resume: bool = True,
+        progress_tracker: RunProgressTracker | None = None,
     ) -> None:
         """Run declared evaluations against generation or transformed candidates."""
+        kwargs = {
+            "dataset_context": dataset_context,
+            "resume": resume,
+        }
+        if progress_tracker is not None:
+            kwargs["progress_tracker"] = progress_tracker
         self.last_scheduler_stats = self._overlay_execution.execute_evaluations(
             trials,
             runtime_context,
-            dataset_context=dataset_context,
-            resume=resume,
+            **kwargs,
         )
 
     def _iter_trials(

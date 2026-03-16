@@ -26,7 +26,10 @@ class WorkItemStatus(str, Enum):
     """Lifecycle state for one persisted stage work item."""
 
     PENDING = "pending"
+    RUNNING = "running"
     COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 class RunStatus(str, Enum):
@@ -55,6 +58,10 @@ class StageWorkItem(BaseModel):
     lease_expires_at: datetime | None = None
     external_job_id: str | None = None
     artifact_refs: list[str] = Field(default_factory=list)
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    last_error_code: str | None = None
+    last_error_message: str | None = None
 
 
 class RunManifest(BaseModel):

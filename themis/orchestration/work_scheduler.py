@@ -43,30 +43,67 @@ class WorkScheduler:
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None] | None = None,
+        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed generation work items under the bounded scheduler."""
-        return run_coroutine_sync(lambda: self._run_bounded(work_items, worker))
+        return run_coroutine_sync(
+            lambda: self._run_bounded(
+                work_items,
+                worker,
+                on_work_item_started=on_work_item_started,
+                on_work_item_finished=on_work_item_finished,
+            )
+        )
 
     def run_transforms(
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None] | None = None,
+        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed transform work items under the bounded scheduler."""
-        return run_coroutine_sync(lambda: self._run_bounded(work_items, worker))
+        return run_coroutine_sync(
+            lambda: self._run_bounded(
+                work_items,
+                worker,
+                on_work_item_started=on_work_item_started,
+                on_work_item_finished=on_work_item_finished,
+            )
+        )
 
     def run_evaluations(
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None] | None = None,
+        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         """Run streamed evaluation work items under the bounded scheduler."""
-        return run_coroutine_sync(lambda: self._run_bounded(work_items, worker))
+        return run_coroutine_sync(
+            lambda: self._run_bounded(
+                work_items,
+                worker,
+                on_work_item_started=on_work_item_started,
+                on_work_item_finished=on_work_item_finished,
+            )
+        )
 
     async def _run_bounded(
         self,
         work_items: Iterable[T],
         worker: Callable[[T], R | Awaitable[R]],
+        *,
+        on_work_item_started: Callable[[T], None] | None = None,
+        on_work_item_finished: Callable[[T, R | None, BaseException | None], None]
+        | None = None,
     ) -> list[ScheduledResult[T, R]]:
         queue: asyncio.Queue[tuple[int, T] | None] = asyncio.Queue(
             maxsize=self.max_in_flight_work_items * 2
@@ -97,7 +134,11 @@ class WorkScheduler:
                 async with result_lock:
                     in_flight += 1
                     max_seen_in_flight = max(max_seen_in_flight, in_flight)
+                value: R | None = None
+                error: BaseException | None = None
                 try:
+                    if on_work_item_started is not None:
+                        on_work_item_started(work_item)
                     if inspect.iscoroutinefunction(worker):
                         value = await worker(work_item)
                     else:
@@ -109,10 +150,19 @@ class WorkScheduler:
                             work_item=work_item,
                             result=value,
                         )
-                except BaseException as exc:
+                except BaseException as caught_error:
+                    error = caught_error
                     async with result_lock:
-                        errors.append(exc)
+                        errors.append(caught_error)
                 finally:
+                    if on_work_item_finished is not None:
+                        try:
+                            on_work_item_finished(work_item, value, error)
+                        except BaseException as callback_error:
+                            if error is None:
+                                error = callback_error
+                            async with result_lock:
+                                errors.append(callback_error)
                     async with result_lock:
                         in_flight -= 1
                     queue.task_done()

@@ -30,6 +30,7 @@ from themis.orchestration.run_manifest import (
 )
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.orchestration.trial_planner import PlannedTrial, TrialPlanner
+from themis.progress.models import RunProgressSnapshot
 from themis.records.trial import TrialRecord
 from themis.runtime import ExperimentResult
 from themis.specs.experiment import ExperimentSpec, ProjectSpec, RuntimeContext
@@ -108,7 +109,15 @@ class RunPlanningService:
 
     def plan(self, experiment: ExperimentSpec) -> RunManifest:
         planned_trials = self.planner.plan_experiment(experiment)
+        return self.plan_from_trials(experiment, planned_trials)
+
+    def plan_from_trials(
+        self,
+        experiment: ExperimentSpec,
+        planned_trials: Sequence[PlannedTrial],
+    ) -> RunManifest:
         manifest = self.build_manifest(experiment, planned_trials)
+        manifest = self.manifest_repo.reconcile_manifest(manifest)
         self.manifest_repo.save_manifest(manifest)
         return manifest
 
@@ -178,7 +187,7 @@ class RunPlanningService:
         manifest = self.plan(experiment)
         if self.backend_kind == "local":
             execute_run(experiment, runtime)
-            manifest = self.plan(experiment)
+            manifest = self.manifest_repo.get_manifest(manifest.run_id) or manifest
         return self.run_handle_from_manifest(manifest)
 
     def resume(
@@ -210,15 +219,19 @@ class RunPlanningService:
 
         manifest = self.plan(stored_manifest.experiment_spec)
         if self.backend_kind == "local" and any(
-            item.status == WorkItemStatus.PENDING for item in manifest.work_items
+            item.status in {WorkItemStatus.PENDING, WorkItemStatus.FAILED}
+            for item in manifest.work_items
         ):
             execute_run(stored_manifest.experiment_spec, runtime)
-            manifest = self.plan(stored_manifest.experiment_spec)
+            manifest = self.manifest_repo.get_manifest(manifest.run_id) or manifest
 
         handle = self.run_handle_from_manifest(manifest)
         if handle.pending_work_items == 0:
             return self.result_from_manifest(manifest)
         return handle
+
+    def get_progress_snapshot(self, run_id: str) -> RunProgressSnapshot | None:
+        return self.manifest_repo.get_progress_snapshot(run_id)
 
     def estimate(self, experiment: ExperimentSpec) -> CostEstimate:
         planned_trials = self.planner.plan_experiment(experiment)
@@ -518,7 +531,9 @@ class RunPlanningService:
 
     def run_handle_from_manifest(self, manifest: RunManifest) -> RunHandle:
         pending_work_items = sum(
-            1 for item in manifest.work_items if item.status == WorkItemStatus.PENDING
+            1
+            for item in manifest.work_items
+            if item.status in {WorkItemStatus.PENDING, WorkItemStatus.RUNNING}
         )
         completed_work_items = len(manifest.work_items) - pending_work_items
         if pending_work_items == 0:
@@ -705,8 +720,14 @@ def _work_item_id(
 
 def _generation_status(candidate_events: Sequence[TrialEvent]) -> WorkItemStatus:
     if any(
-        event.event_type
-        in {TrialEventType.CANDIDATE_COMPLETED, TrialEventType.CANDIDATE_FAILED}
+        event.event_type == TrialEventType.CANDIDATE_FAILED
+        and _metadata_value(event.metadata, "transform_hash") is None
+        and _metadata_value(event.metadata, "evaluation_hash") is None
+        for event in candidate_events
+    ):
+        return WorkItemStatus.FAILED
+    if any(
+        event.event_type == TrialEventType.CANDIDATE_COMPLETED
         for event in candidate_events
     ):
         return WorkItemStatus.COMPLETED
@@ -719,17 +740,29 @@ def _transform_status(
     transform_hash: str,
 ) -> WorkItemStatus:
     for event in candidate_events:
-        if event.event_type != TrialEventType.EXTRACTION_COMPLETED:
-            continue
         metadata = event.metadata
-        if (
+        if event.event_type == TrialEventType.EXTRACTION_COMPLETED and (
             isinstance(metadata, ExtractionCompletedEventMetadata)
             and metadata.transform_hash == transform_hash
-            and metadata.success is True
-            and event.status != RecordStatus.ERROR
         ):
-            return WorkItemStatus.COMPLETED
+            if metadata.success is True and event.status != RecordStatus.ERROR:
+                return WorkItemStatus.COMPLETED
+            return WorkItemStatus.FAILED
+        if event.event_type == TrialEventType.CANDIDATE_FAILED and (
+            _metadata_value(metadata, "transform_hash") == transform_hash
+        ):
+            return WorkItemStatus.FAILED
     return WorkItemStatus.PENDING
+
+
+def _metadata_value(metadata: object, key: str) -> object | None:
+    if metadata is None:
+        return None
+    if hasattr(metadata, key):
+        return getattr(metadata, key)
+    if isinstance(metadata, dict):
+        return metadata.get(key)
+    return None
 
 
 def _evaluation_status(
@@ -738,13 +771,16 @@ def _evaluation_status(
     evaluation_hash: str,
 ) -> WorkItemStatus:
     for event in candidate_events:
-        if event.event_type != TrialEventType.EVALUATION_COMPLETED:
-            continue
         metadata = event.metadata
-        if (
+        if event.event_type == TrialEventType.EVALUATION_COMPLETED and (
             isinstance(metadata, EvaluationCompletedEventMetadata)
             and metadata.evaluation_hash == evaluation_hash
-            and event.status != RecordStatus.ERROR
         ):
-            return WorkItemStatus.COMPLETED
+            if event.status != RecordStatus.ERROR:
+                return WorkItemStatus.COMPLETED
+            return WorkItemStatus.FAILED
+        if event.event_type == TrialEventType.CANDIDATE_FAILED and (
+            _metadata_value(metadata, "evaluation_hash") == evaluation_hash
+        ):
+            return WorkItemStatus.FAILED
     return WorkItemStatus.PENDING
