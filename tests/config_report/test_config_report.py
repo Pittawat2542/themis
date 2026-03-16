@@ -74,6 +74,18 @@ def _find_child(node, name: str):
     raise AssertionError(f"missing child {name!r}")
 
 
+def _normalized_path(path: str | None) -> str | None:
+    if path is None:
+        return None
+    return path.replace("\\", "/")
+
+
+def test_normalized_path_converts_windows_separators() -> None:
+    assert _normalized_path(r"D:\a\themis\themis\themis\specs\experiment.py") == (
+        "D:/a/themis/themis/themis/specs/experiment.py"
+    )
+
+
 def test_build_config_report_document_collects_leaf_metadata() -> None:
     params = InferenceParamsSpec(max_tokens=64, temperature=0.3)
 
@@ -84,7 +96,7 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     assert document.header.root_type == "InferenceParamsSpec"
     assert root.class_name == "InferenceParamsSpec"
     assert root.source_file is not None
-    assert root.source_file.endswith("themis/specs/experiment.py")
+    assert _normalized_path(root.source_file).endswith("themis/specs/experiment.py")
     assert root.source_line == 79
 
     max_tokens = next(
@@ -96,7 +108,9 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     assert max_tokens.has_default is True
     assert max_tokens.doc == "Max string length generated."
     assert max_tokens.source_file is not None
-    assert max_tokens.source_file.endswith("themis/specs/experiment.py")
+    assert _normalized_path(max_tokens.source_file).endswith(
+        "themis/specs/experiment.py"
+    )
     assert max_tokens.source_line == 89
     assert max_tokens.declared_in == "InferenceParamsSpec"
 
