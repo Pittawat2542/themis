@@ -129,6 +129,16 @@ class DatabaseManager:
                 "tags_json": "TEXT",
             },
         )
+        self._ensure_columns(
+            conn,
+            "stage_work_items",
+            {
+                "started_at": "TEXT",
+                "ended_at": "TEXT",
+                "last_error_code": "TEXT",
+                "last_error_message": "TEXT",
+            },
+        )
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_specs_canonical_hash ON specs(canonical_hash)"
         )

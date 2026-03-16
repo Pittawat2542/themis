@@ -174,4 +174,4 @@ workflow as:
 2. export the relevant work bundle
 3. run the external batch job
 4. import the completed results
-5. call `resume(run_id)` or re-plan the same experiment to confirm no work is left
+5. call `resume(run_id)` or `get_run_progress(run_id)` to confirm what work is left

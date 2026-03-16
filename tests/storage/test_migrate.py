@@ -215,6 +215,7 @@ def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(tmp_path
                 trial_hash="trial_hash_1",
                 candidate_index=0,
                 candidate_id="candidate_1",
+                started_at="2026-03-15T10:00:00+00:00",
             ),
             StageWorkItem(
                 work_item_id="work_done",
@@ -224,6 +225,9 @@ def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(tmp_path
                 candidate_index=0,
                 candidate_id="candidate_1",
                 evaluation_hash="eval_1",
+                ended_at="2026-03-15T10:01:00+00:00",
+                last_error_code="metric_failure",
+                last_error_message="judge timeout",
             ),
         ],
     )

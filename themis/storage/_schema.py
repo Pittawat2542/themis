@@ -188,6 +188,10 @@ CREATE TABLE IF NOT EXISTS stage_work_items (
     lease_expires_at TEXT,
     external_job_id TEXT,
     artifact_refs_json TEXT,
+    started_at TEXT,
+    ended_at TEXT,
+    last_error_code TEXT,
+    last_error_message TEXT,
     FOREIGN KEY(run_id) REFERENCES run_manifests(run_id)
 );
 

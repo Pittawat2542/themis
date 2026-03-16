@@ -29,8 +29,40 @@ resumed = orchestrator.resume(handle.run_id, runtime=runtime)
 For the local backend, `submit()` executes immediately and returns a completed
 handle once the missing work items finish. For batch or worker-pool backends,
 the handle remains pending until external workers or imports complete the
-manifested work items. `resume()` refreshes the persisted manifest and returns
-either a new `RunHandle` or a final `ExperimentResult` when nothing is left to do.
+manifested work items. `resume()` reuses the persisted canonical manifest and
+returns either a new `RunHandle` or a final `ExperimentResult` when nothing is
+left to do.
+
+## Inspect Runtime Progress
+
+```python
+from themis.progress import ProgressConfig
+from themis.types.enums import RunStage
+
+progress = orchestrator.get_run_progress(handle.run_id)
+
+print(progress.active_stage)
+print(progress.processed_items, progress.remaining_items)
+print(progress.stage_counts[RunStage.TRANSFORM].failed_items)
+```
+
+`get_run_progress()` always reports the full run for that `run_id`, not just
+the stage-specific entry point that happened to execute most recently. Failed
+work items remain visible in the snapshot until they are retried and complete.
+
+If you want live updates while a run is executing, pass a callback:
+
+```python
+snapshots = []
+result = orchestrator.run(
+    experiment,
+    runtime=runtime,
+    progress=ProgressConfig(callback=snapshots.append),
+)
+```
+
+When a callback is provided, Themis does not attach the Rich terminal renderer
+unless you explicitly set `renderer=...`.
 
 ## Inspect the Planned Run
 

@@ -16,7 +16,8 @@ Add extras only when the workflow needs them:
 - `datasets`: Hugging Face datasets integrations
 - `providers-openai`, `providers-litellm`, `providers-vllm`: SDKs for your own
   engine implementations
-- `telemetry`: Langfuse or Weights & Biases callbacks
+- `telemetry`: Langfuse or Weights & Biases callbacks; not required for the
+  built-in progress/logging surface
 - `storage-postgres`: Postgres-backed storage
 
 ## Use The Core Mental Model
@@ -37,6 +38,9 @@ The smallest useful object set is:
 - `PluginRegistry`
 - `Orchestrator`
 - `ExperimentResult`
+
+Operator-facing progress logging is part of the base package through
+`themis.progress`; treat it as separate from optional telemetry integrations.
 
 ## Start From This Bundled Pattern
 
@@ -134,6 +138,27 @@ orchestrator = Orchestrator.from_project_spec(
 result = orchestrator.run(experiment)
 ```
 
+## Add Built-In Progress Logging When Needed
+
+Use the `progress=` entrypoint argument when the user wants live status,
+callback snapshots, or stdlib logging:
+
+```python
+from themis.progress import ProgressConfig, ProgressRendererType, ProgressVerbosity
+
+result = orchestrator.run(
+    experiment,
+    progress=ProgressConfig(
+        renderer=ProgressRendererType.LOG,
+        verbosity=ProgressVerbosity.DEBUG,
+    ),
+)
+```
+
+Use `callback=...` to collect `RunProgressSnapshot` values in memory. When you
+set only a callback, Themis does not attach the Rich terminal renderer unless
+you explicitly request one.
+
 ## Pick The Nearest Pattern
 
 - Use `references/advanced-workflows.md` when project policy should live in
@@ -142,9 +167,10 @@ result = orchestrator.run(experiment)
   scoring surface.
 - Use `references/results-and-ops.md` when the user needs statistical
   comparison and reports.
-- Use `references/results-and-ops.md` when the task is reruns or incremental
-  work.
+- Use `references/results-and-ops.md` when the task is reruns, incremental
+  work, live progress updates, or persisted run snapshots.
 - Use `references/plugins-and-specs.md` when the task is prompt mutation,
   instrumentation, or judge-backed metrics.
 - Use `references/advanced-workflows.md` when generation or scoring happens
-  outside Themis or when the user is adding metrics, prompts, or models later.
+  outside Themis, when the user is adding metrics, prompts, or models later, or
+  when they need telemetry sinks such as Langfuse.

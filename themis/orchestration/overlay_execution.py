@@ -8,6 +8,8 @@ from typing import Protocol
 
 from themis.contracts.protocols import DatasetContext
 from themis.errors import StorageError
+from themis.orchestration.run_manifest import WorkItemStatus
+from themis.progress.tracker import RunProgressTracker
 from themis.orchestration.resolved_plugins import ResolvedStage
 from themis.orchestration.runner_state import TrialExecutionSession
 from themis.orchestration.task_resolution import (
@@ -20,7 +22,7 @@ from themis.orchestration.work_scheduler import WorkScheduler, WorkSchedulerStat
 from themis.records.candidate import CandidateRecord
 from themis.records.trial import TrialRecord
 from themis.specs.experiment import ExecutionPolicySpec, RuntimeContext, TrialSpec
-from themis.types.enums import ErrorCode, RunStage
+from themis.types.enums import ErrorCode, RecordStatus, RunStage
 
 
 class _OverlayRunner(Protocol):
@@ -110,6 +112,7 @@ class OverlayExecutionCoordinator:
         *,
         dataset_context: DatasetContext | None = None,
         resume: bool = True,
+        progress_tracker: RunProgressTracker | None = None,
     ) -> WorkSchedulerStats:
         """Run declared output transforms against existing generation candidates."""
         prepared_sessions: list[TrialExecutionSession] = []
@@ -153,6 +156,8 @@ class OverlayExecutionCoordinator:
             transforms_by_trial[trial.spec_hash] = pending_transforms
 
         scheduler = WorkScheduler(self.execution_policy.max_in_flight_work_items)
+        if progress_tracker is not None and prepared_sessions:
+            progress_tracker.stage_started()
         results = scheduler.run_transforms(
             (
                 TransformWorkItem(
@@ -168,6 +173,43 @@ class OverlayExecutionCoordinator:
                 work_item.session,
                 work_item.candidate,
                 work_item.transform,
+            ),
+            on_work_item_started=(
+                lambda work_item: (
+                    progress_tracker.mark_running(
+                        progress_tracker.transform_work_item_id(
+                            work_item.session.trial_hash,
+                            work_item.candidate.sample_index,
+                            work_item.transform.transform_hash,
+                        )
+                    )
+                    if progress_tracker is not None
+                    else None
+                )
+            ),
+            on_work_item_finished=(
+                lambda work_item, result, error: (
+                    progress_tracker.mark_finished(
+                        progress_tracker.transform_work_item_id(
+                            work_item.session.trial_hash,
+                            work_item.candidate.sample_index,
+                            work_item.transform.transform_hash,
+                        ),
+                        status=_overlay_work_item_status(result=result, error=error),
+                        last_error_code=(
+                            result.error.code.value
+                            if result is not None and result.error is not None
+                            else None
+                        ),
+                        last_error_message=(
+                            result.error.message
+                            if result is not None and result.error is not None
+                            else (str(error) if error is not None else None)
+                        ),
+                    )
+                    if progress_tracker is not None
+                    else None
+                )
             ),
         )
 
@@ -189,6 +231,7 @@ class OverlayExecutionCoordinator:
         *,
         dataset_context: DatasetContext | None = None,
         resume: bool = True,
+        progress_tracker: RunProgressTracker | None = None,
     ) -> WorkSchedulerStats:
         """Run declared evaluations against generation or transformed candidates."""
         prepared_sessions: list[TrialExecutionSession] = []
@@ -242,6 +285,8 @@ class OverlayExecutionCoordinator:
                 )
 
         scheduler = WorkScheduler(self.execution_policy.max_in_flight_work_items)
+        if progress_tracker is not None and prepared_sessions:
+            progress_tracker.stage_started()
         results = scheduler.run_evaluations(
             (
                 EvaluationWorkItem(
@@ -262,6 +307,43 @@ class OverlayExecutionCoordinator:
                 work_item.session,
                 work_item.candidate,
                 work_item.evaluation,
+            ),
+            on_work_item_started=(
+                lambda work_item: (
+                    progress_tracker.mark_running(
+                        progress_tracker.evaluation_work_item_id(
+                            work_item.session.trial_hash,
+                            work_item.candidate.sample_index,
+                            work_item.evaluation.evaluation_hash,
+                        )
+                    )
+                    if progress_tracker is not None
+                    else None
+                )
+            ),
+            on_work_item_finished=(
+                lambda work_item, result, error: (
+                    progress_tracker.mark_finished(
+                        progress_tracker.evaluation_work_item_id(
+                            work_item.session.trial_hash,
+                            work_item.candidate.sample_index,
+                            work_item.evaluation.evaluation_hash,
+                        ),
+                        status=_overlay_work_item_status(result=result, error=error),
+                        last_error_code=(
+                            result.error.code.value
+                            if result is not None and result.error is not None
+                            else None
+                        ),
+                        last_error_message=(
+                            result.error.message
+                            if result is not None and result.error is not None
+                            else (str(error) if error is not None else None)
+                        ),
+                    )
+                    if progress_tracker is not None
+                    else None
+                )
             ),
         )
 
@@ -286,3 +368,17 @@ def _require_trial_execution_session(
             "prepare_trial_session()."
         )
     return session
+
+
+def _overlay_work_item_status(
+    *,
+    result: CandidateRecord | None,
+    error: BaseException | None,
+) -> WorkItemStatus:
+    if error is not None:
+        return WorkItemStatus.FAILED
+    if result is None:
+        return WorkItemStatus.FAILED
+    if result.status == RecordStatus.OK:
+        return WorkItemStatus.COMPLETED
+    return WorkItemStatus.FAILED
