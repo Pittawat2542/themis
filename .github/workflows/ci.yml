@@ -256,6 +256,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --all-extras --dev
 
+      - name: Run docs verification tests
+        run: uv run pytest tests/docs/test_docs_consistency.py tests/docs/test_public_docstrings.py tests/docs/test_documented_workflows.py
+
       - name: Build documentation (strict)
         run: uv run mkdocs build --strict
 
