@@ -124,6 +124,67 @@ print(diff.changed_experiment_fields)
 print(diff.added_trial_hashes[:3])
 ```
 
+## Track Live Progress And Log Run State
+
+Use the public `themis.progress` surface when the user asks for operator-facing
+logging, callback snapshots, or terminal progress:
+
+```python
+from themis.progress import ProgressConfig, ProgressRendererType, ProgressVerbosity
+
+snapshots = []
+result = orchestrator.run(
+    experiment,
+    runtime=runtime,
+    progress=ProgressConfig(
+        renderer=ProgressRendererType.LOG,
+        verbosity=ProgressVerbosity.DEBUG,
+        callback=snapshots.append,
+    ),
+)
+
+print(snapshots[0].remaining_items)
+print(snapshots[-1].processed_items)
+```
+
+`run()`, `generate()`, `transform()`, `evaluate()`, `submit()`, and `resume()`
+all accept `progress=`. The callback receives `RunProgressSnapshot` values.
+Built-in progress logging does not require the `telemetry` extra.
+
+If the user wants terminal rendering instead of stdlib logging, switch the
+renderer:
+
+```python
+from themis.progress import ProgressConfig, ProgressRendererType
+
+result = orchestrator.run(
+    experiment,
+    progress=ProgressConfig(renderer=ProgressRendererType.RICH),
+)
+```
+
+When a callback is provided without `renderer=...`, Themis stays callback-only
+and does not attach the Rich renderer automatically.
+
+## Inspect Persisted Run Progress
+
+Use `get_run_progress(run_id)` when the user needs the canonical stored
+snapshot for a run handle:
+
+```python
+from themis.types.enums import RunStage
+
+handle = orchestrator.submit(experiment, runtime=runtime)
+snapshot = orchestrator.get_run_progress(handle.run_id)
+
+print(snapshot.active_stage)
+print(snapshot.processed_items, snapshot.remaining_items)
+print(snapshot.stage_counts[RunStage.EVALUATION].failed_items)
+```
+
+The returned snapshot covers the full run for that `run_id`, even if the work
+was started through `generate()`, `transform()`, or `evaluate()`.
+
 ## Use The Quickcheck CLI For Fast SQLite Inspection
 
 The CLI surface is the SQLite summary inspector:
