@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from argparse import Namespace
 
 from themis.cli.quickcheck import build_parser, main, run_with_args
 from themis.storage.sqlite_schema import DatabaseManager
@@ -300,7 +300,7 @@ def test_quickcheck_run_with_args_returns_error_code_for_unknown_command(
 
     assert (
         run_with_args(
-            SimpleNamespace(
+            Namespace(
                 command="unknown",
                 db=str(db_path),
                 limit=10,
