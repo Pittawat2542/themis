@@ -5,6 +5,7 @@ import json
 
 import themis
 import themis.config_report
+import themis.progress
 import themis.records
 import themis.specs
 import themis.stats
@@ -446,6 +447,21 @@ def test_lazy_public_namespaces_are_discoverable_via_dir() -> None:
     assert set(themis.records.__all__).issubset(set(dir(themis.records)))
     assert set(themis.types.__all__).issubset(set(dir(themis.types)))
     assert set(themis.stats.__all__).issubset(set(dir(themis.stats)))
+
+
+def test_progress_public_module_exports_curated_surface() -> None:
+    assert {
+        "ProgressBus",
+        "ProgressConfig",
+        "ProgressEvent",
+        "ProgressEventType",
+        "ProgressRendererType",
+        "ProgressVerbosity",
+        "RunProgressTracker",
+        "RunProgressSnapshot",
+        "StageProgressSnapshot",
+    } == set(themis.progress.__all__)
+    assert "StageProgressSnapshot" not in themis.__all__
 
 
 def test_experiment_result_reads_trials_timelines_and_projection_hooks() -> None:

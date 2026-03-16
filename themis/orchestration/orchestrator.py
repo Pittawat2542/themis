@@ -13,6 +13,8 @@ from themis.orchestration._orchestrator_services import (
     OrchestratorServices,
     build_orchestrator_services,
 )
+from themis.progress import ProgressConfig, RunProgressTracker
+from themis.progress.models import RunProgressSnapshot
 from themis.orchestration.run_manifest import (
     CostEstimate,
     EvaluationWorkBundle,
@@ -30,6 +32,7 @@ from themis.orchestration.run_services import (
     generation_trials,
     transform_trials,
 )
+from themis.orchestration.trial_planner import PlannedTrial
 from themis.records.trial import TrialRecord
 from themis.registry.plugin_registry import PluginRegistry
 from themis.runtime import ExperimentResult
@@ -176,28 +179,48 @@ class Orchestrator:
         experiment: ExperimentSpec,
         *,
         runtime: RuntimeContext | None = None,
+        progress: ProgressConfig | None = None,
     ) -> ExperimentResult:
         """Execute generation, transforms, and evaluations for one experiment."""
         planned_trials = self._services.planner.plan_experiment(experiment)
+        progress_tracker = self._build_progress_tracker(
+            experiment,
+            planned_trials,
+            progress=progress,
+            allowed_stages={
+                RunStage.GENERATION,
+                RunStage.TRANSFORM,
+                RunStage.EVALUATION,
+            },
+        )
         pending_generation_trials = generation_trials(planned_trials)
         pending_transform_trials = transform_trials(planned_trials)
         pending_evaluation_trials = evaluation_trials(planned_trials)
 
-        if pending_generation_trials:
-            self._services.executor.execute_generation_trials(
-                pending_generation_trials,
-                runtime,
-            )
-        if pending_transform_trials:
-            self._services.executor.execute_transforms(
-                pending_transform_trials,
-                runtime,
-            )
-        if pending_evaluation_trials:
-            self._services.executor.execute_evaluations(
-                pending_evaluation_trials,
-                runtime,
-            )
+        if progress_tracker is not None:
+            progress_tracker.start_run()
+        try:
+            if pending_generation_trials:
+                self._services.executor.execute_generation_trials(
+                    pending_generation_trials,
+                    runtime,
+                    progress_tracker=progress_tracker,
+                )
+            if pending_transform_trials:
+                self._services.executor.execute_transforms(
+                    pending_transform_trials,
+                    runtime,
+                    progress_tracker=progress_tracker,
+                )
+            if pending_evaluation_trials:
+                self._services.executor.execute_evaluations(
+                    pending_evaluation_trials,
+                    runtime,
+                    progress_tracker=progress_tracker,
+                )
+        finally:
+            if progress_tracker is not None:
+                progress_tracker.finish_run()
 
         return self._run_planning.build_result(
             planned_trials,
@@ -210,6 +233,7 @@ class Orchestrator:
         experiment: ExperimentSpec,
         *,
         runtime: RuntimeContext | None = None,
+        progress: ProgressConfig | None = None,
     ) -> ExperimentResult:
         """Execute only generation-stage work for one experiment."""
         planned_trials = generation_trials(
@@ -218,8 +242,24 @@ class Orchestrator:
                 required_stages={RunStage.GENERATION},
             )
         )
+        progress_tracker = self._build_progress_tracker(
+            experiment,
+            planned_trials,
+            progress=progress,
+            allowed_stages={RunStage.GENERATION},
+        )
         if planned_trials:
-            self._services.executor.execute_generation_trials(planned_trials, runtime)
+            if progress_tracker is not None:
+                progress_tracker.start_run()
+            try:
+                self._services.executor.execute_generation_trials(
+                    planned_trials,
+                    runtime,
+                    progress_tracker=progress_tracker,
+                )
+            finally:
+                if progress_tracker is not None:
+                    progress_tracker.finish_run()
         return self._run_planning.build_result(planned_trials)
 
     def transform(
@@ -227,6 +267,7 @@ class Orchestrator:
         experiment: ExperimentSpec,
         *,
         runtime: RuntimeContext | None = None,
+        progress: ProgressConfig | None = None,
     ) -> ExperimentResult:
         """Execute output transforms against existing generation candidates."""
         planned_trials = transform_trials(
@@ -236,8 +277,24 @@ class Orchestrator:
             )
         )
         transform_hashes = collect_transform_hashes(planned_trials)
+        progress_tracker = self._build_progress_tracker(
+            experiment,
+            planned_trials,
+            progress=progress,
+            allowed_stages={RunStage.TRANSFORM},
+        )
         if planned_trials:
-            self._services.executor.execute_transforms(planned_trials, runtime)
+            if progress_tracker is not None:
+                progress_tracker.start_run()
+            try:
+                self._services.executor.execute_transforms(
+                    planned_trials,
+                    runtime,
+                    progress_tracker=progress_tracker,
+                )
+            finally:
+                if progress_tracker is not None:
+                    progress_tracker.finish_run()
         return self._run_planning.build_result(
             planned_trials,
             transform_hashes=transform_hashes,
@@ -248,6 +305,7 @@ class Orchestrator:
         experiment: ExperimentSpec,
         *,
         runtime: RuntimeContext | None = None,
+        progress: ProgressConfig | None = None,
     ) -> ExperimentResult:
         """Execute evaluation-stage work, reusing generation when possible."""
         planned_trials = evaluation_trials(
@@ -256,17 +314,31 @@ class Orchestrator:
                 required_stages={RunStage.TRANSFORM, RunStage.EVALUATION},
             )
         )
+        progress_tracker = self._build_progress_tracker(
+            experiment,
+            planned_trials,
+            progress=progress,
+            allowed_stages={RunStage.TRANSFORM, RunStage.EVALUATION},
+        )
         if planned_trials:
-            self._services.executor.execute_transforms(
-                planned_trials,
-                runtime,
-                resume=True,
-            )
-            self._services.executor.execute_evaluations(
-                planned_trials,
-                runtime,
-                resume=True,
-            )
+            if progress_tracker is not None:
+                progress_tracker.start_run()
+            try:
+                self._services.executor.execute_transforms(
+                    planned_trials,
+                    runtime,
+                    resume=True,
+                    progress_tracker=progress_tracker,
+                )
+                self._services.executor.execute_evaluations(
+                    planned_trials,
+                    runtime,
+                    resume=True,
+                    progress_tracker=progress_tracker,
+                )
+            finally:
+                if progress_tracker is not None:
+                    progress_tracker.finish_run()
         return self._run_planning.build_result(
             planned_trials,
             transform_hashes=collect_transform_hashes(planned_trials),
@@ -301,6 +373,7 @@ class Orchestrator:
         experiment: ExperimentSpec,
         *,
         runtime: RuntimeContext | None = None,
+        progress: ProgressConfig | None = None,
     ) -> RunHandle:
         """Persist one run manifest and start execution if the backend is local."""
         return self._run_planning.submit(
@@ -309,6 +382,7 @@ class Orchestrator:
             execute_run=lambda spec, runtime_context: self.run(
                 spec,
                 runtime=runtime_context,
+                progress=progress,
             ),
         )
 
@@ -317,6 +391,7 @@ class Orchestrator:
         run_id: str,
         *,
         runtime: RuntimeContext | None = None,
+        progress: ProgressConfig | None = None,
     ) -> RunHandle | ExperimentResult:
         """Refresh a persisted run and continue it when possible."""
         return self._run_planning.resume(
@@ -325,12 +400,35 @@ class Orchestrator:
             execute_run=lambda spec, runtime_context: self.run(
                 spec,
                 runtime=runtime_context,
+                progress=progress,
             ),
         )
+
+    def get_run_progress(self, run_id: str) -> RunProgressSnapshot | None:
+        """Return the persisted progress snapshot for one known run."""
+        return self._run_planning.get_progress_snapshot(run_id)
 
     def estimate(self, experiment: ExperimentSpec) -> CostEstimate:
         """Return a best-effort work-item and token estimate for an experiment."""
         return self._run_planning.estimate(experiment)
+
+    def _build_progress_tracker(
+        self,
+        experiment: ExperimentSpec,
+        planned_trials: list[PlannedTrial],
+        *,
+        progress: ProgressConfig | None,
+        allowed_stages: set[RunStage],
+    ) -> RunProgressTracker | None:
+        if progress is None:
+            return None
+        manifest = self._run_planning.plan_from_trials(experiment, planned_trials)
+        return RunProgressTracker(
+            manifest,
+            self._run_planning.manifest_repo,
+            progress,
+            frozenset(allowed_stages),
+        )
 
     def export_generation_bundle(
         self,

@@ -102,6 +102,23 @@ Use:
 The engine implementation still owns provider rate limiting, retries, and
 batch-adapter details.
 
+## Distinguish Progress Logging From Telemetry
+
+Use built-in progress tracking first when the user wants live status, terminal
+progress, or stdlib log lines during orchestration:
+
+```python
+from themis.progress import ProgressConfig, ProgressRendererType
+
+result = orchestrator.run(
+    experiment,
+    progress=ProgressConfig(renderer=ProgressRendererType.LOG),
+)
+```
+
+Reach for telemetry only when the user needs event-level observability or
+external sinks such as Langfuse or Weights & Biases.
+
 ## Add Telemetry Only When The User Needs It
 
 Use a `TelemetryBus` for in-process events. Add Langfuse or other callbacks only
@@ -114,4 +131,5 @@ bus = TelemetryBus()
 bus.subscribe(lambda event: print(event.name, event.payload))
 ```
 
-Use the `telemetry` extra when callbacks depend on external SDKs.
+Use the `telemetry` extra when callbacks depend on external SDKs. Do not tell
+the user to install it just to get progress logs or run snapshots.

@@ -167,6 +167,85 @@ def test_database_manager_rejects_pre_vnext_store(tmp_path):
         manager.initialize()
 
 
+def test_database_manager_migrates_stage_work_item_progress_columns(tmp_path):
+    db_path = tmp_path / "legacy-stage-work-items.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE store_metadata (
+            metadata_key TEXT PRIMARY KEY,
+            metadata_value TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO store_metadata (metadata_key, metadata_value) VALUES (?, ?)",
+        ("store_format", storage_schema.STORE_FORMAT_VERSION),
+    )
+    conn.execute(
+        """
+        CREATE TABLE specs (
+            spec_hash TEXT PRIMARY KEY,
+            canonical_hash TEXT,
+            spec_type TEXT NOT NULL,
+            schema_version TEXT NOT NULL,
+            canonical_json TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE trial_summary (
+            trial_hash TEXT PRIMARY KEY,
+            overlay_key TEXT,
+            model_id TEXT,
+            task_id TEXT,
+            item_id TEXT,
+            status TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE stage_work_items (
+            work_item_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            status TEXT NOT NULL,
+            trial_hash TEXT NOT NULL,
+            candidate_index INTEGER NOT NULL,
+            candidate_id TEXT NOT NULL,
+            transform_hash TEXT,
+            evaluation_hash TEXT,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            lease_owner TEXT,
+            lease_expires_at TEXT,
+            external_job_id TEXT,
+            artifact_refs_json TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    manager = DatabaseManager(f"sqlite:///{db_path}")
+    manager.initialize()
+
+    with manager.get_connection() as upgraded:
+        columns = {
+            row["name"]
+            for row in upgraded.execute("PRAGMA table_info(stage_work_items)")
+        }
+
+    assert {
+        "started_at",
+        "ended_at",
+        "last_error_code",
+        "last_error_message",
+    }.issubset(columns)
+
+
 def test_sqlite_and_postgres_share_storage_schema_contract():
     assert storage_module.sqlite_schema.SCHEMA is storage_schema.SCHEMA
     assert postgres_manager.SCHEMA is storage_schema.SCHEMA
