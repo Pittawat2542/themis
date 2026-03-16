@@ -1,3 +1,5 @@
+"""Public models for configuring and inspecting run progress reporting."""
+
 from __future__ import annotations
 
 from collections.abc import Callable

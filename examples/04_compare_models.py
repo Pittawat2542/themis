@@ -122,6 +122,10 @@ def build_experiment() -> ExperimentSpec:
     )
 
 
+def _format_display_path(path: Path) -> str:
+    return path.as_posix()
+
+
 def main() -> None:
     orchestrator = Orchestrator.from_project_spec(
         build_project(),
@@ -151,7 +155,7 @@ def main() -> None:
         "pairs=",
         row.pair_count,
     )
-    print("Report written to:", report_path)
+    print("Report written to:", _format_display_path(report_path))
 
 
 if __name__ == "__main__":

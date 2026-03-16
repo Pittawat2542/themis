@@ -2,6 +2,14 @@
 
 Immutable output models produced by execution and projections.
 
+`themis.records` is the stable namespace for persisted output models. It
+lazy-loads record types so the base package can stay small while still exposing
+the read-side models by short import path.
+
+::: themis.records
+    options:
+      show_root_heading: false
+
 ::: themis.records.base
     options:
       show_root_heading: false

@@ -62,6 +62,26 @@ def test_telemetry_bus_can_fail_fast_on_subscriber_errors():
         bus.emit("trial_start", trial_hash="trial-1")
 
 
+def test_telemetry_bus_unsubscribe_matches_bound_methods_by_equality():
+    from themis.telemetry.bus import TelemetryBus
+
+    class Recorder:
+        def __init__(self) -> None:
+            self.seen: list[object] = []
+
+        def handle(self, event: object) -> None:
+            self.seen.append(event)
+
+    recorder = Recorder()
+    bus = TelemetryBus()
+    bus.subscribe(recorder.handle)
+
+    bus.unsubscribe(recorder.handle)
+    bus.emit("trial_start", trial_hash="trial-1")
+
+    assert recorder.seen == []
+
+
 def test_langfuse_callback_requires_telemetry_extra(monkeypatch):
     from themis.telemetry import langfuse_callback as module
 

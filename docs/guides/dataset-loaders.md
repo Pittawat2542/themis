@@ -4,6 +4,9 @@ Themis expects a dataset loader object that satisfies the `DatasetLoader`
 protocol: one `load_task_items(task: TaskSpec)` method returning a sequence of
 execution items.
 
+Use [Validate Dataset Loaders](dataset-validation.md) before large runs when you
+want to inspect IDs, metadata, and JSON-safety directly against the raw items.
+
 ## Minimal Contract
 
 ```python
@@ -26,6 +29,12 @@ Each returned item can be:
 - a `dict`
 - a `DataItemContext`
 - a JSON-safe scalar
+
+Mapping-shaped rows are the most ergonomic teaching path because they carry
+explicit IDs, payload fields, and `metadata`. `DataItemContext` is the typed
+equivalent when you want validation and helper methods. Scalar items remain
+valid for minimal tasks, but they are harder to inspect and slice because you
+must derive identity from the value itself.
 
 If you return a mapping, Themis will:
 
@@ -82,3 +91,6 @@ Sampling is deterministic when you pass `seed`.
 `item_ids` and `metadata_filters` are applied before subset or stratified
 sampling, so you can define reproducible slices like "only hard examples" or
 "this exact regression list" without changing the dataset loader itself.
+
+Use [Evolve an Experiment](evolve-an-experiment.md) when you want those slices
+to remain stable over time.

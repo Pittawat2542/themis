@@ -19,7 +19,11 @@ def _system_exit_code(code: object) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the top-level Themis CLI parser."""
+    """Build the top-level Themis CLI parser.
+
+    Returns:
+        A parser configured with the currently supported Themis subcommands.
+    """
 
     parser = argparse.ArgumentParser(prog="themis")
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
@@ -30,7 +34,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the top-level Themis CLI."""
+    """Run the top-level Themis CLI.
+
+    Args:
+        argv: Optional argument vector to parse instead of `sys.argv`.
+
+    Returns:
+        A shell-compatible exit status produced by the selected subcommand.
+
+    Raises:
+        SystemExit: Normalized into the returned shell exit status when argparse
+            or a subcommand exits.
+    """
 
     parser = build_parser()
     try:

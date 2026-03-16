@@ -7,6 +7,8 @@ from typing import Protocol
 
 from themis._optional import import_optional
 from themis.records.trial import TrialRecord
+from themis.report.builder import ReportBuilder
+from themis.runtime.comparison import ComparisonTable
 from themis.runtime.result_services import (
     ExperimentResultAnalysisService,
     ExperimentResultDiagnosticsService,
@@ -138,6 +140,14 @@ class ExperimentResult:
         """Return a view pinned to one output-transform overlay.
 
         Use this when you want normalized candidate outputs without scoring.
+
+        Args:
+            transform_hash: Deterministic transform overlay hash to pin as the
+                active read-side selection.
+
+        Returns:
+            A new `ExperimentResult` view scoped to the requested transform
+            overlay.
         """
         return ExperimentResult(
             projection_repo=self.projection_repo,
@@ -153,6 +163,14 @@ class ExperimentResult:
 
         Use this when you want metric-backed candidates, comparisons, or report
         exports for one specific evaluation pass.
+
+        Args:
+            evaluation_hash: Deterministic evaluation overlay hash to pin as the
+                active read-side selection.
+
+        Returns:
+            A new `ExperimentResult` view scoped to the requested evaluation
+            overlay.
         """
         return ExperimentResult(
             projection_repo=self.projection_repo,
@@ -172,8 +190,24 @@ class ExperimentResult:
         baseline_model_id: str | None = None,
         treatment_model_id: str | None = None,
         p_value_correction: PValueCorrection | str = PValueCorrection.NONE,
-    ):
-        """Build a paired comparison table from projection rows."""
+    ) -> ComparisonTable:
+        """Build a paired comparison table from projection rows.
+
+        Args:
+            trial_hash: Optional trial hash to limit the comparison to one trial.
+            metric_id: Optional metric ID used to filter projected score rows.
+            task_id: Optional task ID used to limit the comparison to one task.
+            baseline_model_id: Optional model ID to force as the baseline side.
+            treatment_model_id: Optional model ID to force as the treatment side.
+            p_value_correction: Multiple-comparison correction mode applied to
+                the reported p-values.
+
+        Returns:
+            A comparison table built from the currently active overlay.
+
+        Raises:
+            ModuleNotFoundError: If the `stats` extra is not installed.
+        """
         return self._analysis.compare(
             trial_hash=trial_hash,
             metric_id=metric_id,
@@ -214,9 +248,28 @@ class ExperimentResult:
         *,
         include_trials: bool = True,
     ) -> dict[str, object]:
-        """Return a JSON-serializable payload for the active overlay."""
+        """Return a JSON-serializable payload for the active overlay.
+
+        Args:
+            path: Optional path where the JSON payload should also be written.
+            include_trials: Whether to include fully hydrated trial records in
+                the exported payload.
+
+        Returns:
+            A JSON-serializable dictionary describing the active overlay.
+
+        Raises:
+            OSError: If `path` is supplied and the payload cannot be written.
+        """
         return self._analysis.export_json(path, include_trials=include_trials)
 
-    def report(self):
-        """Build a report builder for the active overlay."""
+    def report(self) -> ReportBuilder:
+        """Build a report builder for the active overlay.
+
+        Returns:
+            A report builder bound to the currently active overlay selection.
+
+        Raises:
+            ModuleNotFoundError: If the `stats` extra is not installed.
+        """
         return self._analysis.report()

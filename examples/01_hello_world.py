@@ -16,12 +16,12 @@ from themis import (
     ProjectSpec,
     PromptMessage,
     PromptTemplateSpec,
-    StorageSpec,
+    SqliteBlobStorageSpec,
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
-from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
+from themis.types.enums import PromptRole, DatasetSource
 
 
 class ArithmeticDatasetLoader:
@@ -76,9 +76,9 @@ def build_project() -> ProjectSpec:
         project_name="hello-world",
         researcher_id="examples",
         global_seed=7,
-        storage=StorageSpec(
+        storage=SqliteBlobStorageSpec(
             root_dir=str(Path(".cache/themis-examples/01-hello-world")),
-            compression=CompressionCodec.NONE,
+            compression="none",
         ),
         execution_policy=ExecutionPolicySpec(),
     )

@@ -6,6 +6,13 @@ Use these APIs when you want to subscribe to runtime events, forward them to an
 external tracing backend, or persist external trace links back into timeline
 views.
 
+`themis.telemetry` is the stable namespace for the event bus, event-name enum,
+and optional Langfuse callback.
+
+::: themis.telemetry
+    options:
+      show_root_heading: false
+
 ::: themis.telemetry.bus
     options:
       show_root_heading: false

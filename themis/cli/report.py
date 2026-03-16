@@ -21,7 +21,11 @@ from themis.types.json_validation import format_validation_error
 
 
 def add_report_arguments(parser: argparse.ArgumentParser) -> None:
-    """Attach config-report arguments to an argparse parser."""
+    """Attach config-report arguments to an argparse parser.
+
+    Args:
+        parser: The parser that should receive config-report arguments.
+    """
 
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--factory")
@@ -41,7 +45,14 @@ def add_report_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def configure_report_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Configure one parser to serve the config-report CLI."""
+    """Configure one parser to serve the config-report CLI.
+
+    Args:
+        parser: The parser to configure for config-report dispatch.
+
+    Returns:
+        The same parser after arguments and dispatch metadata are attached.
+    """
 
     add_report_arguments(parser)
     parser.set_defaults(handler=run_with_args, _parser=parser)
@@ -49,7 +60,14 @@ def configure_report_parser(parser: argparse.ArgumentParser) -> argparse.Argumen
 
 
 def build_parser(*, prog: str = "themis report") -> argparse.ArgumentParser:
-    """Build the config-report CLI parser."""
+    """Build the config-report CLI parser.
+
+    Args:
+        prog: Program name displayed in usage text.
+
+    Returns:
+        A fully configured parser for the standalone config-report CLI.
+    """
 
     parser = argparse.ArgumentParser(prog=prog)
     return configure_report_parser(parser)
@@ -58,7 +76,15 @@ def build_parser(*, prog: str = "themis report") -> argparse.ArgumentParser:
 def add_report_subparser(
     subparsers: argparse._SubParsersAction[Any],
 ) -> argparse.ArgumentParser:
-    """Add the report command to a parent CLI."""
+    """Add the report command to a parent CLI.
+
+    Args:
+        subparsers: Parent CLI subparser collection that should receive the
+            `report` command.
+
+    Returns:
+        The configured report parser that was attached to the parent CLI.
+    """
 
     parser = subparsers.add_parser("report")
     return configure_report_parser(parser)
@@ -121,7 +147,20 @@ def _load_run_manifest_bundle(project_file: str, run_id: str) -> dict[str, objec
 
 
 def run_with_args(args: argparse.Namespace) -> int:
-    """Execute the parsed config-report command."""
+    """Execute the parsed config-report command.
+
+    Args:
+        args: Parsed report arguments, including the selected input mode and
+            output-rendering options.
+
+    Returns:
+        A shell-compatible exit status for the report command.
+
+    Raises:
+        SystemExit: Raised by argparse when required argument combinations are
+            missing.
+        ValueError: If the referenced run manifest cannot be found.
+    """
 
     parser: argparse.ArgumentParser = args._parser
     if args.factory is not None:
@@ -149,7 +188,17 @@ def run_with_args(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the config-report CLI."""
+    """Run the config-report CLI.
+
+    Args:
+        argv: Optional argument vector to parse instead of `sys.argv`.
+
+    Returns:
+        A shell-compatible exit status for the selected config-report action.
+
+    Raises:
+        SystemExit: Propagated by argparse when invalid CLI input is supplied.
+    """
 
     parser = build_parser()
     args = parser.parse_args(argv)

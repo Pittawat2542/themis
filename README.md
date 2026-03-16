@@ -29,6 +29,9 @@ Themis centers on a small public surface:
 
 ## Installation
 
+`uv` is required for the documented install and example workflow in this
+repository.
+
 ```bash
 uv add themis-eval
 
@@ -45,6 +48,12 @@ telemetry, docs tooling, and the contributor toolchain, see
 The runnable quick-start script lives at
 [`examples/01_hello_world.py`](examples/01_hello_world.py). It uses local demo
 components, so it runs without API keys or provider extras.
+
+Run it with:
+
+```bash
+uv run python examples/01_hello_world.py
+```
 
 The workflow is:
 
@@ -83,6 +92,8 @@ Runnable examples live in [`examples/`](examples/):
 - `05_resume_run.py`
 - `06_hooks_and_timeline.py`
 - `07_judge_metric.py`
+- `08_external_stage_handoff.py`
+- `09_experiment_evolution.py`
 
 ## Config Reports
 
@@ -102,8 +113,10 @@ full_json = generate_config_report(bundle, format="json", verbosity="full")
 
 The same collected structure can be rendered as `json`, `yaml`, `markdown`, or
 `latex`, with `verbosity="default"` for a paper-facing summary and
-`verbosity="full"` for the exhaustive view. Source metadata is best-effort for
-dynamic or third-party classes. Custom formats can be registered with
+`verbosity="full"` for the exhaustive view. Source metadata is complete for
+local Python classes with retrievable source, partial for dynamically generated
+classes, and empty for third-party or compiled implementations that do not
+expose source text. Custom formats can be registered with
 `register_config_report_renderer(...)`. For CLI usage and a full worked example, see
 [docs/guides/config-reports.md](docs/guides/config-reports.md).
 

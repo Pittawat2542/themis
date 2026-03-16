@@ -18,7 +18,12 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 
 def add_quickcheck_arguments(subparsers: argparse._SubParsersAction[Any]) -> None:
-    """Attach quickcheck subcommands to an argparse subparser collection."""
+    """Attach quickcheck subcommands to an argparse subparser collection.
+
+    Args:
+        subparsers: The argparse subparser collection that should receive the
+            `failures`, `scores`, and `latency` commands.
+    """
 
     failures = subparsers.add_parser("failures")
     failures.add_argument("--db", required=True)
@@ -41,7 +46,14 @@ def add_quickcheck_arguments(subparsers: argparse._SubParsersAction[Any]) -> Non
 def configure_quickcheck_parser(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """Configure one parser to serve the quickcheck CLI."""
+    """Configure one parser to serve the quickcheck CLI.
+
+    Args:
+        parser: The parser to configure for quickcheck dispatch.
+
+    Returns:
+        The same parser after subcommands and dispatch metadata are attached.
+    """
 
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_quickcheck_arguments(subparsers)
@@ -50,7 +62,14 @@ def configure_quickcheck_parser(
 
 
 def build_parser(*, prog: str = "themis-quickcheck") -> argparse.ArgumentParser:
-    """Build the quickcheck CLI parser."""
+    """Build the quickcheck CLI parser.
+
+    Args:
+        prog: Program name displayed in usage text.
+
+    Returns:
+        A fully configured parser for the standalone quickcheck CLI.
+    """
 
     parser = argparse.ArgumentParser(prog=prog)
     return configure_quickcheck_parser(parser)
@@ -59,14 +78,30 @@ def build_parser(*, prog: str = "themis-quickcheck") -> argparse.ArgumentParser:
 def add_quickcheck_subparser(
     subparsers: argparse._SubParsersAction[Any],
 ) -> argparse.ArgumentParser:
-    """Add the quickcheck command to a parent CLI."""
+    """Add the quickcheck command to a parent CLI.
+
+    Args:
+        subparsers: Parent CLI subparser collection that should receive the
+            `quickcheck` command.
+
+    Returns:
+        The configured quickcheck parser that was attached to the parent CLI.
+    """
 
     parser = subparsers.add_parser("quickcheck")
     return configure_quickcheck_parser(parser)
 
 
 def run_with_args(args: argparse.Namespace) -> int:
-    """Execute the parsed quickcheck command."""
+    """Execute the parsed quickcheck command.
+
+    Args:
+        args: Parsed quickcheck arguments including the selected subcommand and
+            any overlay filters.
+
+    Returns:
+        A shell-compatible exit status for the selected quickcheck query.
+    """
 
     db_path = Path(args.db)
     with _connect(str(db_path)) as conn:
@@ -94,7 +129,17 @@ def run_with_args(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the quickcheck CLI and dispatch to the selected summary command."""
+    """Run the quickcheck CLI and dispatch to the selected summary command.
+
+    Args:
+        argv: Optional argument vector to parse instead of `sys.argv`.
+
+    Returns:
+        A shell-compatible exit status for the selected quickcheck command.
+
+    Raises:
+        SystemExit: Propagated by argparse when invalid CLI input is supplied.
+    """
 
     parser = build_parser()
     args = parser.parse_args(argv)

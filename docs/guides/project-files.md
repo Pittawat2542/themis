@@ -2,6 +2,10 @@
 
 `Orchestrator.from_project_file()` accepts TOML or JSON.
 
+Prefer `SqliteBlobStorageSpec` and `PostgresBlobStorageSpec` in new code. The
+fields below map directly onto those types. `StorageSpec` remains the SQLite
+compatibility alias.
+
 ## Recommended Fields
 
 Keep these values stable in your project file:
@@ -50,6 +54,27 @@ kind = "worker_pool"
 lease_ttl_seconds = 180
 poll_interval_seconds = 5
 worker_tags = ["gpu:a100"]
+```
+
+If you keep `compression = "zstd"`, install the compression extra first:
+
+```bash
+uv add "themis-eval[compression]"
+```
+
+## Common Failure Modes
+
+Malformed project files fail during load instead of falling back silently.
+Representative output:
+
+```text
+Failed to parse project config broken.json: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+```
+
+Unsupported file extensions fail with:
+
+```text
+Project files must use .toml or .json.
 ```
 
 ## Usage

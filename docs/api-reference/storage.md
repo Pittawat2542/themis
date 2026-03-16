@@ -2,6 +2,12 @@
 
 Storage, summaries, projections, and artifact persistence.
 
+!!! warning "Implementation detail pages"
+    `ProjectSpec.storage`, `StorageConfig`, and the documented blob-storage
+    specs are the stable user-facing surface. The repository, projection, and
+    schema modules on this page are importable for inspection and debugging, but
+    they are implementation detail rather than the stable extension surface.
+
 ## Storage Model
 
 - `ProjectSpec.storage` accepts `StorageConfig`, the backend-neutral union of
@@ -24,6 +30,8 @@ Storage, summaries, projections, and artifact persistence.
 - Reporting and comparison paths should prefer projected `trial_summary` rows
   and `metric_scores` rows. Full `TrialRecord` materialization is
   available for provenance-heavy workflows.
+- Event payload and metadata types live on the dedicated
+  [Types](types.md) reference page to avoid duplicated anchors.
 
 ::: themis.storage
     options:
@@ -34,10 +42,6 @@ Storage, summaries, projections, and artifact persistence.
       show_root_heading: false
 
 ::: themis.storage.event_repo
-    options:
-      show_root_heading: false
-
-::: themis.types.events
     options:
       show_root_heading: false
 

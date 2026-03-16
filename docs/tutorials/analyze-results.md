@@ -1,134 +1,129 @@
-# Analyze Results
+# Analyze a Stored Run
 
-In this tutorial you will extend a stored comparison run into five concrete
-outputs:
-
-- a paired comparison table in Python
-- a lightweight leaderboard and drilldown view
-- an exported Markdown report
-- a targeted pass over invalid, null, and tagged examples
-- a quick operator check from SQLite summaries
-
-This tutorial assumes you installed the `stats` extra:
-
-```bash
-uv add "themis-eval[stats]"
-```
+This tutorial starts from the shipped paired-comparison example and walks
+through one complete analysis loop: run the example, inspect the report, compare
+the models, and confirm the stored SQLite summaries.
 
 ## Before You Start
 
-Run `examples/04_compare_models.py` once, or start from a script that already
-produces a `result` object with two comparable models.
+Install the `stats` extra in the environment that will run the example. If you
+are working from a source checkout, follow the repository sync workflow in
+[Installation & Setup](../installation-setup/index.md#install-from-source)
+instead of running `uv add` from the checkout root. Then run the example from
+the repository root:
 
-## Step 1: Build a report
-
-```python
-report_builder = result.report()
-report = report_builder.build(p_value_correction="holm")
-print([table.id for table in report.tables])
-report_builder.to_markdown("report.md")
+```bash
+uv run python examples/04_compare_models.py
 ```
 
-You should see tables such as `main_results` and `paired_comparisons`, and a new
-`report.md` file on disk.
+Expected output:
 
-`ReportBuilder` assembles:
+```text
+delta_mean= 0.5 adjusted_p_value= 0.25 pairs= 6
+Report written to: .cache/themis-examples/04-compare-models/report.md
+```
 
-- aggregate metric tables grouped by model, task, and metric
-- optional paired comparison tables when the run includes comparable trial sets
-- report metadata including stored provenance summaries
+The example writes its SQLite store to:
 
-## Step 2: Inspect the paired comparison
+```text
+.cache/themis-examples/04-compare-models/themis.sqlite3
+```
+
+## Step 1: Open the report path
+
+The example already exported a Markdown report:
+
+```text
+.cache/themis-examples/04-compare-models/report.md
+```
+
+That file is the quickest handoff artifact when you want the paired comparison
+and leaderboard in one place.
+
+## Step 2: Rebuild the comparison in Python
+
+Open a Python session or a notebook in the repository and recreate the same run
+state:
 
 ```python
+import runpy
+
+namespace = runpy.run_path("examples/04_compare_models.py")
+
+orchestrator = namespace["Orchestrator"].from_project_spec(
+    namespace["build_project"](),
+    registry=namespace["build_registry"](),
+    dataset_loader=namespace["ArithmeticDatasetLoader"](),
+)
+result = orchestrator.run(namespace["build_experiment"]())
 evaluation_result = result.for_evaluation(result.evaluation_hashes[0])
+
 comparison = evaluation_result.compare(
     metric_id="exact_match",
+    baseline_model_id="baseline",
+    treatment_model_id="candidate",
     p_value_correction="holm",
 )
-for row in comparison.rows:
-    print(row.baseline_model_id, row.treatment_model_id, row.delta_mean)
+row = comparison.rows[0]
+print(row.delta_mean, row.adjusted_p_value, row.pair_count)
 ```
 
-Comparisons are paired by `item_id`, so both models need score rows for the same
-task/item pairs.
+Expected output:
 
-Each row also carries bootstrap confidence intervals and p-values, which makes
-this the best place to answer "how large is the effect?" and "is the delta
-statistically meaningful on the paired items?".
+```text
+0.5 0.25 6
+```
 
-## Step 3: Build a lightweight leaderboard
+## Step 3: Build a quick leaderboard
 
 ```python
-evaluation_result = result.for_evaluation(result.evaluation_hashes[0])
 leaderboard = evaluation_result.leaderboard(metric_id="exact_match")
-print(leaderboard)
+for row in leaderboard:
+    print(row["model_id"], row["task_id"], row["mean"])
 ```
 
-This gives you a fast aggregate view without needing to build a report first.
+Expected output:
 
-## Step 4: Surface invalid or null extractions
-
-```python
-for row in evaluation_result.iter_invalid_extractions():
-    print(
-        row["candidate_id"],
-        row["extractor_id"],
-        row["failure_reason"],
-        row["warnings"],
-    )
+```text
+baseline paired-math 0.5
+candidate paired-math 1.0
 ```
 
-`iter_invalid_extractions()` includes both hard extraction failures and
-successful extractions whose `parsed_answer` ended up null. Use it when you want
-to tighten extractor edge cases without trawling the full event log.
+## Step 4: Inspect the SQLite summaries
 
-## Step 5: Inspect tagged failure cases
+Use the operator CLI when you want a lightweight check without hydrating the
+full trial records:
 
-```python
-for row in evaluation_result.iter_tagged_examples(tag="hallucination"):
-    print("tagged", row["candidate_id"], row["tags"])
+```bash
+uv run themis-quickcheck scores \
+  --db .cache/themis-examples/04-compare-models/themis.sqlite3 \
+  --metric exact_match
 ```
 
-This only works if your metrics or candidate payloads emit structured tags. It
-is the recommended path for qualitative categories such as refusals,
-hallucinations, or formatting problems.
+Expected output:
 
-## Step 6: Drill into one concrete example
+```text
+ev:fc7ad3e8b3e2	baseline	paired-math	exact_match	0.5000	6
+ev:fc7ad3e8b3e2	candidate	paired-math	exact_match	1.0000	6
+```
+
+## Step 5: Inspect one concrete trial
 
 ```python
 trial = evaluation_result.get_trial(evaluation_result.trial_hashes[0])
-candidate_id = trial.candidates[0].candidate_id
-candidate_view = evaluation_result.view_timeline(candidate_id)
+candidate_view = evaluation_result.view_timeline(trial.candidates[0].candidate_id)
 
 print(candidate_view.inference.raw_text)
 print(candidate_view.evaluation.aggregate_scores)
 ```
 
-Switch to timeline views when aggregate helpers tell you *which* example is bad
-and you now need to inspect the actual response, extraction chain, evaluation
-payload, or judge audit behind it.
+This is the point where you switch from aggregate comparison back to one stored
+example.
 
-## Step 7: Inspect the SQLite summaries
+## Next Steps
 
-The operator CLI reads only SQLite summaries, which makes it fast even when the
-artifact store is large.
-
-```bash
-themis-quickcheck failures --db .cache/themis-docs/compare/themis.sqlite3
-themis-quickcheck scores --db .cache/themis-docs/compare/themis.sqlite3 --metric exact_match --evaluation-hash <evaluation_hash>
-themis-quickcheck latency --db .cache/themis-docs/compare/themis.sqlite3 --evaluation-hash <evaluation_hash>
-```
-
-## Summary
-
-This walkthrough uses the same stored run in five different ways:
-
-1. high-level statistical comparison through `ExperimentResult.compare()`
-2. aggregate ranking through `ExperimentResult.leaderboard()`
-3. qualitative drilldown through invalid extractions, tags, and timeline views
-4. shareable report export through `ReportBuilder`
-5. lightweight operations inspection through `themis-quickcheck`
-
-Use the guide pages when you already know which of those tasks you want to do
-and do not need the walkthrough.
+- Use [Analyze Results](../guides/analyze-results.md) for the task-oriented guide.
+- Use [Compare and Export Results](../guides/compare-and-export.md) when you
+  want JSON, CSV, or report exports.
+- Use [Use the Quickcheck CLI](../guides/quickcheck.md) for more operator
+  queries against the same SQLite store.

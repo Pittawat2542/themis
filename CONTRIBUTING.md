@@ -44,6 +44,14 @@ uv run ruff check .
 uv run mkdocs build --strict
 ```
 
+When you change docs or public API reference surfaces, also run:
+
+```bash
+uv run pytest tests/docs/test_docs_consistency.py \
+  tests/docs/test_public_docstrings.py \
+  tests/docs/test_documented_workflows.py
+```
+
 If you only changed a few Python files, matching CI's changed-file checks is
 fine too:
 
@@ -66,6 +74,19 @@ That hook runs `scripts/ci/check_staged_python.sh`.
 2. Make the smallest coherent change you can.
 3. Run the relevant local checks.
 4. Open a pull request against `main` with a clear summary and any migration notes.
+
+## Docs QA
+
+Before merging docs changes, do one rendered-site pass for:
+
+- Beginner flow: install, run the quick start, and confirm the expected output matches the page.
+- Researcher flow: find compare/export/reproduce guidance without reading the whole site.
+- Power-user flow: find errors, progress, run-planning, and types reference pages directly from nav/search.
+
+Maintenance rules:
+
+- Any new example requires a docs link, expected output, and API-reference decision before merge.
+- Any new public namespace requires a docs link, expected output, and API-reference decision before merge.
 
 ## Versioning & Releases
 

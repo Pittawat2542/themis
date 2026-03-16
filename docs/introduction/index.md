@@ -10,7 +10,7 @@ idea is simple:
 
 ## Public Surface
 
-The current implementation centers on five concepts:
+The current implementation centers on six concepts:
 
 | Layer | Primary API | What it does |
 | --- | --- | --- |
@@ -48,11 +48,30 @@ inspection, but they are not the stable extension surface.
 
 ## What This Documentation Covers
 
-This site is organized around three complementary views:
+This site is organized around four complementary views:
 
-- [Concepts](../concepts/index.md) for architecture and mental models
+- [Tutorials](../tutorials/index.md) for beginner-safe lessons with a complete
+  outcome
 - [Guides](../guides/index.md) for task-oriented workflows
+- [Concepts](../concepts/index.md) for architecture and mental models
 - [API Reference](../api-reference/index.md) for source-backed class and function docs
+
+High-signal entry points:
+
+- [Architecture](../concepts/architecture.md) for the system boundaries
+- [Specs and Records](../concepts/specs-and-records.md) for write-side versus read-side concepts
+- [CLI Reference](../api-reference/cli.md) when you want command lookup instead of workflow prose
+
+## Start Here By Persona
+
+- Beginner: [Quick Start](../quick-start/index.md) then
+  [Hello World Walkthrough](../tutorials/hello-world.md)
+- Research scientist: [Validate Dataset Loaders](../guides/dataset-validation.md),
+  [Compare and Export Results](../guides/compare-and-export.md), and
+  [Reproduce and Share Runs](../guides/reproduce-runs.md)
+- Power user: [API Reference](../api-reference/index.md),
+  [Storage and Resume](../concepts/storage-and-resume.md), and
+  [Run Planning](../api-reference/run-planning.md)
 
 ## When Themis Fits Best
 

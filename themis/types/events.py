@@ -1,3 +1,5 @@
+"""Typed lifecycle events and metadata persisted during experiment execution."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -12,6 +14,8 @@ from themis.types.json_types import JSONDict, JSONValueType
 
 
 class TimelineStage(str, Enum):
+    """Fine-grained timeline stage represented by a trial event."""
+
     ITEM_LOAD = "item_load"
     PROMPT_RENDER = "prompt_render"
     INFERENCE = "inference"
@@ -21,6 +25,8 @@ class TimelineStage(str, Enum):
 
 
 class ArtifactRole(str, Enum):
+    """Semantic role of an artifact linked from an event."""
+
     ITEM_PAYLOAD = "item_payload"
     RENDERED_PROMPT = "rendered_prompt"
     INFERENCE_OUTPUT = "inference_output"
@@ -29,6 +35,8 @@ class ArtifactRole(str, Enum):
 
 
 class TrialEventType(str, Enum):
+    """Discriminator for append-only trial events."""
+
     TRIAL_STARTED = "trial_started"
     ITEM_LOADED = "item_loaded"
     PROMPT_RENDERED = "prompt_rendered"
@@ -55,6 +63,8 @@ class TrialEventMetadata(BaseModel):
     model_config = ConfigDict(frozen=True, extra="allow")
 
     def as_dict(self) -> JSONDict:
+        """Returns the metadata as a JSON-safe dictionary."""
+
         return cast(JSONDict, self.model_dump(mode="json"))
 
 
@@ -70,6 +80,8 @@ class OverlayEventMetadata(TrialEventMetadata):
 
 
 class ItemLoadedEventMetadata(TrialEventMetadata):
+    """Metadata persisted when a dataset item is loaded."""
+
     item_id: str | None = None
     dataset_source: str | None = None
     dataset_revision: str | None = None
@@ -78,12 +90,16 @@ class ItemLoadedEventMetadata(TrialEventMetadata):
 
 
 class PromptRenderedEventMetadata(TrialEventMetadata):
+    """Metadata recorded after prompt rendering succeeds."""
+
     prompt_template_id: str | None = None
     rendered_prompt_hash: str | None = None
     input_field_map: list[str] = Field(default_factory=list)
 
 
 class InferenceCompletedEventMetadata(TrialEventMetadata):
+    """Provider and token-usage details captured after inference."""
+
     provider: str | None = None
     model_id: str | None = None
     inference_params_hash: str | None = None
@@ -92,6 +108,8 @@ class InferenceCompletedEventMetadata(TrialEventMetadata):
 
 
 class ExtractionCompletedEventMetadata(OverlayEventMetadata):
+    """Metadata for extractor execution scoped to a transform overlay."""
+
     extractor_id: str | None = None
     attempt_index: int | None = None
     success: bool | None = None
@@ -99,6 +117,8 @@ class ExtractionCompletedEventMetadata(OverlayEventMetadata):
 
 
 class EvaluationCompletedEventMetadata(OverlayEventMetadata):
+    """Metadata for metric evaluation scoped to an evaluation overlay."""
+
     metric_id: str | None = None
     score: float | None = None
     judge_call_count: int | None = None
@@ -111,11 +131,15 @@ class CandidateFailureEventMetadata(OverlayEventMetadata):
 
 
 class ProjectionCompletedEventMetadata(OverlayEventMetadata):
+    """Metadata for projection artifacts derived from prior events."""
+
     projection_version: str | None = None
     source_event_range: list[int] | None = None
 
 
 class TrialRetryEventMetadata(TrialEventMetadata):
+    """Retry metadata identifying which candidate attempt was re-run."""
+
     attempt: int | None = None
     cand_index: int | None = None
 
@@ -192,6 +216,8 @@ class TrialSummaryRow(BaseModel):
 def metadata_model_for_event(
     event_type: TrialEventType | str,
 ) -> type[TrialEventMetadata]:
+    """Returns the metadata model used for a given event discriminator."""
+
     resolved_event_type = TrialEventType(event_type)
     if resolved_event_type == TrialEventType.ITEM_LOADED:
         return ItemLoadedEventMetadata
@@ -217,6 +243,8 @@ def parse_trial_event_metadata(
     event_type: TrialEventType | str,
     metadata: TrialEventMetadata | JSONDict | None,
 ) -> TrialEventMetadata:
+    """Coerces persisted metadata into the typed model for ``event_type``."""
+
     model_type = metadata_model_for_event(event_type)
     if isinstance(metadata, model_type):
         return metadata

@@ -3,7 +3,7 @@
 ## Requirements
 
 - Python `3.12+`
-- `uv` recommended for package and environment management
+- `uv` required for the documented package and example workflow
 
 ## Install Themis
 
@@ -148,7 +148,7 @@ uv add "themis-eval[stats]"
 ```
 
 See [Compare and Export Results](../guides/compare-and-export.md),
-[Analyze Results](../tutorials/analyze-results.md), and
+[Analyze Results](../guides/analyze-results.md), and
 [Reporting & Stats API](../api-reference/reporting-and-stats.md).
 
 ### `telemetry`
@@ -217,16 +217,39 @@ Run a simple import check:
 uv run python -c "from themis import Orchestrator, ProjectSpec, ExperimentSpec; print('ok')"
 ```
 
+Expected output:
+
+    ok
+
 If you installed the `stats` extra, also verify the operator CLI:
 
 ```bash
 uv run themis-quickcheck --help
 ```
 
+Expected output starts with:
+
+    usage: themis-quickcheck [-h] {failures,scores,latency} ...
+
 If you installed the `telemetry` extra, verify the telemetry primitives:
 
 ```bash
 uv run python -c "from themis.telemetry import TelemetryBus, LangfuseCallback; print('ok')"
+```
+
+Expected output:
+
+    ok
+
+## Optional Dependency Failure Examples
+
+Representative install-hint failures:
+
+```text
+Optional dependency 'zstandard' is required for this feature. Install it with `uv add "themis-eval[compression]"`.
+Optional dependency 'jsonschema' is required for this feature. Install it with `uv add "themis-eval[extractors]"`.
+Optional dependency 'themis.stats.stats_engine' is required for this feature. Install it with `uv add "themis-eval[stats]"`.
+Optional dependency 'langfuse' is required for this feature. Install it with `uv add "themis-eval[telemetry]"`.
 ```
 
 ## Pick a Storage Configuration Early
@@ -254,3 +277,6 @@ project = ProjectSpec(
 !!! tip
     Treat the storage root as part of the experiment contract. Resume and
     quickcheck behavior depend on it.
+
+    Prefer `SqliteBlobStorageSpec` or `PostgresBlobStorageSpec` in new code and
+    new docs. `StorageSpec` remains the SQLite compatibility alias.

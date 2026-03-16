@@ -41,6 +41,12 @@
   </a>
 </div>
 
+## Persona Paths
+
+- Beginner: [Installation](installation-setup/index.md) -> [Quick Start](quick-start/index.md) -> [Hello World Walkthrough](tutorials/hello-world.md)
+- Research scientist: [Validate Dataset Loaders](guides/dataset-validation.md) -> [Compare and Export Results](guides/compare-and-export.md) -> [Reproduce and Share Runs](guides/reproduce-runs.md)
+- API / power user: [Introduction](introduction/index.md) -> [API Reference](api-reference/index.md) -> [Storage and Resume](concepts/storage-and-resume.md)
+
 ## Current Product Shape
 
 - `ProjectSpec` holds shared policy and storage defaults.
@@ -67,6 +73,10 @@ flowchart LR
 !!! note
     This site stays close to the code and tests so the documented workflow,
     examples, and API reference describe the same runtime contract.
+
+    Runnable examples under `examples/` are the canonical source for the
+    workflows shown here. Output blocks on onboarding pages are copied from those
+    verified runs when the output is deterministic enough to document.
 
 ## Recommended Reading Order
 

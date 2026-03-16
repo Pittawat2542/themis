@@ -20,10 +20,19 @@ any successful generation projection.
 ## Submit and Resume Through a Run Handle
 
 ```python
+from themis.orchestration.run_manifest import RunHandle
+from themis.runtime import ExperimentResult
+
+
 handle = orchestrator.submit(experiment, runtime=runtime)
 print(handle.run_id, handle.status, handle.pending_work_items)
 
 resumed = orchestrator.resume(handle.run_id, runtime=runtime)
+
+if isinstance(resumed, RunHandle):
+    print(resumed.run_id, resumed.status, resumed.pending_work_items)
+elif isinstance(resumed, ExperimentResult):
+    print(resumed.trial_hashes[:3])
 ```
 
 For the local backend, `submit()` executes immediately and returns a completed
@@ -150,9 +159,10 @@ print(estimate.estimated_total_tokens)
 print(estimate.notes)
 ```
 
-`estimate()` is intentionally best-effort. It currently uses the prompt
-templates, dataset payload size, and `max_tokens` budget to approximate token
-usage, and it reports uncertainty explicitly when provider pricing is unknown.
+`estimate()` is intentionally approximate. It uses prompt templates, dataset
+payload size, and the `max_tokens` budget to estimate work. It does not include
+provider-side caching, unpublished pricing, or provider-specific routing logic,
+so treat token and cost values as planning bounds rather than billable truth.
 
 ## Export Work for an External System
 
@@ -170,6 +180,9 @@ same trial context plus the candidate payload that should be scored externally.
 If dataset payloads are sensitive, disable them at the project level:
 
 ```python
+# `project.model_copy(...)` returns a new `ProjectSpec`, and
+# `project.storage.model_copy(...)` replaces the nested storage config with a
+# copy where `store_item_payloads` is disabled.
 project = project.model_copy(
     update={"storage": project.storage.model_copy(update={"store_item_payloads": False})}
 )

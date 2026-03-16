@@ -15,6 +15,12 @@ walks through the same workflow step by step.
 Make sure `themis-eval` is installed and create a new file, for example
 `hello_world.py`.
 
+You will run it with:
+
+```bash
+uv run python hello_world.py
+```
+
 ## Step 1: Add imports and a dataset loader
 
 Start with the write-side building blocks and a tiny in-memory dataset loader:
@@ -36,7 +42,7 @@ from themis import (
     ProjectSpec,
     PromptMessage,
     PromptTemplateSpec,
-    StorageSpec,
+    SqliteBlobStorageSpec,
     TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
@@ -115,15 +121,14 @@ project = ProjectSpec(
     project_name="hello-world",
     researcher_id="docs",
     global_seed=7,
-    storage=StorageSpec(
-        root_dir=str(Path(".cache/themis-docs/hello-world")),
-        compression="none",
-    ),
+    storage=SqliteBlobStorageSpec(root_dir=str(Path(".cache/themis-examples/01-hello-world")), compression="none"),
     execution_policy=ExecutionPolicySpec(),
 )
 ```
 
-This keeps storage and execution rules out of the experiment matrix.
+This keeps storage and execution rules out of the experiment matrix. `StorageSpec`
+remains the SQLite compatibility alias, but the concrete
+`SqliteBlobStorageSpec` name is the preferred teaching path for new code.
 
 ## Step 5: Declare the experiment matrix
 
@@ -172,9 +177,10 @@ orchestrator = Orchestrator.from_project_spec(
 )
 result = orchestrator.run(experiment)
 
+print("Stored SQLite database:", ".cache/themis-examples/01-hello-world/themis.sqlite3")
 for trial in result.iter_trials():
-    print(trial.trial_spec.item_id)
-    print(trial.candidates[0].evaluation.aggregate_scores)
+    score = trial.candidates[0].evaluation.aggregate_scores["exact_match"]
+    print(f"{trial.trial_spec.item_id}: exact_match={score:.1f}")
 ```
 
 `run()` executes the full three-stage flow: generation first, then any declared
@@ -183,8 +189,9 @@ output transforms, then any declared evaluations.
 Expected output:
 
 ```text
-item-1 {'exact_match': 1.0}
-item-2 {'exact_match': 1.0}
+Stored SQLite database: .cache/themis-examples/01-hello-world/themis.sqlite3
+item-1: exact_match=1.0
+item-2: exact_match=1.0
 ```
 
 ## Step 7: Inspect a stored projection

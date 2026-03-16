@@ -1,3 +1,5 @@
+"""Compatibility checks for providers, extractors, metrics, and run stages."""
+
 from __future__ import annotations
 
 from collections.abc import Collection
@@ -30,33 +32,49 @@ class CompatibilityChecker:
         self.registry = registry
 
     def check_generation_trial(self, trial: TrialSpec) -> list[Issue]:
+        """Returns generation-stage compatibility issues for ``trial``."""
+
         return check_generation_trial(trial, self.registry)
 
     def validate_generation_trial(self, trial: TrialSpec) -> None:
+        """Raises when generation-stage compatibility checks fail."""
+
         validate_generation_trial(trial, self.registry)
 
     def check_output_transform(
         self,
         output_transform: OutputTransformSpec,
     ) -> list[Issue]:
+        """Returns compatibility issues for one output transform."""
+
         return check_output_transform(output_transform, self.registry)
 
     def validate_output_transform(
         self,
         output_transform: OutputTransformSpec,
     ) -> None:
+        """Raises when an output transform is incompatible."""
+
         validate_output_transform(output_transform, self.registry)
 
     def check_evaluation_spec(self, evaluation: EvaluationSpec) -> list[Issue]:
+        """Returns compatibility issues for one evaluation spec."""
+
         return check_evaluation_spec(evaluation, self.registry)
 
     def validate_evaluation_spec(self, evaluation: EvaluationSpec) -> None:
+        """Raises when one evaluation spec is incompatible."""
+
         validate_evaluation_spec(evaluation, self.registry)
 
     def check_trial(self, trial: TrialSpec) -> list[Issue]:
+        """Returns compatibility issues across all declared trial stages."""
+
         return check_trial(trial, self.registry)
 
     def validate_trial(self, trial: TrialSpec) -> None:
+        """Raises when any declared stage of ``trial`` is incompatible."""
+
         validate_trial(trial, self.registry)
 
     def check_trial_for_stages(
@@ -65,6 +83,8 @@ class CompatibilityChecker:
         *,
         stages: Collection[TrialStage],
     ) -> list[Issue]:
+        """Returns compatibility issues only for the requested stages."""
+
         return check_trial_for_stages(trial, self.registry, stages=stages)
 
     def validate_trial_for_stages(
@@ -73,9 +93,13 @@ class CompatibilityChecker:
         *,
         stages: Collection[TrialStage],
     ) -> None:
+        """Raises when the requested stages of ``trial`` are incompatible."""
+
         validate_trial_for_stages(trial, self.registry, stages=stages)
 
     def resolve_trial_plugins(self, trial: TrialSpec) -> ResolvedTrialPlugins:
+        """Validates ``trial`` and resolves its concrete plugin registrations."""
+
         return resolve_trial_plugins(trial, self.registry)
 
 

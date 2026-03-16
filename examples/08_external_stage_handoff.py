@@ -172,6 +172,10 @@ def build_external_evaluation_records(bundle) -> list[TrialRecord]:
     return records
 
 
+def _format_display_path(path: Path) -> str:
+    return path.as_posix()
+
+
 def main() -> None:
     orchestrator = Orchestrator.from_project_spec(
         build_project(),
@@ -205,7 +209,7 @@ def main() -> None:
     row = comparison.rows[0]
     print("Comparison delta_mean:", round(row.delta_mean, 3))
     print("Leaderboard rows:", len(leaderboard))
-    print("Exported overlay JSON:", export_path)
+    print("Exported overlay JSON:", _format_display_path(export_path))
 
 
 if __name__ == "__main__":
