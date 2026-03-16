@@ -41,7 +41,6 @@ def main(argv: list[str] | None = None) -> int:
     handler = getattr(args, "handler", None)
     if handler is None:
         parser.error("Unknown command.")
-        return 2
     try:
         return handler(args)
     except SystemExit as exc:

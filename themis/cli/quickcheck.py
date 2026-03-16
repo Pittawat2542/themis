@@ -45,7 +45,7 @@ def configure_quickcheck_parser(
 
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_quickcheck_arguments(subparsers)
-    parser.set_defaults(handler=run_with_args)
+    parser.set_defaults(handler=run_with_args, _parser=parser)
     return parser
 
 
@@ -90,7 +90,7 @@ def run_with_args(args: argparse.Namespace) -> int:
                 transform_hash=args.transform_hash,
                 evaluation_hash=args.evaluation_hash,
             )
-    raise ValueError(f"Unknown quickcheck command '{args.command}'.")
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:

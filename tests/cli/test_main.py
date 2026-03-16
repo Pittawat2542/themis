@@ -50,6 +50,26 @@ def _build_experiment() -> ExperimentSpec:
     )
 
 
+def _persisted_manifest_bundle(
+    tmp_path: Path,
+    *,
+    run_id: str,
+) -> tuple[Path, ProjectSpec, ExperimentSpec]:
+    project = _build_project(tmp_path)
+    experiment = _build_experiment()
+    project_path = tmp_path / "project.json"
+    project_path.write_text(json.dumps(project.model_dump(mode="json")))
+    storage_bundle = build_storage_bundle(project.storage)
+    manifest = RunManifest(
+        run_id=run_id,
+        backend_kind="local",
+        project_spec=project,
+        experiment_spec=experiment,
+    )
+    RunManifestRepository(storage_bundle.manager).save_manifest(manifest)
+    return project_path, project, experiment
+
+
 class _StubParser:
     def __init__(
         self, *, parse_exit: object = None, handler_exit: object = None
@@ -105,18 +125,7 @@ def test_parent_cli_report_factory_writes_markdown(tmp_path: Path) -> None:
 def test_parent_cli_report_run_manifest_loads_persisted_specs(
     tmp_path: Path, capsys
 ) -> None:
-    project = _build_project(tmp_path)
-    experiment = _build_experiment()
-    project_path = tmp_path / "project.json"
-    project_path.write_text(json.dumps(project.model_dump(mode="json")))
-    storage_bundle = build_storage_bundle(project.storage)
-    manifest = RunManifest(
-        run_id="run-report-1",
-        backend_kind="local",
-        project_spec=project,
-        experiment_spec=experiment,
-    )
-    RunManifestRepository(storage_bundle.manager).save_manifest(manifest)
+    project_path, _, _ = _persisted_manifest_bundle(tmp_path, run_id="run-report-1")
 
     assert (
         main(
@@ -143,19 +152,7 @@ def test_parent_cli_report_run_manifest_loads_persisted_specs(
 
 
 def test_parent_cli_report_run_manifest_reads_project_file(tmp_path: Path) -> None:
-    project = _build_project(tmp_path)
-    project_path = tmp_path / "project.json"
-    project_path.write_text(json.dumps(project.model_dump(mode="json")))
-
-    experiment = _build_experiment()
-    storage_bundle = build_storage_bundle(project.storage)
-    manifest = RunManifest(
-        run_id="run-report-2",
-        backend_kind="local",
-        project_spec=project,
-        experiment_spec=experiment,
-    )
-    RunManifestRepository(storage_bundle.manager).save_manifest(manifest)
+    project_path, _, _ = _persisted_manifest_bundle(tmp_path, run_id="run-report-2")
 
     output_path = tmp_path / "report.tex"
     assert (

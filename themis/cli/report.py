@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+from json import JSONDecodeError
 from pathlib import Path
 import tomllib
 from typing import Any
@@ -84,6 +85,11 @@ def _load_project_spec(path: str) -> ProjectSpec:
         if project_path.suffix == ".json":
             return ProjectSpec.model_validate_json(project_path.read_text())
     except tomllib.TOMLDecodeError as exc:
+        raise SpecValidationError(
+            code=ErrorCode.SCHEMA_MISMATCH,
+            message=f"Failed to parse project config {project_path.name}: {exc}",
+        ) from exc
+    except JSONDecodeError as exc:
         raise SpecValidationError(
             code=ErrorCode.SCHEMA_MISMATCH,
             message=f"Failed to parse project config {project_path.name}: {exc}",
