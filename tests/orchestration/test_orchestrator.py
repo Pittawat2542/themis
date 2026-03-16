@@ -14,6 +14,7 @@ from themis.errors import SpecValidationError
 from themis.orchestration.orchestrator import Orchestrator
 from themis.orchestration.run_manifest import CostEstimate, RunHandle
 from themis.orchestration.task_resolution import resolve_task_stages
+from themis.progress import ProgressConfig, ProgressRendererType
 from themis.records.candidate import CandidateRecord
 from themis.records.evaluation import MetricScore
 from themis.records.evaluation import EvaluationRecord
@@ -54,7 +55,13 @@ from themis.orchestration.projection_handler import ProjectionHandler
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.storage.projection_repo import SqliteProjectionRepository
 from themis.storage._protocols import StorageConnectionManager
-from themis.types.enums import ErrorCode, ErrorWhere, RecordStatus, DatasetSource
+from themis.types.enums import (
+    ErrorCode,
+    ErrorWhere,
+    RecordStatus,
+    DatasetSource,
+    RunStage,
+)
 from themis.types.events import (
     TrialEvent,
     TrialEventType,
@@ -824,7 +831,7 @@ def test_orchestrator_plan_returns_manifest_with_stage_work_items(tmp_path) -> N
 
 
 @pytest.mark.parametrize("failed_stage", ["transform", "evaluation"])
-def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
+def test_orchestrator_plan_marks_failed_overlay_work_items_failed(
     tmp_path,
     failed_stage: str,
 ) -> None:
@@ -973,7 +980,69 @@ def test_orchestrator_plan_keeps_failed_overlay_work_items_pending(
     }
 
     assert statuses["generation"] == "completed"
-    assert statuses[failed_stage] == "pending"
+    assert statuses[failed_stage] == "failed"
+
+
+def test_orchestrator_plan_marks_failed_generation_work_items_failed(tmp_path) -> None:
+    registry, _engine = _build_registry()
+    project = _build_project_spec(tmp_path)
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_loader=SingleItemDatasetLoader(),
+    )
+    experiment = _build_experiment().model_copy(update={"num_samples": 1})
+    bundle = orchestrator.export_generation_bundle(experiment)
+    trial_spec = bundle.items[0].trial_spec
+    candidate_id = bundle.items[0].candidate_id
+    event_repo = SqliteEventRepository(
+        cast(StorageConnectionManager, orchestrator.db_manager)
+    )
+
+    event_repo.save_spec(trial_spec)
+    for event in [
+        TrialEvent(
+            trial_hash=trial_spec.spec_hash,
+            event_seq=1,
+            event_id="evt_1",
+            event_type=TrialEventType.CANDIDATE_STARTED,
+            candidate_id=candidate_id,
+            payload={"sample_index": 0},
+        ),
+        TrialEvent(
+            trial_hash=trial_spec.spec_hash,
+            event_seq=2,
+            event_id="evt_2",
+            event_type=TrialEventType.CANDIDATE_FAILED,
+            candidate_id=candidate_id,
+            stage=TimelineStage.INFERENCE,
+            status=RecordStatus.ERROR,
+            error=ErrorRecord(
+                where=ErrorWhere.INFERENCE,
+                code=ErrorCode.PROVIDER_TIMEOUT,
+                message="provider timeout",
+                retryable=True,
+                details={},
+            ),
+        ),
+        TrialEvent(
+            trial_hash=trial_spec.spec_hash,
+            event_seq=3,
+            event_id="evt_3",
+            event_type=TrialEventType.TRIAL_COMPLETED,
+            payload={"status": "error"},
+        ),
+    ]:
+        event_repo.append_event(event)
+
+    manifest = orchestrator.plan(experiment)
+    statuses: dict[str, str] = {
+        item.stage: item.status
+        for item in manifest.work_items
+        if item.trial_hash == trial_spec.spec_hash and item.candidate_id == candidate_id
+    }
+
+    assert statuses["generation"] == "failed"
 
 
 def test_orchestrator_diff_specs_reports_changed_trials_and_stage_hashes(
@@ -1200,6 +1269,140 @@ def test_orchestrator_submit_preserves_pending_handles_for_batch_backend(
     assert isinstance(resumed, RunHandle)
     assert resumed.run_id == handle.run_id
     assert resumed.status == "pending"
+
+
+def test_orchestrator_get_run_progress_reports_pending_batch_work(tmp_path) -> None:
+    registry, _engine = _build_registry()
+    project = _build_batch_project_spec(tmp_path)
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    handle = orchestrator.submit(_build_experiment(), runtime=RuntimeContext())
+    snapshot = orchestrator.get_run_progress(handle.run_id)
+
+    assert snapshot is not None
+    assert snapshot.run_id == handle.run_id
+    assert snapshot.active_stage == RunStage.GENERATION
+    assert snapshot.processed_items == 0
+    assert snapshot.remaining_items == handle.total_work_items
+    assert snapshot.stage_counts[RunStage.GENERATION].pending_items == 4
+    assert snapshot.stage_counts[RunStage.TRANSFORM].pending_items == 4
+    assert snapshot.stage_counts[RunStage.EVALUATION].pending_items == 4
+
+
+def test_orchestrator_run_emits_progress_snapshots_to_callback(tmp_path) -> None:
+    registry, _engine = _build_registry()
+    project = _build_project_spec(tmp_path)
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+    snapshots = []
+
+    result = orchestrator.run(
+        _build_experiment(),
+        runtime=RuntimeContext(),
+        progress=ProgressConfig(
+            renderer=ProgressRendererType.LOG,
+            callback=snapshots.append,
+        ),
+    )
+
+    assert isinstance(result, ExperimentResult)
+    assert snapshots
+    assert snapshots[0].remaining_items == 12
+    assert snapshots[-1].remaining_items == 0
+    assert snapshots[-1].processed_items == 12
+
+    persisted = orchestrator.get_run_progress(snapshots[-1].run_id)
+    assert persisted is not None
+    assert persisted.remaining_items == 0
+
+
+def test_orchestrator_submit_preserves_terminal_progress_snapshot(tmp_path) -> None:
+    registry, _engine = _build_registry()
+    project = _build_project_spec(tmp_path)
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+    snapshots = []
+
+    handle = orchestrator.submit(
+        _build_experiment(),
+        runtime=RuntimeContext(),
+        progress=ProgressConfig(callback=snapshots.append),
+    )
+
+    persisted = orchestrator.get_run_progress(handle.run_id)
+
+    assert persisted is not None
+    assert persisted.remaining_items == 0
+    assert persisted.processed_items == snapshots[-1].processed_items
+    assert persisted.ended_at == snapshots[-1].ended_at
+
+
+def test_orchestrator_submit_preserves_failed_progress_snapshot(tmp_path) -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine("mock", RunnableEngine())
+    registry.register_extractor("mock-extractor", FailingExtractor())
+    registry.register_metric("em", RunnableMetric())
+    project = _build_project_spec(tmp_path)
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_loader=SingleItemDatasetLoader(),
+    )
+    snapshots = []
+
+    handle = orchestrator.submit(
+        _build_experiment().model_copy(update={"num_samples": 1}),
+        runtime=RuntimeContext(),
+        progress=ProgressConfig(callback=snapshots.append),
+    )
+
+    persisted = orchestrator.get_run_progress(handle.run_id)
+
+    assert persisted is not None
+    assert persisted.stage_counts[RunStage.TRANSFORM].failed_items == 1
+    assert persisted.ended_at == snapshots[-1].ended_at
+
+
+@pytest.mark.parametrize("entrypoint_name", ["generate", "transform", "evaluate"])
+def test_stage_entrypoints_preserve_full_run_progress_snapshot(
+    tmp_path,
+    entrypoint_name: str,
+) -> None:
+    registry, _engine = _build_registry()
+    project = _build_project_spec(tmp_path)
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+    experiment = _build_experiment()
+    orchestrator.run(experiment, runtime=RuntimeContext())
+    snapshots = []
+
+    getattr(orchestrator, entrypoint_name)(
+        experiment,
+        runtime=RuntimeContext(),
+        progress=ProgressConfig(callback=snapshots.append),
+    )
+
+    persisted = orchestrator.get_run_progress(snapshots[-1].run_id)
+
+    assert persisted is not None
+    assert set(persisted.stage_counts) == {
+        RunStage.GENERATION,
+        RunStage.TRANSFORM,
+        RunStage.EVALUATION,
+    }
 
 
 def test_orchestrator_estimate_reports_best_effort_work_item_and_token_counts(
