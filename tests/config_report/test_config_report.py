@@ -83,6 +83,7 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     assert document.header.entrypoint == "tests:leaf"
     assert document.header.root_type == "InferenceParamsSpec"
     assert root.class_name == "InferenceParamsSpec"
+    assert root.source_file is not None
     assert root.source_file.endswith("themis/specs/experiment.py")
     assert root.source_line == 79
 
@@ -94,6 +95,7 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     assert max_tokens.default == 1024
     assert max_tokens.has_default is True
     assert max_tokens.doc == "Max string length generated."
+    assert max_tokens.source_file is not None
     assert max_tokens.source_file.endswith("themis/specs/experiment.py")
     assert max_tokens.source_line == 89
     assert max_tokens.declared_in == "InferenceParamsSpec"

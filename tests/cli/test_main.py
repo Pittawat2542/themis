@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 from themis import (
     DatasetSpec,
@@ -47,6 +48,28 @@ def _build_experiment() -> ExperimentSpec:
         prompt_templates=[PromptTemplateSpec(id="baseline", messages=[])],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
     )
+
+
+class _StubParser:
+    def __init__(
+        self, *, parse_exit: object = None, handler_exit: object = None
+    ) -> None:
+        self._parse_exit = parse_exit
+        self._handler_exit = handler_exit
+
+    def parse_args(self, argv: list[str] | None) -> object:
+        del argv
+        if self._parse_exit is not None:
+            raise SystemExit(self._parse_exit)
+
+        def _handler(args: object) -> int:
+            del args
+            raise SystemExit(self._handler_exit)
+
+        return SimpleNamespace(handler=_handler)
+
+    def error(self, message: str) -> None:
+        raise AssertionError(message)
 
 
 def test_parent_cli_dispatches_quickcheck_help(capsys) -> None:
@@ -203,3 +226,18 @@ def test_parent_cli_dispatches_report_from_installed_entrypoint(
     assert main() == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["header"]["project_name"] == "factory-report-demo"
+
+
+def test_parent_cli_normalizes_system_exit_codes(monkeypatch) -> None:
+    monkeypatch.setattr("themis.cli.main.build_parser", lambda: _StubParser())
+
+    assert main(["ignored"]) == 0
+
+
+def test_parent_cli_maps_string_system_exit_to_shell_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "themis.cli.main.build_parser",
+        lambda: _StubParser(handler_exit="report generation failed"),
+    )
+
+    assert main(["ignored"]) == 1

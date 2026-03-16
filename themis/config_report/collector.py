@@ -9,7 +9,7 @@ from enum import Enum
 import inspect
 from pathlib import Path
 import subprocess
-from typing import get_args, get_origin
+from typing import Any, TypeGuard, cast, get_args, get_origin
 
 from pydantic import BaseModel, SecretStr
 from pydantic.fields import FieldInfo
@@ -88,17 +88,17 @@ def _is_scalar(value: object) -> bool:
     )
 
 
-def _is_mapping(value: object) -> bool:
+def _is_mapping(value: object) -> TypeGuard[Mapping[object, object]]:
     return isinstance(value, Mapping)
 
 
-def _is_sequence(value: object) -> bool:
+def _is_sequence(value: object) -> TypeGuard[Sequence[object]]:
     return isinstance(value, Sequence) and not isinstance(
         value, (str, bytes, bytearray)
     )
 
 
-def _is_pydantic_model(value: object) -> bool:
+def _is_pydantic_model(value: object) -> TypeGuard[BaseModel]:
     return isinstance(value, BaseModel)
 
 
@@ -626,7 +626,7 @@ class ConfigReportCollector:
         parameters: list[ConfigReportParameter] = []
         children: list[ConfigReportNode] = []
 
-        for field in dataclasses.fields(value):
+        for field in dataclasses.fields(cast(Any, value)):
             if field.name in options.hidden_fields:
                 continue
             field_value = getattr(value, field.name)

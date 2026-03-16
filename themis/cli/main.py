@@ -8,6 +8,16 @@ from themis.cli import quickcheck as quickcheck_cli
 from themis.cli import report as report_cli
 
 
+def _system_exit_code(code: object) -> int:
+    """Normalize ``SystemExit.code`` to a shell exit status."""
+
+    if code is None:
+        return 0
+    if isinstance(code, int):
+        return code
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level Themis CLI parser."""
 
@@ -26,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
-        return int(exc.code)
+        return _system_exit_code(exc.code)
 
     handler = getattr(args, "handler", None)
     if handler is None:
@@ -35,4 +45,4 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return handler(args)
     except SystemExit as exc:
-        return int(exc.code)
+        return _system_exit_code(exc.code)
