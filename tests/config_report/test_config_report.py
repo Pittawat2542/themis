@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from pathlib import Path
-from typing import get_args
+from typing import get_args, overload
 
 from themis import (
     DatasetSpec,
@@ -21,7 +21,11 @@ from themis import (
     TaskSpec,
     generate_config_report,
 )
-from themis.config_report import build_config_report_document, render_config_report
+from themis.config_report import (
+    build_config_report_document,
+    config_reportable,
+    render_config_report,
+)
 from themis.config_report.renderers import ConfigReportRenderer
 from themis.config_report.types import ConfigReportFormat, ConfigReportVerbosity
 from themis.types.enums import DatasetSource, PromptRole
@@ -72,6 +76,14 @@ def _find_child(node, name: str):
         if child.name == name:
             return child
     raise AssertionError(f"missing child {name!r}")
+
+
+@overload
+def _normalized_path(path: None) -> None: ...
+
+
+@overload
+def _normalized_path(path: str) -> str: ...
 
 
 def _normalized_path(path: str | None) -> str | None:
@@ -444,6 +456,126 @@ def test_build_config_report_document_tolerates_pydantic_model_without_source(
     assert root.class_name == "DynamicModel"
     assert root.source_file is None
     assert root.source_line is None
+
+
+def test_build_config_report_document_redacts_defaults_and_nested_children() -> None:
+    @dataclasses.dataclass(frozen=True)
+    class SecretChild:
+        token: str = "nested-secret"
+
+    @config_reportable(redacted_fields={"secret_value", "secret_child"})
+    @dataclasses.dataclass(frozen=True)
+    class SecretConfig:
+        secret_value: str = "top-secret"
+        secret_child: SecretChild = dataclasses.field(default_factory=SecretChild)
+
+    root = build_config_report_document(SecretConfig(secret_child=SecretChild())).root
+
+    secret_value = next(
+        parameter for parameter in root.parameters if parameter.name == "secret_value"
+    )
+    secret_child = _find_child(root, "secret_child")
+    child_token = next(
+        parameter for parameter in secret_child.parameters if parameter.name == "token"
+    )
+
+    assert secret_value.value == "***REDACTED***"
+    assert secret_value.default == "***REDACTED***"
+    assert child_token.value == "***REDACTED***"
+
+
+def test_build_config_report_document_reports_default_factory_without_calling_it() -> (
+    None
+):
+    factory_calls = 0
+
+    def noisy_factory() -> str:
+        nonlocal factory_calls
+        factory_calls += 1
+        return "generated"
+
+    @dataclasses.dataclass(frozen=True)
+    class FactoryConfig:
+        value: str = dataclasses.field(default_factory=noisy_factory)
+
+    root = build_config_report_document(FactoryConfig(value="explicit")).root
+    value = next(
+        parameter for parameter in root.parameters if parameter.name == "value"
+    )
+
+    assert factory_calls == 0
+    assert value.has_default is True
+    assert value.default == "<factory: noisy_factory>"
+
+
+def test_default_verbosity_uses_mro_precedence_for_visibility_overrides() -> None:
+    @config_reportable(paper_fields={"foo"})
+    @dataclasses.dataclass(frozen=True)
+    class BaseVisibilityConfig:
+        foo: int = 1
+
+    @config_reportable(non_paper_fields={"foo"})
+    @dataclasses.dataclass(frozen=True)
+    class DerivedVisibilityConfig(BaseVisibilityConfig):
+        pass
+
+    payload = json.loads(
+        generate_config_report(
+            DerivedVisibilityConfig(),
+            format="json",
+            verbosity="default",
+        )
+    )
+
+    assert payload["root"]["parameters"] == []
+
+
+def test_default_verbosity_does_not_hide_ordinary_param_by_name() -> None:
+    @dataclasses.dataclass(frozen=True)
+    class OrdinaryParamConfig:
+        ordinary_param: int = 1
+
+    payload = json.loads(
+        generate_config_report(
+            OrdinaryParamConfig(ordinary_param=2),
+            format="json",
+            verbosity="default",
+        )
+    )
+
+    assert {parameter["name"] for parameter in payload["root"]["parameters"]} == {
+        "ordinary_param"
+    }
+
+
+def test_latex_renderer_escapes_special_tokens_without_double_escaping() -> None:
+    latex_output = generate_config_report(
+        {"project": {"path": r"C:\tmp\demo", "marker": "~^"}},
+        format="latex",
+    )
+
+    assert r"\textbackslash{}" in latex_output
+    assert r"\textasciitilde{}" in latex_output
+    assert r"\textasciicircum{}" in latex_output
+    assert r"\textbackslash\{\}" not in latex_output
+
+
+def test_load_source_index_respects_declared_file_encoding(tmp_path: Path) -> None:
+    from themis.config_report.source_index import load_source_index
+
+    source_path = tmp_path / "latin1_module.py"
+    source_path.write_bytes(
+        (
+            b"# -*- coding: latin-1 -*-\n"
+            b"class EncodedConfig:\n"
+            b"    field: str = 'caf\xe9'\n"
+        )
+    )
+
+    class_info = load_source_index(str(source_path)).get_class_info("EncodedConfig")
+
+    assert class_info is not None
+    assert class_info.field_lines["field"] == 3
 
 
 class _XmlRenderer:

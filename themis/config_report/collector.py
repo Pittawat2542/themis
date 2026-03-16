@@ -159,10 +159,10 @@ def _project_name(config: object) -> str | None:
 def _safe_default_factory(default_factory: object) -> JSONValueType | None:
     if not callable(default_factory):
         return None
-    try:
-        return _json_safe(default_factory())
-    except Exception:
-        return "<factory>"
+    name = getattr(default_factory, "__name__", None)
+    if isinstance(name, str) and name:
+        return f"<factory: {name}>"
+    return f"<factory: {default_factory!r}>"
 
 
 def _pydantic_default(field_info: FieldInfo) -> tuple[JSONValueType | None, bool]:
@@ -260,7 +260,7 @@ def _parameter(
         name=name,
         value=_json_safe(value, redacted=redacted),
         type_repr=_display_type(annotation),
-        default=default,
+        default=_json_safe(default, redacted=redacted) if has_default else default,
         has_default=has_default,
         source_file=source_file,
         source_line=source_line,
@@ -350,6 +350,7 @@ class ConfigReportCollector:
             path="$",
             depth=0,
             parent_path=None,
+            redacted=False,
         )
         header = ConfigReportHeader(
             generated_at=datetime.now(timezone.utc).isoformat(),
@@ -368,6 +369,7 @@ class ConfigReportCollector:
         path: str,
         depth: int,
         parent_path: str | None,
+        redacted: bool,
     ) -> ConfigReportNode:
         identity = id(value)
         if not _is_scalar(value) and identity in self._active_ids:
@@ -397,23 +399,48 @@ class ConfigReportCollector:
         try:
             if _is_mapping(value):
                 node = self._collect_mapping(
-                    value, name=name, path=path, depth=depth, parent_path=parent_path
+                    value,
+                    name=name,
+                    path=path,
+                    depth=depth,
+                    parent_path=parent_path,
+                    redacted=redacted,
                 )
             elif _is_sequence(value):
                 node = self._collect_sequence(
-                    value, name=name, path=path, depth=depth, parent_path=parent_path
+                    value,
+                    name=name,
+                    path=path,
+                    depth=depth,
+                    parent_path=parent_path,
+                    redacted=redacted,
                 )
             elif _is_pydantic_model(value):
                 node = self._collect_pydantic(
-                    value, name=name, path=path, depth=depth, parent_path=parent_path
+                    value,
+                    name=name,
+                    path=path,
+                    depth=depth,
+                    parent_path=parent_path,
+                    redacted=redacted,
                 )
             elif dataclasses.is_dataclass(value):
                 node = self._collect_dataclass(
-                    value, name=name, path=path, depth=depth, parent_path=parent_path
+                    value,
+                    name=name,
+                    path=path,
+                    depth=depth,
+                    parent_path=parent_path,
+                    redacted=redacted,
                 )
             elif _is_plain_object(value):
                 node = self._collect_plain_object(
-                    value, name=name, path=path, depth=depth, parent_path=parent_path
+                    value,
+                    name=name,
+                    path=path,
+                    depth=depth,
+                    parent_path=parent_path,
+                    redacted=redacted,
                 )
             else:
                 node = ConfigReportNode(
@@ -427,7 +454,7 @@ class ConfigReportCollector:
                     parameters=[
                         ConfigReportParameter(
                             name="value",
-                            value=_json_safe(value),
+                            value=_json_safe(value, redacted=redacted),
                             type_repr=_display_type(type(value)),
                         )
                     ],
@@ -445,6 +472,7 @@ class ConfigReportCollector:
         path: str,
         depth: int,
         parent_path: str | None,
+        redacted: bool,
     ) -> ConfigReportNode:
         parameters: list[ConfigReportParameter] = []
         children: list[ConfigReportNode] = []
@@ -455,7 +483,7 @@ class ConfigReportCollector:
                 parameters.append(
                     ConfigReportParameter(
                         name=key_name,
-                        value=_json_safe(item),
+                        value=_json_safe(item, redacted=redacted),
                         type_repr=_display_type(type(item)),
                     )
                 )
@@ -467,6 +495,7 @@ class ConfigReportCollector:
                         path=child_path,
                         depth=depth + 1,
                         parent_path=path,
+                        redacted=redacted,
                     )
                 )
         return ConfigReportNode(
@@ -493,6 +522,7 @@ class ConfigReportCollector:
         path: str,
         depth: int,
         parent_path: str | None,
+        redacted: bool,
     ) -> ConfigReportNode:
         parameters: list[ConfigReportParameter] = []
         children: list[ConfigReportNode] = []
@@ -503,7 +533,7 @@ class ConfigReportCollector:
                 parameters.append(
                     ConfigReportParameter(
                         name=item_name,
-                        value=_json_safe(item),
+                        value=_json_safe(item, redacted=redacted),
                         type_repr=_display_type(type(item)),
                     )
                 )
@@ -515,6 +545,7 @@ class ConfigReportCollector:
                         path=item_path,
                         depth=depth + 1,
                         parent_path=path,
+                        redacted=redacted,
                     )
                 )
         return ConfigReportNode(
@@ -541,6 +572,7 @@ class ConfigReportCollector:
         path: str,
         depth: int,
         parent_path: str | None,
+        redacted: bool,
     ) -> ConfigReportNode:
         cls = value.__class__
         options = get_config_report_options(cls)
@@ -565,6 +597,11 @@ class ConfigReportCollector:
             )
             child_path = f"{path}.{field_name}" if path != "$" else f"$.{field_name}"
             if is_child:
+                child_redacted = (
+                    redacted
+                    or field_name in options.redacted_fields
+                    or _looks_secret(field_name)
+                )
                 children.append(
                     self._collect_node(
                         field_value,
@@ -572,6 +609,7 @@ class ConfigReportCollector:
                         path=child_path,
                         depth=depth + 1,
                         parent_path=path,
+                        redacted=child_redacted,
                     )
                 )
                 continue
@@ -591,7 +629,8 @@ class ConfigReportCollector:
                         paper_fields=options.paper_fields,
                         non_paper_fields=options.non_paper_fields,
                     ),
-                    redacted=field_name in options.redacted_fields
+                    redacted=redacted
+                    or field_name in options.redacted_fields
                     or _looks_secret(field_name),
                 )
             )
@@ -616,6 +655,7 @@ class ConfigReportCollector:
         path: str,
         depth: int,
         parent_path: str | None,
+        redacted: bool,
     ) -> ConfigReportNode:
         cls = value.__class__
         options = get_config_report_options(cls)
@@ -640,6 +680,11 @@ class ConfigReportCollector:
             )
             child_path = f"{path}.{field.name}" if path != "$" else f"$.{field.name}"
             if is_child:
+                child_redacted = (
+                    redacted
+                    or field.name in options.redacted_fields
+                    or _looks_secret(field.name)
+                )
                 children.append(
                     self._collect_node(
                         field_value,
@@ -647,6 +692,7 @@ class ConfigReportCollector:
                         path=child_path,
                         depth=depth + 1,
                         parent_path=path,
+                        redacted=child_redacted,
                     )
                 )
                 continue
@@ -666,7 +712,8 @@ class ConfigReportCollector:
                         paper_fields=options.paper_fields,
                         non_paper_fields=options.non_paper_fields,
                     ),
-                    redacted=field.name in options.redacted_fields
+                    redacted=redacted
+                    or field.name in options.redacted_fields
                     or _looks_secret(field.name),
                 )
             )
@@ -691,6 +738,7 @@ class ConfigReportCollector:
         path: str,
         depth: int,
         parent_path: str | None,
+        redacted: bool,
     ) -> ConfigReportNode:
         cls = value.__class__
         options = get_config_report_options(cls)
@@ -713,6 +761,11 @@ class ConfigReportCollector:
             )
             child_path = f"{path}.{field_name}" if path != "$" else f"$.{field_name}"
             if is_child:
+                child_redacted = (
+                    redacted
+                    or field_name in options.redacted_fields
+                    or _looks_secret(field_name)
+                )
                 children.append(
                     self._collect_node(
                         field_value,
@@ -720,6 +773,7 @@ class ConfigReportCollector:
                         path=child_path,
                         depth=depth + 1,
                         parent_path=path,
+                        redacted=child_redacted,
                     )
                 )
                 continue
@@ -739,7 +793,8 @@ class ConfigReportCollector:
                         paper_fields=options.paper_fields,
                         non_paper_fields=options.non_paper_fields,
                     ),
-                    redacted=field_name in options.redacted_fields
+                    redacted=redacted
+                    or field_name in options.redacted_fields
                     or _looks_secret(field_name),
                 )
             )

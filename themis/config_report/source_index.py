@@ -113,7 +113,8 @@ def load_source_index(path: str) -> SourceIndex:
     """Parse and index one Python source file."""
 
     file_path = Path(path)
-    source = file_path.read_text()
+    with tokenize.open(file_path) as fh:
+        source = fh.read()
     lines = source.splitlines()
     tree = ast.parse(source)
 

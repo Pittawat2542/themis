@@ -58,12 +58,18 @@ def get_config_report_options(cls: type[object]) -> ConfigReportOptions:
         options = getattr(base, "__config_report_options__", None)
         if options is None:
             continue
+        new_paper = (merged.paper_fields | set(options.paper_fields)) - set(
+            options.non_paper_fields
+        )
+        new_non_paper = (merged.non_paper_fields | set(options.non_paper_fields)) - set(
+            options.paper_fields
+        )
         merged = ConfigReportOptions(
             display_name=options.display_name or merged.display_name,
             hidden_fields=merged.hidden_fields | set(options.hidden_fields),
             child_fields=merged.child_fields | set(options.child_fields),
             redacted_fields=merged.redacted_fields | set(options.redacted_fields),
-            paper_fields=merged.paper_fields | set(options.paper_fields),
-            non_paper_fields=merged.non_paper_fields | set(options.non_paper_fields),
+            paper_fields=new_paper,
+            non_paper_fields=new_non_paper,
         )
     return merged

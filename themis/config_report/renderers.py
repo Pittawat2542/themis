@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Protocol
 
 from themis.config_report.models import ConfigReportDocument, ConfigReportNode
@@ -163,8 +164,8 @@ def _latex_escape(value: object) -> str:
         "~": r"\textasciitilde{}",
         "^": r"\textasciicircum{}",
     }
-    for source, target in replacements.items():
-        text = text.replace(source, target)
+    pattern = re.compile("|".join(re.escape(source) for source in replacements))
+    text = pattern.sub(lambda match: replacements[match.group(0)], text)
     return text.replace("\n", r"\\")
 
 

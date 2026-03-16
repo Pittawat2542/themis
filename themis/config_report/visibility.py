@@ -78,15 +78,6 @@ def _has_meaningful_extras(parameter: ConfigReportParameter) -> bool:
     )
 
 
-def _uses_explicit_visibility(parameter: ConfigReportParameter) -> bool:
-    explicit_visibility = _explicit_default_visibility(parameter)
-    if explicit_visibility is True:
-        return True
-    if explicit_visibility is False:
-        return False
-    return False
-
-
 def _is_meaningful_named_parameter(
     node: ConfigReportNode,
     parameter: ConfigReportParameter,
@@ -99,7 +90,7 @@ def _is_meaningful_named_parameter(
         return True
     if parameter.name == "extras" and (_has_meaningful_extras(parameter)):
         return True
-    if parameter.name in {"metadata", "ordinary_param"}:
+    if parameter.name == "metadata":
         return False
     return None
 
