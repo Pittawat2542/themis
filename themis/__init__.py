@@ -1,6 +1,7 @@
 """Curated public package surface for the current Themis runtime."""
 
 from themis._version import __version__
+from themis.config_report import generate_config_report
 from themis.errors import ThemisError
 from themis.orchestration.orchestrator import Orchestrator
 from themis.runtime import ExperimentResult
@@ -60,4 +61,5 @@ __all__ = [
     "RuntimeContext",
     "PluginRegistry",
     "ThemisError",
+    "generate_config_report",
 ]

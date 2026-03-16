@@ -6,6 +6,7 @@ import argparse
 import sqlite3
 from pathlib import Path
 from statistics import mean
+from typing import Any
 
 from themis.overlays import OverlaySelection
 
@@ -16,9 +17,8 @@ def _connect(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="themis-quickcheck")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+def add_quickcheck_arguments(subparsers: argparse._SubParsersAction[Any]) -> None:
+    """Attach quickcheck subcommands to an argparse subparser collection."""
 
     failures = subparsers.add_parser("failures")
     failures.add_argument("--db", required=True)
@@ -36,13 +36,37 @@ def _build_parser() -> argparse.ArgumentParser:
     latency.add_argument("--db", required=True)
     latency.add_argument("--transform-hash")
     latency.add_argument("--evaluation-hash")
+
+
+def configure_quickcheck_parser(
+    parser: argparse.ArgumentParser,
+) -> argparse.ArgumentParser:
+    """Configure one parser to serve the quickcheck CLI."""
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    add_quickcheck_arguments(subparsers)
+    parser.set_defaults(handler=run_with_args, _parser=parser)
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run the quickcheck CLI and dispatch to the selected summary command."""
-    parser = _build_parser()
-    args = parser.parse_args(argv)
+def build_parser(*, prog: str = "themis-quickcheck") -> argparse.ArgumentParser:
+    """Build the quickcheck CLI parser."""
+
+    parser = argparse.ArgumentParser(prog=prog)
+    return configure_quickcheck_parser(parser)
+
+
+def add_quickcheck_subparser(
+    subparsers: argparse._SubParsersAction[Any],
+) -> argparse.ArgumentParser:
+    """Add the quickcheck command to a parent CLI."""
+
+    parser = subparsers.add_parser("quickcheck")
+    return configure_quickcheck_parser(parser)
+
+
+def run_with_args(args: argparse.Namespace) -> int:
+    """Execute the parsed quickcheck command."""
 
     db_path = Path(args.db)
     with _connect(str(db_path)) as conn:
@@ -66,8 +90,15 @@ def main(argv: list[str] | None = None) -> int:
                 transform_hash=args.transform_hash,
                 evaluation_hash=args.evaluation_hash,
             )
-    parser.error("Unknown command.")
     return 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the quickcheck CLI and dispatch to the selected summary command."""
+
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return run_with_args(args)
 
 
 def _run_failures(

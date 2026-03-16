@@ -15,6 +15,7 @@ Themis centers on a small public surface:
 - `PluginRegistry` for engines, extractors, metrics, judges, and hooks
 - `Orchestrator` for planning, running, and materializing trials
 - `ExperimentResult` for timelines, reports, and paired comparisons
+- `generate_config_report(...)` for reproducibility-focused config snapshots
 - `themis-quickcheck` for fast SQLite summary inspection
 
 ## Why Themis
@@ -24,6 +25,7 @@ Themis centers on a small public surface:
 - **Extensible runtime**: register your own engines, extractors, metrics, judges, and hooks.
 - **Inspectable outputs**: read trials, timelines, reports, and paired comparisons from one result object.
 - **Predictable resume behavior**: completed trials are skipped when storage, specs, and revision match.
+- **Config-as-documentation reporting**: snapshot nested experiment parameters into JSON, YAML, Markdown, or LaTeX.
 
 ## Installation
 
@@ -81,6 +83,29 @@ Runnable examples live in [`examples/`](examples/):
 - `05_resume_run.py`
 - `06_hooks_and_timeline.py`
 - `07_judge_metric.py`
+
+## Config Reports
+
+Use `generate_config_report(...)` when you need a human-readable snapshot of the
+exact nested config used for an experiment:
+
+```python
+from pathlib import Path
+
+from themis import generate_config_report
+
+bundle = {"project": project, "experiment": experiment}
+markdown = generate_config_report(bundle, format="markdown")
+latex = generate_config_report(bundle, format="latex", output=Path("config-report.tex"))
+full_json = generate_config_report(bundle, format="json", verbosity="full")
+```
+
+The same collected structure can be rendered as `json`, `yaml`, `markdown`, or
+`latex`, with `verbosity="default"` for a paper-facing summary and
+`verbosity="full"` for the exhaustive view. Source metadata is best-effort for
+dynamic or third-party classes. Custom formats can be registered with
+`register_config_report_renderer(...)`. For CLI usage and a full worked example, see
+[docs/guides/config-reports.md](docs/guides/config-reports.md).
 
 ## Documentation
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from themis.cli.quickcheck import main
+from argparse import Namespace
+
+from themis.cli.quickcheck import build_parser, main, run_with_args
 from themis.storage.sqlite_schema import DatabaseManager
 
 
@@ -281,3 +283,32 @@ def test_quickcheck_failures_can_select_evaluation_overlay(tmp_path, capsys):
     assert "trial_eval_err" in failures_output
     assert "ev:eval_failed" in failures_output
     assert "metric failed" in failures_output
+
+
+def test_quickcheck_parser_sets_parser_default() -> None:
+    args = build_parser().parse_args(["failures", "--db", "example.db"])
+
+    assert args._parser.prog == "themis-quickcheck"
+
+
+def test_quickcheck_run_with_args_returns_error_code_for_unknown_command(
+    tmp_path,
+) -> None:
+    db_path = tmp_path / "quickcheck_empty.db"
+    manager = DatabaseManager(f"sqlite:///{db_path}")
+    manager.initialize()
+
+    assert (
+        run_with_args(
+            Namespace(
+                command="unknown",
+                db=str(db_path),
+                limit=10,
+                transform_hash=None,
+                evaluation_hash=None,
+                metric=None,
+                task=None,
+            )
+        )
+        == 2
+    )

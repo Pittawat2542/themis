@@ -15,5 +15,6 @@ to [Tutorials](../tutorials/index.md) instead.
 - [Evolve an Experiment](evolve-an-experiment.md)
 - [Scale Execution](scaling-execution.md)
 - [Compare and Export Results](compare-and-export.md)
+- [Generate Config Reports](config-reports.md)
 - [Resume and Inspect Runs](resume-and-inspect.md)
 - [Use the Quickcheck CLI](quickcheck.md)

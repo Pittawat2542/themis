@@ -145,6 +145,7 @@ nav:
       - Evolve an Experiment: guides/evolve-an-experiment.md
       - Scale Execution: guides/scaling-execution.md
       - Compare and Export Results: guides/compare-and-export.md
+      - Generate Config Reports: guides/config-reports.md
       - Use the Quickcheck CLI: guides/quickcheck.md
 
   - API Reference:
@@ -160,6 +161,7 @@ nav:
       - Records: api-reference/records.md
       - Storage: api-reference/storage.md
       - Reporting & Stats: api-reference/reporting-and-stats.md
+      - Config Reports: api-reference/config-reports.md
       - CLI: api-reference/cli.md
 
   - Changelog:

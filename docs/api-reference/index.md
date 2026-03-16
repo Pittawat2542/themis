@@ -18,7 +18,8 @@ need exact fields, signatures, and docstrings.
 | Records | immutable output models |
 | Storage | SQLite repositories and artifact storage |
 | Reporting & Stats | report assembly, exporters, and statistical comparisons |
-| CLI | the `themis-quickcheck` entry point |
+| Config Reports | collection models, typed render APIs, and renderer registration |
+| CLI | the `themis` parent CLI plus `themis-quickcheck` |
 
 !!! note
     The generated docs are only as good as the source docstrings. This docset
