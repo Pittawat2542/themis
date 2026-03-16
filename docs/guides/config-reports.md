@@ -55,8 +55,8 @@ The parent CLI now exposes config reporting under `themis report`.
 ### Factory Mode
 
 Use this when your experiment config is defined directly in Python and you want
-to import a factory that returns either a config object or a `{project,
-experiment}` bundle:
+to import a factory that returns either a config object or a dictionary with
+keys `"project"` and `"experiment"` mapped to the corresponding variables:
 
 ```bash
 themis report \

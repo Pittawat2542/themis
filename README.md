@@ -93,7 +93,6 @@ exact nested config used for an experiment:
 from pathlib import Path
 
 from themis import generate_config_report
-from themis.config_report import register_config_report_renderer
 
 bundle = {"project": project, "experiment": experiment}
 markdown = generate_config_report(bundle, format="markdown")

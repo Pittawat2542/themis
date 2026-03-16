@@ -34,11 +34,11 @@ into package internals unless the public package surface requires it.
 
 - Start from the smallest bundled pattern in these references, then adapt it
   instead of inventing a new pattern.
-- Prefer `from themis import generate_config_report` for one-shot export helpers
-  and `themis report` when the user wants a CLI artifact instead of Python code.
-  `themis.contracts.protocols`, `themis.progress`, and
-  `themis.specs.foundational` when those are already part of the documented
-  public workflow.
+- Prefer `from themis import generate_config_report` for one-shot export helpers.
+  Use `themis report` when the user wants a CLI artifact instead of Python code.
+- `themis.contracts.protocols`, `themis.progress`, and
+  `themis.specs.foundational` may be imported directly when those modules are
+  part of the documented public workflow.
 - If the current workspace does not contain Themis source code, examples, or
   docs, continue using only this skill's references and the installed package
   surface.
