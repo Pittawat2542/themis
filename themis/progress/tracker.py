@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import threading
 
 from themis.orchestration.run_manifest import RunManifest, StageWorkItem, WorkItemStatus
 from themis.progress.bus import ProgressBus, ProgressEventType
@@ -30,6 +31,7 @@ class RunProgressTracker:
     allowed_stages: frozenset[RunStage] | None = None
     bus: ProgressBus = field(init=False)
     snapshot: RunProgressSnapshot = field(init=False)
+    _lock: threading.RLock = field(init=False, default_factory=threading.RLock)
     _work_items: dict[str, StageWorkItem] = field(init=False, default_factory=dict)
     _generation_ids: dict[tuple[str, int], str] = field(
         init=False, default_factory=dict
@@ -127,25 +129,28 @@ class RunProgressTracker:
         return self._evaluation_ids[key]
 
     def start_run(self) -> None:
-        self._emit(ProgressEventType.RUN_STARTED)
+        with self._lock:
+            self._emit(ProgressEventType.RUN_STARTED)
 
     def stage_started(self) -> None:
-        self._emit(ProgressEventType.STAGE_STARTED)
+        with self._lock:
+            self._emit(ProgressEventType.STAGE_STARTED)
 
     def mark_running(self, work_item_id: str) -> None:
-        started_at = _now_utc()
-        self.manifest_repo.update_work_item(
-            self.manifest.run_id,
-            work_item_id,
-            status=WorkItemStatus.RUNNING,
-            started_at=started_at,
-        )
-        self._update_work_item(
-            work_item_id,
-            status=WorkItemStatus.RUNNING,
-            started_at=started_at,
-        )
-        self._emit(ProgressEventType.WORK_ITEM_STARTED)
+        with self._lock:
+            started_at = _now_utc()
+            self.manifest_repo.update_work_item(
+                self.manifest.run_id,
+                work_item_id,
+                status=WorkItemStatus.RUNNING,
+                started_at=started_at,
+            )
+            self._update_work_item(
+                work_item_id,
+                status=WorkItemStatus.RUNNING,
+                started_at=started_at,
+            )
+            self._emit(ProgressEventType.WORK_ITEM_STARTED)
 
     def mark_finished(
         self,
@@ -155,34 +160,36 @@ class RunProgressTracker:
         last_error_code: str | None = None,
         last_error_message: str | None = None,
     ) -> None:
-        ended_at = _now_utc()
-        self.manifest_repo.update_work_item(
-            self.manifest.run_id,
-            work_item_id,
-            status=status,
-            ended_at=ended_at,
-            last_error_code=last_error_code,
-            last_error_message=last_error_message,
-        )
-        self._update_work_item(
-            work_item_id,
-            status=status,
-            ended_at=ended_at,
-            last_error_code=last_error_code,
-            last_error_message=last_error_message,
-        )
-        self._emit(ProgressEventType.WORK_ITEM_FINISHED)
+        with self._lock:
+            ended_at = _now_utc()
+            self.manifest_repo.update_work_item(
+                self.manifest.run_id,
+                work_item_id,
+                status=status,
+                ended_at=ended_at,
+                last_error_code=last_error_code,
+                last_error_message=last_error_message,
+            )
+            self._update_work_item(
+                work_item_id,
+                status=status,
+                ended_at=ended_at,
+                last_error_code=last_error_code,
+                last_error_message=last_error_message,
+            )
+            self._emit(ProgressEventType.WORK_ITEM_FINISHED)
 
     def finish_run(self) -> None:
-        ended_at = None
-        if self.snapshot.remaining_items == 0:
-            ended_candidates: list[datetime] = []
-            for item in self._work_items.values():
-                if item.ended_at is not None:
-                    ended_candidates.append(item.ended_at)
-            ended_at = max(ended_candidates) if ended_candidates else _now_utc()
-        self.snapshot = self.snapshot.model_copy(update={"ended_at": ended_at})
-        self._emit(ProgressEventType.RUN_FINISHED)
+        with self._lock:
+            ended_at = None
+            if self.snapshot.remaining_items == 0:
+                ended_candidates: list[datetime] = []
+                for item in self._work_items.values():
+                    if item.ended_at is not None:
+                        ended_candidates.append(item.ended_at)
+                ended_at = max(ended_candidates) if ended_candidates else _now_utc()
+            self.snapshot = self.snapshot.model_copy(update={"ended_at": ended_at})
+            self._emit(ProgressEventType.RUN_FINISHED)
 
     def _emit(self, event_type: ProgressEventType) -> None:
         self.bus.emit(event_type, snapshot=self.snapshot)
