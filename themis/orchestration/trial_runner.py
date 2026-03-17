@@ -17,6 +17,7 @@ from themis.orchestration.generation_stage import GenerationStageExecutor
 from themis.orchestration.overlay_stage import OverlayStageExecutor
 from themis.orchestration.runner_events import TrialEventEmitter
 from themis.orchestration.session_preparer import TrialSessionPreparer
+from themis.orchestration.session_preparer import prepare_benchmark_prompt
 from themis.orchestration.runner_state import (
     TrialExecutionSession,
 )
@@ -116,20 +117,25 @@ class TrialRunner:
         """Build the shared execution context for one trial."""
         provenance = self._build_provenance()
         base_runtime = self._coerce_runtime_context(runtime_context)
-        session = self.session_preparer.prepare_trial_session(
-            trial,
-            dataset_context,
-            base_runtime,
-            provenance,
-        )
-        session.resolved_plugins = resolve_trial_plugins(
+        resolved_plugins = resolve_trial_plugins(
             trial,
             self.registry,
-            resolved_stages=session.resolved_stages,
+            resolved_stages=None,
             required_stages=tuple(required_stages)
             if required_stages is not None
             else None,
         )
+        prepared_trial = resolved_plugins.hooks.apply_pre_inference(
+            prepare_benchmark_prompt(trial, dataset_context, base_runtime)
+        )
+        session = self.session_preparer.prepare_trial_session(
+            trial,
+            prepared_trial,
+            dataset_context,
+            base_runtime,
+            provenance,
+        )
+        session.resolved_plugins = resolved_plugins
         return session
 
     def run_generation_candidate(

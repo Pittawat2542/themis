@@ -79,6 +79,7 @@ def _provenance() -> ProvenanceRecord:
 def _session(trial: TrialSpec) -> TrialExecutionSession:
     return TrialExecutionSession(
         trial=trial,
+        prepared_trial=trial,
         dataset_context=DataItemContext(item_id=trial.item_id, payload={}),
         base_runtime=RuntimeContext(),
         provenance=_provenance(),

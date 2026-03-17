@@ -62,6 +62,7 @@ class GenerationStageExecutor:
         """Execute the generation stage for one candidate within a prepared trial."""
         resolved_plugins = session.require_resolved_plugins()
         trial = session.trial
+        prepared_trial = session.prepared_trial
         candidate_id = candidate_hash_for_index(trial, cand_index)
         candidate_events = self.get_trial_events(session.trial_hash, candidate_id)
         terminal_candidate = candidate_from_terminal_events(
@@ -75,7 +76,7 @@ class GenerationStageExecutor:
 
         if not candidate_events:
             prompt_metadata = PromptRenderedEventMetadata(
-                prompt_template_id=trial.prompt.id,
+                prompt_template_id=prepared_trial.prompt.id,
                 rendered_prompt_hash=session.prompt_artifact[1],
                 input_field_map=sorted(session.dataset_context.keys()),
             )
@@ -113,6 +114,7 @@ class GenerationStageExecutor:
                         ),
                     ),
                     cand_index,
+                    prepared_trial=prepared_trial,
                     resolved_generation=resolved_plugins.generation,
                 )
                 stage_results = CandidateStageResults(

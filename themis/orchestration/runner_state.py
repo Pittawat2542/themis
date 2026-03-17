@@ -46,6 +46,7 @@ class TrialExecutionSession:
     """Shared mutable execution state for one trial across candidate workers."""
 
     trial: TrialSpec
+    prepared_trial: TrialSpec
     dataset_context: DatasetContext
     base_runtime: RuntimeContext
     provenance: ProvenanceRecord

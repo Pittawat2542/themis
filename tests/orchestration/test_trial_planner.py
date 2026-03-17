@@ -356,7 +356,7 @@ def test_trial_planner_rejects_non_json_safe_dataset_items():
         planner.plan_experiment(experiment)
 
 
-def test_trial_hash_does_not_change_when_transforms_or_evaluations_change():
+def test_trial_hash_changes_when_transforms_or_evaluations_change():
     task_a = TaskSpec(
         task_id="qa",
         dataset=DatasetSpec(source=DatasetSource.MEMORY),
@@ -377,7 +377,7 @@ def test_trial_hash_does_not_change_when_transforms_or_evaluations_change():
         }
     )
 
-    assert task_a.spec_hash == task_b.spec_hash
+    assert task_a.spec_hash != task_b.spec_hash
 
 
 def test_trial_planner_can_validate_generation_stage_without_transform_or_metric_plugins():

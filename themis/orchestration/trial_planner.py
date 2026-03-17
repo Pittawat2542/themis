@@ -9,7 +9,10 @@ import json
 import random
 from collections.abc import Collection, Mapping, Sequence
 
-from themis.contracts.protocols import DatasetItem, DatasetLoader
+from themis.benchmark.compiler import compile_benchmark
+from themis.benchmark.query import DatasetQuerySpec
+from themis.benchmark.specs import BenchmarkSpec, DatasetSliceSpec
+from themis.contracts.protocols import DatasetItem, DatasetLoader, DatasetProvider
 from themis.errors import SpecValidationError
 from themis.registry.compatibility import (
     TrialStage,
@@ -42,10 +45,25 @@ class TrialPlanner:
     def __init__(
         self,
         dataset_loader: DatasetLoader | None = None,
+        dataset_provider: DatasetProvider | None = None,
         registry: PluginRegistry | None = None,
     ) -> None:
         self.dataset_loader = dataset_loader
+        self.dataset_provider = dataset_provider
         self.registry = registry
+
+    def plan_benchmark(
+        self,
+        benchmark: BenchmarkSpec,
+        *,
+        required_stages: Collection[TrialStage] | None = None,
+    ) -> list[PlannedTrial]:
+        """Compile and plan one benchmark specification."""
+
+        return self.plan_experiment(
+            compile_benchmark(benchmark),
+            required_stages=required_stages,
+        )
 
     def plan_experiment(
         self,
@@ -57,70 +75,119 @@ class TrialPlanner:
         trials: list[PlannedTrial] = []
 
         task_items: dict[str, list[DataItemContext]] = {}
-        if self.dataset_loader:
+        if self.dataset_provider or self.dataset_loader:
             for task in experiment.tasks:
-                items = self.dataset_loader.load_task_items(task)
-                task_items[task.task_id] = [
-                    self._coerce_data_item_context(item)
-                    for item in self._sample_items(items, experiment.item_sampling)
-                ]
+                query = self._effective_dataset_query(experiment, task)
+                if self.dataset_provider is not None:
+                    provider_query = self._provider_query(query)
+                    items = self.dataset_provider.scan(
+                        self._dataset_slice_spec(task),
+                        provider_query,
+                    )
+                    task_items[task.task_id] = [
+                        self._coerce_data_item_context(item) for item in items
+                    ]
+                else:
+                    assert self.dataset_loader is not None
+                    items = self.dataset_loader.load_task_items(task)
+                    sampling = self._sampling_query(experiment, query)
+                    task_items[task.task_id] = [
+                        self._coerce_data_item_context(item)
+                        for item in self._sample_items(items, sampling)
+                    ]
         elif experiment.tasks:
             raise SpecValidationError(
                 code=ErrorCode.MISSING_OPTIONAL_DEPENDENCY,
-                message="Experiment requires dataset items but no dataset_loader was provided.",
+                message=(
+                    "Experiment requires dataset items but no dataset_loader was "
+                    "provided and no dataset_provider was provided."
+                ),
             )
-
-        grid = itertools.product(
-            experiment.models,
-            experiment.tasks,
-            experiment.prompt_templates,
-            experiment.inference_grid.expand(),
-        )
-
-        for model, task, prompt, params in grid:
-            items = task_items.get(task.task_id, [])
-
-            for item in items:
-                item_str = json.dumps(
-                    {
-                        "item_id": item.item_id,
-                        "payload": item.payload,
-                        "metadata": item.metadata,
-                    },
-                    sort_keys=True,
-                )
-
-                composite = "".join(
-                    [
-                        model.spec_hash,
-                        task.spec_hash,
-                        prompt.spec_hash,
-                        params.spec_hash,
-                        item_str,
+        params_grid = experiment.inference_grid.expand()
+        for model in experiment.models:
+            for task in experiment.tasks:
+                items = task_items.get(task.task_id, [])
+                allowed_prompt_ids = task.allowed_prompt_template_ids
+                if allowed_prompt_ids is None:
+                    prompts = list(experiment.prompt_templates)
+                else:
+                    allowed_prompt_id_set = set(allowed_prompt_ids)
+                    prompts = [
+                        prompt
+                        for prompt in experiment.prompt_templates
+                        if prompt.id in allowed_prompt_id_set
                     ]
-                ).encode("utf-8")
-                trial_id = f"trial_{hashlib.sha256(composite).hexdigest()[:12]}"
-                trial = TrialSpec(
-                    trial_id=trial_id,
-                    model=model,
-                    task=task,
-                    prompt=prompt,
-                    params=params,
-                    item_id=item.item_id,
-                    candidate_count=experiment.num_samples,
-                )
-                if self.registry is not None:
-                    if required_stages is None:
-                        validate_trial(trial, self.registry)
-                    else:
-                        validate_trial_for_stages(
-                            trial,
-                            self.registry,
-                            stages=required_stages,
+                    if not prompts:
+                        selector_preview = ", ".join(sorted(allowed_prompt_id_set))
+                        raise SpecValidationError(
+                            code=ErrorCode.SCHEMA_MISMATCH,
+                            message=(
+                                "Task "
+                                f"'{task.slice_id or task.task_id}' matched no prompt "
+                                f"templates for explicit selector(s): {selector_preview}."
+                            ),
                         )
-                trials.append(PlannedTrial(trial_spec=trial, dataset_context=item))
+                for prompt, params in itertools.product(prompts, params_grid):
+                    for item in items:
+                        item_str = json.dumps(
+                            {
+                                "item_id": item.item_id,
+                                "payload": item.payload,
+                                "metadata": item.metadata,
+                            },
+                            sort_keys=True,
+                        )
+
+                        composite = "".join(
+                            [
+                                model.spec_hash,
+                                task.spec_hash,
+                                prompt.spec_hash,
+                                params.spec_hash,
+                                item_str,
+                            ]
+                        ).encode("utf-8")
+                        trial_id = f"trial_{hashlib.sha256(composite).hexdigest()[:12]}"
+                        trial = TrialSpec(
+                            trial_id=trial_id,
+                            model=model,
+                            task=task,
+                            prompt=prompt,
+                            params=params,
+                            item_id=item.item_id,
+                            candidate_count=experiment.num_samples,
+                            metadata=validate_json_dict(
+                                {
+                                    "benchmark_id": task.benchmark_id,
+                                    "slice_id": task.slice_id or task.task_id,
+                                    "prompt_variant_id": prompt.id,
+                                    "dimensions": dict(task.dimensions),
+                                },
+                                label="TrialSpec.metadata",
+                            ),
+                        )
+                        if self.registry is not None:
+                            if required_stages is None:
+                                validate_trial(trial, self.registry)
+                            else:
+                                validate_trial_for_stages(
+                                    trial,
+                                    self.registry,
+                                    stages=required_stages,
+                                )
+                        trials.append(
+                            PlannedTrial(trial_spec=trial, dataset_context=item)
+                        )
 
         return trials
+
+    def _dataset_slice_spec(self, task) -> DatasetSliceSpec:
+        return DatasetSliceSpec(
+            benchmark_id=task.benchmark_id,
+            slice_id=task.slice_id or task.task_id,
+            dataset=task.dataset,
+            dimensions=dict(task.dimensions),
+        )
 
     def _coerce_data_item_context(self, item: object) -> DataItemContext:
         if isinstance(item, DataItemContext):
@@ -149,7 +216,7 @@ class TrialPlanner:
     def _sample_items(
         self,
         items: Sequence[DatasetItem],
-        sampling: ItemSamplingSpec,
+        sampling: ItemSamplingSpec | DatasetQuerySpec,
     ) -> list[DatasetItem]:
         item_list = self._filter_items(list(items), sampling)
         if sampling.kind == SamplingKind.ALL or not item_list:
@@ -203,7 +270,7 @@ class TrialPlanner:
     def _filter_items(
         self,
         items: list[DatasetItem],
-        sampling: ItemSamplingSpec,
+        sampling: ItemSamplingSpec | DatasetQuerySpec,
     ) -> list[DatasetItem]:
         filtered = list(items)
         if sampling.item_ids:
@@ -237,6 +304,81 @@ class TrialPlanner:
     def _fallback_item_id(self, payload: JSONValueType) -> str:
         serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
+
+    def _coerce_dataset_query(
+        self, query: object
+    ) -> ItemSamplingSpec | DatasetQuerySpec | dict[str, JSONValueType]:
+        if query is None:
+            return DatasetQuerySpec()
+        if isinstance(query, (ItemSamplingSpec, DatasetQuerySpec)):
+            return query
+        if isinstance(query, Mapping):
+            payload = validate_json_dict(dict(query), label="task.dataset_query")
+            try:
+                return DatasetQuerySpec.model_validate(payload)
+            except Exception:
+                try:
+                    return ItemSamplingSpec.model_validate(payload)
+                except Exception:
+                    return payload
+        raise SpecValidationError(
+            code=ErrorCode.SCHEMA_MISMATCH,
+            message=f"Unsupported dataset query payload: {type(query).__name__}",
+        )
+
+    def _effective_dataset_query(
+        self,
+        experiment: ExperimentSpec,
+        task,
+    ) -> ItemSamplingSpec | DatasetQuerySpec | dict[str, JSONValueType]:
+        query = self._coerce_dataset_query(task.dataset_query)
+        if isinstance(query, dict):
+            return query
+        if self._is_default_sampling(query) and not self._is_default_sampling(
+            experiment.item_sampling
+        ):
+            return experiment.item_sampling
+        return query
+
+    def _provider_query(
+        self,
+        query: ItemSamplingSpec | DatasetQuerySpec | dict[str, JSONValueType],
+    ) -> DatasetQuerySpec:
+        if isinstance(query, DatasetQuerySpec):
+            return query
+        if isinstance(query, ItemSamplingSpec):
+            return DatasetQuerySpec.model_validate(query.model_dump(mode="json"))
+        raise SpecValidationError(
+            code=ErrorCode.SCHEMA_MISMATCH,
+            message=(
+                "Dataset providers require a DatasetQuerySpec-compatible query, "
+                "but the task carries a loader-side JSON mapping."
+            ),
+        )
+
+    def _sampling_query(
+        self,
+        experiment: ExperimentSpec,
+        query: ItemSamplingSpec | DatasetQuerySpec | dict[str, JSONValueType],
+    ) -> ItemSamplingSpec | DatasetQuerySpec:
+        if isinstance(query, dict):
+            if not self._is_default_sampling(experiment.item_sampling):
+                return experiment.item_sampling
+            return ItemSamplingSpec()
+        return query
+
+    def _is_default_sampling(
+        self, sampling: ItemSamplingSpec | DatasetQuerySpec
+    ) -> bool:
+        return (
+            sampling.kind == SamplingKind.ALL
+            and sampling.count is None
+            and sampling.seed is None
+            and sampling.strata_field is None
+            and not sampling.item_ids
+            and not sampling.metadata_filters
+            and not getattr(sampling, "projected_fields", [])
+        )
 
     def _json_value(self, data: object) -> JSONValueType:
         return validate_json_value(data, label="dataset item")

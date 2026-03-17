@@ -31,6 +31,8 @@ from themis.types.events import ScoreRow, TrialEvent, TrialEventType, TrialSumma
 from themis.types.json_types import JSONValueType
 
 if TYPE_CHECKING:
+    from themis.benchmark.query import DatasetQuerySpec
+    from themis.benchmark.specs import DatasetSliceSpec
     from themis.runtime.timeline_view import RecordTimelineView
 
 DatasetContext = DataItemContext | Mapping[str, object]
@@ -160,6 +162,19 @@ class DatasetLoader(Protocol):
 
     def load_task_items(self, task: TaskSpec) -> Sequence[DatasetItem]:
         """Return execution items for the supplied task-like object."""
+        ...
+
+
+@runtime_checkable
+class DatasetProvider(Protocol):
+    """Query-aware dataset provider used by the benchmark-first public surface."""
+
+    def scan(
+        self,
+        slice_spec: DatasetSliceSpec,
+        query: DatasetQuerySpec,
+    ) -> Sequence[DatasetItem]:
+        """Return slice items after applying the requested dataset query."""
         ...
 
 

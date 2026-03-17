@@ -76,6 +76,8 @@ class ResolvedPipelineHooks:
             update={
                 "prompt": trial.prompt.__class__(
                     id=trial.prompt.id,
+                    family=trial.prompt.family,
+                    variables=dict(trial.prompt.variables),
                     messages=prompt.messages,
                 )
             }
