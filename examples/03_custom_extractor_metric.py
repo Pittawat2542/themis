@@ -1,40 +1,34 @@
-"""Use a custom extractor and metric to score structured output."""
+"""Use a custom parser and metric with the benchmark-first API."""
 
 import re
 from pathlib import Path
 
 from themis import (
-    DatasetSpec,
-    EvaluationSpec,
+    BenchmarkSpec,
     ExecutionPolicySpec,
-    ExperimentSpec,
-    ExtractorChainSpec,
-    ExtractorRefSpec,
-    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
     Orchestrator,
-    OutputTransformSpec,
+    ParseSpec,
     PluginRegistry,
     ProjectSpec,
     PromptMessage,
-    PromptTemplateSpec,
+    PromptVariantSpec,
+    ScoreSpec,
+    SliceSpec,
     StorageSpec,
-    TaskSpec,
-    TrialSpec,
 )
 from themis.contracts.protocols import InferenceResult
 from themis.records import ExtractionRecord, InferenceRecord, MetricScore
 from themis.records import CandidateRecord
-from themis.specs.experiment import RuntimeContext
-from typing import Any, Mapping
-from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
+from themis.specs import DatasetSpec, GenerationSpec
+from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 
 
-class FactsDatasetLoader:
-    def load_task_items(self, task):
-        del task
+class FactsDatasetProvider:
+    def scan(self, slice_spec, query):
+        del slice_spec, query
         return [
             {"item_id": "item-1", "question": "What is 6 * 7?", "answer": "42"},
             {"item_id": "item-2", "question": "What is 8 * 8?", "answer": "64"},
@@ -42,25 +36,18 @@ class FactsDatasetLoader:
 
 
 class VerboseAnswerEngine:
-    def infer(
-        self, trial: TrialSpec, context: Any, runtime: RuntimeContext
-    ) -> InferenceResult:
+    def infer(self, trial, context, runtime):
         del trial, runtime
         return InferenceResult(
             inference=InferenceRecord(
                 spec_hash=f"inf_{context['item_id']}",
-                raw_text=f"I checked my work carefully. The answer is {context['answer']}.",
+                raw_text=f"I checked carefully. The answer is {context['answer']}.",
             )
         )
 
 
 class NumberExtractor:
-    def extract(
-        self,
-        trial: TrialSpec,
-        candidate: CandidateRecord,
-        config: Mapping[str, Any] | None = None,
-    ) -> ExtractionRecord:
+    def extract(self, trial, candidate: CandidateRecord, config=None):
         del trial, config
         text = candidate.inference.raw_text if candidate.inference else ""
         match = re.search(r"(\d+)", text or "")
@@ -69,14 +56,12 @@ class NumberExtractor:
             extractor_id="number_extractor",
             success=match is not None,
             parsed_answer=match.group(1) if match else None,
-            failure_reason=None if match else "No number found in the model output.",
+            failure_reason=None if match else "No number found.",
         )
 
 
 class ParsedExactMatchMetric:
-    def score(
-        self, trial: TrialSpec, candidate: CandidateRecord, context: Any
-    ) -> MetricScore:
+    def score(self, trial, candidate, context):
         del trial
         extraction = candidate.best_extraction()
         parsed = extraction.parsed_answer if extraction is not None else None
@@ -87,55 +72,47 @@ class ParsedExactMatchMetric:
         )
 
 
-def build_registry() -> PluginRegistry:
+def main() -> None:
     registry = PluginRegistry()
     registry.register_inference_engine("demo", VerboseAnswerEngine())
     registry.register_extractor("number_extractor", NumberExtractor())
     registry.register_metric("parsed_exact_match", ParsedExactMatchMetric())
-    return registry
 
-
-def build_project() -> ProjectSpec:
-    return ProjectSpec(
-        project_name="custom-extractor",
+    project = ProjectSpec(
+        project_name="custom-parser-benchmark",
         researcher_id="examples",
         global_seed=17,
         storage=StorageSpec(
-            root_dir=str(Path(".cache/themis-examples/03-custom-extractor")),
+            root_dir=str(
+                Path(".cache/themis-examples/03-custom-extractor-benchmark-first")
+            ),
             compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
-
-
-def build_experiment() -> ExperimentSpec:
-    return ExperimentSpec(
+    benchmark = BenchmarkSpec(
+        benchmark_id="custom-parser",
         models=[ModelSpec(model_id="verbose-answer-model", provider="demo")],
-        tasks=[
-            TaskSpec(
-                task_id="math-with-extraction",
+        slices=[
+            SliceSpec(
+                slice_id="math",
                 dataset=DatasetSpec(source=DatasetSource.MEMORY),
                 generation=GenerationSpec(),
-                output_transforms=[
-                    OutputTransformSpec(
-                        name="parsed",
-                        extractor_chain=ExtractorChainSpec(
-                            extractors=[ExtractorRefSpec(id="number_extractor")]
-                        ),
-                    )
-                ],
-                evaluations=[
-                    EvaluationSpec(
+                prompt_variant_ids=["baseline"],
+                parses=[ParseSpec(name="parsed", extractors=["number_extractor"])],
+                scores=[
+                    ScoreSpec(
                         name="parsed-score",
-                        transform="parsed",
+                        parse="parsed",
                         metrics=["parsed_exact_match"],
                     )
                 ],
             )
         ],
-        prompt_templates=[
-            PromptTemplateSpec(
+        prompt_variants=[
+            PromptVariantSpec(
                 id="baseline",
+                family="qa",
                 messages=[
                     PromptMessage(role=PromptRole.USER, content="Answer the question.")
                 ],
@@ -144,31 +121,17 @@ def build_experiment() -> ExperimentSpec:
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=64)]),
     )
 
-
-def main() -> None:
     orchestrator = Orchestrator.from_project_spec(
-        build_project(),
-        registry=build_registry(),
-        dataset_loader=FactsDatasetLoader(),
+        project,
+        registry=registry,
+        dataset_provider=FactsDatasetProvider(),
     )
-    result = orchestrator.run(build_experiment())
-    transform_result = result.for_transform(result.transform_hashes[0])
+    result = orchestrator.run_benchmark(benchmark)
 
-    for trial in result.iter_trials():
-        candidate = trial.candidates[0]
-        transform_trial = transform_result.get_trial(trial.spec_hash)
-        if transform_trial is None:
-            raise RuntimeError(f"Missing transform overlay for {trial.spec_hash}.")
-        extraction = transform_trial.candidates[0].best_extraction()
-        if extraction is None:
-            raise RuntimeError(f"Missing extraction for {trial.spec_hash}.")
-        assert candidate.evaluation is not None
-        score = candidate.evaluation.aggregate_scores["parsed_exact_match"]
-        assert trial.trial_spec is not None
-        print(
-            f"{trial.trial_spec.item_id}: parsed={extraction.parsed_answer!r} "
-            f"score={score:.1f}"
-        )
+    for row in result.aggregate(
+        group_by=["model_id", "slice_id", "metric_id", "prompt_variant_id"]
+    ):
+        print(row)
 
 
 if __name__ == "__main__":

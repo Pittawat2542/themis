@@ -1,19 +1,9 @@
 # Runtime
 
-Read-side facades over stored experiment outputs.
+The benchmark-first read side starts with `BenchmarkResult`.
 
-`RecordTimelineView` is the main inspection object. It can hydrate stored stage
-timings plus related conversation events, judge audits, and observability links
-when those artifacts are present.
+::: themis.runtime.benchmark_result.ArtifactBundle
 
-::: themis.runtime
-    options:
-      show_root_heading: false
+::: themis.runtime.benchmark_result.BenchmarkResult
 
-::: themis.runtime.comparison
-    options:
-      show_root_heading: false
-
-::: themis.runtime.timeline_view
-    options:
-      show_root_heading: false
+::: themis.runtime.timeline_view.RecordTimelineView

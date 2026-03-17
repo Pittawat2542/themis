@@ -5,7 +5,7 @@
 Reuse the same:
 
 - `ProjectSpec.storage.root_dir`
-- `ExperimentSpec`
+- benchmark or experiment source spec
 - active stage configuration
 
 When a completed projection already exists for that trial hash and overlay, the
@@ -21,17 +21,17 @@ any successful generation projection.
 
 ```python
 from themis.orchestration.run_manifest import RunHandle
-from themis.runtime import ExperimentResult
+from themis.runtime import BenchmarkResult
 
 
-handle = orchestrator.submit(experiment, runtime=runtime)
+handle = orchestrator.submit(benchmark, runtime=runtime)
 print(handle.run_id, handle.status, handle.pending_work_items)
 
 resumed = orchestrator.resume(handle.run_id, runtime=runtime)
 
 if isinstance(resumed, RunHandle):
     print(resumed.run_id, resumed.status, resumed.pending_work_items)
-elif isinstance(resumed, ExperimentResult):
+elif isinstance(resumed, BenchmarkResult):
     print(resumed.trial_hashes[:3])
 ```
 
@@ -39,7 +39,7 @@ For the local backend, `submit()` executes immediately and returns a completed
 handle once the missing work items finish. For batch or worker-pool backends,
 the handle remains pending until external workers or imports complete the
 manifested work items. `resume()` reuses the persisted canonical manifest and
-returns either a new `RunHandle` or a final `ExperimentResult` when nothing is
+returns either a new `RunHandle` or a final `BenchmarkResult` when nothing is
 left to do.
 
 ## Inspect Runtime Progress
@@ -64,7 +64,7 @@ If you want live updates while a run is executing, pass a callback:
 ```python
 snapshots = []
 result = orchestrator.run(
-    experiment,
+    benchmark,
     runtime=runtime,
     progress=ProgressConfig(callback=snapshots.append),
 )
@@ -76,7 +76,7 @@ unless you explicitly set `renderer=...`.
 ## Inspect the Planned Run
 
 ```python
-manifest = orchestrator.plan(experiment)
+manifest = orchestrator.plan(benchmark)
 
 print(manifest.run_id)
 print(manifest.backend_kind)
@@ -139,7 +139,7 @@ evaluation views when you want metric-backed candidate records.
 ## Diff Two Experiment Specs
 
 ```python
-diff = orchestrator.diff_specs(baseline_experiment, treatment_experiment)
+diff = orchestrator.diff_specs(baseline_benchmark, treatment_benchmark)
 
 print(diff.changed_experiment_fields)
 print(diff.added_trial_hashes[:3])
@@ -151,7 +151,7 @@ metric and want to confirm that only the expected trial set changed.
 ## Estimate Work Before Running
 
 ```python
-estimate = orchestrator.estimate(experiment)
+estimate = orchestrator.estimate(benchmark)
 
 print(estimate.total_work_items)
 print(estimate.work_items_by_stage)
@@ -167,8 +167,8 @@ so treat token and cost values as planning bounds rather than billable truth.
 ## Export Work for an External System
 
 ```python
-generation_bundle = orchestrator.export_generation_bundle(experiment)
-evaluation_bundle = orchestrator.export_evaluation_bundle(experiment)
+generation_bundle = orchestrator.export_generation_bundle(benchmark)
+evaluation_bundle = orchestrator.export_evaluation_bundle(benchmark)
 ```
 
 Generation bundles carry the `TrialSpec`, dataset context, and deterministic

@@ -78,7 +78,7 @@ Confirms:
 - Requires a matching wheel under `dist/`
 - Creates a clean temp venv
 - Installs the built wheel
-- Verifies `import themis`, curated root exports, and
+- Verifies `import themis`, the benchmark-first curated root exports, and
   `themis-quickcheck --help`
 
 ## Tagging And Publish Readiness

@@ -2,134 +2,43 @@
 
 ## Use Project Files For Stable Shared Policy
 
-Keep shared infrastructure policy in TOML or JSON and keep the experiment matrix
-in Python.
-
-Example `project.toml`:
-
-```toml
-project_name = "offline-evals"
-researcher_id = "team-research"
-global_seed = 13
-
-[storage]
-root_dir = ".cache/themis/offline-evals"
-backend = "sqlite_blob"
-store_item_payloads = true
-compression = "zstd"
-
-[execution_policy]
-max_retries = 2
-retry_backoff_factor = 1.5
-circuit_breaker_threshold = 4
-
-[execution_backend]
-kind = "local"
-```
-
-Load it with:
+Keep storage and execution policy in TOML or JSON, then keep benchmark
+semantics in Python.
 
 ```python
 orchestrator = Orchestrator.from_project_file(
     "project.toml",
     registry=registry,
-    dataset_loader=dataset_loader,
+    dataset_provider=dataset_provider,
 )
 ```
 
-Use project files for storage, retry, and backend policy. Keep models, prompts,
-tasks, transforms, and evaluations in `ExperimentSpec`.
-
-## Evolve An Existing Experiment Incrementally
-
-Themis hashes the matrix into deterministic stage identities, so only new work
-stays pending.
+## Evolve A Benchmark Incrementally
 
 Common cases:
 
-- add a model or prompt: new trial hashes
-- add inference params: new trial hashes for new combinations
-- add a metric: new evaluation overlay, existing generation can stay
-- add a transform: new transform and evaluation overlays
-- change the dataset slice: deterministic change to the planned trial set
+- add a model
+- add a prompt variant
+- add a parse pipeline
+- add a score overlay
+- change the dataset query
 
-Use `model_copy(update=...)` and confirm the delta first:
+Run the new benchmark against the same project storage root so completed work is
+reused where hashes still match.
 
-```python
-diff = orchestrator.diff_specs(old_experiment, new_experiment)
-print(diff.changed_experiment_fields)
-print(len(diff.added_trial_hashes))
-print(len(diff.added_evaluation_hashes))
-```
-
-Use the snippets in this file as the runnable pattern. Do not assume the user
-has a local `examples/` directory.
-
-## Hand Off Generation Or Evaluation To External Systems
-
-Export only missing work, run it elsewhere, then import compatible records back.
-
-Generation handoff:
+## Hand Off Generation Or Evaluation
 
 ```python
-bundle = orchestrator.export_generation_bundle(experiment)
-print(bundle.manifest.run_id)
-print(len(bundle.items))
+bundle = orchestrator.export_evaluation_bundle(benchmark)
+result = orchestrator.import_evaluation_results(bundle, external_trial_records)
 ```
-
-Evaluation handoff:
-
-```python
-bundle = orchestrator.export_evaluation_bundle(experiment)
-print(bundle.manifest.run_id)
-print(len(bundle.items))
-```
-
-After import, normal reporting and timeline APIs continue to work. Use the
-snippets in this file as the import shape when local examples are unavailable.
 
 ## Scale Execution Deliberately
 
-Themis manages orchestration state, not provider-specific throughput tuning.
-
-Use:
-
-- `ExecutionPolicySpec.max_in_flight_work_items` to bound orchestrated work
-- `execution_backend.kind="local"` for in-process runs
-- `execution_backend.kind="worker_pool"` or batch workflows when work should be
-  picked up elsewhere
-
-The engine implementation still owns provider rate limiting, retries, and
-batch-adapter details.
+Themis owns orchestration state. Your engine still owns provider-specific rate
+limits, retries, and batching details.
 
 ## Distinguish Progress Logging From Telemetry
 
-Use built-in progress tracking first when the user wants live status, terminal
-progress, or stdlib log lines during orchestration:
-
-```python
-from themis.progress import ProgressConfig, ProgressRendererType
-
-result = orchestrator.run(
-    experiment,
-    progress=ProgressConfig(renderer=ProgressRendererType.LOG),
-)
-```
-
-Reach for telemetry only when the user needs event-level observability or
-external sinks such as Langfuse or Weights & Biases.
-
-## Add Telemetry Only When The User Needs It
-
-Use a `TelemetryBus` for in-process events. Add Langfuse or other callbacks only
-when the user wants observability.
-
-```python
-from themis.telemetry import TelemetryBus
-
-bus = TelemetryBus()
-bus.subscribe(lambda event: print(event.name, event.payload))
-```
-
-Use the `telemetry` extra when callbacks depend on external SDKs. Do not tell
-the user to install it just to get progress logs or run snapshots.
+Use `themis.progress` first for operator-facing logging. Add external telemetry
+only when the user needs event-level observability or external sinks.

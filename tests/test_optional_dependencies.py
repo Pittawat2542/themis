@@ -8,7 +8,7 @@ import pytest
 from themis import _optional
 from themis.errors import ThemisError
 from themis.records.trial import TrialRecord
-from themis.runtime import ExperimentResult
+from themis.runtime.experiment_result import ExperimentResult
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.enums import ErrorCode, RecordStatus, DatasetSource

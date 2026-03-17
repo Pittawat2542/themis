@@ -1,15 +1,43 @@
 # Specs
 
-Typed, immutable configuration models used to define experiments.
+## Benchmark Authoring
 
-::: themis.specs.base
-    options:
-      show_root_heading: false
+::: themis.benchmark.query.DatasetQuerySpec
 
-::: themis.specs.foundational
-    options:
-      show_root_heading: false
+::: themis.benchmark.specs.BenchmarkSpec
 
-::: themis.specs.experiment
-    options:
-      show_root_heading: false
+::: themis.benchmark.specs.SliceSpec
+
+::: themis.benchmark.specs.PromptVariantSpec
+
+::: themis.benchmark.specs.ParseSpec
+
+::: themis.benchmark.specs.ScoreSpec
+
+## Project and Runtime Support
+
+::: themis.specs.experiment.ProjectSpec
+
+::: themis.specs.experiment.StorageConfig
+
+::: themis.specs.experiment.StorageSpec
+
+::: themis.specs.experiment.SqliteBlobStorageSpec
+
+::: themis.specs.experiment.PostgresBlobStorageSpec
+
+::: themis.specs.experiment.ExecutionPolicySpec
+
+::: themis.specs.experiment.InferenceGridSpec
+
+::: themis.specs.experiment.InferenceParamsSpec
+
+::: themis.specs.experiment.PromptMessage
+
+::: themis.specs.foundational.ModelSpec
+
+::: themis.specs.foundational.DatasetSpec
+
+::: themis.specs.foundational.GenerationSpec
+
+::: themis.specs.foundational.JudgeInferenceSpec

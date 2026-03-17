@@ -1,100 +1,75 @@
 ---
 name: themis-eval
-description: Use when working with the themis-eval Python package to build, run, inspect, resume, compare, or export LLM evaluations and project configs. This skill is for package users writing evaluation code or debugging evaluation workflows with ProjectSpec, ExperimentSpec, PluginRegistry, Orchestrator, ExperimentResult, config report export, custom engines, metrics, extractors, hooks, judge-backed metrics, project files, external handoffs, or the themis-quickcheck CLI. Use it whenever the user asks for a reproducibility snapshot, config export, project/experiment report, or `themis report`, even if they do not name the config-report API directly.
+description: Use when working with the themis-eval Python package to build, run, inspect, compare, hand off, or export benchmark-first LLM evaluations and config reports. This skill is for package users writing workflows with ProjectSpec, BenchmarkSpec, SliceSpec, DatasetProvider, PromptVariantSpec, ParseSpec, ScoreSpec, PluginRegistry, Orchestrator, BenchmarkResult, config report export, custom engines, metrics, extractors, hooks, judge-backed metrics, project files, external handoffs, or the themis-quickcheck CLI. Use it whenever the user asks for benchmark setup, slice design, result aggregation, paired comparisons, config export, or quick SQLite inspection.
 ---
 
 # themis-eval
 
-Treat Themis as a code-first evaluation framework with a small public surface:
+Treat Themis as a benchmark-first evaluation framework with one small public
+surface:
 
 - `ProjectSpec` defines shared storage and execution policy.
-- `ExperimentSpec` defines the experiment matrix.
-- `PluginRegistry` binds runtime engines, metrics, extractors, judges, and hooks.
-- `Orchestrator` plans, runs, resumes, and imports work.
-- `ExperimentResult` reads projections, timelines, reports, and comparisons.
+- `BenchmarkSpec` defines the benchmark.
+- `SliceSpec` defines one dataset slice.
+- `DatasetQuerySpec` defines subset and filter intent.
+- `PromptVariantSpec`, `ParseSpec`, and `ScoreSpec` define prompting, parsing, and scoring.
+- `PluginRegistry` binds dataset providers, engines, extractors, metrics, judges, and hooks.
+- `Orchestrator` plans, runs, resumes, exports, and imports benchmark work.
+- `BenchmarkResult` reads projections, aggregates, paired comparisons, artifact bundles, and timelines.
 
-This skill is for a consumer of `themis-eval`. Prefer the public package surface
-and this skill's bundled references. Do not assume the user has the Themis repo,
-local docs, or local example files available at runtime. Do not send the user
-into package internals unless the public package surface requires it.
+This skill is for consumers of `themis-eval`. Prefer the public package surface
+and these references. Do not send the user into retired experiment/task APIs.
 
 ## Read The Right Reference
 
-- Read `references/getting-started.md` for installation, the core workflow, and
-  example selection.
-- Read `references/plugins-and-specs.md` when defining dataset loaders, specs,
-  engines, metrics, extractors, hooks, or judge-backed metrics.
-- Read `references/results-and-ops.md` when inspecting trials, timelines,
-  reports, comparisons, run progress, resume behavior, operator-facing logging,
-  or `themis-quickcheck`.
-- Read `references/advanced-workflows.md` for project files, external handoffs,
-  experiment evolution, scaling, telemetry, and observability callbacks.
+- Read `references/getting-started.md` for installation, the core benchmark flow, and example selection.
+- Read `references/plugins-and-specs.md` when defining dataset providers, slices, prompt variants, parse pipelines, engines, metrics, hooks, or judge-backed metrics.
+- Read `references/results-and-ops.md` when inspecting aggregates, timelines, artifact bundles, run progress, config reports, or `themis-quickcheck`.
+- Read `references/advanced-workflows.md` for project files, external handoffs, benchmark evolution, scaling, and telemetry.
 
 ## Working Rules
 
-- Start from the smallest bundled pattern in these references, then adapt it
-  instead of inventing a new pattern.
-- Prefer `from themis import generate_config_report` for one-shot export helpers.
-  Use `themis report` when the user wants a CLI artifact instead of Python code.
-- `themis.contracts.protocols`, `themis.progress`, and
-  `themis.specs.foundational` may be imported directly when those modules are
-  part of the documented public workflow.
-- If the current workspace does not contain Themis source code, examples, or
-  docs, continue using only this skill's references and the installed package
-  surface.
-- Keep `ProjectSpec` stable across reruns. Put storage, retry policy, and
-  backend choices there.
-- Keep models, prompts, tasks, transforms, evaluations, and parameter sweeps in
-  `ExperimentSpec`.
-- Register provider names, metric IDs, extractor IDs, and hook IDs explicitly in
-  one `PluginRegistry` instance.
-- Use `progress=` plus `themis.progress.ProgressConfig` for operator-facing
-  status, logging, and callbacks. Use `TelemetryBus` or Langfuse only when the
-  user needs event-level observability or external telemetry sinks.
-- Use `result.for_transform(...)` or `result.for_evaluation(...)` before
-  comparing or exporting when multiple overlays exist.
-- Use `orchestrator.get_run_progress(run_id)` for persisted run state after
-  `plan()`, `submit()`, `resume()`, or stage-specific execution.
-- Use timeline views for one bad example and aggregate helpers for overall
-  behavior.
+- Start from the smallest bundled benchmark pattern and adapt it.
+- Use `DatasetProvider.scan(slice_spec, query)` for data access.
+- Use `BenchmarkSpec` plus `SliceSpec`; do not propose `ExperimentSpec` or `TaskSpec`.
+- Treat prompt rendering as orchestration-owned for benchmark runs. Engines receive rendered `trial.prompt.messages` plus preserved prompt metadata such as `trial.prompt.id`, `trial.prompt.family`, and `trial.prompt.variables`.
+- Use `ParseSpec` for parsing and keep metrics focused on scoring parsed outputs.
+- Use `BenchmarkResult.aggregate(...)` and `paired_compare(...)` before reaching for lower-level report APIs.
+- Prefer `from themis import generate_config_report` for one-shot reproducibility exports.
+- Use `themis.specs` for supporting public spec imports such as `DatasetSpec`, `GenerationSpec`, and `JudgeInferenceSpec`.
+- Use `progress=` plus `themis.progress.ProgressConfig` when the user wants live logs or snapshots.
+- Use `themis-quickcheck` when the user wants SQLite inspection without importing benchmark code.
+- If the workspace does not contain Themis source or examples, continue using only this skill's references and the installed package surface.
 
 ## Default Workflow
 
-1. Install `themis-eval` and any needed extras.
-2. Pick the nearest pattern from this skill's references.
-3. Implement or adapt a dataset loader plus the minimum plugin set.
-4. Define `ProjectSpec`, then `ExperimentSpec`.
+1. Install `themis-eval` and needed extras.
+2. Implement or adapt a `DatasetProvider` plus the minimum plugin set.
+3. Define `ProjectSpec`.
+4. Define `BenchmarkSpec`, `SliceSpec`, prompt variants, parses, and scores.
 5. Build `Orchestrator` from a project spec or project file.
-6. Run, submit, resume, or export work, adding `progress=` when the user wants
-   live status or logs.
-7. Inspect the returned `ExperimentResult`, query
-   `orchestrator.get_run_progress(run_id)`,
-   compare overlays, or query SQLite summaries with `themis-quickcheck`.
+6. Run with `run_benchmark(...)`, or export/import external work as needed.
+7. Inspect the returned `BenchmarkResult`, query progress, or inspect SQLite with `themis-quickcheck`.
 
 ## Pattern Map
 
 - Hello world: `references/getting-started.md`
 - Project files: `references/advanced-workflows.md`
-- Custom extractors and metrics: `references/plugins-and-specs.md`
-- Comparison and reports: `references/results-and-ops.md`
-- Config report export: `references/results-and-ops.md`
-- Progress logging and run snapshots: `references/results-and-ops.md`
-- Resume and reruns: `references/results-and-ops.md`
+- Custom parsing and metrics: `references/plugins-and-specs.md`
+- Aggregation and artifact bundles: `references/results-and-ops.md`
+- Config reports: `references/results-and-ops.md`
 - Hooks and judge-backed metrics: `references/plugins-and-specs.md`
-- External handoffs and experiment evolution: `references/advanced-workflows.md`
-- Telemetry and observability callbacks: `references/advanced-workflows.md`
+- External handoffs and benchmark evolution: `references/advanced-workflows.md`
+- Telemetry and observability: `references/advanced-workflows.md`
 
 ## Output Expectations
 
-When helping the user, produce code that is runnable in their project:
+When helping the user, produce runnable code that includes:
 
 - concrete imports
-- a minimal registry and dataset loader
-- `ProjectSpec` and `ExperimentSpec`
+- a dataset provider
+- a minimal registry
+- `ProjectSpec` and `BenchmarkSpec`
 - the right extras to install
-- `generate_config_report(...)` or `themis report` examples when the user asks
-  for config export
-- `ProgressConfig` or `orchestrator.get_run_progress()` calls when the user asks
-  for logging,
-  status inspection, or monitoring
-- the matching inspection or export calls after execution
+- `BenchmarkResult` inspection or export calls after execution
+- `generate_config_report(...)` or `themis report` examples when they ask for config export
