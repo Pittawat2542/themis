@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import string
 from collections.abc import Mapping
 
 from themis._optional import import_optional
@@ -34,6 +35,22 @@ def _raw_text(candidate: CandidateRecord) -> str:
     if candidate.inference is None or candidate.inference.raw_text is None:
         return ""
     return candidate.inference.raw_text
+
+
+_BOXED_PATTERN = re.compile(r"\\boxed\s*\{([^{}]+)\}", re.IGNORECASE | re.DOTALL)
+
+
+def _last_boxed_text(text: str) -> str | None:
+    matches = _BOXED_PATTERN.findall(text)
+    if not matches:
+        return None
+    return matches[-1].strip()
+
+
+def _normalize_text(text: str) -> str:
+    cleaned = text.strip().casefold()
+    cleaned = cleaned.strip(string.punctuation + " ")
+    return " ".join(cleaned.split())
 
 
 def _success(
@@ -190,6 +207,45 @@ class FirstNumberExtractor:
         return _success("first_number", candidate, cfg, parsed)
 
 
+class BoxedTextExtractor:
+    """Extract the final LaTeX-style boxed answer from raw text."""
+
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, JSONValueType] | None = None,
+    ) -> ExtractionRecord:
+        """Extract the final boxed segment from candidate output."""
+        del trial
+        cfg = dict(config or {})
+        boxed = _last_boxed_text(_raw_text(candidate))
+        if boxed is None:
+            return _failure(
+                "boxed_text",
+                candidate,
+                cfg,
+                "No boxed answer found in the inference output.",
+            )
+        return _success("boxed_text", candidate, cfg, boxed)
+
+
+class NormalizedTextExtractor:
+    """Normalize free-form text for robust exact-match style scoring."""
+
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, JSONValueType] | None = None,
+    ) -> ExtractionRecord:
+        """Normalize either the boxed answer or the full raw text."""
+        del trial
+        cfg = dict(config or {})
+        source = _last_boxed_text(_raw_text(candidate)) or _raw_text(candidate)
+        return _success("normalized_text", candidate, cfg, _normalize_text(source))
+
+
 class ChoiceLetterExtractor:
     """Extract an uppercase multiple-choice letter from candidate raw text."""
 
@@ -208,7 +264,7 @@ class ChoiceLetterExtractor:
         else:
             choices = ["A", "B", "C", "D", "E"]
         choices_pattern = "".join(re.escape(choice) for choice in choices)
-        text = _raw_text(candidate)
+        text = _last_boxed_text(_raw_text(candidate)) or _raw_text(candidate)
 
         match = re.search(
             rf"\b(?:option|answer|choice)\s*[:\-]?\s*([{choices_pattern}])\b",

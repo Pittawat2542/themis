@@ -122,6 +122,8 @@ def test_registry_ships_builtin_extractors():
     assert registry.has_extractor("json_schema")
     assert registry.has_extractor("first_number")
     assert registry.has_extractor("choice_letter")
+    assert registry.has_extractor("boxed_text")
+    assert registry.has_extractor("normalized_text")
 
 
 def test_regex_extractor_parses_configured_capture_group():
@@ -188,6 +190,42 @@ def test_choice_letter_extractor_returns_uppercase_choice():
 
     assert extraction.success is True
     assert extraction.parsed_answer == "C"
+
+
+def test_choice_letter_extractor_handles_boxed_reasoning_answers():
+    extractor = PluginRegistry().get_extractor("choice_letter")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate("After analysis, the final answer is \\boxed{b}."),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == "B"
+
+
+def test_boxed_text_extractor_returns_last_boxed_answer():
+    extractor = PluginRegistry().get_extractor("boxed_text")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate("Scratch \\boxed{draft} and final \\boxed{42}"),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == "42"
+
+
+def test_normalized_text_extractor_cleans_whitespace_and_punctuation():
+    extractor = PluginRegistry().get_extractor("normalized_text")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate("  The Answer!!!   "),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == "the answer"
 
 
 def test_json_schema_extractor_returns_install_hint_when_optional_dependency_is_missing(
