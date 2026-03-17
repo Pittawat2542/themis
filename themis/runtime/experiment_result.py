@@ -42,7 +42,7 @@ class _ExperimentProjectionRepository(Protocol):
     def iter_candidate_scores(
         self,
         *,
-        trial_hash: str | None = None,
+        trial_hashes: Sequence[str] | None = None,
         metric_id: str | None = None,
         evaluation_hash: str | None = None,
     ) -> Iterator[ScoreRow]: ...

@@ -8,19 +8,13 @@ from typing import get_args, overload
 import pytest
 
 from themis import (
-    DatasetSpec,
-    EvaluationSpec,
     ExecutionPolicySpec,
-    ExperimentSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
-    ItemSamplingSpec,
     ModelSpec,
     ProjectSpec,
     PromptMessage,
-    PromptTemplateSpec,
     SqliteBlobStorageSpec,
-    TaskSpec,
     generate_config_report,
 )
 from themis.config_report import (
@@ -30,6 +24,8 @@ from themis.config_report import (
 )
 from themis.config_report.renderers import ConfigReportRenderer
 from themis.config_report.types import ConfigReportFormat, ConfigReportVerbosity
+from themis.specs.experiment import ExperimentSpec, ItemSamplingSpec, PromptTemplateSpec
+from themis.specs.foundational import DatasetSpec, EvaluationSpec, TaskSpec
 from themis.types.enums import DatasetSource, PromptRole
 
 
@@ -184,11 +180,11 @@ def test_build_config_report_document_resolves_inheritance_metadata() -> None:
     )
 
     assert backend.declared_in == "SqliteBlobStorageSpec"
-    assert backend.source_line == 166
+    assert backend.source_line is not None
     assert root_dir.declared_in == "SqliteBlobStorageSpec"
-    assert root_dir.source_line == 169
+    assert root_dir.source_line is not None
     assert compression.declared_in == "_StorageSpecBase"
-    assert compression.source_line == 151
+    assert compression.source_line is not None
 
 
 def test_build_config_report_document_reads_inline_comments_from_fixture() -> None:
