@@ -27,7 +27,7 @@ from themis.records.extraction import ExtractionRecord
 from themis.records.inference import InferenceRecord, TokenUsage
 from themis.records.trial import TrialRecord
 from themis.registry.plugin_registry import PluginRegistry
-from themis.runtime import ExperimentResult
+from themis.runtime.experiment_result import ExperimentResult
 from themis.specs.experiment import (
     BatchExecutionBackendSpec,
     DataItemContext,
@@ -1464,3 +1464,26 @@ def test_orchestrator_estimate_reports_best_effort_work_item_and_token_counts(
     )
     assert estimate.estimated_total_cost is None
     assert estimate.notes
+
+
+def test_orchestrator_estimate_uses_engine_prompt_token_estimators(tmp_path) -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine(
+        "mock",
+        RunnableEngine(),
+        prompt_token_estimator=lambda trial: 123,
+    )
+    registry.register_extractor("mock-extractor", RunnableExtractor())
+    registry.register_metric("em", RunnableMetric())
+    orchestrator = Orchestrator.from_project_spec(
+        _build_project_spec(tmp_path),
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    estimate = orchestrator.estimate(_build_experiment())
+
+    assert estimate.estimated_prompt_tokens == 492
+    assert any(
+        "engine-provided prompt token estimators" in note for note in estimate.notes
+    )

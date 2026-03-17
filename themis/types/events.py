@@ -30,6 +30,8 @@ class ArtifactRole(str, Enum):
     ITEM_PAYLOAD = "item_payload"
     RENDERED_PROMPT = "rendered_prompt"
     INFERENCE_OUTPUT = "inference_output"
+    EXTRACTION_OUTPUT = "extraction_output"
+    EVALUATION_OUTPUT = "evaluation_output"
     METRIC_DETAILS = "metric_details"
     JUDGE_AUDIT = "judge_audit"
 

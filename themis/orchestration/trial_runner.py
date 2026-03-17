@@ -56,6 +56,7 @@ class TrialRunner:
         artifact_store: ArtifactStore | None = None,
         max_retries: int = 3,
         retry_backoff_factor: float = 1.5,
+        retryable_error_codes: list[str] | None = None,
         parallel_candidates: int = 5,
         project_seed: int | None = None,
         store_item_payloads: bool = True,
@@ -71,6 +72,7 @@ class TrialRunner:
         self.artifact_store = artifact_store
         self.max_retries = max_retries
         self.retry_backoff_factor = retry_backoff_factor
+        self.retryable_error_codes = tuple(retryable_error_codes or [])
         self.parallel_candidates = parallel_candidates
         self.project_seed = project_seed
         self.store_item_payloads = store_item_payloads
@@ -93,6 +95,8 @@ class TrialRunner:
             registry=registry,
             event_emitter=self.event_emitter,
             max_retries=max_retries,
+            retry_backoff_factor=retry_backoff_factor,
+            retryable_error_codes=self.retryable_error_codes,
             project_seed=project_seed,
             telemetry_bus=telemetry_bus,
             append_session_event=self._append_session_event,
@@ -102,6 +106,9 @@ class TrialRunner:
             registry=registry,
             event_emitter=self.event_emitter,
             artifact_store=artifact_store,
+            max_retries=max_retries,
+            retry_backoff_factor=retry_backoff_factor,
+            retryable_error_codes=self.retryable_error_codes,
             telemetry_bus=telemetry_bus,
             append_session_event=self._append_session_event,
         )

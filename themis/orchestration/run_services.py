@@ -310,8 +310,8 @@ class RunPlanningService:
             }
             for item in manifest.work_items
         ):
-            execute_run(stored_manifest.experiment_spec, runtime)
-            manifest = self.plan(stored_manifest.experiment_spec)
+            execute_run(source_spec, runtime)
+            manifest = self.plan_source(source_spec)
 
         handle = self.run_handle_from_manifest(manifest)
         if handle.pending_work_items == 0:
@@ -329,30 +329,58 @@ class RunPlanningService:
         planned_trials = self.planner.plan_experiment(experiment)
         manifest = self.build_manifest(experiment, planned_trials)
         prompt_char_budget = 0
+        estimated_prompt_tokens = 0
         completion_token_budget = 0
+        used_engine_estimators = False
         for planned_trial in planned_trials:
-            prompt_chars = sum(
-                len(message.content)
-                for message in planned_trial.trial_spec.prompt.messages
-            )
-            dataset_chars = len(
-                json.dumps(
-                    planned_trial.dataset_context.payload,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-            )
             candidate_count = planned_trial.trial_spec.candidate_count
-            prompt_char_budget += (prompt_chars + dataset_chars) * candidate_count
+            estimator = self._prompt_token_estimator_for_provider(
+                planned_trial.trial_spec.model.provider
+            )
+            if estimator is not None:
+                estimated_prompt_tokens += (
+                    estimator(planned_trial.trial_spec) * candidate_count
+                )
+                used_engine_estimators = True
+            else:
+                prompt_chars = sum(
+                    len(message.content)
+                    for message in planned_trial.trial_spec.prompt.messages
+                )
+                dataset_chars = len(
+                    json.dumps(
+                        planned_trial.dataset_context.payload,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                )
+                prompt_char_budget += (prompt_chars + dataset_chars) * candidate_count
             if planned_trial.trial_spec.task.generation is not None:
                 completion_token_budget += (
                     planned_trial.trial_spec.params.max_tokens * candidate_count
                 )
-        estimated_prompt_tokens = max(1, (prompt_char_budget + 3) // 4)
+        if prompt_char_budget:
+            estimated_prompt_tokens += max(1, (prompt_char_budget + 3) // 4)
         work_items_by_stage = {
             stage: sum(1 for item in manifest.work_items if item.stage == stage)
             for stage in ("generation", "transform", "evaluation")
         }
+        notes = []
+        if used_engine_estimators:
+            notes.append(
+                "Used engine-provided prompt token estimators where registered."
+            )
+        if prompt_char_budget:
+            notes.append(
+                "Best-effort heuristic fallback was used for providers without prompt token estimators."
+            )
+        elif not notes:
+            notes.append(
+                "Best-effort heuristic only: prompt tokens are estimated from prompt templates and dataset payload size."
+            )
+        notes.append(
+            "Provider pricing is not configured, so estimated_total_cost is unavailable."
+        )
         return CostEstimate(
             run_id=manifest.run_id,
             backend_kind=manifest.backend_kind,
@@ -362,11 +390,18 @@ class RunPlanningService:
             estimated_completion_tokens=completion_token_budget,
             estimated_total_tokens=estimated_prompt_tokens + completion_token_budget,
             estimated_total_cost=None,
-            notes=[
-                "Best-effort heuristic only: prompt tokens are estimated from prompt templates and dataset payload size.",
-                "Provider pricing is not configured, so estimated_total_cost is unavailable.",
-            ],
+            notes=notes,
         )
+
+    def _prompt_token_estimator_for_provider(
+        self,
+        provider: str,
+    ):
+        if self.registry is None or not self.registry.has_inference_engine(provider):
+            return None
+        return self.registry.get_inference_engine_registration(
+            provider
+        ).prompt_token_estimator
 
     def export_generation_bundle(
         self,

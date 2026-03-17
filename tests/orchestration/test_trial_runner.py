@@ -12,7 +12,12 @@ from themis.contracts.protocols import (
     RuntimeContext,
     TrialEventRepository,
 )
-from themis.errors import InferenceError, SpecValidationError
+from themis.errors import (
+    ExtractionError,
+    InferenceError,
+    MetricError,
+    SpecValidationError,
+)
 from themis.orchestration.trial_runner import TrialRunner
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.records.candidate import CandidateRecord
@@ -392,6 +397,153 @@ def test_trial_runner_retry(trial_spec):
 
     events = [event.event_type for event in repo.events]
     assert "trial_retry" in events
+
+
+@pytest.mark.parametrize(
+    ("stage_name", "retryable_codes"),
+    [
+        ("transform", [ErrorCode.PARSE_ERROR.value]),
+        ("evaluation", [ErrorCode.METRIC_COMPUTATION.value]),
+    ],
+)
+def test_trial_runner_retries_overlay_stages_for_retryable_errors(
+    trial_spec,
+    stage_name: str,
+    retryable_codes: list[str],
+):
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", MockInferenceEngine())
+
+    class FlakyExtractor(Extractor):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def extract(self, trial, candidate, config=None):
+            del trial, candidate, config
+            self.calls += 1
+            if stage_name == "transform" and self.calls == 1:
+                raise ExtractionError(
+                    code=ErrorCode.PARSE_ERROR,
+                    message="try transform again",
+                )
+            return ExtractionRecord(
+                spec_hash="ext_hash",
+                extractor_id="mock",
+                success=True,
+                parsed_answer="42",
+            )
+
+    class FlakyMetric(Metric):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def score(self, trial, candidate, context):
+            del trial, candidate, context
+            self.calls += 1
+            if stage_name == "evaluation" and self.calls == 1:
+                raise MetricError(
+                    code=ErrorCode.METRIC_COMPUTATION,
+                    message="try evaluation again",
+                )
+            return MetricScore(metric_id="em", value=1.0, details={"matched": True})
+
+    extractor = FlakyExtractor()
+    metric = FlakyMetric()
+    registry.register_extractor("mock", extractor)
+    registry.register_metric("em", metric)
+
+    repo = MockEventRepo()
+    runner = TrialRunner(
+        registry,
+        event_repo=repo,
+        max_retries=2,
+        retryable_error_codes=retryable_codes,
+    )
+
+    trial_record = runner.run_trial(
+        trial_spec.model_copy(update={"candidate_count": 1}),
+        {},
+        RuntimeContext(),
+    )
+
+    assert trial_record.status == RecordStatus.OK
+    assert extractor.calls == (2 if stage_name == "transform" else 1)
+    assert metric.calls == (2 if stage_name == "evaluation" else 1)
+    retry_events = [event for event in repo.events if event.event_type == "trial_retry"]
+    assert len(retry_events) == 1
+    assert retry_events[0].stage == (
+        TimelineStage.EXTRACTION
+        if stage_name == "transform"
+        else TimelineStage.EVALUATION
+    )
+
+
+def test_trial_runner_replays_artifact_backed_stage_payloads_without_inline_json(
+    trial_spec, tmp_path
+):
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", MockInferenceEngine())
+    registry.register_extractor("mock", MockExtractor())
+    registry.register_metric("em", MockMetric())
+
+    manager = DatabaseManager(f"sqlite:///{tmp_path}/artifact-backed-events.db")
+    manager.initialize()
+    artifact_store = ArtifactStore(tmp_path / "artifacts", manager=manager)
+    event_repo = SqliteEventRepository(manager)
+    projection_repo = SqliteProjectionRepository(manager, artifact_store=artifact_store)
+    runner = TrialRunner(
+        registry,
+        event_repo=event_repo,
+        artifact_store=artifact_store,
+    )
+
+    executed_trial = trial_spec.model_copy(update={"candidate_count": 1})
+    runner.run_trial(
+        executed_trial,
+        {"question": "6 * 7", "answer": "42"},
+        RuntimeContext(),
+    )
+
+    resolved = resolve_task_stages(executed_trial.task)
+    record = projection_repo.materialize_trial_record(
+        executed_trial.spec_hash,
+        evaluation_hash=resolved.evaluations[0].evaluation_hash,
+    )
+
+    assert record.status == RecordStatus.OK
+    assert record.candidates[0].evaluation is not None
+    assert record.candidates[0].evaluation.aggregate_scores["em"] == 1.0
+
+    with manager.get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT stage, payload_json, artifact_refs_json
+            FROM trial_events
+            WHERE trial_hash = ? AND stage IS NOT NULL
+            ORDER BY event_seq ASC
+            """,
+            (executed_trial.spec_hash,),
+        ).fetchall()
+
+    by_stage = {
+        row["stage"]: row
+        for row in rows
+        if row["stage"]
+        in {
+            TimelineStage.ITEM_LOAD,
+            TimelineStage.INFERENCE,
+            TimelineStage.EXTRACTION,
+            TimelineStage.EVALUATION,
+        }
+    }
+    assert by_stage[TimelineStage.ITEM_LOAD]["payload_json"] is None
+    assert by_stage[TimelineStage.ITEM_LOAD]["artifact_refs_json"] is not None
+    assert by_stage[TimelineStage.INFERENCE]["payload_json"] is None
+    assert by_stage[TimelineStage.INFERENCE]["artifact_refs_json"] is not None
+    assert by_stage[TimelineStage.EXTRACTION]["payload_json"] is None
+    assert by_stage[TimelineStage.EXTRACTION]["artifact_refs_json"] is not None
+    assert by_stage[TimelineStage.EVALUATION]["payload_json"] is None
+    assert by_stage[TimelineStage.EVALUATION]["artifact_refs_json"] is not None
 
 
 def test_trial_runner_delegates_generation_candidate_execution(trial_spec):

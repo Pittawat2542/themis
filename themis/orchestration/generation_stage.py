@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Callable
 
 from themis._replay import ResumeState
@@ -41,6 +42,8 @@ class GenerationStageExecutor:
         registry: PluginRegistry,
         event_emitter: TrialEventEmitter,
         max_retries: int,
+        retry_backoff_factor: float,
+        retryable_error_codes: tuple[str, ...],
         project_seed: int | None = None,
         telemetry_bus: TelemetryBus | None = None,
         append_session_event: Callable[..., None],
@@ -49,6 +52,8 @@ class GenerationStageExecutor:
         self.registry = registry
         self.event_emitter = event_emitter
         self.max_retries = max_retries
+        self.retry_backoff_factor = retry_backoff_factor
+        self.retryable_error_codes = retryable_error_codes
         self.project_seed = project_seed
         self.telemetry_bus = telemetry_bus
         self.append_session_event = append_session_event
@@ -183,11 +188,7 @@ class GenerationStageExecutor:
                     ),
                 )
 
-            if not (
-                candidate.status == RecordStatus.ERROR
-                and candidate.error
-                and candidate.error.retryable
-            ):
+            if not self._should_retry(candidate):
                 self._append_candidate_completed(
                     session, candidate_id, candidate.status
                 )
@@ -203,12 +204,14 @@ class GenerationStageExecutor:
                 session,
                 TrialEventType.TRIAL_RETRY,
                 candidate_id=candidate_id,
+                stage=TimelineStage.INFERENCE,
                 metadata=TrialRetryEventMetadata(
                     attempt=attempt,
                     cand_index=cand_index,
                 ),
                 payload={"attempt": attempt, "cand_index": cand_index},
             )
+            time.sleep(self._retry_delay_seconds(attempt))
 
     def _append_candidate_completed(
         self,
@@ -242,3 +245,13 @@ class GenerationStageExecutor:
             f"{self.project_seed}:{trial_hash}:{cand_index}".encode("utf-8")
         ).hexdigest()
         return int(digest[:16], 16)
+
+    def _should_retry(self, candidate: CandidateRecord) -> bool:
+        if candidate.status != RecordStatus.ERROR or candidate.error is None:
+            return False
+        if self.retryable_error_codes:
+            return candidate.error.code.value in self.retryable_error_codes
+        return bool(candidate.error.retryable)
+
+    def _retry_delay_seconds(self, attempt: int) -> float:
+        return min(5.0, 0.05 * (self.retry_backoff_factor ** max(attempt - 1, 0)))

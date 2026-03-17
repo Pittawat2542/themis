@@ -64,6 +64,7 @@ def build_orchestrator_services(
         artifact_store=cast(ArtifactStore | None, storage_bundle.blob_store),
         max_retries=execution_policy.max_retries,
         retry_backoff_factor=execution_policy.retry_backoff_factor,
+        retryable_error_codes=execution_policy.retryable_error_codes,
         parallel_candidates=parallel_candidates,
         project_seed=project_seed,
         store_item_payloads=store_item_payloads,

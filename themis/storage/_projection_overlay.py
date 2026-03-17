@@ -256,6 +256,15 @@ class ProjectionOverlayReader:
             source_event_range=source_range,
         )
 
+    def resolve_event_payload(self, event: TrialEvent):
+        if event.payload is not None or self.artifact_store is None:
+            return event
+        artifact_hash = self._payload_artifact_hash(event)
+        if artifact_hash is None:
+            return event
+        payload = self.artifact_store.read_json(artifact_hash)
+        return event.model_copy(update={"payload": payload})
+
     def timeline_stage_from_event(self, event: TrialEvent) -> TimelineStageRecord:
         stage = event.stage
         if stage is None:
@@ -310,3 +319,22 @@ class ProjectionOverlayReader:
             "transform_hash": transform_hash,
             "evaluation_hash": evaluation_hash,
         }
+
+    def _payload_artifact_hash(self, event: TrialEvent) -> str | None:
+        expected_roles = {
+            TrialEventType.ITEM_LOADED: ArtifactRole.ITEM_PAYLOAD,
+            TrialEventType.INFERENCE_COMPLETED: ArtifactRole.INFERENCE_OUTPUT,
+            TrialEventType.EXTRACTION_COMPLETED: ArtifactRole.EXTRACTION_OUTPUT,
+            TrialEventType.EVALUATION_COMPLETED: ArtifactRole.EVALUATION_OUTPUT,
+        }
+        expected_role = expected_roles.get(event.event_type)
+        if expected_role is None:
+            return None
+        return next(
+            (
+                artifact.artifact_hash
+                for artifact in event.artifact_refs
+                if artifact.role == expected_role
+            ),
+            None,
+        )
