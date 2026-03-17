@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 from pathlib import Path
 from statistics import mean
@@ -34,7 +35,13 @@ def add_quickcheck_arguments(subparsers: argparse._SubParsersAction[Any]) -> Non
     scores = subparsers.add_parser("scores")
     scores.add_argument("--db", required=True)
     scores.add_argument("--metric")
-    scores.add_argument("--task")
+    scores.add_argument("--slice")
+    scores.add_argument(
+        "--dimension",
+        action="append",
+        default=[],
+        help="Exact-match dimension filter in key=value form.",
+    )
     scores.add_argument("--evaluation-hash")
 
     latency = subparsers.add_parser("latency")
@@ -116,7 +123,8 @@ def run_with_args(args: argparse.Namespace) -> int:
             return _run_scores(
                 conn,
                 metric_id=args.metric,
-                task_id=args.task,
+                slice_id=args.slice,
+                dimension_filters=args.dimension,
                 evaluation_hash=args.evaluation_hash,
             )
         if args.command == "latency":
@@ -159,7 +167,7 @@ def _run_failures(
     )
     rows = conn.execute(
         """
-        SELECT trial_hash, overlay_key, model_id, task_id, item_id, error_fingerprint, error_preview
+        SELECT trial_hash, overlay_key, model_id, slice_id, item_id, error_fingerprint, error_preview
         FROM trial_summary
         WHERE status = 'error' AND overlay_key = ?
         ORDER BY COALESCE(ended_at, updated_at, created_at) DESC, trial_hash ASC
@@ -174,7 +182,7 @@ def _run_failures(
                     row["trial_hash"],
                     row["overlay_key"] or "",
                     row["model_id"] or "",
-                    row["task_id"] or "",
+                    row["slice_id"] or "",
                     row["item_id"] or "",
                     row["error_fingerprint"] or "",
                     row["error_preview"] or "",
@@ -188,7 +196,8 @@ def _run_scores(
     conn: sqlite3.Connection,
     *,
     metric_id: str | None,
-    task_id: str | None,
+    slice_id: str | None,
+    dimension_filters: list[str],
     evaluation_hash: str | None,
 ) -> int:
     clauses = ["metric_scores.overlay_key = candidate_summary.overlay_key"]
@@ -201,13 +210,10 @@ def _run_scores(
     if metric_id is not None:
         clauses.append("metric_scores.metric_id = ?")
         params.append(metric_id)
-    if task_id is not None:
-        clauses.append("trial_summary.task_id = ?")
-        params.append(task_id)
     where_clause = f"WHERE {' AND '.join(clauses)}"
     rows = conn.execute(
         f"""
-        SELECT candidate_summary.overlay_key, trial_summary.model_id, trial_summary.task_id, metric_scores.metric_id, AVG(metric_scores.score) AS avg_score, COUNT(*) AS row_count
+        SELECT candidate_summary.overlay_key, trial_summary.model_id, trial_summary.slice_id, trial_summary.dimensions_json, metric_scores.metric_id, metric_scores.score
         FROM metric_scores
         JOIN candidate_summary
           ON candidate_summary.candidate_id = metric_scores.candidate_id
@@ -216,21 +222,40 @@ def _run_scores(
           ON trial_summary.trial_hash = candidate_summary.trial_hash
          AND trial_summary.overlay_key = candidate_summary.overlay_key
         {where_clause}
-        GROUP BY candidate_summary.overlay_key, trial_summary.model_id, trial_summary.task_id, metric_scores.metric_id
         ORDER BY candidate_summary.overlay_key ASC, trial_summary.model_id ASC, metric_scores.metric_id ASC
         """,
         params,
     ).fetchall()
+    parsed_dimension_filters = _parse_dimension_filters(dimension_filters)
+    grouped: dict[tuple[str, str, str, str], list[float]] = {}
     for row in rows:
+        if slice_id is not None and row["slice_id"] != slice_id:
+            continue
+        dimensions = _load_dimensions(row["dimensions_json"])
+        if not _dimensions_match(dimensions, parsed_dimension_filters):
+            continue
+        key = (
+            row["overlay_key"] or "",
+            row["model_id"] or "",
+            row["slice_id"] or "",
+            row["metric_id"] or "",
+        )
+        grouped.setdefault(key, []).append(float(row["score"]))
+    for (
+        overlay_key,
+        model_id,
+        resolved_slice_id,
+        resolved_metric_id,
+    ), scores in grouped.items():
         print(
             "\t".join(
                 [
-                    row["overlay_key"] or "",
-                    row["model_id"] or "",
-                    row["task_id"] or "",
-                    row["metric_id"] or "",
-                    f"{row['avg_score']:.4f}",
-                    str(row["row_count"]),
+                    overlay_key,
+                    model_id,
+                    resolved_slice_id,
+                    resolved_metric_id,
+                    f"{sum(scores) / len(scores):.4f}",
+                    str(len(scores)),
                 ]
             )
         )
@@ -284,6 +309,31 @@ def _percentile(values: list[int | float], percentile: int) -> str:
     ordered = sorted(values)
     index = int(round((percentile / 100) * (len(ordered) - 1)))
     return f"{ordered[index]:.2f}"
+
+
+def _parse_dimension_filters(filters: list[str]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for item in filters:
+        key, _, value = item.partition("=")
+        if key and value:
+            parsed[key] = value
+    return parsed
+
+
+def _load_dimensions(raw: str | None) -> dict[str, str]:
+    if not raw:
+        return {}
+    loaded = json.loads(raw)
+    if not isinstance(loaded, dict):
+        return {}
+    return {str(key): str(value) for key, value in loaded.items()}
+
+
+def _dimensions_match(dimensions: dict[str, str], filters: dict[str, str]) -> bool:
+    for key, expected_value in filters.items():
+        if dimensions.get(key) != expected_value:
+            return False
+    return True
 
 
 if __name__ == "__main__":

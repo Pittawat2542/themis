@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 
 from themis.orchestration.run_manifest import RunManifest, StageWorkItem, WorkItemStatus
+from themis.benchmark.specs import BenchmarkSpec
 from themis.orchestration.run_services import (
     RunPlanningService,
     _evaluation_status,
@@ -13,6 +14,7 @@ from themis.orchestration.trial_planner import PlannedTrial, TrialPlanner
 from themis.records.conversation import Conversation
 from themis.records.timeline import RecordTimeline
 from themis.records.trial import TrialRecord
+from themis.runtime.experiment_result import ExperimentResult
 from themis.runtime import RecordTimelineView
 from themis.specs.experiment import (
     ExperimentSpec,
@@ -176,7 +178,9 @@ def test_resume_reexecutes_local_runs_with_running_items() -> None:
         ],
     )
     planned_manifest = stored_manifest.model_copy()
-    execute_calls: list[tuple[ExperimentSpec, RuntimeContext | None]] = []
+    execute_calls: list[
+        tuple[ExperimentSpec | BenchmarkSpec, RuntimeContext | None]
+    ] = []
 
     class FakePlanner(TrialPlanner):
         def plan_experiment(
@@ -274,11 +278,11 @@ def test_resume_reexecutes_local_runs_with_running_items() -> None:
         def iter_candidate_scores(
             self,
             *,
-            trial_hash: str | None = None,
+            trial_hashes: Sequence[str] | None = None,
             metric_id: str | None = None,
             evaluation_hash: str | None = None,
         ) -> Iterator[ScoreRow]:
-            del trial_hash, metric_id, evaluation_hash
+            del trial_hashes, metric_id, evaluation_hash
             return iter(())
 
         def iter_trial_summaries(
@@ -367,14 +371,15 @@ def test_resume_reexecutes_local_runs_with_running_items() -> None:
         ),
     )
 
-    def execute_run(experiment_spec: ExperimentSpec, runtime: RuntimeContext | None):
+    def execute_run(
+        experiment_spec: ExperimentSpec | BenchmarkSpec,
+        runtime: RuntimeContext | None,
+    ) -> ExperimentResult:
         execute_calls.append((experiment_spec, runtime))
         manifest_repo._after_execute = True
-
-        class Result:
-            trial_hashes: list[str] = []
-
-        return Result()
+        return ExperimentResult(
+            projection_repo=service.projection_repo, trial_hashes=[]
+        )
 
     resumed = service.resume(
         stored_manifest.run_id,
@@ -412,7 +417,9 @@ def test_submit_replans_local_run_after_execution_without_progress_tracker() -> 
             ]
         }
     )
-    execute_calls: list[tuple[ExperimentSpec, RuntimeContext | None]] = []
+    execute_calls: list[
+        tuple[ExperimentSpec | BenchmarkSpec, RuntimeContext | None]
+    ] = []
 
     class FakePlanner(TrialPlanner):
         def plan_experiment(
@@ -510,11 +517,11 @@ def test_submit_replans_local_run_after_execution_without_progress_tracker() -> 
         def iter_candidate_scores(
             self,
             *,
-            trial_hash: str | None = None,
+            trial_hashes: Sequence[str] | None = None,
             metric_id: str | None = None,
             evaluation_hash: str | None = None,
         ) -> Iterator[ScoreRow]:
-            del trial_hash, metric_id, evaluation_hash
+            del trial_hashes, metric_id, evaluation_hash
             return iter(())
 
         def iter_trial_summaries(
@@ -595,14 +602,15 @@ def test_submit_replans_local_run_after_execution_without_progress_tracker() -> 
         ),
     )
 
-    def execute_run(experiment_spec: ExperimentSpec, runtime: RuntimeContext | None):
+    def execute_run(
+        experiment_spec: ExperimentSpec | BenchmarkSpec,
+        runtime: RuntimeContext | None,
+    ) -> ExperimentResult:
         execute_calls.append((experiment_spec, runtime))
         manifest_repo._after_execute = True
-
-        class Result:
-            trial_hashes: list[str] = []
-
-        return Result()
+        return ExperimentResult(
+            projection_repo=service.projection_repo, trial_hashes=[]
+        )
 
     handle = service.submit(
         experiment,

@@ -58,7 +58,7 @@ def migrate_sqlite_store(
             src_conn,
             "run_manifests",
             """
-            SELECT run_id, backend_kind, project_spec_json, experiment_spec_json,
+            SELECT run_id, backend_kind, project_spec_json, benchmark_spec_json, experiment_spec_json,
                    manifest_json, created_at
             FROM run_manifests
             """,
@@ -184,14 +184,16 @@ def migrate_sqlite_store(
                         run_id,
                         backend_kind,
                         project_spec_json,
+                        benchmark_spec_json,
                         experiment_spec_json,
                         manifest_json,
                         created_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(run_id) DO UPDATE SET
                         backend_kind=excluded.backend_kind,
                         project_spec_json=excluded.project_spec_json,
+                        benchmark_spec_json=excluded.benchmark_spec_json,
                         experiment_spec_json=excluded.experiment_spec_json,
                         manifest_json=excluded.manifest_json,
                         created_at=excluded.created_at
@@ -200,6 +202,7 @@ def migrate_sqlite_store(
                         row["run_id"],
                         row["backend_kind"],
                         row["project_spec_json"],
+                        row["benchmark_spec_json"],
                         row["experiment_spec_json"],
                         row["manifest_json"],
                         row["created_at"],

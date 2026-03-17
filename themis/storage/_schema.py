@@ -13,7 +13,7 @@ class StatementExecutor(Protocol):
 
 
 STORE_FORMAT_KEY = "store_format"
-STORE_FORMAT_VERSION = "stage_overlays_v2"
+STORE_FORMAT_VERSION = "stage_overlays_v3"
 
 THEMIS_TABLES = {
     "specs",
@@ -57,8 +57,12 @@ CREATE TABLE IF NOT EXISTS artifacts (
 CREATE TABLE IF NOT EXISTS trial_summary (
     trial_hash TEXT NOT NULL,
     overlay_key TEXT NOT NULL DEFAULT 'gen',
+    benchmark_id TEXT,
     model_id TEXT,
     task_id TEXT,
+    slice_id TEXT,
+    prompt_variant_id TEXT,
+    dimensions_json TEXT,
     item_id TEXT,
     status TEXT NOT NULL,
     started_at TEXT,
@@ -168,6 +172,7 @@ CREATE TABLE IF NOT EXISTS run_manifests (
     run_id TEXT PRIMARY KEY,
     backend_kind TEXT NOT NULL,
     project_spec_json TEXT,
+    benchmark_spec_json TEXT,
     experiment_spec_json TEXT NOT NULL,
     manifest_json TEXT NOT NULL,
     created_at TEXT NOT NULL

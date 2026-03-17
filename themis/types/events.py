@@ -209,6 +209,10 @@ class TrialSummaryRow(BaseModel):
     trial_hash: str
     model_id: str | None = None
     task_id: str | None = None
+    benchmark_id: str | None = None
+    slice_id: str | None = None
+    prompt_variant_id: str | None = None
+    dimensions: dict[str, str] = Field(default_factory=dict)
     item_id: str | None = None
     status: RecordStatus
 

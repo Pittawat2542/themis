@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 from themis import (
-    DatasetSpec,
-    EvaluationSpec,
     ExecutionPolicySpec,
-    ExperimentSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
     ProjectSpec,
-    PromptTemplateSpec,
     SqliteBlobStorageSpec,
-    TaskSpec,
 )
 from themis.types.enums import DatasetSource
+from themis.specs.experiment import ExperimentSpec, PromptTemplateSpec
+from themis.specs.foundational import DatasetSpec, EvaluationSpec, TaskSpec
 
 
 def build_config_bundle() -> dict[str, object]:

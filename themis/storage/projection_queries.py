@@ -19,6 +19,12 @@ _CONVERSATION_EVENT_ADAPTER: TypeAdapter[ConversationEvent] = TypeAdapter(
 )
 
 
+def _coerce_dimensions(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): str(item) for key, item in value.items()}
+
+
 class ProjectionQueries:
     """Owns SQL-backed read queries and basic projection hydration helpers."""
 
@@ -82,16 +88,20 @@ class ProjectionQueries:
     def iter_candidate_scores(
         self,
         *,
-        trial_hash: str | None = None,
+        trial_hashes: Sequence[str] | None = None,
         metric_id: str | None = None,
         evaluation_hash: str | None = None,
     ) -> Iterator[ScoreRow]:
+        if trial_hashes is not None and not trial_hashes:
+            return
+
         overlay_key = self.overlay_key(evaluation_hash=evaluation_hash)
         clauses: list[str] = []
         params: list[object] = []
-        if trial_hash is not None:
-            clauses.append("candidate_summary.trial_hash = ?")
-            params.append(trial_hash)
+        if trial_hashes:
+            placeholders = ", ".join("?" for _ in trial_hashes)
+            clauses.append(f"candidate_summary.trial_hash IN ({placeholders})")
+            params.extend(trial_hashes)
         if metric_id is not None:
             clauses.append("metric_scores.metric_id = ?")
             params.append(metric_id)
@@ -145,7 +155,7 @@ class ProjectionQueries:
             evaluation_hash=evaluation_hash,
         )
         query = """
-            SELECT trial_hash, model_id, task_id, item_id, status
+            SELECT trial_hash, benchmark_id, model_id, task_id, slice_id, prompt_variant_id, dimensions_json, item_id, status
             FROM trial_summary
             WHERE overlay_key = ?
         """
@@ -162,8 +172,19 @@ class ProjectionQueries:
         for row in rows:
             yield TrialSummaryRow(
                 trial_hash=row["trial_hash"],
+                benchmark_id=row["benchmark_id"],
                 model_id=row["model_id"],
                 task_id=row["task_id"],
+                slice_id=row["slice_id"],
+                prompt_variant_id=row["prompt_variant_id"],
+                dimensions=_coerce_dimensions(
+                    self.codecs.load_json_value(
+                        row["dimensions_json"],
+                        label="trial_summary.dimensions_json",
+                        context=f"trial_hash={row['trial_hash']}",
+                        default={},
+                    )
+                ),
                 item_id=row["item_id"],
                 status=row["status"],
             )

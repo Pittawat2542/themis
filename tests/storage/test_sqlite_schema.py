@@ -136,7 +136,7 @@ def test_database_manager_initialization(tmp_path):
             """
         ).fetchone()
         assert store_format_row is not None
-        assert store_format_row["metadata_value"] == "stage_overlays_v2"
+        assert store_format_row["metadata_value"] == "stage_overlays_v3"
 
 
 def test_database_manager_invalid_uri():
@@ -244,6 +244,90 @@ def test_database_manager_migrates_stage_work_item_progress_columns(tmp_path):
         "last_error_code",
         "last_error_message",
     }.issubset(columns)
+
+
+def test_database_manager_migrates_benchmark_projection_and_manifest_columns(tmp_path):
+    db_path = tmp_path / "legacy-benchmark-columns.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE store_metadata (
+            metadata_key TEXT PRIMARY KEY,
+            metadata_value TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO store_metadata (metadata_key, metadata_value) VALUES (?, ?)",
+        ("store_format", "stage_overlays_v2"),
+    )
+    conn.execute(
+        """
+        CREATE TABLE specs (
+            spec_hash TEXT PRIMARY KEY,
+            canonical_hash TEXT,
+            spec_type TEXT NOT NULL,
+            schema_version TEXT NOT NULL,
+            canonical_json TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE trial_summary (
+            trial_hash TEXT PRIMARY KEY,
+            overlay_key TEXT,
+            model_id TEXT,
+            task_id TEXT,
+            item_id TEXT,
+            status TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE run_manifests (
+            run_id TEXT PRIMARY KEY,
+            backend_kind TEXT NOT NULL,
+            project_spec_json TEXT,
+            experiment_spec_json TEXT NOT NULL,
+            manifest_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    manager = DatabaseManager(f"sqlite:///{db_path}")
+    manager.initialize()
+
+    with manager.get_connection() as upgraded:
+        trial_summary_columns = {
+            row["name"] for row in upgraded.execute("PRAGMA table_info(trial_summary)")
+        }
+        run_manifest_columns = {
+            row["name"] for row in upgraded.execute("PRAGMA table_info(run_manifests)")
+        }
+        store_format = upgraded.execute(
+            """
+            SELECT metadata_value
+            FROM store_metadata
+            WHERE metadata_key = ?
+            """,
+            (storage_schema.STORE_FORMAT_KEY,),
+        ).fetchone()
+
+    assert {
+        "benchmark_id",
+        "slice_id",
+        "prompt_variant_id",
+        "dimensions_json",
+    }.issubset(trial_summary_columns)
+    assert "benchmark_spec_json" in run_manifest_columns
+    assert store_format is not None
+    assert store_format["metadata_value"] == "stage_overlays_v3"
 
 
 def test_sqlite_and_postgres_share_storage_schema_contract():

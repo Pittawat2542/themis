@@ -88,6 +88,7 @@ class PostgresConnectionManager:
         with self.get_connection() as conn:
             with conn:
                 apply_sql_script(conn, SCHEMA)
+                self._migrate(conn)
                 self._ensure_store_format(conn)
 
     def _ensure_store_format(self, conn: StorageConnection) -> None:
@@ -108,6 +109,16 @@ class PostgresConnectionManager:
                 (STORE_FORMAT_KEY, STORE_FORMAT_VERSION),
             )
             return
+        if row["metadata_value"] == "stage_overlays_v2":
+            conn.execute(
+                """
+                UPDATE store_metadata
+                SET metadata_value = ?
+                WHERE metadata_key = ?
+                """,
+                (STORE_FORMAT_VERSION, STORE_FORMAT_KEY),
+            )
+            return
         if row["metadata_value"] != STORE_FORMAT_VERSION:
             raise StorageError(
                 code=ErrorCode.STORAGE_READ,
@@ -117,3 +128,26 @@ class PostgresConnectionManager:
                 ),
                 details={"database_url": self.database_url},
             )
+
+    def _migrate(self, conn: StorageConnection) -> None:
+        for statement in (
+            "ALTER TABLE specs ADD COLUMN IF NOT EXISTS canonical_hash TEXT",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS benchmark_id TEXT",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS slice_id TEXT",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS prompt_variant_id TEXT",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS dimensions_json TEXT",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS started_at TEXT",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS ended_at TEXT",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS duration_ms INTEGER",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS has_conversation INTEGER DEFAULT 0",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS has_logprobs INTEGER DEFAULT 0",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS has_trace INTEGER DEFAULT 0",
+            "ALTER TABLE trial_summary ADD COLUMN IF NOT EXISTS tags_json TEXT",
+            "ALTER TABLE stage_work_items ADD COLUMN IF NOT EXISTS started_at TEXT",
+            "ALTER TABLE stage_work_items ADD COLUMN IF NOT EXISTS ended_at TEXT",
+            "ALTER TABLE stage_work_items ADD COLUMN IF NOT EXISTS last_error_code TEXT",
+            "ALTER TABLE stage_work_items ADD COLUMN IF NOT EXISTS last_error_message TEXT",
+            "ALTER TABLE run_manifests ADD COLUMN IF NOT EXISTS benchmark_spec_json TEXT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_specs_canonical_hash ON specs(canonical_hash)",
+        ):
+            conn.execute(statement)
