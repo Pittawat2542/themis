@@ -1,20 +1,10 @@
-"""Run generation locally, score externally, then continue with Themis analysis.
+"""Run generation locally, score externally, and import benchmark results back."""
 
-Requires the optional stats extra:
-
-    uv add "themis-eval[stats]"
-"""
-
-from __future__ import annotations
-from collections import defaultdict
 from pathlib import Path
 
 from themis import (
-    DatasetSpec,
-    EvaluationSpec,
+    BenchmarkSpec,
     ExecutionPolicySpec,
-    ExperimentSpec,
-    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -22,11 +12,13 @@ from themis import (
     PluginRegistry,
     ProjectSpec,
     PromptMessage,
-    PromptTemplateSpec,
+    PromptVariantSpec,
+    ScoreSpec,
+    SliceSpec,
     StorageSpec,
-    TaskSpec,
 )
 from themis.contracts.protocols import InferenceResult
+from themis.orchestration.run_manifest import EvaluationBundleItem, EvaluationWorkBundle
 from themis.records import (
     CandidateRecord,
     EvaluationRecord,
@@ -34,32 +26,24 @@ from themis.records import (
     MetricScore,
     TrialRecord,
 )
-from themis.types.enums import PromptRole, DatasetSource, CompressionCodec
+from themis.specs import DatasetSpec, GenerationSpec
+from themis.specs.experiment import TrialSpec
+from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 
 
-class ArithmeticDatasetLoader:
-    def load_task_items(self, task):
-        del task
+class ArithmeticDatasetProvider:
+    def scan(self, slice_spec, query):
+        del slice_spec, query
         return [
             {"item_id": "item-1", "question": "1 + 1", "answer": "2"},
             {"item_id": "item-2", "question": "2 + 2", "answer": "4"},
-            {"item_id": "item-3", "question": "3 + 3", "answer": "6"},
-            {"item_id": "item-4", "question": "4 + 4", "answer": "8"},
         ]
 
 
-class ComparisonEngine:
-    """Makes the candidate model stronger than the baseline."""
-
+class DemoEngine:
     def infer(self, trial, context, runtime):
         del runtime
-        if trial.model.model_id == "baseline" and context["item_id"] in {
-            "item-2",
-            "item-4",
-        }:
-            answer = "wrong"
-        else:
-            answer = context["answer"]
+        answer = context["answer"] if trial.model.model_id == "candidate" else "wrong"
         return InferenceResult(
             inference=InferenceRecord(
                 spec_hash=f"inf_{trial.model.model_id}_{trial.item_id}",
@@ -68,83 +52,27 @@ class ComparisonEngine:
         )
 
 
-class ExternalExactMatchMetric:
-    """Placeholder metric used only for planning the evaluation overlay."""
-
+class PlaceholderMetric:
     def score(self, trial, candidate, context):
         del trial, candidate, context
         return MetricScore(metric_id="external_exact_match", value=0.0)
 
 
-def build_registry() -> PluginRegistry:
-    registry = PluginRegistry()
-    registry.register_inference_engine("demo", ComparisonEngine())
-    registry.register_metric("external_exact_match", ExternalExactMatchMetric())
-    return registry
-
-
-def build_project() -> ProjectSpec:
-    return ProjectSpec(
-        project_name="external-stage-handoff",
-        researcher_id="examples",
-        global_seed=61,
-        storage=StorageSpec(
-            root_dir=str(Path(".cache/themis-examples/08-external-stage-handoff")),
-            compression=CompressionCodec.NONE,
-        ),
-        execution_policy=ExecutionPolicySpec(),
-    )
-
-
-def build_experiment() -> ExperimentSpec:
-    return ExperimentSpec(
-        models=[
-            ModelSpec(model_id="baseline", provider="demo"),
-            ModelSpec(model_id="candidate", provider="demo"),
-        ],
-        tasks=[
-            TaskSpec(
-                task_id="external-eval-math",
-                dataset=DatasetSpec(source=DatasetSource.MEMORY),
-                generation=GenerationSpec(),
-                evaluations=[
-                    EvaluationSpec(
-                        name="external",
-                        metrics=["external_exact_match"],
-                    )
-                ],
-            )
-        ],
-        prompt_templates=[
-            PromptTemplateSpec(
-                id="baseline",
-                messages=[
-                    PromptMessage(
-                        role=PromptRole.USER, content="Answer the arithmetic problem."
-                    )
-                ],
-            )
-        ],
-        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
-    )
-
-
-def build_external_evaluation_records(bundle) -> list[TrialRecord]:
-    items_by_trial = defaultdict(list)
-    trial_specs = {}
+def _build_external_records(bundle: EvaluationWorkBundle) -> list[TrialRecord]:
+    by_trial: dict[str, list[EvaluationBundleItem]] = {}
+    trial_specs: dict[str, TrialSpec] = {}
     for item in bundle.items:
-        items_by_trial[item.trial_hash].append(item)
+        by_trial.setdefault(item.trial_hash, []).append(item)
         trial_specs[item.trial_hash] = item.trial_spec
 
     records: list[TrialRecord] = []
-    for trial_hash, items in sorted(items_by_trial.items()):
-        candidates = []
+    for trial_hash, items in sorted(by_trial.items()):
+        candidates: list[CandidateRecord] = []
         for item in items:
             expected = str(item.dataset_context["answer"])
             actual = (
                 item.candidate.inference.raw_text if item.candidate.inference else ""
             )
-            score = float(actual == expected)
             candidates.append(
                 CandidateRecord(
                     spec_hash=item.candidate_id,
@@ -155,8 +83,7 @@ def build_external_evaluation_records(bundle) -> list[TrialRecord]:
                         metric_scores=[
                             MetricScore(
                                 metric_id="external_exact_match",
-                                value=score,
-                                details={"expected": expected, "actual": actual},
+                                value=float(actual == expected),
                             )
                         ],
                     ),
@@ -172,44 +99,65 @@ def build_external_evaluation_records(bundle) -> list[TrialRecord]:
     return records
 
 
-def _format_display_path(path: Path) -> str:
-    return path.as_posix()
-
-
 def main() -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine("demo", DemoEngine())
+    registry.register_metric("external_exact_match", PlaceholderMetric())
+
+    project = ProjectSpec(
+        project_name="external-stage-benchmark",
+        researcher_id="examples",
+        global_seed=61,
+        storage=StorageSpec(
+            root_dir=str(
+                Path(".cache/themis-examples/08-external-stage-handoff-benchmark-first")
+            ),
+            compression=CompressionCodec.NONE,
+        ),
+        execution_policy=ExecutionPolicySpec(),
+    )
+    benchmark = BenchmarkSpec(
+        benchmark_id="external-eval",
+        models=[
+            ModelSpec(model_id="baseline", provider="demo"),
+            ModelSpec(model_id="candidate", provider="demo"),
+        ],
+        slices=[
+            SliceSpec(
+                slice_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+                prompt_variant_ids=["baseline"],
+                scores=[ScoreSpec(name="external", metrics=["external_exact_match"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="baseline",
+                family="qa",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve the arithmetic problem."
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
     orchestrator = Orchestrator.from_project_spec(
-        build_project(),
-        registry=build_registry(),
-        dataset_loader=ArithmeticDatasetLoader(),
+        project,
+        registry=registry,
+        dataset_provider=ArithmeticDatasetProvider(),
     )
-    experiment = build_experiment()
-
-    generated = orchestrator.generate(experiment)
-    print("Generation-only trial count:", len(generated.trial_hashes))
-
-    evaluation_bundle = orchestrator.export_evaluation_bundle(experiment)
-    print("Pending external evaluation items:", len(evaluation_bundle.items))
-
-    external_records = build_external_evaluation_records(evaluation_bundle)
-    result = orchestrator.import_evaluation_results(evaluation_bundle, external_records)
-    evaluation_result = result.for_evaluation(result.evaluation_hashes[0])
-
-    comparison = evaluation_result.compare(
-        metric_id="external_exact_match",
-        baseline_model_id="baseline",
-        treatment_model_id="candidate",
-        p_value_correction="holm",
+    generated = orchestrator.generate(benchmark)
+    assert generated.trial_hashes
+    bundle = orchestrator.export_evaluation_bundle(benchmark)
+    result = orchestrator.import_evaluation_results(
+        bundle, _build_external_records(bundle)
     )
-    leaderboard = evaluation_result.leaderboard(metric_id="external_exact_match")
-    export_path = Path(
-        ".cache/themis-examples/08-external-stage-handoff/external-result.json"
-    )
-    evaluation_result.export_json(str(export_path))
 
-    row = comparison.rows[0]
-    print("Comparison delta_mean:", round(row.delta_mean, 3))
-    print("Leaderboard rows:", len(leaderboard))
-    print("Exported overlay JSON:", _format_display_path(export_path))
+    print(result.aggregate(group_by=["model_id", "slice_id", "metric_id"]))
 
 
 if __name__ == "__main__":

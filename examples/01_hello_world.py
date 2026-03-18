@@ -1,13 +1,11 @@
-"""Minimal Themis workflow that mirrors the Quick Start guide."""
+"""Minimal benchmark-first Themis run."""
 
 from pathlib import Path
 
 from themis import (
-    DatasetSpec,
-    EvaluationSpec,
+    BenchmarkSpec,
+    DatasetQuerySpec,
     ExecutionPolicySpec,
-    ExperimentSpec,
-    GenerationSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -15,92 +13,81 @@ from themis import (
     PluginRegistry,
     ProjectSpec,
     PromptMessage,
-    PromptTemplateSpec,
-    SqliteBlobStorageSpec,
-    TaskSpec,
+    PromptVariantSpec,
+    ScoreSpec,
+    SliceSpec,
+    StorageSpec,
 )
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
-from themis.types.enums import PromptRole, DatasetSource
+from themis.specs import DatasetSpec, GenerationSpec
+from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 
 
-class ArithmeticDatasetLoader:
-    """Provides two in-memory arithmetic items for the demo task."""
-
-    def load_task_items(self, task):
-        del task
-        return [
-            {"item_id": "item-1", "question": "2 + 2", "answer": "4"},
-            {"item_id": "item-2", "question": "6 * 7", "answer": "42"},
-        ]
+class ArithmeticDatasetProvider:
+    def scan(self, slice_spec, query):
+        del slice_spec, query
+        return [{"item_id": "item-1", "question": "2 + 2", "answer": "4"}]
 
 
 class DemoEngine:
-    """Small fake engine so the example runs without external providers."""
-
     def infer(self, trial, context, runtime):
-        del runtime
-        answer = "4" if context["question"] == "2 + 2" else "42"
+        del trial, runtime
         return InferenceResult(
             inference=InferenceRecord(
-                spec_hash=f"inference_{trial.item_id}",
-                raw_text=answer,
-                latency_ms=2,
+                spec_hash=f"inf_{context['item_id']}",
+                raw_text=str(context["answer"]),
             )
         )
 
 
 class ExactMatchMetric:
-    """Scores the engine output against the dataset answer."""
-
     def score(self, trial, candidate, context):
         del trial
         actual = candidate.inference.raw_text if candidate.inference else ""
-        expected = str(context["answer"])
         return MetricScore(
             metric_id="exact_match",
-            value=float(actual.strip() == expected),
-            details={"actual": actual, "expected": expected},
+            value=float(actual == context["answer"]),
         )
 
 
-def build_registry() -> PluginRegistry:
+def main() -> None:
     registry = PluginRegistry()
     registry.register_inference_engine("demo", DemoEngine())
     registry.register_metric("exact_match", ExactMatchMetric())
-    return registry
 
-
-def build_project() -> ProjectSpec:
-    return ProjectSpec(
-        project_name="hello-world",
+    project = ProjectSpec(
+        project_name="hello-world-benchmark",
         researcher_id="examples",
         global_seed=7,
-        storage=SqliteBlobStorageSpec(
-            root_dir=str(Path(".cache/themis-examples/01-hello-world")),
-            compression="none",
+        storage=StorageSpec(
+            root_dir=str(Path(".cache/themis-examples/01-hello-world-benchmark-first")),
+            compression=CompressionCodec.NONE,
         ),
         execution_policy=ExecutionPolicySpec(),
     )
-
-
-def build_experiment() -> ExperimentSpec:
-    return ExperimentSpec(
+    benchmark = BenchmarkSpec(
+        benchmark_id="hello-world",
         models=[ModelSpec(model_id="demo-model", provider="demo")],
-        tasks=[
-            TaskSpec(
-                task_id="arithmetic",
+        slices=[
+            SliceSpec(
+                slice_id="arithmetic",
                 dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                dataset_query=DatasetQuerySpec.subset(1, seed=7),
+                dimensions={"source": "synthetic", "format": "qa"},
+                prompt_variant_ids=["qa-default"],
                 generation=GenerationSpec(),
-                evaluations=[EvaluationSpec(name="default", metrics=["exact_match"])],
+                scores=[ScoreSpec(name="default", metrics=["exact_match"])],
             )
         ],
-        prompt_templates=[
-            PromptTemplateSpec(
-                id="baseline",
+        prompt_variants=[
+            PromptVariantSpec(
+                id="qa-default",
+                family="qa",
                 messages=[
                     PromptMessage(
-                        role=PromptRole.USER, content="Solve the arithmetic problem."
+                        role=PromptRole.USER,
+                        content="Question: {item.question}",
                     )
                 ],
             )
@@ -108,24 +95,17 @@ def build_experiment() -> ExperimentSpec:
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
     )
 
-
-def main() -> None:
     orchestrator = Orchestrator.from_project_spec(
-        build_project(),
-        registry=build_registry(),
-        dataset_loader=ArithmeticDatasetLoader(),
+        project,
+        registry=registry,
+        dataset_provider=ArithmeticDatasetProvider(),
     )
-    result = orchestrator.run(build_experiment())
+    result = orchestrator.run_benchmark(benchmark)
 
-    print(
-        "Stored SQLite database:",
-        ".cache/themis-examples/01-hello-world/themis.sqlite3",
-    )
-    for trial in result.iter_trials():
-        assert trial.candidates[0].evaluation is not None
-        score = trial.candidates[0].evaluation.aggregate_scores["exact_match"]
-        assert trial.trial_spec is not None
-        print(f"{trial.trial_spec.item_id}: exact_match={score:.1f}")
+    for row in result.aggregate(
+        group_by=["model_id", "slice_id", "metric_id", "source", "prompt_variant_id"]
+    ):
+        print(row)
 
 
 if __name__ == "__main__":

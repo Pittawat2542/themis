@@ -17,6 +17,7 @@ from themis.orchestration.generation_stage import GenerationStageExecutor
 from themis.orchestration.overlay_stage import OverlayStageExecutor
 from themis.orchestration.runner_events import TrialEventEmitter
 from themis.orchestration.session_preparer import TrialSessionPreparer
+from themis.orchestration.session_preparer import prepare_benchmark_prompt
 from themis.orchestration.runner_state import (
     TrialExecutionSession,
 )
@@ -55,6 +56,7 @@ class TrialRunner:
         artifact_store: ArtifactStore | None = None,
         max_retries: int = 3,
         retry_backoff_factor: float = 1.5,
+        retryable_error_codes: list[str] | None = None,
         parallel_candidates: int = 5,
         project_seed: int | None = None,
         store_item_payloads: bool = True,
@@ -70,6 +72,22 @@ class TrialRunner:
         self.artifact_store = artifact_store
         self.max_retries = max_retries
         self.retry_backoff_factor = retry_backoff_factor
+        invalid_error_codes: list[str] = []
+        validated_error_codes: list[ErrorCode] = []
+        for value in retryable_error_codes or []:
+            try:
+                validated_error_codes.append(ErrorCode(value))
+            except ValueError:
+                invalid_error_codes.append(value)
+        if invalid_error_codes:
+            invalid_values = ", ".join(
+                sorted(repr(value) for value in invalid_error_codes)
+            )
+            raise SpecValidationError(
+                code=ErrorCode.SCHEMA_MISMATCH,
+                message=(f"Unknown retryable_error_codes: {invalid_values}."),
+            )
+        self.retryable_error_codes = tuple(validated_error_codes)
         self.parallel_candidates = parallel_candidates
         self.project_seed = project_seed
         self.store_item_payloads = store_item_payloads
@@ -92,6 +110,8 @@ class TrialRunner:
             registry=registry,
             event_emitter=self.event_emitter,
             max_retries=max_retries,
+            retry_backoff_factor=retry_backoff_factor,
+            retryable_error_codes=self.retryable_error_codes,
             project_seed=project_seed,
             telemetry_bus=telemetry_bus,
             append_session_event=self._append_session_event,
@@ -101,6 +121,9 @@ class TrialRunner:
             registry=registry,
             event_emitter=self.event_emitter,
             artifact_store=artifact_store,
+            max_retries=max_retries,
+            retry_backoff_factor=retry_backoff_factor,
+            retryable_error_codes=self.retryable_error_codes,
             telemetry_bus=telemetry_bus,
             append_session_event=self._append_session_event,
         )
@@ -116,20 +139,25 @@ class TrialRunner:
         """Build the shared execution context for one trial."""
         provenance = self._build_provenance()
         base_runtime = self._coerce_runtime_context(runtime_context)
-        session = self.session_preparer.prepare_trial_session(
-            trial,
-            dataset_context,
-            base_runtime,
-            provenance,
-        )
-        session.resolved_plugins = resolve_trial_plugins(
+        resolved_plugins = resolve_trial_plugins(
             trial,
             self.registry,
-            resolved_stages=session.resolved_stages,
+            resolved_stages=None,
             required_stages=tuple(required_stages)
             if required_stages is not None
             else None,
         )
+        prepared_trial = resolved_plugins.hooks.apply_pre_inference(
+            prepare_benchmark_prompt(trial, dataset_context, base_runtime)
+        )
+        session = self.session_preparer.prepare_trial_session(
+            trial,
+            prepared_trial,
+            dataset_context,
+            base_runtime,
+            provenance,
+        )
+        session.resolved_plugins = resolved_plugins
         return session
 
     def run_generation_candidate(

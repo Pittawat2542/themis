@@ -139,13 +139,13 @@ class _ScoreRepo:
     def iter_candidate_scores(
         self,
         *,
-        trial_hash: str | None = None,
+        trial_hashes: list[str] | None = None,
         metric_id: str | None = None,
         evaluation_hash: str | None = None,
     ):
         del evaluation_hash
         for row in self.score_rows:
-            if trial_hash is not None and row.trial_hash != trial_hash:
+            if trial_hashes is not None and row.trial_hash not in trial_hashes:
                 continue
             if metric_id is not None and row.metric_id != metric_id:
                 continue

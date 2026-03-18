@@ -7,6 +7,7 @@ from typing import cast
 
 from themis.contracts.protocols import (
     DatasetLoader,
+    DatasetProvider,
     ObservabilityStore,
     ProjectionRepository,
     TrialEventRepository,
@@ -41,6 +42,7 @@ def build_orchestrator_services(
     registry: PluginRegistry,
     storage_bundle: StorageBundle,
     dataset_loader: DatasetLoader | None,
+    dataset_provider: DatasetProvider | None,
     execution_policy: ExecutionPolicySpec,
     parallel_candidates: int,
     project_seed: int | None,
@@ -53,6 +55,7 @@ def build_orchestrator_services(
     projection_repo = storage_bundle.projection_repo
     planner = TrialPlanner(
         dataset_loader=dataset_loader,
+        dataset_provider=dataset_provider,
         registry=registry,
     )
     runner = TrialRunner(
@@ -61,6 +64,7 @@ def build_orchestrator_services(
         artifact_store=cast(ArtifactStore | None, storage_bundle.blob_store),
         max_retries=execution_policy.max_retries,
         retry_backoff_factor=execution_policy.retry_backoff_factor,
+        retryable_error_codes=execution_policy.retryable_error_codes,
         parallel_candidates=parallel_candidates,
         project_seed=project_seed,
         store_item_payloads=store_item_payloads,

@@ -151,6 +151,13 @@ class TrialEventEmitter:
     ) -> None:
         """Persist extraction events for one output-transform overlay."""
         for attempt_index, extraction in enumerate(transformed_candidate.extractions):
+            extraction_payload = extraction.model_dump(mode="json")
+            extraction_artifact = artifact_ref(
+                extraction_payload,
+                role=ArtifactRole.EXTRACTION_OUTPUT,
+                label="extraction_output",
+                artifact_store=self.artifact_store,
+            )
             append_event(
                 TrialEventType.EXTRACTION_COMPLETED,
                 candidate_id=candidate_id,
@@ -163,7 +170,8 @@ class TrialEventEmitter:
                     success=extraction.success,
                     failure_reason=extraction.failure_reason,
                 ),
-                payload=extraction.model_dump(mode="json"),
+                payload=extraction_payload,
+                artifact_refs=[extraction_artifact[0]],
             )
 
     def emit_evaluation_candidate_events(
@@ -193,6 +201,13 @@ class TrialEventEmitter:
             if first_score.details
             else None
         )
+        evaluation_payload = evaluated_candidate.evaluation.model_dump(mode="json")
+        evaluation_artifact = artifact_ref(
+            evaluation_payload,
+            role=ArtifactRole.EVALUATION_OUTPUT,
+            label="evaluation_output",
+            artifact_store=self.artifact_store,
+        )
         append_event(
             TrialEventType.EVALUATION_COMPLETED,
             candidate_id=candidate_id,
@@ -215,9 +230,10 @@ class TrialEventEmitter:
                     artifact.artifact_hash for artifact in judge_artifact_refs or []
                 ],
             ),
-            payload=evaluated_candidate.evaluation.model_dump(mode="json"),
+            payload=evaluation_payload,
             artifact_refs=[
                 *([details_artifact[0]] if details_artifact is not None else []),
+                evaluation_artifact[0],
                 *(judge_artifact_refs or []),
             ],
         )

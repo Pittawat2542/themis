@@ -4,6 +4,8 @@ import importlib.util
 from pathlib import Path
 import runpy
 
+from tests.constants import EXPECTED_ROOT_EXPORTS
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -120,6 +122,12 @@ def test_check_built_package_import_check_targets_site_packages() -> None:
     assert "expected = " in snippet
 
 
+def test_check_built_package_uses_v3_root_exports() -> None:
+    module = _load_module("scripts/ci/check_built_package.py", "check_built_package")
+
+    assert module.EXPECTED_ROOT_EXPORTS == EXPECTED_ROOT_EXPORTS
+
+
 def test_check_built_package_selects_wheel_matching_project_version(tmp_path) -> None:
     module = _load_module("scripts/ci/check_built_package.py", "check_built_package")
 
@@ -143,5 +151,5 @@ def test_hooks_and_timeline_example_runs(tmp_path, monkeypatch, capsys) -> None:
     )
 
     captured = capsys.readouterr()
-    assert "Telemetry events:" in captured.out
-    assert "Candidate output:" in captured.out
+    assert "PromptRole.SYSTEM:Be concise and explicit." in captured.out
+    assert "question=Explain what you are doing." in captured.out

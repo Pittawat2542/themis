@@ -63,6 +63,7 @@ def _prepared_session(
 ) -> TrialExecutionSession:
     return TrialExecutionSession(
         trial=trial,
+        prepared_trial=trial,
         dataset_context=dataset_context,
         base_runtime=runtime_context or RuntimeContext(),
         provenance=ProvenanceRecord(

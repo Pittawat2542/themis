@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import hashlib
 import json
 from pathlib import Path
+import sqlite3
 import shutil
 from typing import cast
 
@@ -14,9 +17,29 @@ from themis.storage.blobs.local_fs import LocalBlobStore
 from themis.storage._protocols import StorageConnectionManager
 from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.factory import StorageBundle, build_storage_bundle
-from themis.storage.sqlite_schema import DatabaseManager
 from themis.types.enums import ErrorCode
 from themis.types.events import ProjectionCompletedEventMetadata, TrialEventType
+
+
+class _ReadOnlySqliteManager:
+    """Minimal read-only connection manager for source-store migration reads."""
+
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path
+
+    @contextmanager
+    def get_connection(self):
+        conn = sqlite3.connect(
+            f"file:{self.db_path}?mode=ro",
+            uri=True,
+            timeout=30.0,
+            isolation_level=None,
+        )
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 def migrate_sqlite_store(
@@ -27,19 +50,25 @@ def migrate_sqlite_store(
 ) -> None:
     """Copy a SQLite-backed store into another initialized storage bundle."""
     source_db = Path(source_db_path)
-    source_manager = DatabaseManager(f"sqlite:///{source_db}")
+    source_manager = _ReadOnlySqliteManager(source_db)
     source_event_repo = SqliteEventRepository(
         cast(StorageConnectionManager, source_manager)
     )
     trial_hashes: list[str] = []
 
     with source_manager.get_connection() as src_conn:
-        spec_rows = src_conn.execute(
-            """
-            SELECT spec_hash, canonical_hash, spec_type, schema_version, canonical_json
-            FROM specs
-            """
-        ).fetchall()
+        spec_rows = _load_table_rows(
+            src_conn,
+            "specs",
+            columns={
+                "spec_hash": None,
+                "canonical_hash": "NULL",
+                "spec_type": None,
+                "schema_version": None,
+                "canonical_json": None,
+            },
+            order_by="spec_hash ASC",
+        )
         event_rows = src_conn.execute(
             """
             SELECT trial_hash, event_seq, event_id, candidate_id, event_type, stage, status,
@@ -54,25 +83,44 @@ def migrate_sqlite_store(
             FROM artifacts
             """
         ).fetchall()
-        run_manifest_rows = _load_optional_rows(
+        run_manifest_rows = _load_table_rows(
             src_conn,
             "run_manifests",
-            """
-            SELECT run_id, backend_kind, project_spec_json, experiment_spec_json,
-                   manifest_json, created_at
-            FROM run_manifests
-            """,
+            columns={
+                "run_id": None,
+                "backend_kind": None,
+                "project_spec_json": None,
+                "benchmark_spec_json": "NULL",
+                "experiment_spec_json": None,
+                "manifest_json": None,
+                "created_at": None,
+            },
+            order_by="run_id ASC",
         )
-        stage_work_item_rows = _load_optional_rows(
+        stage_work_item_rows = _load_table_rows(
             src_conn,
             "stage_work_items",
-            """
-            SELECT work_item_id, run_id, stage, status, trial_hash, candidate_index,
-                   candidate_id, transform_hash, evaluation_hash, attempt_count,
-                   lease_owner, lease_expires_at, external_job_id, artifact_refs_json,
-                   started_at, ended_at, last_error_code, last_error_message
-            FROM stage_work_items
-            """,
+            columns={
+                "work_item_id": None,
+                "run_id": None,
+                "stage": None,
+                "status": None,
+                "trial_hash": None,
+                "candidate_index": None,
+                "candidate_id": None,
+                "transform_hash": "NULL",
+                "evaluation_hash": "NULL",
+                "attempt_count": "0",
+                "lease_owner": "NULL",
+                "lease_expires_at": "NULL",
+                "external_job_id": "NULL",
+                "artifact_refs_json": "NULL",
+                "started_at": "NULL",
+                "ended_at": "NULL",
+                "last_error_code": "NULL",
+                "last_error_message": "NULL",
+            },
+            order_by="work_item_id ASC",
         )
         observability_rows = _load_observability_links(src_conn)
         trial_hashes = [
@@ -101,7 +149,7 @@ def migrate_sqlite_store(
                     """,
                     (
                         row["spec_hash"],
-                        row["canonical_hash"],
+                        _canonical_hash_for_row(row),
                         row["spec_type"],
                         row["schema_version"],
                         row["canonical_json"],
@@ -184,14 +232,16 @@ def migrate_sqlite_store(
                         run_id,
                         backend_kind,
                         project_spec_json,
+                        benchmark_spec_json,
                         experiment_spec_json,
                         manifest_json,
                         created_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(run_id) DO UPDATE SET
                         backend_kind=excluded.backend_kind,
                         project_spec_json=excluded.project_spec_json,
+                        benchmark_spec_json=excluded.benchmark_spec_json,
                         experiment_spec_json=excluded.experiment_spec_json,
                         manifest_json=excluded.manifest_json,
                         created_at=excluded.created_at
@@ -200,6 +250,7 @@ def migrate_sqlite_store(
                         row["run_id"],
                         row["backend_kind"],
                         row["project_spec_json"],
+                        row["benchmark_spec_json"],
                         row["experiment_spec_json"],
                         row["manifest_json"],
                         row["created_at"],
@@ -343,22 +394,63 @@ def _sqlite_table_exists(conn, table_name: str) -> bool:
     return row is not None
 
 
-def _load_optional_rows(conn, table_name: str, query: str) -> list:
+def _sqlite_table_columns(conn, table_name: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {row["name"] for row in rows}
+
+
+def _load_table_rows(
+    conn,
+    table_name: str,
+    *,
+    columns: dict[str, str | None],
+    order_by: str | None = None,
+) -> list:
     if not _sqlite_table_exists(conn, table_name):
         return []
+    existing_columns = _sqlite_table_columns(conn, table_name)
+    select_list: list[str] = []
+    for column_name, missing_expr in columns.items():
+        if column_name in existing_columns:
+            select_list.append(column_name)
+            continue
+        if missing_expr is None:
+            raise StorageError(
+                code=ErrorCode.STORAGE_READ,
+                message=(
+                    f"unsupported source store format: expected column "
+                    f"'{column_name}' in table '{table_name}'."
+                ),
+            )
+        select_list.append(f"{missing_expr} AS {column_name}")
+    query = f"SELECT {', '.join(select_list)} FROM {table_name}"
+    if order_by is not None:
+        query += f" ORDER BY {order_by}"
     return conn.execute(query).fetchall()
+
+
+def _canonical_hash_for_row(row) -> str:
+    canonical_hash = row["canonical_hash"]
+    if canonical_hash:
+        return str(canonical_hash)
+    canonical_json = row["canonical_json"]
+    return hashlib.sha256(str(canonical_json).encode("utf-8")).hexdigest()
 
 
 def _load_observability_links(conn) -> list:
     if not _sqlite_table_exists(conn, "observability_links"):
         if _sqlite_table_exists(conn, "observability_refs"):
-            raise StorageError(
-                code=ErrorCode.STORAGE_READ,
-                message=(
-                    "unsupported source store format: expected observability_links "
-                    "table for migration."
-                ),
-            )
+            legacy_ref_count = conn.execute(
+                "SELECT COUNT(*) AS ref_count FROM observability_refs"
+            ).fetchone()["ref_count"]
+            if legacy_ref_count:
+                raise StorageError(
+                    code=ErrorCode.STORAGE_READ,
+                    message=(
+                        "unsupported source store format: expected observability_links "
+                        "rows instead of legacy observability_refs"
+                    ),
+                )
         return []
     return conn.execute(
         """

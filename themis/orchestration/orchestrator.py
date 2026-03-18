@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import tomllib
+from typing import Literal
 
 from pydantic import ValidationError
 
+from themis.benchmark.compiler import compile_benchmark
+from themis.benchmark.specs import BenchmarkSpec
 from themis.contracts.protocols import DatasetLoader
+from themis.contracts.protocols import DatasetProvider
 from themis.errors import SpecValidationError
 from themis.orchestration._orchestrator_services import (
     OrchestratorServices,
@@ -35,7 +40,8 @@ from themis.orchestration.run_services import (
 from themis.orchestration.trial_planner import PlannedTrial
 from themis.records.trial import TrialRecord
 from themis.registry.plugin_registry import PluginRegistry
-from themis.runtime import ExperimentResult
+from themis.runtime import BenchmarkResult
+from themis.runtime.experiment_result import ExperimentResult
 from themis.specs.experiment import (
     ExecutionPolicySpec,
     ExperimentSpec,
@@ -50,6 +56,14 @@ from themis.types.enums import ErrorCode, RunStage
 from themis.types.json_validation import format_validation_error
 
 
+@dataclass(frozen=True, slots=True)
+class _NormalizedSourceSpec:
+    source_kind: Literal["benchmark", "experiment"]
+    source_spec: ExperimentSpec | BenchmarkSpec
+    experiment_spec: ExperimentSpec
+    benchmark_spec: BenchmarkSpec | None
+
+
 class Orchestrator:
     """Main facade that plans, executes, projects, and returns experiment results."""
 
@@ -59,6 +73,7 @@ class Orchestrator:
         project: ProjectSpec,
         *,
         registry: PluginRegistry | None = None,
+        dataset_provider: DatasetProvider | None = None,
         dataset_loader: DatasetLoader | None = None,
         parallel_candidates: int = 5,
         telemetry_bus: TelemetryBus | None = None,
@@ -68,6 +83,7 @@ class Orchestrator:
         return cls(
             registry or PluginRegistry(),
             storage_bundle or build_storage_bundle(project.storage),
+            dataset_provider=dataset_provider,
             dataset_loader=dataset_loader,
             execution_policy=project.execution_policy,
             parallel_candidates=parallel_candidates,
@@ -84,6 +100,7 @@ class Orchestrator:
         path: str,
         *,
         registry: PluginRegistry | None = None,
+        dataset_provider: DatasetProvider | None = None,
         dataset_loader: DatasetLoader | None = None,
         parallel_candidates: int = 5,
         telemetry_bus: TelemetryBus | None = None,
@@ -113,6 +130,7 @@ class Orchestrator:
         return cls.from_project_spec(
             project,
             registry=registry,
+            dataset_provider=dataset_provider,
             dataset_loader=dataset_loader,
             parallel_candidates=parallel_candidates,
             telemetry_bus=telemetry_bus,
@@ -124,6 +142,7 @@ class Orchestrator:
         registry: PluginRegistry | None = None,
         storage_bundle: StorageBundle | None = None,
         *,
+        dataset_provider: DatasetProvider | None = None,
         dataset_loader: DatasetLoader | None = None,
         execution_policy: ExecutionPolicySpec | None = None,
         parallel_candidates: int = 5,
@@ -145,6 +164,7 @@ class Orchestrator:
             )
 
         self.registry = registry
+        self.dataset_provider = dataset_provider
         self.dataset_loader = dataset_loader
         self.project_spec = project_spec
         self.execution_policy = execution_policy
@@ -152,6 +172,7 @@ class Orchestrator:
         self._services: OrchestratorServices = build_orchestrator_services(
             registry=self.registry,
             storage_bundle=storage_bundle,
+            dataset_provider=self.dataset_provider,
             dataset_loader=self.dataset_loader,
             execution_policy=self.execution_policy,
             parallel_candidates=parallel_candidates,
@@ -167,6 +188,7 @@ class Orchestrator:
             projection_handler=self._services.projection_handler,
             manifest_repo=manifest_repo,
             project_spec=self.project_spec,
+            registry=self.registry,
         )
         self._run_imports = RunImportService(
             event_repo=self._services.event_repo,
@@ -176,15 +198,18 @@ class Orchestrator:
 
     def run(
         self,
-        experiment: ExperimentSpec,
+        experiment: ExperimentSpec | BenchmarkSpec,
         *,
         runtime: RuntimeContext | None = None,
         progress: ProgressConfig | None = None,
-    ) -> ExperimentResult:
+    ) -> ExperimentResult | BenchmarkResult:
         """Execute generation, transforms, and evaluations for one experiment."""
-        planned_trials = self._services.planner.plan_experiment(experiment)
+        normalized = self._normalize_source_spec(experiment)
+        planned_trials = self._services.planner.plan_experiment(
+            normalized.experiment_spec
+        )
         progress_tracker = self._build_progress_tracker(
-            experiment,
+            normalized.experiment_spec,
             planned_trials,
             progress=progress,
             allowed_stages={
@@ -192,6 +217,7 @@ class Orchestrator:
                 RunStage.TRANSFORM,
                 RunStage.EVALUATION,
             },
+            benchmark_spec=normalized.benchmark_spec,
         )
         pending_generation_trials = generation_trials(planned_trials)
         pending_transform_trials = transform_trials(planned_trials)
@@ -222,31 +248,50 @@ class Orchestrator:
             if progress_tracker is not None:
                 progress_tracker.finish_run()
 
-        return self._run_planning.build_result(
+        result = self._run_planning.build_result(
             planned_trials,
             transform_hashes=collect_transform_hashes(pending_transform_trials),
             evaluation_hashes=collect_evaluation_hashes(pending_evaluation_trials),
         )
+        return self._wrap_source_result(normalized, result)
 
-    def generate(
+    def run_benchmark(
         self,
-        experiment: ExperimentSpec,
+        benchmark: BenchmarkSpec,
         *,
         runtime: RuntimeContext | None = None,
         progress: ProgressConfig | None = None,
-    ) -> ExperimentResult:
+    ) -> BenchmarkResult:
+        """Compile and execute one benchmark specification."""
+        result = self.run(benchmark, runtime=runtime, progress=progress)
+        if not isinstance(result, BenchmarkResult):
+            raise TypeError(
+                "Orchestrator.run_benchmark expected run() to return a "
+                f"BenchmarkResult, got {type(result).__name__}."
+            )
+        return result
+
+    def generate(
+        self,
+        experiment: ExperimentSpec | BenchmarkSpec,
+        *,
+        runtime: RuntimeContext | None = None,
+        progress: ProgressConfig | None = None,
+    ) -> ExperimentResult | BenchmarkResult:
         """Execute only generation-stage work for one experiment."""
+        normalized = self._normalize_source_spec(experiment)
         planned_trials = generation_trials(
             self._services.planner.plan_experiment(
-                experiment,
+                normalized.experiment_spec,
                 required_stages={RunStage.GENERATION},
             )
         )
         progress_tracker = self._build_progress_tracker(
-            experiment,
+            normalized.experiment_spec,
             planned_trials,
             progress=progress,
             allowed_stages={RunStage.GENERATION},
+            benchmark_spec=normalized.benchmark_spec,
         )
         if planned_trials:
             if progress_tracker is not None:
@@ -260,28 +305,31 @@ class Orchestrator:
             finally:
                 if progress_tracker is not None:
                     progress_tracker.finish_run()
-        return self._run_planning.build_result(planned_trials)
+        result = self._run_planning.build_result(planned_trials)
+        return self._wrap_source_result(normalized, result)
 
     def transform(
         self,
-        experiment: ExperimentSpec,
+        experiment: ExperimentSpec | BenchmarkSpec,
         *,
         runtime: RuntimeContext | None = None,
         progress: ProgressConfig | None = None,
-    ) -> ExperimentResult:
+    ) -> ExperimentResult | BenchmarkResult:
         """Execute output transforms against existing generation candidates."""
+        normalized = self._normalize_source_spec(experiment)
         planned_trials = transform_trials(
             self._services.planner.plan_experiment(
-                experiment,
+                normalized.experiment_spec,
                 required_stages={RunStage.TRANSFORM},
             )
         )
         transform_hashes = collect_transform_hashes(planned_trials)
         progress_tracker = self._build_progress_tracker(
-            experiment,
+            normalized.experiment_spec,
             planned_trials,
             progress=progress,
             allowed_stages={RunStage.TRANSFORM},
+            benchmark_spec=normalized.benchmark_spec,
         )
         if planned_trials:
             if progress_tracker is not None:
@@ -295,30 +343,33 @@ class Orchestrator:
             finally:
                 if progress_tracker is not None:
                     progress_tracker.finish_run()
-        return self._run_planning.build_result(
+        result = self._run_planning.build_result(
             planned_trials,
             transform_hashes=transform_hashes,
         )
+        return self._wrap_source_result(normalized, result)
 
     def evaluate(
         self,
-        experiment: ExperimentSpec,
+        experiment: ExperimentSpec | BenchmarkSpec,
         *,
         runtime: RuntimeContext | None = None,
         progress: ProgressConfig | None = None,
-    ) -> ExperimentResult:
+    ) -> ExperimentResult | BenchmarkResult:
         """Execute evaluation-stage work, reusing generation when possible."""
+        normalized = self._normalize_source_spec(experiment)
         planned_trials = evaluation_trials(
             self._services.planner.plan_experiment(
-                experiment,
+                normalized.experiment_spec,
                 required_stages={RunStage.TRANSFORM, RunStage.EVALUATION},
             )
         )
         progress_tracker = self._build_progress_tracker(
-            experiment,
+            normalized.experiment_spec,
             planned_trials,
             progress=progress,
             allowed_stages={RunStage.TRANSFORM, RunStage.EVALUATION},
+            benchmark_spec=normalized.benchmark_spec,
         )
         if planned_trials:
             if progress_tracker is not None:
@@ -339,11 +390,12 @@ class Orchestrator:
             finally:
                 if progress_tracker is not None:
                     progress_tracker.finish_run()
-        return self._run_planning.build_result(
+        result = self._run_planning.build_result(
             planned_trials,
             transform_hashes=collect_transform_hashes(planned_trials),
             evaluation_hashes=collect_evaluation_hashes(planned_trials),
         )
+        return self._wrap_source_result(normalized, result)
 
     def import_candidates(
         self,
@@ -356,28 +408,41 @@ class Orchestrator:
             trial_hashes=list(trial_hashes),
         )
 
-    def plan(self, experiment: ExperimentSpec) -> RunManifest:
+    def plan(self, experiment: ExperimentSpec | BenchmarkSpec) -> RunManifest:
         """Build and persist a deterministic run manifest for one experiment."""
-        return self._run_planning.plan(experiment)
+        normalized = self._normalize_source_spec(experiment)
+        return self._run_planning.plan(
+            normalized.experiment_spec,
+            benchmark_spec=normalized.benchmark_spec,
+        )
 
     def diff_specs(
         self,
-        baseline: ExperimentSpec,
-        treatment: ExperimentSpec,
+        baseline: ExperimentSpec | BenchmarkSpec,
+        treatment: ExperimentSpec | BenchmarkSpec,
     ) -> RunDiff:
         """Return a high-level diff between two experiment specifications."""
-        return self._run_planning.diff_specs(baseline, treatment)
+        normalized_baseline = self._normalize_source_spec(baseline)
+        normalized_treatment = self._normalize_source_spec(treatment)
+        return self._run_planning.diff_specs(
+            normalized_baseline.experiment_spec,
+            normalized_treatment.experiment_spec,
+            baseline_source_spec=normalized_baseline.source_spec,
+            treatment_source_spec=normalized_treatment.source_spec,
+        )
 
     def submit(
         self,
-        experiment: ExperimentSpec,
+        experiment: ExperimentSpec | BenchmarkSpec,
         *,
         runtime: RuntimeContext | None = None,
         progress: ProgressConfig | None = None,
     ) -> RunHandle:
         """Persist one run manifest and start execution if the backend is local."""
+        normalized = self._normalize_source_spec(experiment)
         return self._run_planning.submit(
-            experiment,
+            normalized.experiment_spec,
+            benchmark_spec=normalized.benchmark_spec,
             runtime=runtime,
             execute_run=lambda spec, runtime_context: self.run(
                 spec,
@@ -392,9 +457,9 @@ class Orchestrator:
         *,
         runtime: RuntimeContext | None = None,
         progress: ProgressConfig | None = None,
-    ) -> RunHandle | ExperimentResult:
+    ) -> RunHandle | ExperimentResult | BenchmarkResult:
         """Refresh a persisted run and continue it when possible."""
-        return self._run_planning.resume(
+        resumed = self._run_planning.resume(
             run_id,
             runtime=runtime,
             execute_run=lambda spec, runtime_context: self.run(
@@ -403,14 +468,20 @@ class Orchestrator:
                 progress=progress,
             ),
         )
+        if isinstance(resumed, ExperimentResult):
+            manifest = self._run_planning.manifest_repo.get_manifest(run_id)
+            if manifest is not None:
+                return self._wrap_manifest_result(manifest, resumed)
+        return resumed
 
     def get_run_progress(self, run_id: str) -> RunProgressSnapshot | None:
         """Return the persisted progress snapshot for one known run."""
         return self._run_planning.get_progress_snapshot(run_id)
 
-    def estimate(self, experiment: ExperimentSpec) -> CostEstimate:
+    def estimate(self, experiment: ExperimentSpec | BenchmarkSpec) -> CostEstimate:
         """Return a best-effort work-item and token estimate for an experiment."""
-        return self._run_planning.estimate(experiment)
+        normalized = self._normalize_source_spec(experiment)
+        return self._run_planning.estimate(normalized.experiment_spec)
 
     def _build_progress_tracker(
         self,
@@ -419,10 +490,15 @@ class Orchestrator:
         *,
         progress: ProgressConfig | None,
         allowed_stages: set[RunStage],
+        benchmark_spec: BenchmarkSpec | None = None,
     ) -> RunProgressTracker | None:
         if progress is None:
             return None
-        manifest = self._run_planning.plan_from_trials(experiment, planned_trials)
+        manifest = self._run_planning.plan_from_trials(
+            experiment,
+            planned_trials,
+            benchmark_spec=benchmark_spec,
+        )
         return RunProgressTracker(
             manifest,
             self._run_planning.manifest_repo,
@@ -432,39 +508,144 @@ class Orchestrator:
 
     def export_generation_bundle(
         self,
-        experiment: ExperimentSpec,
+        experiment: ExperimentSpec | BenchmarkSpec,
     ) -> GenerationWorkBundle:
         """Export only pending generation items for an experiment."""
-        return self._run_planning.export_generation_bundle(experiment)
+        normalized = self._normalize_source_spec(experiment)
+        return self._run_planning.export_generation_bundle(
+            normalized.experiment_spec,
+            benchmark_spec=normalized.benchmark_spec,
+        )
 
     def import_generation_results(
         self,
         bundle: GenerationWorkBundle,
         trial_records: list[TrialRecord],
-    ) -> ExperimentResult:
+    ) -> ExperimentResult | BenchmarkResult:
         """Import externally generated results for a previously exported bundle."""
         self._run_imports.import_generation_results(bundle, trial_records)
-        manifest = self.plan(bundle.manifest.experiment_spec)
-        return self._run_planning.result_from_manifest(manifest)
+        manifest = self.plan(self._manifest_source_spec(bundle.manifest))
+        result = self._run_planning.result_from_manifest(manifest)
+        return self._wrap_manifest_result(manifest, result)
 
     def export_evaluation_bundle(
         self,
-        experiment: ExperimentSpec,
+        experiment: ExperimentSpec | BenchmarkSpec,
     ) -> EvaluationWorkBundle:
         """Export only pending evaluation items for an experiment."""
-        return self._run_planning.export_evaluation_bundle(experiment)
+        normalized = self._normalize_source_spec(experiment)
+        return self._run_planning.export_evaluation_bundle(
+            normalized.experiment_spec,
+            benchmark_spec=normalized.benchmark_spec,
+        )
 
     def import_evaluation_results(
         self,
         bundle: EvaluationWorkBundle,
         trial_records: list[TrialRecord],
-    ) -> ExperimentResult:
+    ) -> ExperimentResult | BenchmarkResult:
         """Import externally evaluated results for a previously exported bundle."""
         self._run_imports.import_evaluation_results(bundle, trial_records)
-        manifest = self.plan(bundle.manifest.experiment_spec)
-        return self._run_planning.result_from_manifest(manifest)
+        manifest = self.plan(self._manifest_source_spec(bundle.manifest))
+        result = self._run_planning.result_from_manifest(manifest)
+        return self._wrap_manifest_result(manifest, result)
 
     @property
     def db_manager(self) -> StorageConnectionManager:
         """Return the active backend-specific database manager for this orchestrator."""
         return self._services.storage_bundle.manager
+
+    def _benchmark_result_from_public_spec(
+        self,
+        benchmark: BenchmarkSpec,
+        result: ExperimentResult,
+    ) -> BenchmarkResult:
+        prompt_variant_ids = [
+            prompt.id for prompt in benchmark.prompt_variants if prompt.id is not None
+        ]
+        return BenchmarkResult(
+            projection_repo=result.projection_repo,
+            trial_hashes=result.trial_hashes,
+            transform_hashes=result.transform_hashes,
+            evaluation_hashes=result.evaluation_hashes,
+            active_transform_hash=result.active_transform_hash,
+            active_evaluation_hash=result.active_evaluation_hash,
+            benchmark_id=benchmark.benchmark_id,
+            slice_ids=[slice_spec.slice_id for slice_spec in benchmark.slices],
+            prompt_variant_ids=prompt_variant_ids,
+        )
+
+    def _wrap_source_result(
+        self,
+        normalized: _NormalizedSourceSpec,
+        result: ExperimentResult,
+    ) -> ExperimentResult | BenchmarkResult:
+        if normalized.benchmark_spec is not None:
+            return self._benchmark_result_from_public_spec(
+                normalized.benchmark_spec,
+                result,
+            )
+        return result
+
+    def _wrap_manifest_result(
+        self,
+        manifest: RunManifest,
+        result: ExperimentResult,
+    ) -> ExperimentResult | BenchmarkResult:
+        if manifest.benchmark_spec is not None:
+            return self._benchmark_result_from_public_spec(
+                manifest.benchmark_spec,
+                result,
+            )
+        experiment = manifest.experiment_spec
+        benchmark_ids = {
+            task.benchmark_id
+            for task in experiment.tasks
+            if task.benchmark_id is not None
+        }
+        if not benchmark_ids:
+            return result
+        slice_ids = [
+            task.slice_id or task.task_id
+            for task in experiment.tasks
+            if (task.slice_id or task.task_id) is not None
+        ]
+        prompt_variant_ids = [
+            prompt.id for prompt in experiment.prompt_templates if prompt.id is not None
+        ]
+        return BenchmarkResult(
+            projection_repo=result.projection_repo,
+            trial_hashes=result.trial_hashes,
+            transform_hashes=result.transform_hashes,
+            evaluation_hashes=result.evaluation_hashes,
+            active_transform_hash=result.active_transform_hash,
+            active_evaluation_hash=result.active_evaluation_hash,
+            benchmark_id=sorted(benchmark_ids)[0],
+            slice_ids=slice_ids,
+            prompt_variant_ids=prompt_variant_ids,
+        )
+
+    def _manifest_source_spec(
+        self, manifest: RunManifest
+    ) -> ExperimentSpec | BenchmarkSpec:
+        if manifest.source_kind == "benchmark" and manifest.benchmark_spec is not None:
+            return manifest.benchmark_spec
+        return manifest.experiment_spec
+
+    def _normalize_source_spec(
+        self,
+        source_spec: ExperimentSpec | BenchmarkSpec,
+    ) -> _NormalizedSourceSpec:
+        if isinstance(source_spec, BenchmarkSpec):
+            return _NormalizedSourceSpec(
+                source_kind="benchmark",
+                source_spec=source_spec,
+                experiment_spec=compile_benchmark(source_spec),
+                benchmark_spec=source_spec,
+            )
+        return _NormalizedSourceSpec(
+            source_kind="experiment",
+            source_spec=source_spec,
+            experiment_spec=source_spec,
+            benchmark_spec=None,
+        )

@@ -100,19 +100,25 @@ hard_items = [
 print(len(hard_items))
 ```
 
-Then mirror the same intent in `ItemSamplingSpec`:
+Then mirror the same intent in `DatasetQuerySpec` on the relevant slice:
 
 ```python
-from themis import ItemSamplingSpec
+from themis import DatasetQuerySpec
 
-experiment = experiment.model_copy(
+benchmark = benchmark.model_copy(
     update={
-        "item_sampling": ItemSamplingSpec(
-            kind="subset",
-            count=100,
-            seed=7,
-            metadata_filters={"difficulty": "hard"},
-        )
+        "slices": [
+            benchmark.slices[0].model_copy(
+                update={
+                    "dataset_query": DatasetQuerySpec(
+                        kind="subset",
+                        count=100,
+                        seed=7,
+                        metadata_filters={"difficulty": "hard"},
+                    )
+                }
+            )
+        ]
     }
 )
 ```

@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from themis.benchmark.specs import BenchmarkSpec
 from themis.records.candidate import CandidateRecord
 from themis.specs.experiment import (
     DataItemContext,
@@ -71,7 +72,9 @@ class RunManifest(BaseModel):
 
     run_id: str
     backend_kind: str
+    source_kind: Literal["benchmark", "experiment"] = "experiment"
     project_spec: ProjectSpec | None = None
+    benchmark_spec: BenchmarkSpec | None = None
     experiment_spec: ExperimentSpec
     trial_hashes: list[str] = Field(default_factory=list)
     transform_hashes: list[str] = Field(default_factory=list)
@@ -79,17 +82,32 @@ class RunManifest(BaseModel):
     work_items: list[StageWorkItem] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_now_utc)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _infer_source_kind(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        if "source_kind" in value:
+            return value
+        payload = dict(value)
+        payload["source_kind"] = (
+            "benchmark" if payload.get("benchmark_spec") is not None else "experiment"
+        )
+        return payload
+
 
 class RunDiff(BaseModel):
     """High-level diff between two experiment plans under one project context."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    source_kind: Literal["benchmark", "experiment"] = "experiment"
     project_hash_before: str | None = None
     project_hash_after: str | None = None
     experiment_hash_before: str
     experiment_hash_after: str
     changed_project_fields: list[str] = Field(default_factory=list)
+    changed_source_fields: list[str] = Field(default_factory=list)
     changed_experiment_fields: list[str] = Field(default_factory=list)
     added_trial_hashes: list[str] = Field(default_factory=list)
     removed_trial_hashes: list[str] = Field(default_factory=list)

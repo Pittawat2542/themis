@@ -6,23 +6,31 @@ import sys
 from types import SimpleNamespace
 
 from themis import (
-    DatasetSpec,
-    EvaluationSpec,
+    BenchmarkSpec,
+    DatasetQuerySpec,
     ExecutionPolicySpec,
-    ExperimentSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
+    PromptMessage,
+    PromptVariantSpec,
     ProjectSpec,
-    PromptTemplateSpec,
+    ScoreSpec,
+    SliceSpec,
     SqliteBlobStorageSpec,
-    TaskSpec,
 )
 from themis.cli.main import main
 from themis.orchestration.run_manifest import RunManifest
+from themis.specs.experiment import ExperimentSpec, PromptTemplateSpec
+from themis.specs.foundational import (
+    DatasetSpec,
+    EvaluationSpec,
+    GenerationSpec,
+    TaskSpec,
+)
 from themis.storage.factory import build_storage_bundle
 from themis.storage.run_manifest_repo import RunManifestRepository
-from themis.types.enums import DatasetSource
+from themis.types.enums import DatasetSource, PromptRole
 
 
 def _build_project(tmp_path: Path) -> ProjectSpec:
@@ -50,6 +58,32 @@ def _build_experiment() -> ExperimentSpec:
     )
 
 
+def _build_benchmark() -> BenchmarkSpec:
+    return BenchmarkSpec(
+        benchmark_id="cli-benchmark",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="math",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                dataset_query=DatasetQuerySpec.subset(5, seed=13),
+                generation=GenerationSpec(),
+                scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="baseline",
+                family="qa",
+                messages=[
+                    PromptMessage(role=PromptRole.USER, content="Answer the question.")
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+
 def _persisted_manifest_bundle(
     tmp_path: Path,
     *,
@@ -68,6 +102,28 @@ def _persisted_manifest_bundle(
     )
     RunManifestRepository(storage_bundle.manager).save_manifest(manifest)
     return project_path, project, experiment
+
+
+def _persisted_benchmark_manifest_bundle(
+    tmp_path: Path,
+    *,
+    run_id: str,
+) -> tuple[Path, ProjectSpec, BenchmarkSpec]:
+    project = _build_project(tmp_path)
+    benchmark = _build_benchmark()
+    experiment = _build_experiment()
+    project_path = tmp_path / "project-benchmark.json"
+    project_path.write_text(json.dumps(project.model_dump(mode="json")))
+    storage_bundle = build_storage_bundle(project.storage)
+    manifest = RunManifest(
+        run_id=run_id,
+        backend_kind="local",
+        project_spec=project,
+        benchmark_spec=benchmark,
+        experiment_spec=experiment,
+    )
+    RunManifestRepository(storage_bundle.manager).save_manifest(manifest)
+    return project_path, project, benchmark
 
 
 class _StubParser:
@@ -173,6 +229,36 @@ def test_parent_cli_report_run_manifest_reads_project_file(tmp_path: Path) -> No
     )
 
     assert "\\section*{Configuration Report}" in output_path.read_text()
+
+
+def test_parent_cli_report_prefers_benchmark_source_config_when_available(
+    tmp_path: Path, capsys
+) -> None:
+    project_path, _, _ = _persisted_benchmark_manifest_bundle(
+        tmp_path,
+        run_id="run-report-benchmark",
+    )
+
+    assert (
+        main(
+            [
+                "report",
+                "--project-file",
+                str(project_path),
+                "--run-id",
+                "run-report-benchmark",
+                "--format",
+                "json",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert {child["name"] for child in payload["root"]["children"]} == {
+        "project",
+        "benchmark",
+    }
 
 
 def test_parent_cli_report_accepts_full_verbosity(tmp_path: Path, capsys) -> None:

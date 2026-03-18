@@ -1,5 +1,5 @@
 site_name: Themis
-site_description: Typed, code-first orchestration for reproducible LLM evaluation
+site_description: Benchmark-first orchestration for reproducible LLM evaluation
 site_url: https://pittawat2542.github.io/themis/
 repo_url: https://github.com/pittawat2542/themis
 repo_name: pittawat2542/themis
@@ -95,7 +95,7 @@ markdown_extensions:
       toc_depth: 3
 
 extra:
-  announcement: "<strong>Documentation reset:</strong> this site now documents the implementation directly instead of the retired design handoff docs."
+  announcement: "<strong>Benchmark-first API:</strong> this docset only teaches the current public surface."
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/pittawat2542/themis
@@ -136,19 +136,13 @@ nav:
 
   - Guides:
       - Overview: guides/index.md
-      - Release Checklist: guides/releasing.md
       - Example Catalog: guides/examples.md
-      - Write a Dataset Loader: guides/dataset-loaders.md
-      - Validate Dataset Loaders: guides/dataset-validation.md
-      - Add a Minimal Plugin Set: guides/plugins.md
+      - Build a Dataset Provider: guides/dataset-loaders.md
+      - Author Parse Pipelines and Scores: guides/plugins.md
       - Build a Provider Engine: guides/provider-engines.md
-      - Attach Telemetry & Observability: guides/telemetry-and-observability.md
       - Author Project Files: guides/project-files.md
-      - Reproduce and Share Runs: guides/reproduce-runs.md
-      - Resume and Inspect Runs: guides/resume-and-inspect.md
       - Hand Off Generation or Evaluation: guides/external-stage-handoffs.md
-      - Evolve an Experiment: guides/evolve-an-experiment.md
-      - Scale Execution: guides/scaling-execution.md
+      - Evolve a Benchmark: guides/evolve-an-experiment.md
       - Compare and Export Results: guides/compare-and-export.md
       - Analyze Results: guides/analyze-results.md
       - Generate Config Reports: guides/config-reports.md
@@ -157,21 +151,12 @@ nav:
   - API Reference:
       - Overview: api-reference/index.md
       - Root Package: api-reference/root.md
-      - Errors: api-reference/errors.md
       - Specs: api-reference/specs.md
       - Orchestration: api-reference/orchestration.md
-      - Run Planning: api-reference/run-planning.md
       - Runtime: api-reference/runtime.md
-      - Progress: api-reference/progress.md
       - Registry: api-reference/registry.md
       - Extractors: api-reference/extractors.md
       - Protocols: api-reference/protocols.md
-      - Telemetry: api-reference/telemetry.md
-      - Records: api-reference/records.md
-      - Storage: api-reference/storage.md
-      - Postgres Storage: api-reference/postgres-storage.md
-      - Types: api-reference/types.md
-      - Reporting & Stats: api-reference/reporting-and-stats.md
       - Config Reports: api-reference/config-reports.md
       - CLI: api-reference/cli.md
 

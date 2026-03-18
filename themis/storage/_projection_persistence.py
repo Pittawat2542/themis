@@ -47,8 +47,12 @@ class ProjectionWriter:
             INSERT INTO trial_summary (
                 trial_hash,
                 overlay_key,
+                benchmark_id,
                 model_id,
                 task_id,
+                slice_id,
+                prompt_variant_id,
+                dimensions_json,
                 item_id,
                 status,
                 started_at,
@@ -61,10 +65,14 @@ class ProjectionWriter:
                 error_fingerprint,
                 error_preview
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(trial_hash, overlay_key) DO UPDATE SET
+                benchmark_id=excluded.benchmark_id,
                 model_id=excluded.model_id,
                 task_id=excluded.task_id,
+                slice_id=excluded.slice_id,
+                prompt_variant_id=excluded.prompt_variant_id,
+                dimensions_json=excluded.dimensions_json,
                 item_id=excluded.item_id,
                 status=excluded.status,
                 started_at=excluded.started_at,
@@ -81,8 +89,28 @@ class ProjectionWriter:
             (
                 record.spec_hash,
                 overlay_key,
+                (
+                    trial_spec.metadata.get("benchmark_id")
+                    if trial_spec and isinstance(trial_spec.metadata, dict)
+                    else None
+                ),
                 trial_spec.model.model_id if trial_spec else None,
                 trial_spec.task.task_id if trial_spec else None,
+                (
+                    trial_spec.metadata.get("slice_id")
+                    if trial_spec and isinstance(trial_spec.metadata, dict)
+                    else None
+                ),
+                (
+                    trial_spec.metadata.get("prompt_variant_id")
+                    if trial_spec and isinstance(trial_spec.metadata, dict)
+                    else None
+                ),
+                json.dumps(
+                    trial_spec.metadata.get("dimensions", {})
+                    if trial_spec and isinstance(trial_spec.metadata, dict)
+                    else {}
+                ),
                 trial_spec.item_id if trial_spec else None,
                 record.status.value,
                 started_at,

@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
+from themis.benchmark.query import DatasetQuerySpec
 from themis.specs.base import SpecBase
 from themis.types.enums import DatasetSource
 from themis.types.json_types import JSONDict
+from themis.types.json_validation import validate_json_dict
 
 if TYPE_CHECKING:
     from themis.specs.experiment import InferenceParamsSpec
+
+
+def _default_dataset_query() -> DatasetQuerySpec:
+    return DatasetQuerySpec()
 
 
 class ModelSpec(SpecBase):
@@ -183,9 +196,7 @@ class OutputTransformSpec(SpecBase):
     """
 
     name: str = Field(
-        ...,
-        description="Stable transform label referenced by evaluations.",
-        json_schema_extra={"exclude_from_hash": True},
+        ..., description="Stable transform label referenced by evaluations."
     )
     extractor_chain: ExtractorChainSpec = Field(
         ..., description="Extractor chain used to normalize generated output."
@@ -199,15 +210,10 @@ class EvaluationSpec(SpecBase):
     multiple judge-backed metrics over the same candidate set.
     """
 
-    name: str = Field(
-        ...,
-        description="Human-readable evaluation label.",
-        json_schema_extra={"exclude_from_hash": True},
-    )
+    name: str = Field(..., description="Human-readable evaluation label.")
     transform: str | None = Field(
         default=None,
         description="Optional name of the output transform this evaluation consumes.",
-        json_schema_extra={"exclude_from_hash": True},
     )
     metrics: list[str] = Field(
         default_factory=list,
@@ -232,6 +238,10 @@ class TaskSpec(SpecBase):
         ..., description="Unique human-readable identifier for this task configuration."
     )
     dataset: DatasetSpec = Field(..., description="The underlying data source.")
+    dataset_query: DatasetQuerySpec | JSONDict | None = Field(
+        default_factory=_default_dataset_query,
+        description="Query pushed down to dataset providers for this slice.",
+    )
     generation: GenerationSpec | None = Field(
         default=None,
         description="Whether this task participates in generation-stage execution.",
@@ -239,13 +249,57 @@ class TaskSpec(SpecBase):
     output_transforms: list[OutputTransformSpec] = Field(
         default_factory=list,
         description="Named output transformations available after generation.",
-        json_schema_extra={"exclude_from_hash": True},
     )
     evaluations: list[EvaluationSpec] = Field(
         default_factory=list,
         description="Named evaluation passes available for transformed outputs.",
-        json_schema_extra={"exclude_from_hash": True},
     )
+    benchmark_id: str | None = Field(
+        default=None,
+        description="Owning benchmark identifier when compiled from BenchmarkSpec.",
+    )
+    slice_id: str | None = Field(
+        default=None,
+        description="Owning slice identifier when compiled from BenchmarkSpec.",
+    )
+    dimensions: dict[str, str] = Field(
+        default_factory=dict,
+        description="Semantic benchmark dimensions attached to this slice.",
+    )
+    allowed_prompt_template_ids: list[str] | None = Field(
+        default=None,
+        description="Optional allow-list of prompt variant IDs for this slice.",
+    )
+    prompt_family_filters: list[str] | None = Field(
+        default=None,
+        description="Optional prompt-family selector preserved from BenchmarkSpec.",
+    )
+
+    @field_validator("dataset_query", mode="before")
+    @classmethod
+    def _coerce_dataset_query(cls, value: object) -> object:
+        if value is None:
+            return _default_dataset_query()
+        if isinstance(value, DatasetQuerySpec):
+            return value
+        try:
+            from themis.specs.experiment import ItemSamplingSpec
+
+            if isinstance(value, ItemSamplingSpec):
+                payload = dict(value.model_dump(mode="json"))
+                try:
+                    return DatasetQuerySpec.model_validate(payload)
+                except ValidationError:
+                    return validate_json_dict(payload, label="TaskSpec.dataset_query")
+        except ImportError:
+            pass
+        if not isinstance(value, Mapping):
+            return value
+
+        try:
+            return DatasetQuerySpec.model_validate(dict(value))
+        except ValidationError:
+            return validate_json_dict(dict(value), label="TaskSpec.dataset_query")
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> TaskSpec:

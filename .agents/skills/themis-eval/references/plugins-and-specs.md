@@ -2,20 +2,17 @@
 
 ## Keep The Boundary Clear
 
-- `ProjectSpec` holds stable storage, retry, and backend policy.
-- `ExperimentSpec` holds models, tasks, prompt templates, sampling, transforms,
-  evaluations, and inference params.
-- `PluginRegistry` is the runtime lookup table and should be built explicitly.
+- `ProjectSpec` defines shared runtime policy.
+- `BenchmarkSpec` captures benchmark semantics.
+- `SliceSpec` contains dataset, dimensions, parse pipelines, and score overlays.
+- `PluginRegistry` is the runtime lookup table.
 
-## Build A Dataset Loader
-
-Implement `load_task_items(task)` and return item payloads with stable IDs when
-possible:
+## Build A Dataset Provider
 
 ```python
-class MyLoader:
-    def load_task_items(self, task):
-        del task
+class MyProvider:
+    def scan(self, slice_spec, query):
+        del slice_spec, query
         return [
             {
                 "item_id": "item-1",
@@ -26,10 +23,13 @@ class MyLoader:
         ]
 ```
 
-Use `metadata` when the user needs deterministic filtering or sampling through
-`ItemSamplingSpec`.
+Use `DatasetQuerySpec` for selection logic instead of payload conventions.
 
 ## Implement The Minimum Plugin Set
+
+Themis renders benchmark prompt templates before your engine runs. In normal
+benchmark-native flows, consume `trial.prompt.messages` directly instead of
+calling a prompt-render helper inside the engine.
 
 Inference engine:
 
@@ -40,7 +40,9 @@ from themis.records import InferenceRecord
 
 class MyEngine:
     def infer(self, trial, context, runtime):
-        del trial, runtime
+        messages = [message.model_dump(mode="json") for message in trial.prompt.messages]
+        prompt_family = trial.prompt.family
+        del messages, prompt_family, runtime
         return InferenceResult(
             inference=InferenceRecord(
                 spec_hash=f"inf_{context['item_id']}",
@@ -59,64 +61,23 @@ class ExactMatchMetric:
     def score(self, trial, candidate, context):
         del trial
         actual = candidate.inference.raw_text if candidate.inference else ""
-        expected = str(context["answer"])
         return MetricScore(
             metric_id="exact_match",
-            value=float(actual.strip() == expected),
+            value=float(actual == context["answer"]),
         )
 ```
 
-Registry:
+## Use Parse Pipelines
 
 ```python
-registry = PluginRegistry()
-registry.register_inference_engine("demo", MyEngine())
-registry.register_metric("exact_match", ExactMatchMetric())
-```
-
-The model `provider` in `ModelSpec` must match the inference engine name you
-register.
-
-## Use Built-In Extractors Before Writing One
-
-Built-ins available in the documented workflow:
-
-- `regex`
-- `json_schema` with the `extractors` extra
-- `first_number`
-- `choice_letter`
-
-Example:
-
-```python
-from themis import EvaluationSpec, ExtractorChainSpec, OutputTransformSpec
-
-task = TaskSpec(
-    task_id="qa",
-    dataset=DatasetSpec(source="memory"),
-    generation=GenerationSpec(),
-    output_transforms=[
-        OutputTransformSpec(
-            name="parsed",
-            extractor_chain=ExtractorChainSpec(
-                extractors=[
-                    "first_number",
-                    {"id": "regex", "config": {"pattern": r"score = (\\d+)", "group": 1}},
-                ]
-            ),
-        )
-    ],
-    evaluations=[EvaluationSpec(name="default", transform="parsed", metrics=["exact_match"])],
+SliceSpec(
+    ...,
+    parses=[ParseSpec(name="parsed", extractors=["boxed_text", "normalized_text"])],
+    scores=[ScoreSpec(name="default", parse="parsed", metrics=["exact_match"])],
 )
 ```
 
-Write a custom extractor only when the built-ins cannot express the parsing
-logic.
-
 ## Use Hooks For Small Pipeline Edits
-
-Use hooks when the user wants to mutate prompts or records without replacing a
-whole stage:
 
 ```python
 class MyHook:
@@ -126,61 +87,51 @@ class MyHook:
     def post_inference(self, trial, result):
         return result
 
+    def pre_extraction(self, trial, candidate):
+        return candidate
 
-registry.register_hook("my_hook", MyHook(), priority=10)
+    def post_extraction(self, trial, candidate):
+        return candidate
+
+    def pre_eval(self, trial, candidate):
+        return candidate
+
+    def post_eval(self, trial, candidate):
+        return candidate
 ```
 
-## Use Judge-Backed Metrics For Model-Graded Scoring
-
-Judge-backed metrics call `context["judge_service"]` and usually need a judge
-engine plus a `JudgeInferenceSpec`:
+## Use Judge-Backed Metrics
 
 ```python
-from themis import ModelSpec, PromptMessage, PromptTemplateSpec
+from themis import ModelSpec, PromptMessage
 from themis.records import MetricScore
-from themis.specs.foundational import JudgeInferenceSpec
+from themis.specs import JudgeInferenceSpec
+from themis.types.enums import PromptRole
 
 
 class JudgeMetric:
     def score(self, trial, candidate, context):
         judge = context["judge_service"]
-        judge_inference = judge.judge(
+        judge_record = judge.judge(
             metric_id="judge_pass",
             parent_candidate=candidate,
             judge_spec=JudgeInferenceSpec(
-                model=ModelSpec(model_id="judge-model", provider="judge"),
+                model=ModelSpec(model_id="judge-model", provider="demo"),
             ),
-            prompt=PromptTemplateSpec(
-                id="judge-prompt",
-                messages=[
-                    PromptMessage(
-                        role="user",
-                        content="Does the answer match the reference?",
-                    )
-                ],
+            prompt=trial.prompt.model_copy(
+                update={
+                    "messages": [
+                        PromptMessage(
+                            role=PromptRole.USER,
+                            content="Judge whether the answer is correct.",
+                        )
+                    ]
+                }
             ),
-            runtime={"task_spec": trial.task, "dataset_context": context},
+            runtime=context,
         )
         return MetricScore(
             metric_id="judge_pass",
-            value=float(judge_inference.raw_text == "PASS"),
-            details={"judge_raw_text": judge_inference.raw_text},
+            value=float(judge_record.raw_text == "PASS"),
         )
 ```
-
-If the user needs the full working pattern, combine this reference with
-`references/results-and-ops.md` for stored audit inspection. Do not assume a
-local examples directory exists.
-
-## Author Specs In The Documented Shape
-
-Use:
-
-- `ProjectSpec` for storage root, researcher ID, seed, execution policy, and
-  optional backend
-- `ExperimentSpec` for models, tasks, prompt templates, inference grid, and
-  item sampling
-- `TaskSpec` for dataset, generation, transforms, and evaluations
-
-Prefer `ExperimentSpec.model_copy(update=...)` when evolving a run instead of
-mutating pieces in place.

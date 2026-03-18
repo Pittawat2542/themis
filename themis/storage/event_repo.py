@@ -17,6 +17,7 @@ from themis.storage._protocols import (
 from themis.types.enums import ErrorCode
 from themis.types.events import (
     ArtifactRef,
+    ArtifactRole,
     ProjectionCompletedEventMetadata,
     TrialEvent,
     TrialEventType,
@@ -114,6 +115,7 @@ class SqliteEventRepository:
                     self.append_event(event, conn=local_conn)
             return
 
+        payload_json = self._payload_json_for_event(event, conn)
         conn.execute(
             """
             INSERT INTO trial_events (
@@ -144,7 +146,7 @@ class SqliteEventRepository:
                 json.dumps(event.metadata.as_dict())
                 if event.metadata.as_dict()
                 else None,
-                json.dumps(event.payload) if event.payload is not None else None,
+                payload_json,
                 json.dumps(
                     [
                         artifact.model_dump(mode="json")
@@ -158,6 +160,57 @@ class SqliteEventRepository:
                 else None,
             ),
         )
+
+    def _payload_json_for_event(
+        self,
+        event: TrialEvent,
+        conn: StorageConnection,
+    ) -> str | None:
+        if event.payload is None:
+            return None
+        if self._payload_persisted_via_artifact(event, conn):
+            return None
+        return json.dumps(event.payload)
+
+    def _payload_persisted_via_artifact(
+        self,
+        event: TrialEvent,
+        conn: StorageConnection,
+    ) -> bool:
+        # Artifact-backed payload persistence only applies to stage-scoped events
+        # that emit indexed artifacts. ITEM_LOADED, INFERENCE_COMPLETED,
+        # EXTRACTION_COMPLETED, and EVALUATION_COMPLETED map to ArtifactRole-backed
+        # payloads; CANDIDATE_COMPLETED is a lifecycle marker with no artifact
+        # support, so it is intentionally excluded.
+        if not event.artifact_refs or event.stage is None:
+            return False
+        expected_roles = {
+            TrialEventType.ITEM_LOADED: {ArtifactRole.ITEM_PAYLOAD},
+            TrialEventType.INFERENCE_COMPLETED: {ArtifactRole.INFERENCE_OUTPUT},
+            TrialEventType.EXTRACTION_COMPLETED: {ArtifactRole.EXTRACTION_OUTPUT},
+            TrialEventType.EVALUATION_COMPLETED: {ArtifactRole.EVALUATION_OUTPUT},
+        }.get(event.event_type, set())
+        return any(
+            artifact.role in expected_roles
+            and self._artifact_is_indexed(conn, artifact.artifact_hash)
+            for artifact in event.artifact_refs
+        )
+
+    def _artifact_is_indexed(
+        self,
+        conn: StorageConnection,
+        artifact_hash: str,
+    ) -> bool:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM artifacts
+            WHERE artifact_hash = ?
+            LIMIT 1
+            """,
+            (artifact_hash,),
+        ).fetchone()
+        return row is not None
 
     def get_events(
         self, trial_hash: str, candidate_id: str | None = None

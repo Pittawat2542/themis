@@ -1,92 +1,26 @@
 # Load a Project File
 
-In this tutorial you will take an inline `ProjectSpec` and move it into a
-reusable `project.toml` file.
+Use a project file when storage and execution policy should stay stable across
+many benchmarks.
 
-`Orchestrator.from_project_file()` supports `.toml` and `.json`.
-
-## Before You Start
-
-Use the hello-world script or start from `examples/02_project_file.py`.
-
-To verify the shipped example first, run:
+## Run It
 
 ```bash
 uv run python examples/02_project_file.py
 ```
 
-## Step 1: Write `project.toml`
-
-```toml
-project_name = "docs-tutorial"
-researcher_id = "team-docs"
-global_seed = 11
-
-[storage]
-backend = "sqlite_blob"
-root_dir = ".cache/themis-examples/02-project-file"
-store_item_payloads = true
-compression = "none"
-
-[execution_policy]
-max_retries = 3
-retry_backoff_factor = 1.5
-circuit_breaker_threshold = 5
-```
-
-This file holds the shared execution policy and storage configuration.
-
-If you want Postgres-backed events and projections instead, swap the storage
-block for:
-
-```toml
-[storage]
-backend = "postgres_blob"
-database_url = "postgresql://localhost:5432/themis"
-blob_root_dir = ".cache/themis-examples/02-project-file/blobs"
-store_item_payloads = true
-compression = "none"
-```
-
-## Step 2: Replace the inline `ProjectSpec`
-
-Remove the inline `ProjectSpec(...)` block from your script and load it from
-disk instead:
-
-```python
-orchestrator = Orchestrator.from_project_file(
-    "project.toml",
-    registry=registry,
-    dataset_loader=dataset_loader,
-)
-result = orchestrator.run(experiment)
-```
-
-## Step 3: Run the script again
-
-When you run the script again, the behavior should stay the same, but the
-project configuration lives in one reusable file.
-
-Check that:
-
-- the run completes successfully
-- the storage root comes from `project.toml`
-- you can change retry or storage policy without editing Python
-
-Expected output from `examples/02_project_file.py`:
+Output:
 
 ```text
-Loaded project file: .cache/themis-examples/02-project-file-config/project.toml
-Trial hashes: 4842354de2b4, defddb7e8085
+[{'model_id': 'demo-model', 'slice_id': 'greeting', 'metric_id': 'exact_match', 'mean': 1.0, 'count': 1}]
 ```
 
-## Step 4: Understand the split
+## Pattern
 
-- `ProjectSpec` changes slowly and carries infrastructure defaults.
-- `ExperimentSpec` changes often and carries the actual sweep.
+- keep `project.toml` for storage, retry, and execution policy
+- keep `BenchmarkSpec` in Python where slices and prompt variants evolve faster
+- build the orchestrator with `Orchestrator.from_project_file(...)`
 
-That split makes it easy to rerun different matrices against the same storage
-layout, retry policy, and seeding strategy.
+## Full Script
 
-This gives you a portable project config that can be shared across multiple
-scripts and experiments.
+--8<-- "examples/02_project_file.py"

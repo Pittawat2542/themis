@@ -72,6 +72,7 @@ class ProjectionMaterializer:
         trial_error = None
 
         for event in events:
+            event = self.overlay_reader.resolve_event_payload(event)
             if event.candidate_id is None:
                 if event.stage is not None:
                     trial_stage_events.append(event)

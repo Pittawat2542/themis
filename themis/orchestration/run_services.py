@@ -7,6 +7,8 @@ from dataclasses import dataclass
 import hashlib
 import json
 
+from themis.benchmark.compiler import compile_benchmark
+from themis.benchmark.specs import BenchmarkSpec
 from themis.contracts.protocols import (
     ProjectionHandler as ProjectionHandlerProtocol,
     ProjectionRepository,
@@ -32,7 +34,8 @@ from themis.orchestration.task_resolution import resolve_task_stages
 from themis.orchestration.trial_planner import PlannedTrial, TrialPlanner
 from themis.progress.models import RunProgressSnapshot
 from themis.records.trial import TrialRecord
-from themis.runtime import ExperimentResult
+from themis.registry.plugin_registry import PluginRegistry
+from themis.runtime.experiment_result import ExperimentResult
 from themis.specs.experiment import ExperimentSpec, ProjectSpec, RuntimeContext
 from themis.storage.run_manifest_repo import RunManifestRepository
 from themis.types.enums import ErrorCode, RecordStatus, RunStage
@@ -43,7 +46,8 @@ from themis.types.events import (
     TrialEventType,
 )
 
-RunExecutor = Callable[[ExperimentSpec, RuntimeContext | None], ExperimentResult]
+SourceSpec = ExperimentSpec | BenchmarkSpec
+RunExecutor = Callable[[SourceSpec, RuntimeContext | None], ExperimentResult]
 
 
 def generation_trials(planned_trials: Sequence[PlannedTrial]) -> list[PlannedTrial]:
@@ -110,6 +114,7 @@ class RunPlanningService:
     projection_handler: ProjectionHandlerProtocol
     manifest_repo: RunManifestRepository
     project_spec: ProjectSpec | None = None
+    registry: PluginRegistry | None = None
 
     @property
     def backend_kind(self) -> str:
@@ -119,55 +124,109 @@ class RunPlanningService:
             return "local"
         return self.project_spec.execution_backend.kind
 
-    def plan(self, experiment: ExperimentSpec) -> RunManifest:
+    def plan(
+        self,
+        experiment: ExperimentSpec,
+        *,
+        benchmark_spec: BenchmarkSpec | None = None,
+    ) -> RunManifest:
         """Plans one experiment and persists the reconciled run manifest."""
 
         planned_trials = self.planner.plan_experiment(experiment)
-        return self.plan_from_trials(experiment, planned_trials)
+        return self.plan_from_trials(
+            experiment,
+            planned_trials,
+            benchmark_spec=benchmark_spec,
+        )
 
     def plan_from_trials(
         self,
         experiment: ExperimentSpec,
         planned_trials: Sequence[PlannedTrial],
+        *,
+        benchmark_spec: BenchmarkSpec | None = None,
     ) -> RunManifest:
         """Builds, reconciles, and saves a manifest from preplanned trials."""
 
-        manifest = self.build_manifest(experiment, planned_trials)
+        manifest = self.build_manifest(
+            experiment,
+            planned_trials,
+            benchmark_spec=benchmark_spec,
+        )
         manifest = self.manifest_repo.reconcile_manifest(manifest)
         self.manifest_repo.save_manifest(manifest)
         return manifest
+
+    def plan_source(self, source_spec: SourceSpec) -> RunManifest:
+        """Plans the canonical source spec while preserving benchmark provenance."""
+
+        if isinstance(source_spec, BenchmarkSpec):
+            return self.plan(
+                compile_benchmark(source_spec),
+                benchmark_spec=source_spec,
+            )
+        return self.plan(source_spec)
 
     def diff_specs(
         self,
         baseline: ExperimentSpec,
         treatment: ExperimentSpec,
+        *,
+        baseline_source_spec: SourceSpec | None = None,
+        treatment_source_spec: SourceSpec | None = None,
     ) -> RunDiff:
         """Diffs two experiments at the manifest and top-level field level."""
 
         baseline_manifest = self.build_manifest(
             baseline,
             self.planner.plan_experiment(baseline),
+            benchmark_spec=(
+                baseline_source_spec
+                if isinstance(baseline_source_spec, BenchmarkSpec)
+                else None
+            ),
         )
         treatment_manifest = self.build_manifest(
             treatment,
             self.planner.plan_experiment(treatment),
+            benchmark_spec=(
+                treatment_source_spec
+                if isinstance(treatment_source_spec, BenchmarkSpec)
+                else None
+            ),
         )
         baseline_payload = baseline.model_dump(mode="json")
         treatment_payload = treatment.model_dump(mode="json")
+        resolved_baseline_source = baseline_source_spec or baseline
+        resolved_treatment_source = treatment_source_spec or treatment
+        baseline_source_payload = resolved_baseline_source.model_dump(mode="json")
+        treatment_source_payload = resolved_treatment_source.model_dump(mode="json")
         changed_experiment_fields = sorted(
             key
             for key in set(baseline_payload) | set(treatment_payload)
             if baseline_payload.get(key) != treatment_payload.get(key)
         )
+        changed_source_fields = sorted(
+            key
+            for key in set(baseline_source_payload) | set(treatment_source_payload)
+            if baseline_source_payload.get(key) != treatment_source_payload.get(key)
+        )
         project_hash = (
             self.project_spec.spec_hash if self.project_spec is not None else None
         )
         return RunDiff(
+            source_kind=(
+                "benchmark"
+                if isinstance(resolved_baseline_source, BenchmarkSpec)
+                and isinstance(resolved_treatment_source, BenchmarkSpec)
+                else "experiment"
+            ),
             project_hash_before=project_hash,
             project_hash_after=project_hash,
             experiment_hash_before=baseline.spec_hash,
             experiment_hash_after=treatment.spec_hash,
             changed_project_fields=[],
+            changed_source_fields=changed_source_fields,
             changed_experiment_fields=changed_experiment_fields,
             added_trial_hashes=sorted(
                 set(treatment_manifest.trial_hashes)
@@ -199,15 +258,17 @@ class RunPlanningService:
         self,
         experiment: ExperimentSpec,
         *,
+        benchmark_spec: BenchmarkSpec | None = None,
         runtime: RuntimeContext | None,
         execute_run: RunExecutor,
     ) -> RunHandle:
         """Plans a run and executes it immediately when using the local backend."""
 
-        manifest = self.plan(experiment)
+        manifest = self.plan(experiment, benchmark_spec=benchmark_spec)
         if self.backend_kind == "local":
-            execute_run(experiment, runtime)
-            manifest = self.plan(experiment)
+            source_spec = benchmark_spec if benchmark_spec is not None else experiment
+            execute_run(source_spec, runtime)
+            manifest = self.plan_source(source_spec)
         return self.run_handle_from_manifest(manifest)
 
     def resume(
@@ -239,7 +300,8 @@ class RunPlanningService:
                 ),
             )
 
-        manifest = self.plan(stored_manifest.experiment_spec)
+        source_spec = self._manifest_source_spec(stored_manifest)
+        manifest = self.plan_source(source_spec)
         if self.backend_kind == "local" and any(
             item.status
             in {
@@ -249,8 +311,8 @@ class RunPlanningService:
             }
             for item in manifest.work_items
         ):
-            execute_run(stored_manifest.experiment_spec, runtime)
-            manifest = self.plan(stored_manifest.experiment_spec)
+            execute_run(source_spec, runtime)
+            manifest = self.plan_source(source_spec)
 
         handle = self.run_handle_from_manifest(manifest)
         if handle.pending_work_items == 0:
@@ -268,30 +330,60 @@ class RunPlanningService:
         planned_trials = self.planner.plan_experiment(experiment)
         manifest = self.build_manifest(experiment, planned_trials)
         prompt_char_budget = 0
+        estimated_prompt_tokens = 0
         completion_token_budget = 0
+        used_engine_estimators = False
         for planned_trial in planned_trials:
-            prompt_chars = sum(
-                len(message.content)
-                for message in planned_trial.trial_spec.prompt.messages
-            )
-            dataset_chars = len(
-                json.dumps(
-                    planned_trial.dataset_context.payload,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-            )
             candidate_count = planned_trial.trial_spec.candidate_count
-            prompt_char_budget += (prompt_chars + dataset_chars) * candidate_count
+            estimator = self._prompt_token_estimator_for_provider(
+                planned_trial.trial_spec.model.provider
+            )
+            if estimator is not None:
+                estimated_prompt_tokens += (
+                    estimator(planned_trial.trial_spec) * candidate_count
+                )
+                used_engine_estimators = True
+            else:
+                prompt_chars = sum(
+                    len(message.content)
+                    for message in planned_trial.trial_spec.prompt.messages
+                )
+                dataset_chars = len(
+                    json.dumps(
+                        planned_trial.dataset_context.payload,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                )
+                prompt_char_budget += (prompt_chars + dataset_chars) * candidate_count
             if planned_trial.trial_spec.task.generation is not None:
                 completion_token_budget += (
                     planned_trial.trial_spec.params.max_tokens * candidate_count
                 )
-        estimated_prompt_tokens = max(1, (prompt_char_budget + 3) // 4)
+        if prompt_char_budget:
+            estimated_prompt_tokens += max(1, (prompt_char_budget + 3) // 4)
         work_items_by_stage = {
             stage: sum(1 for item in manifest.work_items if item.stage == stage)
             for stage in ("generation", "transform", "evaluation")
         }
+        notes = []
+        if used_engine_estimators:
+            notes.append(
+                "Used engine-provided prompt token estimators where registered."
+            )
+        if prompt_char_budget:
+            notes.append(
+                "Best-effort heuristic fallback was used for providers without prompt token estimators."
+            )
+        elif not planned_trials:
+            notes.append("No planned trials: no prompt tokens to estimate.")
+        elif not notes:
+            notes.append(
+                "Best-effort heuristic only: prompt tokens are estimated from prompt templates and dataset payload size."
+            )
+        notes.append(
+            "Provider pricing is not configured, so estimated_total_cost is unavailable."
+        )
         return CostEstimate(
             run_id=manifest.run_id,
             backend_kind=manifest.backend_kind,
@@ -301,20 +393,33 @@ class RunPlanningService:
             estimated_completion_tokens=completion_token_budget,
             estimated_total_tokens=estimated_prompt_tokens + completion_token_budget,
             estimated_total_cost=None,
-            notes=[
-                "Best-effort heuristic only: prompt tokens are estimated from prompt templates and dataset payload size.",
-                "Provider pricing is not configured, so estimated_total_cost is unavailable.",
-            ],
+            notes=notes,
         )
+
+    def _prompt_token_estimator_for_provider(
+        self,
+        provider: str,
+    ):
+        if self.registry is None or not self.registry.has_inference_engine(provider):
+            return None
+        return self.registry.get_inference_engine_registration(
+            provider
+        ).prompt_token_estimator
 
     def export_generation_bundle(
         self,
         experiment: ExperimentSpec,
+        *,
+        benchmark_spec: BenchmarkSpec | None = None,
     ) -> GenerationWorkBundle:
         """Exports pending generation work for execution outside Themis."""
 
         planned_trials = self.planner.plan_experiment(experiment)
-        manifest = self.build_manifest(experiment, planned_trials)
+        manifest = self.build_manifest(
+            experiment,
+            planned_trials,
+            benchmark_spec=benchmark_spec,
+        )
         self.manifest_repo.save_manifest(manifest)
         planned_by_hash = {
             planned_trial.trial_spec.spec_hash: planned_trial
@@ -337,11 +442,17 @@ class RunPlanningService:
     def export_evaluation_bundle(
         self,
         experiment: ExperimentSpec,
+        *,
+        benchmark_spec: BenchmarkSpec | None = None,
     ) -> EvaluationWorkBundle:
         """Exports pending evaluation work after generation has completed."""
 
         planned_trials = self.planner.plan_experiment(experiment)
-        manifest = self.build_manifest(experiment, planned_trials)
+        manifest = self.build_manifest(
+            experiment,
+            planned_trials,
+            benchmark_spec=benchmark_spec,
+        )
         self.manifest_repo.save_manifest(manifest)
         planned_by_hash = {
             planned_trial.trial_spec.spec_hash: planned_trial
@@ -420,6 +531,8 @@ class RunPlanningService:
         self,
         experiment: ExperimentSpec,
         planned_trials: Sequence[PlannedTrial],
+        *,
+        benchmark_spec: BenchmarkSpec | None = None,
     ) -> RunManifest:
         """Constructs a manifest and stage work items from planned trials."""
 
@@ -523,7 +636,9 @@ class RunPlanningService:
                 project_spec=self.project_spec,
             ),
             backend_kind=self.backend_kind,
+            source_kind="benchmark" if benchmark_spec is not None else "experiment",
             project_spec=self.project_spec,
+            benchmark_spec=benchmark_spec,
             experiment_spec=experiment,
             trial_hashes=trial_hashes,
             transform_hashes=transform_hashes,
@@ -602,6 +717,11 @@ class RunPlanningService:
             evaluation_hashes=manifest.evaluation_hashes,
             warnings=warnings,
         )
+
+    def _manifest_source_spec(self, manifest: RunManifest) -> SourceSpec:
+        if manifest.source_kind == "benchmark" and manifest.benchmark_spec is not None:
+            return manifest.benchmark_spec
+        return manifest.experiment_spec
 
     def _evaluation_source_trial(
         self,

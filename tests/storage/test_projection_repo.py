@@ -287,7 +287,7 @@ def test_projection_repo_delegates_query_methods_to_query_service(tmp_path) -> N
 
     class StubQueries:
         def __init__(self) -> None:
-            self.score_calls: list[tuple[str | None, str | None, str | None]] = []
+            self.score_calls: list[tuple[list[str] | None, str | None, str | None]] = []
             self.summary_calls: list[
                 tuple[list[str] | None, str | None, str | None]
             ] = []
@@ -295,11 +295,17 @@ def test_projection_repo_delegates_query_methods_to_query_service(tmp_path) -> N
         def iter_candidate_scores(
             self,
             *,
-            trial_hash: str | None = None,
+            trial_hashes=None,
             metric_id: str | None = None,
             evaluation_hash: str | None = None,
         ):
-            self.score_calls.append((trial_hash, metric_id, evaluation_hash))
+            self.score_calls.append(
+                (
+                    list(trial_hashes) if trial_hashes is not None else None,
+                    metric_id,
+                    evaluation_hash,
+                )
+            )
             return iter([expected_score])
 
         def iter_trial_summaries(
@@ -323,14 +329,14 @@ def test_projection_repo_delegates_query_methods_to_query_service(tmp_path) -> N
 
     score_rows = list(
         repo.iter_candidate_scores(
-            trial_hash="trial_hash",
+            trial_hashes=["trial_hash1", "trial_hash2"],
             metric_id="exact_match",
             evaluation_hash="eval_hash",
         )
     )
     summary_rows = list(
         repo.iter_trial_summaries(
-            trial_hashes=["trial_hash"],
+            trial_hashes=["trial_hash1", "trial_hash2"],
             transform_hash="tx_hash",
             evaluation_hash="eval_hash",
         )
@@ -338,8 +344,12 @@ def test_projection_repo_delegates_query_methods_to_query_service(tmp_path) -> N
 
     assert score_rows == [expected_score]
     assert summary_rows == [expected_summary]
-    assert stub.score_calls == [("trial_hash", "exact_match", "eval_hash")]
-    assert stub.summary_calls == [(["trial_hash"], "tx_hash", "eval_hash")]
+    assert stub.score_calls == [
+        (["trial_hash1", "trial_hash2"], "exact_match", "eval_hash")
+    ]
+    assert stub.summary_calls == [
+        (["trial_hash1", "trial_hash2"], "tx_hash", "eval_hash")
+    ]
 
 
 def test_projection_repo_delegates_timeline_reads_to_view_service(tmp_path) -> None:

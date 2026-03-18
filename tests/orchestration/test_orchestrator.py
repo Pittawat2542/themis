@@ -9,6 +9,7 @@ import typing
 
 import pytest
 
+from themis.benchmark.specs import BenchmarkSpec, PromptVariantSpec, SliceSpec
 from themis.contracts.protocols import InferenceResult
 from themis.errors import SpecValidationError
 from themis.orchestration.orchestrator import Orchestrator
@@ -27,7 +28,7 @@ from themis.records.extraction import ExtractionRecord
 from themis.records.inference import InferenceRecord, TokenUsage
 from themis.records.trial import TrialRecord
 from themis.registry.plugin_registry import PluginRegistry
-from themis.runtime import ExperimentResult
+from themis.runtime.experiment_result import ExperimentResult
 from themis.specs.experiment import (
     BatchExecutionBackendSpec,
     DataItemContext,
@@ -37,6 +38,7 @@ from themis.specs.experiment import (
     InferenceParamsSpec,
     LocalExecutionBackendSpec,
     ProjectSpec,
+    PromptMessage,
     PromptTemplateSpec,
     RuntimeContext,
     StorageSpec,
@@ -64,6 +66,7 @@ from themis.types.enums import (
     ErrorWhere,
     RecordStatus,
     DatasetSource,
+    PromptRole,
     RunStage,
 )
 from themis.types.events import (
@@ -522,6 +525,43 @@ def test_transform_returns_transform_scoped_result() -> None:
     assert extraction is not None
     assert extraction.parsed_answer == "42"
     assert trial.candidates[0].evaluation is None
+
+
+def test_run_benchmark_rejects_non_benchmark_results(monkeypatch) -> None:
+    orchestrator, _engine = _build_orchestrator()
+    benchmark = BenchmarkSpec(
+        benchmark_id="demo-benchmark",
+        models=[ModelSpec(model_id="openai-demo", provider="openai")],
+        slices=[
+            SliceSpec(
+                slice_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+                prompt_variant_ids=["baseline"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="baseline",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Solve: {item.question}",
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=16)]),
+    )
+    wrong_result = ExperimentResult(
+        projection_repo=orchestrator._services.projection_repo,
+        trial_hashes=[],
+    )
+
+    monkeypatch.setattr(orchestrator, "run", lambda *args, **kwargs: wrong_result)
+
+    with pytest.raises(TypeError, match="BenchmarkResult"):
+        orchestrator.run_benchmark(benchmark)
 
 
 def test_evaluate_materializes_required_transforms_if_missing() -> None:
@@ -1464,3 +1504,26 @@ def test_orchestrator_estimate_reports_best_effort_work_item_and_token_counts(
     )
     assert estimate.estimated_total_cost is None
     assert estimate.notes
+
+
+def test_orchestrator_estimate_uses_engine_prompt_token_estimators(tmp_path) -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine(
+        "mock",
+        RunnableEngine(),
+        prompt_token_estimator=lambda trial: 123,
+    )
+    registry.register_extractor("mock-extractor", RunnableExtractor())
+    registry.register_metric("em", RunnableMetric())
+    orchestrator = Orchestrator.from_project_spec(
+        _build_project_spec(tmp_path),
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    estimate = orchestrator.estimate(_build_experiment())
+
+    assert estimate.estimated_prompt_tokens == 492
+    assert any(
+        "engine-provided prompt token estimators" in note for note in estimate.notes
+    )

@@ -140,10 +140,12 @@ def _load_run_manifest_bundle(project_file: str, run_id: str) -> dict[str, objec
     manifest = RunManifestRepository(storage_bundle.manager).get_manifest(run_id)
     if manifest is None:
         raise ValueError(f"Run manifest '{run_id}' was not found.")
-    return {
-        "project": manifest.project_spec or project,
-        "experiment": manifest.experiment_spec,
-    }
+    bundle: dict[str, object] = {"project": manifest.project_spec or project}
+    if manifest.benchmark_spec is not None:
+        bundle["benchmark"] = manifest.benchmark_spec
+    else:
+        bundle["experiment"] = manifest.experiment_spec
+    return bundle
 
 
 def run_with_args(args: argparse.Namespace) -> int:

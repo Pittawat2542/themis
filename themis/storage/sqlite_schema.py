@@ -51,8 +51,9 @@ class DatabaseManager:
             with conn:
                 self._reject_unsupported_store_format(conn)
                 apply_sql_script(conn, SCHEMA)
-                self._ensure_store_format(conn)
+                existing_store_format = self._existing_store_format(conn)
                 self._migrate(conn)
+                self._ensure_store_format(conn, existing_store_format)
 
     def _reject_unsupported_store_format(self, conn: sqlite3.Connection) -> None:
         existing_tables = self._existing_user_tables(conn)
@@ -70,7 +71,7 @@ class DatabaseManager:
                 details={"db_path": self.db_path},
             )
 
-    def _ensure_store_format(self, conn: sqlite3.Connection) -> None:
+    def _existing_store_format(self, conn: sqlite3.Connection) -> str | None:
         row = conn.execute(
             """
             SELECT metadata_value
@@ -79,7 +80,14 @@ class DatabaseManager:
             """,
             (STORE_FORMAT_KEY,),
         ).fetchone()
-        if row is None:
+        return None if row is None else str(row["metadata_value"])
+
+    def _ensure_store_format(
+        self,
+        conn: sqlite3.Connection,
+        existing_store_format: str | None,
+    ) -> None:
+        if existing_store_format is None:
             conn.execute(
                 """
                 INSERT INTO store_metadata (metadata_key, metadata_value)
@@ -88,12 +96,24 @@ class DatabaseManager:
                 (STORE_FORMAT_KEY, STORE_FORMAT_VERSION),
             )
             return
-        if row["metadata_value"] != STORE_FORMAT_VERSION:
+        if existing_store_format == STORE_FORMAT_VERSION:
+            return
+        if existing_store_format == "stage_overlays_v2":
+            conn.execute(
+                """
+                UPDATE store_metadata
+                SET metadata_value = ?
+                WHERE metadata_key = ?
+                """,
+                (STORE_FORMAT_VERSION, STORE_FORMAT_KEY),
+            )
+            return
+        else:
             raise StorageError(
                 code=ErrorCode.STORAGE_READ,
                 message=(
                     "unsupported store format: expected "
-                    f"{STORE_FORMAT_VERSION}, found {row['metadata_value']}"
+                    f"{STORE_FORMAT_VERSION}, found {existing_store_format}"
                 ),
                 details={"db_path": self.db_path},
             )
@@ -120,6 +140,10 @@ class DatabaseManager:
             conn,
             "trial_summary",
             {
+                "benchmark_id": "TEXT",
+                "slice_id": "TEXT",
+                "prompt_variant_id": "TEXT",
+                "dimensions_json": "TEXT",
                 "started_at": "TEXT",
                 "ended_at": "TEXT",
                 "duration_ms": "INTEGER",
@@ -137,6 +161,13 @@ class DatabaseManager:
                 "ended_at": "TEXT",
                 "last_error_code": "TEXT",
                 "last_error_message": "TEXT",
+            },
+        )
+        self._ensure_columns(
+            conn,
+            "run_manifests",
+            {
+                "benchmark_spec_json": "TEXT",
             },
         )
         conn.execute(

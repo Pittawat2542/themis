@@ -182,13 +182,13 @@ class SqliteProjectionRepository:
     def iter_candidate_scores(
         self,
         *,
-        trial_hash: str | None = None,
+        trial_hashes: Sequence[str] | None = None,
         metric_id: str | None = None,
         evaluation_hash: str | None = None,
     ) -> Iterator[ScoreRow]:
         """Yield projected metric scores filtered by trial, metric, and evaluation."""
         yield from self._queries.iter_candidate_scores(
-            trial_hash=trial_hash,
+            trial_hashes=trial_hashes,
             metric_id=metric_id,
             evaluation_hash=evaluation_hash,
         )

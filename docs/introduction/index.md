@@ -1,91 +1,64 @@
-# Introduction
+# Public Surface
 
-Themis is a typed orchestration layer for reproducible LLM evaluation. The core
-idea is simple:
+Themis now documents one benchmark-first public API.
 
-- author immutable configuration objects on the write side
-- execute trials through protocol-based plugins
-- persist append-only lifecycle events and optional artifacts
-- materialize read models for inspection, reporting, and statistical comparison
+## Main Objects
 
-## Public Surface
-
-The current implementation centers on six concepts:
-
-| Layer | Primary API | What it does |
-| --- | --- | --- |
-| Configuration | `ProjectSpec`, `ExperimentSpec`, `TrialSpec`, `RuntimeContext` | Describes what should run and what runtime-only inputs are available |
-| Extension points | `PluginRegistry` | Resolves engines, extractors, metrics, judges, and hooks by name |
-| Execution | `Orchestrator` | Plans trials, executes them, stores events, and materializes projections |
-| Read side | `ExperimentResult` | Reads trials, timelines, comparisons, and reports from storage |
-| Telemetry | `TelemetryBus`, `LangfuseCallback` | Emits runtime events and can attach external trace URLs back to stored runs |
-| Operator tooling | `themis-quickcheck` | Queries SQLite summaries for failures, scores, and latency |
+| Object | Role |
+| --- | --- |
+| `ProjectSpec` | Shared storage, seed, and execution policy |
+| `BenchmarkSpec` | Models, slices, prompt variants, parse pipelines, and scores |
+| `SliceSpec` | One benchmark slice with dataset config, dimensions, and allowed prompts |
+| `DatasetQuerySpec` | Subset, filters, item pinning, and sampling hints |
+| `PromptVariantSpec` | A reusable prompt family and message template |
+| `ParseSpec` | A named parser pipeline |
+| `ScoreSpec` | A named scoring overlay, optionally tied to a parse pipeline |
+| `PluginRegistry` | Runtime lookup for engines, parsers, metrics, judges, and hooks |
+| `Orchestrator` | Planning, execution, export, import, resume, and progress |
+| `BenchmarkResult` | Aggregation, paired comparisons, timelines, and artifact bundles |
 
 ## Mental Model
 
-```mermaid
-flowchart LR
-    A["ProjectSpec"] --> B["Orchestrator.from_project_spec(...)"]
-    C["ExperimentSpec"] --> B
-    B --> D["TrialPlanner"]
-    D --> E["TrialRunner / Candidate Pipeline"]
-    E --> F["SQLite event log + optional artifacts"]
-    F --> G["TrialRecord projections"]
-    G --> H["ExperimentResult"]
+`BenchmarkSpec` is the public authoring model. Internally, Themis compiles it to
+a private execution IR before planning trials. That lower layer is an
+implementation detail, not a second public API.
+
+Dataset access uses the benchmark-first provider contract
+`DatasetProvider.scan(slice_spec, query)`.
+
+Use this split when deciding where logic belongs:
+
+- project-wide runtime policy: `ProjectSpec`
+- benchmark semantics: `BenchmarkSpec`
+- provider-specific execution: `InferenceEngine`
+- answer parsing: `ParseSpec` + extractor chain
+- scoring: `ScoreSpec` + metrics
+- read-side analysis: `BenchmarkResult`
+
+## Public Imports
+
+Use the root package for the main entry points:
+
+```python
+from themis import (
+    BenchmarkResult,
+    BenchmarkSpec,
+    DatasetQuerySpec,
+    Orchestrator,
+    ParseSpec,
+    PluginRegistry,
+    ProjectSpec,
+    PromptMessage,
+    PromptVariantSpec,
+    ScoreSpec,
+    SliceSpec,
+    generate_config_report,
+)
 ```
 
-Themis splits the system into a write side and a read side:
+Use `themis.specs` for supporting spec models that are still public but not
+curated into the root package:
 
-- Write side: plan trials, run plugins, append lifecycle events.
-- Read side: hydrate immutable `TrialRecord` and `RecordTimelineView` projections.
-
-That separation keeps retries, resume behavior, and analysis tooling predictable.
-
-The intended public surface is the curated root package plus
-`themis.errors`, `themis.specs`, `themis.runtime`, `themis.registry`, and
-`themis.contracts`. Storage and orchestration internals are importable for local
-inspection, but they are not the stable extension surface.
-
-## What This Documentation Covers
-
-This site is organized around four complementary views:
-
-- [Tutorials](../tutorials/index.md) for beginner-safe lessons with a complete
-  outcome
-- [Guides](../guides/index.md) for task-oriented workflows
-- [Concepts](../concepts/index.md) for architecture and mental models
-- [API Reference](../api-reference/index.md) for source-backed class and function docs
-
-High-signal entry points:
-
-- [Architecture](../concepts/architecture.md) for the system boundaries
-- [Specs and Records](../concepts/specs-and-records.md) for write-side versus read-side concepts
-- [CLI Reference](../api-reference/cli.md) when you want command lookup instead of workflow prose
-
-## Start Here By Persona
-
-- Beginner: [Quick Start](../quick-start/index.md) then
-  [Hello World Walkthrough](../tutorials/hello-world.md)
-- Research scientist: [Validate Dataset Loaders](../guides/dataset-validation.md),
-  [Compare and Export Results](../guides/compare-and-export.md), and
-  [Reproduce and Share Runs](../guides/reproduce-runs.md)
-- Power user: [API Reference](../api-reference/index.md),
-  [Storage and Resume](../concepts/storage-and-resume.md), and
-  [Run Planning](../api-reference/run-planning.md)
-
-## When Themis Fits Best
-
-Themis is a good fit when you want:
-
-- deterministic trial expansion from typed config
-- explicit storage and resume behavior
-- plugin-based inference, extraction, and scoring
-- post-run inspection through timelines, reports, and paired comparisons
-
-The current focus is local-first execution, persistence, and analysis.
-
-The v2 execution surface also includes explicit planning and run handles:
-
-- `plan()` snapshots the resolved run into deterministic work items
-- `submit()` and `resume()` operate on persisted run manifests
-- `estimate()` provides a best-effort dry run for work-item and token budgets
+```python
+from themis.specs import DatasetSpec, GenerationSpec, JudgeInferenceSpec
+```

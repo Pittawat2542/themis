@@ -1,100 +1,30 @@
 # Author Project Files
 
-`Orchestrator.from_project_file()` accepts TOML or JSON.
+Project files are for shared runtime policy, not for benchmark semantics.
 
-Prefer `SqliteBlobStorageSpec` and `PostgresBlobStorageSpec` in new code. The
-fields below map directly onto those types. `StorageSpec` remains the SQLite
-compatibility alias.
+## Keep in `project.toml`
 
-## Recommended Fields
+- storage root
+- storage backend
+- execution policy
+- project seed
 
-Keep these values stable in your project file:
+## Keep in Python
 
-- `project_name`
-- `researcher_id`
-- `global_seed`
-- `storage.root_dir` for `sqlite_blob`, or `storage.database_url` plus `storage.blob_root_dir` for `postgres_blob`
-- `execution_policy.*`
-- `execution_backend.*` when you want worker-pool or batch orchestration
+- benchmark slices
+- dataset queries
+- prompt variants
+- parse pipelines
+- score overlays
 
-## TOML Example
-
-```toml
-project_name = "offline-evals"
-researcher_id = "team-research"
-global_seed = 13
-
-[storage]
-root_dir = ".cache/themis/offline-evals"
-backend = "sqlite_blob"
-store_item_payloads = true
-compression = "zstd"
-
-[execution_policy]
-max_retries = 2
-retry_backoff_factor = 1.5
-circuit_breaker_threshold = 4
-
-[execution_backend]
-kind = "local"
-```
-
-For Postgres-backed runs:
-
-```toml
-[storage]
-backend = "postgres_blob"
-database_url = "postgresql://localhost:5432/themis"
-blob_root_dir = ".cache/themis/offline-evals/blobs"
-store_item_payloads = true
-compression = "zstd"
-
-[execution_backend]
-kind = "worker_pool"
-lease_ttl_seconds = 180
-poll_interval_seconds = 5
-worker_tags = ["gpu:a100"]
-```
-
-If you keep `compression = "zstd"`, install the compression extra first:
-
-```bash
-uv add "themis-eval[compression]"
-```
-
-## Common Failure Modes
-
-Malformed project files fail during load instead of falling back silently.
-Representative output:
-
-```text
-Failed to parse project config broken.json: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
-```
-
-Unsupported file extensions fail with:
-
-```text
-Project files must use .toml or .json.
-```
-
-## Usage
+Load a project file with:
 
 ```python
 orchestrator = Orchestrator.from_project_file(
     "project.toml",
     registry=registry,
-    dataset_loader=dataset_loader,
+    dataset_provider=dataset_provider,
 )
 ```
 
-!!! warning
-    Project files define shared policy, not the experiment matrix. Keep models,
-    tasks, prompts, and parameter sweeps in `ExperimentSpec`.
-
-When you call `Orchestrator.plan()` or export an external work bundle, Themis
-persists the exact `ProjectSpec` snapshot from the file into the run manifest so
-the run can be reproduced or diffed later.
-
-That same backend selection also drives `submit()` and `resume()`: local runs
-execute immediately in-process, while `worker_pool` and `batch` runs persist a
-handle that external workers or imports can complete later.
+Worked example: `examples/02_project_file.py`

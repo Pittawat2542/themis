@@ -135,6 +135,14 @@ class PromptTemplateSpec(SpecBase):
     id: str | None = Field(
         default=None, description="Optional stable identifier for this template."
     )
+    family: str | None = Field(
+        default=None,
+        description="Optional prompt family used for benchmark applicability.",
+    )
+    variables: JSONDict = Field(
+        default_factory=dict,
+        description="Static prompt-scoped variables exposed to prompt rendering.",
+    )
     messages: list[PromptMessage] = Field(
         ...,
         description="List of templated messages mimicking standard Chat formats.",

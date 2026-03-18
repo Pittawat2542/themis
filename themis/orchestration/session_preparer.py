@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 from themis.contracts.protocols import DatasetContext, TrialEventRepository
+from themis.prompting import render_prompt_messages
 from themis.orchestration.runner_state import (
     TrialExecutionSession,
     artifact_ref,
@@ -13,7 +14,7 @@ from themis.orchestration.runner_state import (
 )
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.records.provenance import ProvenanceRecord
-from themis.specs.experiment import RuntimeContext, TrialSpec
+from themis.specs.experiment import PromptMessage, RuntimeContext, TrialSpec
 from themis.storage.artifact_store import ArtifactStore
 from themis.types.enums import RecordStatus
 from themis.types.events import (
@@ -45,6 +46,7 @@ class TrialSessionPreparer:
     def prepare_trial_session(
         self,
         trial: TrialSpec,
+        prepared_trial: TrialSpec,
         dataset_context: DatasetContext,
         base_runtime: RuntimeContext,
         provenance: ProvenanceRecord,
@@ -56,7 +58,8 @@ class TrialSessionPreparer:
         prompt_payload = json_value(
             {
                 "messages": [
-                    message.model_dump(mode="json") for message in trial.prompt.messages
+                    message.model_dump(mode="json")
+                    for message in prepared_trial.prompt.messages
                 ]
             },
             label="rendered prompt",
@@ -74,6 +77,7 @@ class TrialSessionPreparer:
         )
         session = TrialExecutionSession(
             trial=trial,
+            prepared_trial=prepared_trial,
             dataset_context=dataset_context,
             base_runtime=base_runtime,
             provenance=provenance,
@@ -112,7 +116,7 @@ class TrialSessionPreparer:
             )
         tags.update(base_runtime.run_labels)
         prompt_metadata = PromptRenderedEventMetadata(
-            prompt_template_id=trial.prompt.id,
+            prompt_template_id=prepared_trial.prompt.id,
             rendered_prompt_hash=prompt_artifact[1],
             input_field_map=sorted(dataset_context.keys()),
         )
@@ -143,3 +147,55 @@ class TrialSessionPreparer:
             artifact_refs=[prompt_artifact[0]],
         )
         return session
+
+
+def prepare_benchmark_prompt(
+    trial: TrialSpec,
+    dataset_context: DatasetContext,
+    runtime: RuntimeContext,
+) -> TrialSpec:
+    """Render benchmark-native prompt namespaces into one execution-ready trial."""
+
+    if trial.task.benchmark_id is None:
+        return trial
+
+    item_namespace = dataset_payload(dataset_context)
+    item_id = getattr(dataset_context, "item_id", None)
+    if item_id is not None:
+        item_namespace.setdefault("item_id", str(item_id))
+    item_metadata = getattr(dataset_context, "metadata", None)
+    if isinstance(item_metadata, Mapping):
+        item_namespace.setdefault(
+            "metadata",
+            {str(key): value for key, value in item_metadata.items()},
+        )
+    rendered_messages = render_prompt_messages(
+        trial.prompt.messages,
+        {
+            "item": item_namespace,
+            "slice": {
+                "benchmark_id": trial.task.benchmark_id,
+                "slice_id": trial.task.slice_id or trial.task.task_id,
+                "dimensions": dict(trial.task.dimensions),
+            },
+            "prompt": {
+                "id": trial.prompt.id,
+                "family": trial.prompt.family,
+                "variables": dict(trial.prompt.variables),
+            },
+            "runtime": runtime.model_dump(mode="json"),
+        },
+        strict=True,
+    )
+    return trial.model_copy(
+        update={
+            "prompt": trial.prompt.model_copy(
+                update={
+                    "messages": [
+                        PromptMessage.model_validate(message)
+                        for message in rendered_messages
+                    ]
+                }
+            )
+        }
+    )

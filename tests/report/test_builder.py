@@ -8,7 +8,7 @@ from themis.records.candidate import CandidateRecord
 from themis.records.evaluation import EvaluationRecord, MetricScore
 from themis.records.provenance import ProvenanceRecord
 from themis.records.report import ReportMetadata
-from themis.runtime import ExperimentResult
+from themis.runtime.experiment_result import ExperimentResult
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.events import ScoreRow, TrialSummaryRow

@@ -350,7 +350,7 @@ def test_transform_identity_is_deterministic():
     )
 
 
-def test_transform_identity_ignores_display_name():
+def test_transform_identity_includes_display_name():
     transform_a = OutputTransformSpec(
         name="json",
         extractor_chain=ExtractorChainSpec(extractors=["json"]),
@@ -360,7 +360,7 @@ def test_transform_identity_ignores_display_name():
         extractor_chain=ExtractorChainSpec(extractors=["json"]),
     )
 
-    assert transform_a.spec_hash == transform_b.spec_hash
+    assert transform_a.spec_hash != transform_b.spec_hash
 
 
 def test_evaluation_identity_changes_when_referenced_transform_changes():
@@ -399,7 +399,7 @@ def test_evaluation_identity_changes_when_referenced_transform_changes():
     )
 
 
-def test_evaluation_identity_ignores_display_name():
+def test_evaluation_identity_includes_display_name():
     module = _task_resolution_module()
     resolve_task_stages = getattr(module, "resolve_task_stages")
 
@@ -428,7 +428,7 @@ def test_evaluation_identity_ignores_display_name():
 
     assert (
         resolved_a.evaluations[0].evaluation_hash
-        == resolved_b.evaluations[0].evaluation_hash
+        != resolved_b.evaluations[0].evaluation_hash
     )
 
 

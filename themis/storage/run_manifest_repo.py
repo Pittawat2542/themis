@@ -61,14 +61,16 @@ class RunManifestRepository:
                         run_id,
                         backend_kind,
                         project_spec_json,
+                        benchmark_spec_json,
                         experiment_spec_json,
                         manifest_json,
                         created_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(run_id) DO UPDATE SET
                         backend_kind=excluded.backend_kind,
                         project_spec_json=excluded.project_spec_json,
+                        benchmark_spec_json=excluded.benchmark_spec_json,
                         experiment_spec_json=excluded.experiment_spec_json,
                         manifest_json=excluded.manifest_json,
                         created_at=excluded.created_at
@@ -78,6 +80,9 @@ class RunManifestRepository:
                         manifest.backend_kind,
                         json.dumps(manifest.project_spec.model_dump(mode="json"))
                         if manifest.project_spec is not None
+                        else None,
+                        json.dumps(manifest.benchmark_spec.model_dump(mode="json"))
+                        if manifest.benchmark_spec is not None
                         else None,
                         json.dumps(manifest.experiment_spec.model_dump(mode="json")),
                         json.dumps(manifest.model_dump(mode="json")),
@@ -191,6 +196,7 @@ class RunManifestRepository:
             row = conn.execute(
                 """
                 SELECT manifest_json
+                     , benchmark_spec_json
                 FROM run_manifests
                 WHERE run_id = ?
                 """,
@@ -212,6 +218,11 @@ class RunManifestRepository:
             ).fetchall()
 
         manifest_payload = json.loads(row["manifest_json"])
+        if (
+            "benchmark_spec" not in manifest_payload
+            and row["benchmark_spec_json"] is not None
+        ):
+            manifest_payload["benchmark_spec"] = json.loads(row["benchmark_spec_json"])
         if work_item_rows:
             manifest_payload["work_items"] = _STAGE_WORK_ITEMS_ADAPTER.validate_python(
                 [

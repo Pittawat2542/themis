@@ -1,21 +1,8 @@
 # Registry
 
-Plugin registrations, execution capability metadata, and planning-time
-validation.
+`PluginRegistry` binds provider names, parser IDs, metric IDs, judges, and
+hooks into one runtime lookup table.
 
-`themis.registry` is the stable namespace for runtime plugin registration and
-capability checks. Import from it when you need `PluginRegistry`,
-`CompatibilityChecker`, or `EngineCapabilities` without drilling into the module
-layout.
+::: themis.registry.plugin_registry.EngineCapabilities
 
-::: themis.registry
-    options:
-      show_root_heading: false
-
-::: themis.registry.plugin_registry
-    options:
-      show_root_heading: false
-
-::: themis.registry.compatibility
-    options:
-      show_root_heading: false
+::: themis.registry.plugin_registry.PluginRegistry

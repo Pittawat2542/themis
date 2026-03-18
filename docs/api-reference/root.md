@@ -1,11 +1,21 @@
 # Root Package
 
-Curated top-level imports for the public package surface.
+The root package is intentionally small and benchmark-first.
 
-Notable reporting helper:
+Main imports:
 
-- `generate_config_report(...)` collects nested config objects and renders them
-  as JSON, YAML, Markdown, or LaTeX.
+- `BenchmarkSpec`
+- `SliceSpec`
+- `DatasetQuerySpec`
+- `PromptVariantSpec`
+- `ParseSpec`
+- `ScoreSpec`
+- `ProjectSpec`
+- `ModelSpec`
+- `PluginRegistry`
+- `Orchestrator`
+- `BenchmarkResult`
+- `generate_config_report`
 
 ::: themis
     options:

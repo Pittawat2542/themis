@@ -295,7 +295,7 @@ def test_projection_repo_builds_overlay_views_and_score_rows(tmp_path) -> None:
 
     rows = list(
         projection_repo.iter_candidate_scores(
-            trial_hash=trial.spec_hash,
+            trial_hashes=[trial.spec_hash],
             metric_id="exact_match",
             evaluation_hash=evaluation_hash,
         )

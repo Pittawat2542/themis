@@ -54,6 +54,7 @@ def generate_candidate(
     runtime_context: RuntimeContext,
     cand_index: int,
     *,
+    prepared_trial: TrialSpec | None = None,
     resolved_generation: ResolvedGenerationPlugins | None = None,
 ) -> CandidateRecord:
     """Run the generation stage only for one candidate."""
@@ -64,7 +65,11 @@ def generate_candidate(
         sample_index=cand_index,
     )
     resolved = resolved_generation or resolve_generation_plugins(trial, registry)
-    execution_trial = resolved.hooks.apply_pre_inference(trial)
+    execution_trial = (
+        prepared_trial
+        if prepared_trial is not None
+        else resolved.hooks.apply_pre_inference(trial)
+    )
     engine = resolved.engine
     try:
         inf_result = _coerce_inference_result(

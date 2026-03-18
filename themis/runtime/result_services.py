@@ -24,7 +24,7 @@ class _ScoreQueryRepository(Protocol):
     def iter_candidate_scores(
         self,
         *,
-        trial_hash: str | None = None,
+        trial_hashes: list[str] | None = None,
         metric_id: str | None = None,
         evaluation_hash: str | None = None,
     ) -> Iterator[ScoreRow]: ...
@@ -87,11 +87,16 @@ class ExperimentResultAnalysisService:
 
         self.require_optional("themis.stats.stats_engine", extra="stats")
         correction = PValueCorrection(p_value_correction)
+        selected_trial_hashes = self._selected_trial_hashes(trial_hash)
         return build_comparison_table(
-            list(self.iter_trial_summaries()),
+            [
+                row
+                for row in self.iter_trial_summaries()
+                if row.trial_hash in set(selected_trial_hashes)
+            ],
             list(
                 self.projection_repo.iter_candidate_scores(
-                    trial_hash=trial_hash,
+                    trial_hashes=selected_trial_hashes,
                     metric_id=metric_id,
                     evaluation_hash=self.context.active_evaluation_hash,
                 )
@@ -118,6 +123,7 @@ class ExperimentResultAnalysisService:
         }
         grouped_scores: dict[tuple[str | None, str | None, str], list[float]] = {}
         for row in self.projection_repo.iter_candidate_scores(
+            trial_hashes=self.context.trial_hashes,
             metric_id=metric_id,
             evaluation_hash=self.context.active_evaluation_hash,
         ):
@@ -168,6 +174,7 @@ class ExperimentResultAnalysisService:
             "score_rows": [
                 row.model_dump(mode="json")
                 for row in self.projection_repo.iter_candidate_scores(
+                    trial_hashes=self.context.trial_hashes,
                     evaluation_hash=self.context.active_evaluation_hash,
                 )
             ],
@@ -193,6 +200,7 @@ class ExperimentResultAnalysisService:
             trial_summaries=trial_summaries,
             score_rows=list(
                 self.projection_repo.iter_candidate_scores(
+                    trial_hashes=self.context.trial_hashes,
                     evaluation_hash=self.context.active_evaluation_hash,
                 )
             ),
@@ -200,6 +208,13 @@ class ExperimentResultAnalysisService:
             transform_hash=self.context.active_transform_hash,
             evaluation_hash=self.context.active_evaluation_hash,
         )
+
+    def _selected_trial_hashes(self, trial_hash: str | None) -> list[str]:
+        if trial_hash is None:
+            return list(self.context.trial_hashes)
+        if trial_hash not in self.context.trial_hashes:
+            return []
+        return [trial_hash]
 
 
 class ExperimentResultDiagnosticsService:

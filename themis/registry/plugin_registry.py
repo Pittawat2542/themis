@@ -281,9 +281,11 @@ class PluginRegistry:
 
     def _register_builtin_extractors(self) -> None:
         from themis.extractors.builtin import (
+            BoxedTextExtractor,
             ChoiceLetterExtractor,
             FirstNumberExtractor,
             JsonSchemaExtractor,
+            NormalizedTextExtractor,
             RegexExtractor,
         )
 
@@ -298,6 +300,15 @@ class PluginRegistry:
         )
         self.register_extractor(
             "choice_letter", ChoiceLetterExtractor, version="1.0.0", plugin_api="1.0"
+        )
+        self.register_extractor(
+            "boxed_text", BoxedTextExtractor, version="1.0.0", plugin_api="1.0"
+        )
+        self.register_extractor(
+            "normalized_text",
+            NormalizedTextExtractor,
+            version="1.0.0",
+            plugin_api="1.0",
         )
 
     def _next_registration_order(self) -> int:

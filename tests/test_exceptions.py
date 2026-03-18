@@ -60,8 +60,8 @@ class TestExceptionMessages:
     def test_themis_error_is_exception(self):
         assert issubclass(ThemisError, Exception)
 
-    def test_root_namespace_re_exports_canonical_error_class(self):
-        assert themis.ThemisError is ThemisError
+    def test_root_namespace_keeps_error_types_out_of_curated_surface(self):
+        assert not hasattr(themis, "ThemisError")
 
     def test_retryable_provider_error_is_inference_error(self):
         assert issubclass(RetryableProviderError, InferenceError)

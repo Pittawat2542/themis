@@ -1,59 +1,29 @@
-# FAQ / Troubleshooting
+# FAQ
 
-## Why does `Orchestrator.run()` fail with a dataset-loader error?
+## Why is the public API benchmark-first now?
 
-`TrialPlanner` needs dataset items to expand an `ExperimentSpec`. Pass a
-`dataset_loader` object to the orchestrator, and make sure it implements
-`load_task_items(task)`.
+Because serious eval authors need first-class slices, prompt variants, parse
+pipelines, semantic dimensions, and benchmark-native reporting.
 
-## Why are my prompt placeholders not being interpolated automatically?
+## Why does `BenchmarkSpec` compile to something private?
 
-The runtime stores prompt messages and dataset context separately. Your
-inference engine can render those inputs however it wants, but Themis does not
-apply a built-in string templating step during trial execution.
+Planning and execution still run on a lower-level IR, but that layer is an
+implementation detail. The public contract is the benchmark surface.
 
-## Why is a rerun not skipping completed work?
+## What replaced the old dataset loader contract?
 
-Resume checks are tied to:
+Use `DatasetProvider.scan(slice_spec, query)`.
 
-- the trial hash
-- the active overlay hash for transform or evaluation stages
-- the presence of a completed projection
+## What should I do with `examples/medical_reasoning_eval`?
 
-Changing the spec, storage root, `transform_hash`, or `evaluation_hash` makes
-the runtime treat the work as new.
+Treat it as a handoff and acceptance reference. It was intentionally not
+rewritten during the benchmark-first overhaul.
 
-## Why does `result.compare()` raise an optional dependency error?
+## How do I inspect results without importing Python?
 
-Comparisons and report building need the `stats` extra:
+Use `themis-quickcheck` against the SQLite database.
 
-```bash
-uv add "themis-eval[stats]"
-```
+## How do I group results by benchmark semantics?
 
-## Why is `view_timeline(...).item_payload` empty?
-
-That happens when your `StorageConfig.store_item_payloads` setting is `False`.
-The runtime stores events and projections, but omits dataset payload blobs.
-
-## Why is `view_timeline(...).observability` empty?
-
-Passing a `TelemetryBus` is not enough by itself. External URLs only appear in
-`RecordTimelineView.observability` when a callback such as `LangfuseCallback`
-persists refs through a `SqliteObservabilityStore` wired to the same database.
-
-## Why does the built-in `json_schema` extractor say an optional dependency is missing?
-
-Install the `extractors` extra:
-
-```bash
-uv add "themis-eval[extractors]"
-```
-
-## How do I inspect failures without loading all artifacts?
-
-Use the quickcheck CLI against the SQLite database:
-
-```bash
-themis-quickcheck failures --db path/to/themis.sqlite3
-```
+Use `BenchmarkResult.aggregate(...)` and include `slice_id`,
+`prompt_variant_id`, or dimension keys in `group_by`.

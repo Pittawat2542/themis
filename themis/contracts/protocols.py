@@ -31,6 +31,8 @@ from themis.types.events import ScoreRow, TrialEvent, TrialEventType, TrialSumma
 from themis.types.json_types import JSONValueType
 
 if TYPE_CHECKING:
+    from themis.benchmark.query import DatasetQuerySpec
+    from themis.benchmark.specs import DatasetSliceSpec
     from themis.runtime.timeline_view import RecordTimelineView
 
 DatasetContext = DataItemContext | Mapping[str, object]
@@ -164,6 +166,19 @@ class DatasetLoader(Protocol):
 
 
 @runtime_checkable
+class DatasetProvider(Protocol):
+    """Query-aware dataset provider used by the benchmark-first public surface."""
+
+    def scan(
+        self,
+        slice_spec: DatasetSliceSpec,
+        query: DatasetQuerySpec,
+    ) -> Sequence[DatasetItem]:
+        """Return slice items after applying the requested dataset query."""
+        ...
+
+
+@runtime_checkable
 class TrialEventRepository(Protocol):
     """
     Append-only write-side repository for typed trial lifecycle events.
@@ -279,7 +294,7 @@ class ProjectionRepository(Protocol):
     def iter_candidate_scores(
         self,
         *,
-        trial_hash: str | None = None,
+        trial_hashes: Sequence[str] | None = None,
         metric_id: str | None = None,
         evaluation_hash: str | None = None,
     ) -> Iterator[ScoreRow]:

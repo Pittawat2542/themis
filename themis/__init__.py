@@ -1,44 +1,42 @@
 """Curated public package surface for the current Themis runtime."""
 
 from themis._version import __version__
+from themis.benchmark import (
+    BenchmarkSpec,
+    DatasetQuerySpec,
+    ParseSpec,
+    PromptVariantSpec,
+    ScoreSpec,
+    SliceSpec,
+)
 from themis.config_report import generate_config_report
-from themis.errors import ThemisError
 from themis.orchestration.orchestrator import Orchestrator
-from themis.runtime import ExperimentResult
+from themis.runtime import BenchmarkResult
 from themis.specs.experiment import (
     ExecutionPolicySpec,
-    ExperimentSpec,
     InferenceGridSpec,
     InferenceParamsSpec,
-    ItemSamplingSpec,
     PostgresBlobStorageSpec,
     PromptMessage,
     ProjectSpec,
-    PromptTemplateSpec,
-    RuntimeContext,
     SqliteBlobStorageSpec,
     StorageConfig,
     StorageSpec,
-    TrialSpec,
 )
-from themis.specs.foundational import (
-    DatasetSpec,
-    EvaluationSpec,
-    ExtractorChainSpec,
-    ExtractorRefSpec,
-    GenerationSpec,
-    ModelSpec,
-    OutputTransformSpec,
-    TaskSpec,
-)
+from themis.specs.foundational import ModelSpec
 from themis.registry.plugin_registry import PluginRegistry
 
 __all__ = [
     "__version__",
     "Orchestrator",
-    "ExperimentResult",
+    "BenchmarkResult",
+    "BenchmarkSpec",
+    "SliceSpec",
+    "DatasetQuerySpec",
+    "PromptVariantSpec",
+    "ParseSpec",
+    "ScoreSpec",
     "ProjectSpec",
-    "ExperimentSpec",
     "StorageConfig",
     "StorageSpec",
     "SqliteBlobStorageSpec",
@@ -46,20 +44,8 @@ __all__ = [
     "ExecutionPolicySpec",
     "InferenceGridSpec",
     "PromptMessage",
-    "PromptTemplateSpec",
     "InferenceParamsSpec",
-    "ItemSamplingSpec",
-    "TrialSpec",
     "ModelSpec",
-    "GenerationSpec",
-    "OutputTransformSpec",
-    "EvaluationSpec",
-    "ExtractorRefSpec",
-    "ExtractorChainSpec",
-    "TaskSpec",
-    "DatasetSpec",
-    "RuntimeContext",
     "PluginRegistry",
-    "ThemisError",
     "generate_config_report",
 ]

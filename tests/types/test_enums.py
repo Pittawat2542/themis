@@ -89,6 +89,8 @@ def test_artifact_role_values():
         ArtifactRole.ITEM_PAYLOAD,
         ArtifactRole.RENDERED_PROMPT,
         ArtifactRole.INFERENCE_OUTPUT,
+        ArtifactRole.EXTRACTION_OUTPUT,
+        ArtifactRole.EVALUATION_OUTPUT,
         ArtifactRole.METRIC_DETAILS,
         ArtifactRole.JUDGE_AUDIT,
     }

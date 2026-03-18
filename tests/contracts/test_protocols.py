@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import inspect
 
 from themis.contracts.protocols import (
@@ -222,11 +222,11 @@ class MockProjectionRepository(ProjectionRepository):
     def iter_candidate_scores(
         self,
         *,
-        trial_hash: str | None = None,
+        trial_hashes: Sequence[str] | None = None,
         metric_id: str | None = None,
         evaluation_hash: str | None = None,
     ):
-        del trial_hash, metric_id, evaluation_hash
+        del trial_hashes, metric_id, evaluation_hash
         return iter(
             [
                 ScoreRow(

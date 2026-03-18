@@ -1,7 +1,9 @@
-"""Runtime-side public facades over persisted experiment outputs."""
+"""Runtime-side public facades over persisted benchmark outputs."""
 
-from themis.runtime.comparison import ComparisonTable
-from themis.runtime.experiment_result import ExperimentResult
+from themis.runtime.benchmark_result import BenchmarkResult
 from themis.runtime.timeline_view import RecordTimelineView
 
-__all__ = ["ComparisonTable", "ExperimentResult", "RecordTimelineView"]
+__all__ = [
+    "BenchmarkResult",
+    "RecordTimelineView",
+]

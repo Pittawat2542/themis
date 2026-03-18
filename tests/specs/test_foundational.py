@@ -12,7 +12,8 @@ from themis.specs.foundational import (
     RenameFieldTransform,
     TaskSpec,
 )
-from themis.specs.experiment import InferenceParamsSpec
+from themis.benchmark.query import DatasetQuerySpec
+from themis.specs.experiment import InferenceParamsSpec, ItemSamplingSpec
 from themis.types.enums import DatasetSource
 
 
@@ -201,3 +202,43 @@ def test_judge_inference_spec_uses_explicit_params_field():
 
     assert spec.params == InferenceParamsSpec(temperature=0.7, max_tokens=64)
     assert spec.extras == {"mode": "rubric"}
+
+
+def test_task_spec_coerces_item_sampling_spec_to_dataset_query_spec() -> None:
+    GenerationSpec = getattr(foundational, "GenerationSpec", None)
+    assert GenerationSpec is not None
+
+    task = TaskSpec.model_validate(
+        {
+            "task_id": "sampled",
+            "dataset": DatasetSpec(source=DatasetSource.MEMORY),
+            "dataset_query": ItemSamplingSpec.subset(count=2, seed=7),
+            "generation": GenerationSpec(),
+        }
+    )
+
+    assert isinstance(task.dataset_query, DatasetQuerySpec)
+    assert task.dataset_query.kind.value == "subset"
+    assert task.dataset_query.count == 2
+    assert task.dataset_query.seed == 7
+
+
+def test_task_spec_propagates_unexpected_dataset_query_errors(monkeypatch) -> None:
+    GenerationSpec = getattr(foundational, "GenerationSpec", None)
+    assert GenerationSpec is not None
+
+    def _boom(cls, payload):
+        del cls, payload
+        raise RuntimeError("unexpected dataset query failure")
+
+    monkeypatch.setattr(DatasetQuerySpec, "model_validate", classmethod(_boom))
+
+    with pytest.raises(RuntimeError, match="unexpected dataset query failure"):
+        TaskSpec.model_validate(
+            {
+                "task_id": "sampled",
+                "dataset": DatasetSpec(source=DatasetSource.MEMORY),
+                "dataset_query": {"kind": "all"},
+                "generation": GenerationSpec(),
+            }
+        )
