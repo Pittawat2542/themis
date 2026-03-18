@@ -2,30 +2,7 @@ from __future__ import annotations
 
 import themis
 
-
-EXPECTED_ROOT_EXPORTS = {
-    "__version__",
-    "BenchmarkResult",
-    "BenchmarkSpec",
-    "DatasetQuerySpec",
-    "ExecutionPolicySpec",
-    "InferenceGridSpec",
-    "InferenceParamsSpec",
-    "ModelSpec",
-    "Orchestrator",
-    "ParseSpec",
-    "PluginRegistry",
-    "PostgresBlobStorageSpec",
-    "ProjectSpec",
-    "PromptMessage",
-    "PromptVariantSpec",
-    "ScoreSpec",
-    "SliceSpec",
-    "SqliteBlobStorageSpec",
-    "StorageConfig",
-    "StorageSpec",
-    "generate_config_report",
-}
+from tests.constants import EXPECTED_ROOT_EXPORTS
 
 
 def test_root_exports_only_benchmark_first_surface() -> None:

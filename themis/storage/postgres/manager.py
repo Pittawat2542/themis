@@ -6,6 +6,7 @@ import re
 import threading
 from contextlib import contextmanager
 from collections.abc import Sequence
+import logging
 from typing import Iterator, Protocol
 
 from themis._optional import import_optional
@@ -20,6 +21,7 @@ from themis.storage._schema import (
 from themis.types.enums import ErrorCode
 
 _QMARK_PATTERN = re.compile(r"\?")
+logger = logging.getLogger(__name__)
 
 
 class _RawPostgresConnection(Protocol):
@@ -117,6 +119,12 @@ class PostgresConnectionManager:
                 WHERE metadata_key = ?
                 """,
                 (STORE_FORMAT_VERSION, STORE_FORMAT_KEY),
+            )
+            logger.info(
+                "Migrated store metadata %s from %s to %s.",
+                STORE_FORMAT_KEY,
+                row["metadata_value"],
+                STORE_FORMAT_VERSION,
             )
             return
         if row["metadata_value"] != STORE_FORMAT_VERSION:

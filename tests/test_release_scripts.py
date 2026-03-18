@@ -4,31 +4,10 @@ import importlib.util
 from pathlib import Path
 import runpy
 
+from tests.constants import EXPECTED_ROOT_EXPORTS
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_ROOT_EXPORTS = {
-    "__version__",
-    "BenchmarkResult",
-    "BenchmarkSpec",
-    "DatasetQuerySpec",
-    "ExecutionPolicySpec",
-    "InferenceGridSpec",
-    "InferenceParamsSpec",
-    "ModelSpec",
-    "Orchestrator",
-    "ParseSpec",
-    "PluginRegistry",
-    "PostgresBlobStorageSpec",
-    "ProjectSpec",
-    "PromptMessage",
-    "PromptVariantSpec",
-    "ScoreSpec",
-    "SliceSpec",
-    "SqliteBlobStorageSpec",
-    "StorageConfig",
-    "StorageSpec",
-    "generate_config_report",
-}
 
 
 def _load_module(relative_path: str, module_name: str):

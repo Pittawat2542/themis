@@ -14,16 +14,16 @@ class _ValueProxy:
 
     def __getattr__(self, name: str) -> "_ValueProxy":
         if isinstance(self._value, Mapping) and name in self._value:
-            return _ValueProxy(self._value[name])
+            return _ValueProxy(self._value[name], placeholder=self._placeholder)
         if self._placeholder is not None:
-            return _ValueProxy(self._placeholder)
+            return _ValueProxy(self._placeholder, placeholder=self._placeholder)
         raise AttributeError(name)
 
     def __getitem__(self, key: str) -> "_ValueProxy":
         if isinstance(self._value, Mapping) and key in self._value:
-            return _ValueProxy(self._value[key])
+            return _ValueProxy(self._value[key], placeholder=self._placeholder)
         if self._placeholder is not None:
-            return _ValueProxy(self._placeholder)
+            return _ValueProxy(self._placeholder, placeholder=self._placeholder)
         raise KeyError(key)
 
     def __str__(self) -> str:

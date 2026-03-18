@@ -30,11 +30,15 @@ class ResumeDatasetProvider:
 
 
 class ResumeEngine:
+    def __init__(self) -> None:
+        self.run_count = 0
+
     def infer(self, trial, context, runtime):
         del trial, runtime
+        self.run_count += 1
         return InferenceResult(
             inference=InferenceRecord(
-                spec_hash=f"inf_{context['item_id']}",
+                spec_hash=f"inf_{context['item_id']}_run{self.run_count}",
                 raw_text=str(context["answer"]),
             )
         )
@@ -98,9 +102,17 @@ def main() -> None:
 
     first = orchestrator.run_benchmark(_benchmark())
     second = orchestrator.run_benchmark(_benchmark())
+    first_trial = first.get_trial(first.trial_hashes[0])
+    second_trial = second.get_trial(second.trial_hashes[0])
+    assert first_trial is not None
+    assert second_trial is not None
+    assert first_trial.candidates[0].inference is not None
+    assert second_trial.candidates[0].inference is not None
 
     print(first.aggregate(group_by=["model_id", "slice_id", "metric_id"]))
+    print(first_trial.candidates[0].inference.spec_hash)
     print(second.aggregate(group_by=["model_id", "slice_id", "metric_id"]))
+    print(second_trial.candidates[0].inference.spec_hash)
 
 
 if __name__ == "__main__":

@@ -122,6 +122,21 @@ def resume_state_from_events(
     if not candidate_events:
         return None
 
+    attempt = 0
+    for event in reversed(candidate_events):
+        if event.event_type != TrialEventType.TRIAL_RETRY:
+            continue
+        metadata_attempt = getattr(event.metadata, "attempt", None)
+        if isinstance(metadata_attempt, int):
+            attempt = metadata_attempt
+            break
+        payload_attempt = (
+            event.payload.get("attempt") if isinstance(event.payload, dict) else None
+        )
+        if isinstance(payload_attempt, int):
+            attempt = payload_attempt
+            break
+
     conversation_events = [
         _CONVERSATION_EVENT_ADAPTER.validate_python(event.payload)
         for event in candidate_events
@@ -135,6 +150,7 @@ def resume_state_from_events(
         candidate_id=candidate_id,
         conversation=Conversation(events=conversation_events),
         last_event_index=conversation_events[-1].event_index,
+        attempt=attempt,
     )
 
 

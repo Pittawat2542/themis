@@ -43,7 +43,7 @@ from themis import BenchmarkSpec, Orchestrator, PluginRegistry, ProjectSpec
 Supporting spec imports:
 
 ```python
-from themis.specs import DatasetSpec, GenerationSpec
+from themis.specs import DatasetQuerySpec, DatasetSpec, GenerationSpec, SliceSpec
 ```
 
 ## Local Docs

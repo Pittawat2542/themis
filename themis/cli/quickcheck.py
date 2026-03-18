@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sqlite3
 from pathlib import Path
 from statistics import mean
 from typing import Any
 
 from themis.overlays import OverlaySelection
+
+logger = logging.getLogger(__name__)
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
@@ -210,6 +213,9 @@ def _run_scores(
     if metric_id is not None:
         clauses.append("metric_scores.metric_id = ?")
         params.append(metric_id)
+    if slice_id is not None:
+        clauses.append("trial_summary.slice_id = ?")
+        params.append(slice_id)
     where_clause = f"WHERE {' AND '.join(clauses)}"
     rows = conn.execute(
         f"""
@@ -229,8 +235,6 @@ def _run_scores(
     parsed_dimension_filters = _parse_dimension_filters(dimension_filters)
     grouped: dict[tuple[str, str, str, str], list[float]] = {}
     for row in rows:
-        if slice_id is not None and row["slice_id"] != slice_id:
-            continue
         dimensions = _load_dimensions(row["dimensions_json"])
         if not _dimensions_match(dimensions, parsed_dimension_filters):
             continue
@@ -254,7 +258,7 @@ def _run_scores(
                     model_id,
                     resolved_slice_id,
                     resolved_metric_id,
-                    f"{sum(scores) / len(scores):.4f}",
+                    f"{mean(scores):.4f}",
                     str(len(scores)),
                 ]
             )
@@ -314,9 +318,14 @@ def _percentile(values: list[int | float], percentile: int) -> str:
 def _parse_dimension_filters(filters: list[str]) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for item in filters:
-        key, _, value = item.partition("=")
-        if key and value:
-            parsed[key] = value
+        key, separator, value = item.partition("=")
+        if separator != "=" or not key or not value:
+            logger.warning(
+                "Ignoring malformed dimension filter %r: expected non-empty key=value.",
+                item,
+            )
+            continue
+        parsed[key] = value
     return parsed
 
 

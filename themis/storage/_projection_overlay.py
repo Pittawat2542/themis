@@ -256,7 +256,7 @@ class ProjectionOverlayReader:
             source_event_range=source_range,
         )
 
-    def resolve_event_payload(self, event: TrialEvent):
+    def resolve_event_payload(self, event: TrialEvent) -> TrialEvent:
         if event.payload is not None or self.artifact_store is None:
             return event
         artifact_hash = self._payload_artifact_hash(event)

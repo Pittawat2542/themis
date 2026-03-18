@@ -21,7 +21,9 @@ from themis.benchmark.compiler import compile_benchmark
 from themis.errors import SpecValidationError
 from themis.orchestration.trial_planner import TrialPlanner
 from themis.specs.experiment import DataItemContext
-from themis.types.enums import DatasetSource, PromptRole
+from themis.specs.experiment import ExperimentSpec
+from themis.specs.experiment import PromptTemplateSpec
+from themis.types.enums import DatasetSource, PromptRole, SamplingKind
 from themis.specs.foundational import DatasetSpec, ExtractorRefSpec, GenerationSpec
 
 
@@ -251,3 +253,100 @@ def test_slice_spec_rejects_duplicate_score_names() -> None:
                 ScoreSpec(name="default", metrics=["accuracy"]),
             ],
         )
+
+
+def test_slice_spec_rejects_scores_that_reference_unknown_parse_names() -> None:
+    with pytest.raises(ValidationError, match="unknown parse"):
+        SliceSpec(
+            slice_id="arithmetic",
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
+            generation=GenerationSpec(),
+            parses=[
+                ParseSpec(
+                    name="parsed",
+                    extractors=[ExtractorRefSpec(id="first_number")],
+                )
+            ],
+            scores=[ScoreSpec(name="default", parse="missing", metrics=["accuracy"])],
+        )
+
+
+def test_dataset_query_spec_rejects_item_ids_with_count_based_sampling() -> None:
+    with pytest.raises(ValidationError, match="item_ids"):
+        DatasetQuerySpec(
+            kind=SamplingKind.SUBSET,
+            count=2,
+            item_ids=["item-1"],
+        )
+
+    with pytest.raises(ValidationError, match="item_ids"):
+        DatasetQuerySpec(
+            kind=SamplingKind.STRATIFIED,
+            count=2,
+            strata_field="difficulty",
+            item_ids=["item-1"],
+        )
+
+
+def test_trial_planner_resolves_prompt_selectors_before_dataset_access() -> None:
+    provider = RecordingDatasetProvider()
+    planner = TrialPlanner(dataset_provider=provider)
+    experiment = ExperimentSpec(
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        tasks=[
+            compile_benchmark(
+                BenchmarkSpec(
+                    benchmark_id="math-bench",
+                    models=[ModelSpec(model_id="demo-model", provider="demo")],
+                    slices=[
+                        SliceSpec(
+                            slice_id="arithmetic",
+                            dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                            generation=GenerationSpec(),
+                            scores=[
+                                ScoreSpec(
+                                    name="default",
+                                    metrics=["exact_match"],
+                                )
+                            ],
+                        )
+                    ],
+                    prompt_variants=[
+                        PromptVariantSpec(
+                            id="qa-default",
+                            family="qa",
+                            messages=[
+                                PromptMessage(
+                                    role=PromptRole.USER,
+                                    content="Question: {item.question}",
+                                )
+                            ],
+                        )
+                    ],
+                    inference_grid=InferenceGridSpec(
+                        params=[InferenceParamsSpec(max_tokens=32)]
+                    ),
+                )
+            )
+            .tasks[0]
+            .model_copy(update={"allowed_prompt_template_ids": ["missing-variant"]})
+        ],
+        prompt_templates=[
+            PromptTemplateSpec(
+                id="qa-default",
+                family="qa",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Question: {item.question}",
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    with pytest.raises(SpecValidationError, match="missing-variant"):
+        planner.plan_experiment(experiment)
+
+    assert provider.calls == []

@@ -136,7 +136,7 @@ evaluation_result = result.for_evaluation(result.evaluation_hashes[0])
 Use transform views when you want normalized outputs before scoring. Use
 evaluation views when you want metric-backed candidate records.
 
-## Diff Two Experiment Specs
+## Diff Two Benchmark Specs
 
 ```python
 diff = orchestrator.diff_specs(baseline_benchmark, treatment_benchmark)

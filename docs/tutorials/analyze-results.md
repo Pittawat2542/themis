@@ -20,6 +20,11 @@ ArtifactBundle(aggregate_json_path=PosixPath('.cache/themis-examples/04-compare-
 Use `BenchmarkResult` for the benchmark-native surface:
 
 ```python
+from themis import BenchmarkResult
+
+# `project` is the ProjectSpec for this workspace.
+result: BenchmarkResult = orchestrator.run_benchmark(benchmark)
+
 rows = result.aggregate(group_by=["model_id", "slice_id", "metric_id"])
 comparison = result.paired_compare(metric_id="exact_match", group_by="slice_id")
 bundle = result.persist_artifacts(storage_root=project.storage.root_dir)

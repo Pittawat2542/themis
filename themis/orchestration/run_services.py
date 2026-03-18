@@ -266,8 +266,9 @@ class RunPlanningService:
 
         manifest = self.plan(experiment, benchmark_spec=benchmark_spec)
         if self.backend_kind == "local":
-            execute_run(experiment, runtime)
-            manifest = self.plan(experiment, benchmark_spec=benchmark_spec)
+            source_spec = benchmark_spec if benchmark_spec is not None else experiment
+            execute_run(source_spec, runtime)
+            manifest = self.plan_source(source_spec)
         return self.run_handle_from_manifest(manifest)
 
     def resume(

@@ -98,14 +98,8 @@ class BenchmarkResult(ExperimentResult):
         for summary in trial_summaries:
             group_value = self._resolve_group_value(
                 summary,
-                ScoreRow(
-                    trial_hash=summary.trial_hash,
-                    candidate_id="",
-                    metric_id=metric_id,
-                    score=0.0,
-                    details={},
-                ),
                 group_by,
+                metric_id=metric_id,
             )
             summaries_by_group.setdefault(group_value, []).append(summary)
 
@@ -231,17 +225,22 @@ class BenchmarkResult(ExperimentResult):
     ) -> JSONDict:
         payload: JSONDict = {}
         for key in group_by:
-            payload[key] = self._resolve_group_value(summary, score_row, key)
+            payload[key] = self._resolve_group_value(
+                summary,
+                key,
+                metric_id=score_row.metric_id,
+            )
         return payload
 
     def _resolve_group_value(
         self,
         summary: TrialSummaryRow,
-        score_row: ScoreRow,
         key: str,
+        *,
+        metric_id: str | None = None,
     ) -> JSONValueType:
         if key == "metric_id":
-            return score_row.metric_id
+            return metric_id
         if key in {"benchmark_id", "slice_id", "prompt_variant_id"}:
             return getattr(summary, key)
         if key in {"model_id", "item_id", "status"}:

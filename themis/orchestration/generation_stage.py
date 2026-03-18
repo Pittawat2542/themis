@@ -23,7 +23,7 @@ from themis.records.candidate import CandidateRecord
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import RuntimeContext
 from themis.telemetry.bus import TelemetryBus, TelemetryEventName
-from themis.types.enums import RecordStatus
+from themis.types.enums import ErrorCode, RecordStatus
 from themis.types.events import (
     PromptRenderedEventMetadata,
     TimelineStage,
@@ -43,7 +43,7 @@ class GenerationStageExecutor:
         event_emitter: TrialEventEmitter,
         max_retries: int,
         retry_backoff_factor: float,
-        retryable_error_codes: tuple[str, ...],
+        retryable_error_codes: tuple[ErrorCode, ...],
         project_seed: int | None = None,
         telemetry_bus: TelemetryBus | None = None,
         append_session_event: Callable[..., None],
@@ -102,7 +102,7 @@ class GenerationStageExecutor:
                 artifact_refs=[session.prompt_artifact[0]],
             )
 
-        attempt = 0
+        attempt = resume_state.attempt if resume_state is not None else 0
         while True:
             attempt += 1
             stage_results: CandidateStageResults | None = None
@@ -250,7 +250,7 @@ class GenerationStageExecutor:
         if candidate.status != RecordStatus.ERROR or candidate.error is None:
             return False
         if self.retryable_error_codes:
-            return candidate.error.code.value in self.retryable_error_codes
+            return candidate.error.code in self.retryable_error_codes
         return bool(candidate.error.retryable)
 
     def _retry_delay_seconds(self, attempt: int) -> float:

@@ -24,6 +24,7 @@ from themis.specs.experiment import (
     DataItemContext,
     ExperimentSpec,
     ItemSamplingSpec,
+    PromptTemplateSpec,
     TrialSpec,
 )
 from themis.types.enums import ErrorCode, SamplingKind
@@ -73,6 +74,10 @@ class TrialPlanner:
     ) -> list[PlannedTrial]:
         """Expand an experiment specification into deterministic planned trials."""
         trials: list[PlannedTrial] = []
+        task_prompts = {
+            task.task_id: self._resolve_task_prompts(experiment, task)
+            for task in experiment.tasks
+        }
 
         task_items: dict[str, list[DataItemContext]] = {}
         if self.dataset_provider or self.dataset_loader:
@@ -107,26 +112,7 @@ class TrialPlanner:
         for model in experiment.models:
             for task in experiment.tasks:
                 items = task_items.get(task.task_id, [])
-                allowed_prompt_ids = task.allowed_prompt_template_ids
-                if allowed_prompt_ids is None:
-                    prompts = list(experiment.prompt_templates)
-                else:
-                    allowed_prompt_id_set = set(allowed_prompt_ids)
-                    prompts = [
-                        prompt
-                        for prompt in experiment.prompt_templates
-                        if prompt.id in allowed_prompt_id_set
-                    ]
-                    if not prompts:
-                        selector_preview = ", ".join(sorted(allowed_prompt_id_set))
-                        raise SpecValidationError(
-                            code=ErrorCode.SCHEMA_MISMATCH,
-                            message=(
-                                "Task "
-                                f"'{task.slice_id or task.task_id}' matched no prompt "
-                                f"templates for explicit selector(s): {selector_preview}."
-                            ),
-                        )
+                prompts = task_prompts[task.task_id]
                 for prompt, params in itertools.product(prompts, params_grid):
                     for item in items:
                         item_str = json.dumps(
@@ -180,6 +166,46 @@ class TrialPlanner:
                         )
 
         return trials
+
+    def _resolve_task_prompts(
+        self,
+        experiment: ExperimentSpec,
+        task,
+    ) -> list[PromptTemplateSpec]:
+        prompts = list(experiment.prompt_templates)
+        if task.allowed_prompt_template_ids is not None:
+            allowed_prompt_id_set = set(task.allowed_prompt_template_ids)
+            resolved = [
+                prompt for prompt in prompts if prompt.id in allowed_prompt_id_set
+            ]
+            if resolved:
+                return resolved
+            selector_preview = ", ".join(sorted(allowed_prompt_id_set))
+            raise SpecValidationError(
+                code=ErrorCode.SCHEMA_MISMATCH,
+                message=(
+                    "Task "
+                    f"'{task.slice_id or task.task_id}' matched no prompt "
+                    f"templates for explicit selector(s): {selector_preview}."
+                ),
+            )
+        if task.prompt_family_filters is not None:
+            allowed_families = set(task.prompt_family_filters)
+            resolved = [
+                prompt for prompt in prompts if prompt.family in allowed_families
+            ]
+            if resolved:
+                return resolved
+            family_preview = ", ".join(sorted(allowed_families))
+            raise SpecValidationError(
+                code=ErrorCode.SCHEMA_MISMATCH,
+                message=(
+                    "Task "
+                    f"'{task.slice_id or task.task_id}' matched no prompt "
+                    f"templates for family selector(s): {family_preview}."
+                ),
+            )
+        return prompts
 
     def _dataset_slice_spec(self, task) -> DatasetSliceSpec:
         return DatasetSliceSpec(

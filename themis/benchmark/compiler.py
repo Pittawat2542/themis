@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from themis.benchmark.specs import BenchmarkSpec
+from themis.benchmark.specs import BenchmarkSpec, PromptVariantSpec, SliceSpec
 from themis.errors import SpecValidationError
 from themis.specs.experiment import ExperimentSpec, PromptTemplateSpec
 from themis.specs.foundational import (
@@ -73,7 +73,10 @@ def compile_benchmark(benchmark: BenchmarkSpec) -> ExperimentSpec:
     )
 
 
-def _allowed_prompt_ids(slice_spec, variants_by_id) -> list[str]:
+def _allowed_prompt_ids(
+    slice_spec: SliceSpec,
+    variants_by_id: dict[str, PromptVariantSpec],
+) -> list[str]:
     if slice_spec.prompt_variant_ids:
         missing_variant_ids = sorted(
             variant_id
@@ -90,10 +93,11 @@ def _allowed_prompt_ids(slice_spec, variants_by_id) -> list[str]:
             )
         return list(slice_spec.prompt_variant_ids)
     if slice_spec.prompt_families:
+        prompt_families_set = set(slice_spec.prompt_families)
         prompt_ids = [
             variant_id
             for variant_id, variant in variants_by_id.items()
-            if variant.family in set(slice_spec.prompt_families)
+            if variant.family in prompt_families_set
         ]
         if not prompt_ids:
             raise SpecValidationError(

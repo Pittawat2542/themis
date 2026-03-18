@@ -21,7 +21,7 @@ from themis.records.judge import JudgeAuditTrail
 from themis.registry.plugin_registry import PluginRegistry
 from themis.storage.artifact_store import ArtifactStore
 from themis.telemetry.bus import TelemetryBus
-from themis.types.enums import RecordStatus
+from themis.types.enums import ErrorCode, RecordStatus
 from themis.types.events import (
     ArtifactRef,
     ArtifactRole,
@@ -44,7 +44,7 @@ class OverlayStageExecutor:
         artifact_store: ArtifactStore | None = None,
         max_retries: int,
         retry_backoff_factor: float,
-        retryable_error_codes: tuple[str, ...],
+        retryable_error_codes: tuple[ErrorCode, ...],
         telemetry_bus: TelemetryBus | None = None,
         append_session_event: Callable[..., None],
     ) -> None:
@@ -349,7 +349,7 @@ class OverlayStageExecutor:
         if candidate.status != RecordStatus.ERROR or candidate.error is None:
             return False
         if self.retryable_error_codes:
-            return candidate.error.code.value in self.retryable_error_codes
+            return candidate.error.code in self.retryable_error_codes
         return bool(candidate.error.retryable)
 
     def _retry_delay_seconds(self, attempt: int) -> float:

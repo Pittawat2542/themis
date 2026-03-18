@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from themis.benchmark.query import DatasetQuerySpec
 from themis.specs.base import SpecBase
@@ -280,10 +286,11 @@ class TaskSpec(SpecBase):
             from themis.specs.experiment import ItemSamplingSpec
 
             if isinstance(value, ItemSamplingSpec):
-                return validate_json_dict(
-                    value.model_dump(mode="json"),
-                    label="TaskSpec.dataset_query",
-                )
+                payload = dict(value.model_dump(mode="json"))
+                try:
+                    return DatasetQuerySpec.model_validate(payload)
+                except ValidationError:
+                    return validate_json_dict(payload, label="TaskSpec.dataset_query")
         except ImportError:
             pass
         if not isinstance(value, Mapping):

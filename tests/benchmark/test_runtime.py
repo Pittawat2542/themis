@@ -70,12 +70,9 @@ class FakeProjectionRepository:
     def iter_candidate_scores(self, **kwargs):
         self.score_calls.append(dict(kwargs))
         trial_hashes = kwargs.get("trial_hashes")
-        trial_hash = kwargs.get("trial_hash")
         metric_id = kwargs.get("metric_id")
         for row in self.score_rows:
             if trial_hashes is not None and row.trial_hash not in trial_hashes:
-                continue
-            if trial_hash is not None and row.trial_hash != trial_hash:
                 continue
             if metric_id is not None and row.metric_id != metric_id:
                 continue

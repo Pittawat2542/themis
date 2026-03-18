@@ -5,30 +5,7 @@ import themis.config_report
 import themis.runtime
 import themis.specs
 
-
-EXPECTED_ROOT_EXPORTS = {
-    "__version__",
-    "BenchmarkResult",
-    "BenchmarkSpec",
-    "DatasetQuerySpec",
-    "ExecutionPolicySpec",
-    "InferenceGridSpec",
-    "InferenceParamsSpec",
-    "ModelSpec",
-    "Orchestrator",
-    "ParseSpec",
-    "PluginRegistry",
-    "PostgresBlobStorageSpec",
-    "ProjectSpec",
-    "PromptMessage",
-    "PromptVariantSpec",
-    "ScoreSpec",
-    "SliceSpec",
-    "SqliteBlobStorageSpec",
-    "StorageConfig",
-    "StorageSpec",
-    "generate_config_report",
-}
+from tests.constants import EXPECTED_ROOT_EXPORTS
 
 
 def test_root_package_exports_only_benchmark_first_surface() -> None:

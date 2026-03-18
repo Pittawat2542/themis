@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 from argparse import Namespace
+import logging
 
-from themis.cli.quickcheck import build_parser, main, run_with_args
+from themis.cli.quickcheck import (
+    _parse_dimension_filters,
+    _run_scores,
+    build_parser,
+    main,
+    run_with_args,
+)
 from themis.storage.sqlite_schema import DatabaseManager
 
 
@@ -312,3 +319,43 @@ def test_quickcheck_run_with_args_returns_error_code_for_unknown_command(
         )
         == 2
     )
+
+
+def test_quickcheck_scores_pushes_slice_filter_into_sql() -> None:
+    class _Rows:
+        def fetchall(self):
+            return []
+
+    class RecordingConnection:
+        def __init__(self) -> None:
+            self.query: str | None = None
+            self.params: list[object] | None = None
+
+        def execute(self, query: str, params: list[object]):
+            self.query = query
+            self.params = list(params)
+            return _Rows()
+
+    conn = RecordingConnection()
+
+    _run_scores(
+        conn,  # type: ignore[arg-type]
+        metric_id="em",
+        slice_id="qa",
+        dimension_filters=[],
+        evaluation_hash=None,
+    )
+
+    assert conn.query is not None
+    assert "trial_summary.slice_id = ?" in conn.query
+    assert conn.params is not None
+    assert "qa" in conn.params
+
+
+def test_parse_dimension_filters_warns_on_malformed_entries(caplog) -> None:
+    with caplog.at_level(logging.WARNING):
+        parsed = _parse_dimension_filters(["source=synthetic", "noequals", "key="])
+
+    assert parsed == {"source": "synthetic"}
+    assert "noequals" in caplog.text
+    assert "key=" in caplog.text

@@ -108,7 +108,7 @@ class DatabaseManager:
                 (STORE_FORMAT_VERSION, STORE_FORMAT_KEY),
             )
             return
-        if existing_store_format != STORE_FORMAT_VERSION:
+        else:
             raise StorageError(
                 code=ErrorCode.STORAGE_READ,
                 message=(

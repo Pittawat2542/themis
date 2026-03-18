@@ -478,6 +478,21 @@ def test_trial_runner_retries_overlay_stages_for_retryable_errors(
     )
 
 
+def test_trial_runner_rejects_unknown_retryable_error_codes() -> None:
+    with pytest.raises(SpecValidationError) as exc_info:
+        TrialRunner(
+            PluginRegistry(),
+            event_repo=MockEventRepo(),
+            retryable_error_codes=[
+                ErrorCode.PROVIDER_TIMEOUT.value,
+                "not_a_real_error_code",
+            ],
+        )
+
+    assert exc_info.value.code is ErrorCode.SCHEMA_MISMATCH
+    assert "not_a_real_error_code" in exc_info.value.message
+
+
 def test_trial_runner_replays_artifact_backed_stage_payloads_without_inline_json(
     trial_spec, tmp_path
 ):

@@ -115,7 +115,7 @@ class SqliteEventRepository:
                     self.append_event(event, conn=local_conn)
             return
 
-        payload_json = self._payload_json_for_event(event)
+        payload_json = self._payload_json_for_event(event, conn)
         conn.execute(
             """
             INSERT INTO trial_events (
@@ -161,14 +161,27 @@ class SqliteEventRepository:
             ),
         )
 
-    def _payload_json_for_event(self, event: TrialEvent) -> str | None:
+    def _payload_json_for_event(
+        self,
+        event: TrialEvent,
+        conn: StorageConnection,
+    ) -> str | None:
         if event.payload is None:
             return None
-        if self._payload_persisted_via_artifact(event):
+        if self._payload_persisted_via_artifact(event, conn):
             return None
         return json.dumps(event.payload)
 
-    def _payload_persisted_via_artifact(self, event: TrialEvent) -> bool:
+    def _payload_persisted_via_artifact(
+        self,
+        event: TrialEvent,
+        conn: StorageConnection,
+    ) -> bool:
+        # Artifact-backed payload persistence only applies to stage-scoped events
+        # that emit indexed artifacts. ITEM_LOADED, INFERENCE_COMPLETED,
+        # EXTRACTION_COMPLETED, and EVALUATION_COMPLETED map to ArtifactRole-backed
+        # payloads; CANDIDATE_COMPLETED is a lifecycle marker with no artifact
+        # support, so it is intentionally excluded.
         if not event.artifact_refs or event.stage is None:
             return False
         expected_roles = {
@@ -179,21 +192,24 @@ class SqliteEventRepository:
         }.get(event.event_type, set())
         return any(
             artifact.role in expected_roles
-            and self._artifact_is_indexed(artifact.artifact_hash)
+            and self._artifact_is_indexed(conn, artifact.artifact_hash)
             for artifact in event.artifact_refs
         )
 
-    def _artifact_is_indexed(self, artifact_hash: str) -> bool:
-        with self.manager.get_connection() as conn:
-            row = conn.execute(
-                """
-                SELECT 1
-                FROM artifacts
-                WHERE artifact_hash = ?
-                LIMIT 1
-                """,
-                (artifact_hash,),
-            ).fetchone()
+    def _artifact_is_indexed(
+        self,
+        conn: StorageConnection,
+        artifact_hash: str,
+    ) -> bool:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM artifacts
+            WHERE artifact_hash = ?
+            LIMIT 1
+            """,
+            (artifact_hash,),
+        ).fetchone()
         return row is not None
 
     def get_events(

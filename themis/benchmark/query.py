@@ -21,7 +21,7 @@ class DatasetQuerySpec(SpecBase):
 
     @field_validator("kind", mode="before")
     @classmethod
-    def _coerce_kind(cls, value: SamplingKind | str) -> SamplingKind | str:
+    def _coerce_kind(cls, value: SamplingKind | str) -> SamplingKind:
         if isinstance(value, str):
             return SamplingKind(value)
         return value
@@ -66,5 +66,13 @@ class DatasetQuerySpec(SpecBase):
         if self.kind == SamplingKind.STRATIFIED and not self.strata_field:
             raise ValueError(
                 "DatasetQuerySpec kind='stratified' requires strata_field."
+            )
+        if self.item_ids and self.kind in {
+            SamplingKind.SUBSET,
+            SamplingKind.STRATIFIED,
+        }:
+            raise ValueError(
+                "DatasetQuerySpec item_ids is mutually exclusive with count-based "
+                "sampling kinds."
             )
         return self

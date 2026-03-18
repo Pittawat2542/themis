@@ -92,11 +92,18 @@ class SliceSpec(SpecBase):
                 f"SliceSpec '{self.slice_id}' must define at least one stage."
             )
         parse_names = [parse.name for parse in self.parses]
+        parse_name_set = set(parse_names)
         if len(parse_names) != len(set(parse_names)):
             raise ValueError(f"SliceSpec '{self.slice_id}' has duplicate parse name.")
         score_names = [score.name for score in self.scores]
         if len(score_names) != len(set(score_names)):
             raise ValueError(f"SliceSpec '{self.slice_id}' has duplicate score name.")
+        for score in self.scores:
+            if score.parse is not None and score.parse not in parse_name_set:
+                raise ValueError(
+                    f"SliceSpec '{self.slice_id}' references unknown parse "
+                    f"'{score.parse}' in score '{score.name}'."
+                )
         return self
 
 

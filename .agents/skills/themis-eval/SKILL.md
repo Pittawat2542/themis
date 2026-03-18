@@ -9,10 +9,10 @@ Treat Themis as a benchmark-first evaluation framework with one small public
 surface:
 
 - `ProjectSpec` defines shared storage and execution policy.
-- `BenchmarkSpec` defines the benchmark.
-- `SliceSpec` defines one dataset slice.
-- `DatasetQuerySpec` defines subset and filter intent.
-- `PromptVariantSpec`, `ParseSpec`, and `ScoreSpec` define prompting, parsing, and scoring.
+- `BenchmarkSpec` is the benchmark configuration.
+- `SliceSpec` is one dataset slice.
+- `DatasetQuerySpec` carries subset and filter intent.
+- `PromptVariantSpec`, `ParseSpec`, and `ScoreSpec` cover prompting, parsing, and scoring.
 - `PluginRegistry` binds dataset providers, engines, extractors, metrics, judges, and hooks.
 - `Orchestrator` plans, runs, resumes, exports, and imports benchmark work.
 - `BenchmarkResult` reads projections, aggregates, paired comparisons, artifact bundles, and timelines.

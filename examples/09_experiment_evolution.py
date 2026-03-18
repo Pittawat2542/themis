@@ -1,7 +1,10 @@
 """Evolve a benchmark by adding a model and prompt variant."""
 
+from collections.abc import Sequence
 from pathlib import Path
 
+from themis.benchmark.query import DatasetQuerySpec
+from themis.benchmark.specs import DatasetSliceSpec
 from themis import (
     BenchmarkSpec,
     ExecutionPolicySpec,
@@ -24,7 +27,11 @@ from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 
 
 class ArithmeticDatasetProvider:
-    def scan(self, slice_spec, query):
+    def scan(
+        self,
+        slice_spec: DatasetSliceSpec,
+        query: DatasetQuerySpec,
+    ) -> Sequence[dict[str, str]]:
         del slice_spec, query
         return [
             {"item_id": "item-1", "question": "1 + 1", "answer": "2"},

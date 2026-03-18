@@ -28,6 +28,7 @@ def migrate_sqlite_store(
     """Copy a SQLite-backed store into another initialized storage bundle."""
     source_db = Path(source_db_path)
     source_manager = DatabaseManager(f"sqlite:///{source_db}")
+    source_manager.initialize()
     source_event_repo = SqliteEventRepository(
         cast(StorageConnectionManager, source_manager)
     )
@@ -353,6 +354,27 @@ def _load_optional_rows(conn, table_name: str, query: str) -> list:
 
 
 def _load_observability_links(conn) -> list:
+    if _sqlite_table_exists(conn, "observability_refs"):
+        legacy_ref_count = conn.execute(
+            "SELECT COUNT(*) AS ref_count FROM observability_refs"
+        ).fetchone()["ref_count"]
+        if legacy_ref_count:
+            has_links = _sqlite_table_exists(conn, "observability_links")
+            link_count = (
+                conn.execute(
+                    "SELECT COUNT(*) AS link_count FROM observability_links"
+                ).fetchone()["link_count"]
+                if has_links
+                else 0
+            )
+            if link_count == 0:
+                raise StorageError(
+                    code=ErrorCode.STORAGE_READ,
+                    message=(
+                        "unsupported source store format: expected observability_links "
+                        "rows instead of legacy observability_refs"
+                    ),
+                )
     if not _sqlite_table_exists(conn, "observability_links"):
         if _sqlite_table_exists(conn, "observability_refs"):
             raise StorageError(

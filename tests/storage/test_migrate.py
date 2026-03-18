@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from themis.benchmark.compiler import compile_benchmark
+from themis.benchmark.specs import BenchmarkSpec, PromptVariantSpec, SliceSpec
 from themis.errors import StorageError
 from themis.records.observability import ObservabilityLink
 from themis.orchestration.orchestrator import Orchestrator
@@ -255,6 +257,61 @@ def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(tmp_path
     migrated_payload["work_items"] = []
     manifest_payload["work_items"] = []
     assert migrated_payload == manifest_payload
+
+
+def test_migrate_sqlite_store_initializes_legacy_source_schema_before_reading_manifests(
+    tmp_path,
+):
+    source_root = tmp_path / "source_legacy_columns"
+    source_root.mkdir()
+    source_manager = DatabaseManager(f"sqlite:///{source_root / 'themis.sqlite3'}")
+    source_manager.initialize()
+    benchmark = BenchmarkSpec(
+        benchmark_id="legacy-benchmark",
+        models=[ModelSpec(model_id="test", provider="fake")],
+        slices=[
+            SliceSpec(
+                slice_id="task",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+                prompt_variant_ids=["baseline"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="baseline",
+                messages=[{"role": "user", "content": "Solve the task."}],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
+    )
+    manifest = RunManifest(
+        run_id="legacy_run_manifest",
+        backend_kind="local",
+        experiment_spec=compile_benchmark(benchmark),
+        benchmark_spec=benchmark,
+    )
+    RunManifestRepository(source_manager).save_manifest(manifest)
+    with source_manager.get_connection() as conn:
+        with conn:
+            conn.execute("ALTER TABLE run_manifests DROP COLUMN benchmark_spec_json")
+
+    destination_bundle = build_storage_bundle(
+        SqliteBlobStorageSpec(root_dir=str(tmp_path / "destination_legacy_columns"))
+    )
+
+    migrate_sqlite_store(
+        source_db_path=source_root / "themis.sqlite3",
+        destination_bundle=destination_bundle,
+    )
+
+    migrated = RunManifestRepository(destination_bundle.manager).get_manifest(
+        manifest.run_id
+    )
+
+    assert migrated is not None
+    assert migrated.benchmark_spec is not None
+    assert migrated.benchmark_spec.benchmark_id == benchmark.benchmark_id
 
 
 def test_migrate_sqlite_store_rebuilds_overlay_projections_without_blob_copy(

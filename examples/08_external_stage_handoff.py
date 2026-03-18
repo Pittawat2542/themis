@@ -18,6 +18,7 @@ from themis import (
     StorageSpec,
 )
 from themis.contracts.protocols import InferenceResult
+from themis.orchestration.run_manifest import EvaluationBundleItem, EvaluationWorkBundle
 from themis.records import (
     CandidateRecord,
     EvaluationRecord,
@@ -26,6 +27,7 @@ from themis.records import (
     TrialRecord,
 )
 from themis.specs import DatasetSpec, GenerationSpec
+from themis.specs.experiment import TrialSpec
 from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 
 
@@ -56,9 +58,9 @@ class PlaceholderMetric:
         return MetricScore(metric_id="external_exact_match", value=0.0)
 
 
-def _build_external_records(bundle) -> list[TrialRecord]:
-    by_trial: dict[str, list[object]] = {}
-    trial_specs: dict[str, object] = {}
+def _build_external_records(bundle: EvaluationWorkBundle) -> list[TrialRecord]:
+    by_trial: dict[str, list[EvaluationBundleItem]] = {}
+    trial_specs: dict[str, TrialSpec] = {}
     for item in bundle.items:
         by_trial.setdefault(item.trial_hash, []).append(item)
         trial_specs[item.trial_hash] = item.trial_spec

@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import json
 
 import pytest
@@ -21,7 +22,9 @@ from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.types.events import (
     ArtifactRef,
+    ArtifactRole,
     EvaluationCompletedEventMetadata,
+    ItemLoadedEventMetadata,
     TimelineStage,
     TrialEvent,
     TrialEventMetadata,
@@ -107,6 +110,81 @@ def test_sqlite_event_repo_round_trips_overlay_metadata(tmp_path):
     assert events[0].metadata.evaluation_hash == evaluation_hash
     assert repo.last_event_index(trial.spec_hash) == 1
     assert repo.last_event_index(trial.spec_hash, candidate_id="candidate_1") == 1
+
+
+def test_sqlite_event_repo_reuses_open_connection_for_artifact_payload_checks(
+    tmp_path,
+) -> None:
+    class CountingManager(DatabaseManager):
+        def __init__(self, uri: str):
+            super().__init__(uri)
+            self.connection_calls = 0
+
+        @contextmanager
+        def get_connection(self):
+            self.connection_calls += 1
+            with super().get_connection() as conn:
+                yield conn
+
+    manager = CountingManager(f"sqlite:///{tmp_path}/event_repo_connection_reuse.db")
+    manager.initialize()
+    repo = SqliteEventRepository(cast(StorageConnectionManager, manager))
+    trial = _make_trial()
+    repo.save_spec(trial)
+    with manager.get_connection() as conn:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO artifacts (
+                    artifact_hash,
+                    path,
+                    size_bytes,
+                    compression,
+                    media_type
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "sha256:item_payload",
+                    "artifacts/item_payload.json",
+                    18,
+                    "none",
+                    "application/json",
+                ),
+            )
+    manager.connection_calls = 0
+
+    repo.append_event(
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=1,
+            event_id="evt_item",
+            event_type=TrialEventType.ITEM_LOADED,
+            stage=TimelineStage.ITEM_LOAD,
+            metadata=ItemLoadedEventMetadata(
+                item_id=trial.item_id,
+                dataset_source="memory",
+            ),
+            payload={"item_id": "item-1", "question": "6 * 7"},
+            artifact_refs=[
+                ArtifactRef(
+                    artifact_hash="sha256:item_payload",
+                    media_type="application/json",
+                    label="item_payload",
+                    role=ArtifactRole.ITEM_PAYLOAD,
+                )
+            ],
+        )
+    )
+
+    assert manager.connection_calls == 1
+    with manager.get_connection() as conn:
+        row = conn.execute(
+            "SELECT payload_json FROM trial_events WHERE event_id = ?",
+            ("evt_item",),
+        ).fetchone()
+    assert row is not None
+    assert row["payload_json"] is None
 
 
 def test_has_projection_for_overlay_matches_exact_overlay_identity(tmp_path) -> None:

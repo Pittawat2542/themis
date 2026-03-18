@@ -453,7 +453,7 @@ class Orchestrator:
         *,
         runtime: RuntimeContext | None = None,
         progress: ProgressConfig | None = None,
-    ) -> RunHandle | ExperimentResult:
+    ) -> RunHandle | ExperimentResult | BenchmarkResult:
         """Refresh a persisted run and continue it when possible."""
         resumed = self._run_planning.resume(
             run_id,

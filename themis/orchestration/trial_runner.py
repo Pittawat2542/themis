@@ -72,7 +72,22 @@ class TrialRunner:
         self.artifact_store = artifact_store
         self.max_retries = max_retries
         self.retry_backoff_factor = retry_backoff_factor
-        self.retryable_error_codes = tuple(retryable_error_codes or [])
+        invalid_error_codes: list[str] = []
+        validated_error_codes: list[ErrorCode] = []
+        for value in retryable_error_codes or []:
+            try:
+                validated_error_codes.append(ErrorCode(value))
+            except ValueError:
+                invalid_error_codes.append(value)
+        if invalid_error_codes:
+            invalid_values = ", ".join(
+                sorted(repr(value) for value in invalid_error_codes)
+            )
+            raise SpecValidationError(
+                code=ErrorCode.SCHEMA_MISMATCH,
+                message=(f"Unknown retryable_error_codes: {invalid_values}."),
+            )
+        self.retryable_error_codes = tuple(validated_error_codes)
         self.parallel_candidates = parallel_candidates
         self.project_seed = project_seed
         self.store_item_payloads = store_item_payloads

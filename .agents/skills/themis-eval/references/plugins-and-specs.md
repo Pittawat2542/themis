@@ -2,9 +2,9 @@
 
 ## Keep The Boundary Clear
 
-- `ProjectSpec` holds shared runtime policy.
-- `BenchmarkSpec` holds benchmark semantics.
-- `SliceSpec` holds dataset, dimensions, parse pipelines, and score overlays.
+- `ProjectSpec` defines shared runtime policy.
+- `BenchmarkSpec` captures benchmark semantics.
+- `SliceSpec` contains dataset, dimensions, parse pipelines, and score overlays.
 - `PluginRegistry` is the runtime lookup table.
 
 ## Build A Dataset Provider

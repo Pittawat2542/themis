@@ -27,6 +27,7 @@ class ResumeState(BaseModel):
     candidate_id: str
     conversation: Conversation
     last_event_index: int
+    attempt: int = 0
 
     def __getitem__(self, key: str):
         return getattr(self, key)

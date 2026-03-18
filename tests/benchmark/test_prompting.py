@@ -29,3 +29,17 @@ def test_render_prompt_messages_uses_benchmark_namespaces() -> None:
         {"role": "system", "content": "You are judging medqa in qa."},
         {"role": "user", "content": "Question: 2 + 2 [smoke]"},
     ]
+
+
+def test_render_prompt_messages_preserves_placeholder_for_deep_missing_access() -> None:
+    rendered = render_prompt_messages(
+        [
+            PromptMessage(
+                role=PromptRole.USER,
+                content="Question: {item.question[text]}",
+            )
+        ],
+        {},
+    )
+
+    assert rendered == [{"role": "user", "content": "Question: {item}"}]

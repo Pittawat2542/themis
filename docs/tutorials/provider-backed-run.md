@@ -9,13 +9,7 @@ legacy dataset-loader API.
 from themis import (
     BenchmarkSpec,
     DatasetQuerySpec,
-    InferenceGridSpec,
-    InferenceParamsSpec,
-    ModelSpec,
     Orchestrator,
-    PluginRegistry,
-    ProjectSpec,
-    PromptMessage,
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
@@ -24,17 +18,14 @@ from themis.specs import DatasetSpec, GenerationSpec
 
 
 class RemoteDatasetProvider:
-    def scan(self, slice_spec, query):
+    def scan(self, _slice_spec, query):
         # push the subset or filter into the remote source when possible
-        del slice_spec
         return [{"item_id": "item-1", "question": "2 + 2", "answer": "4"}]
 
 
 class ProviderEngine:
-    def infer(self, trial, context, runtime):
+    def infer(self, _trial, _context, _runtime):
         # Messages are already rendered by orchestration before the engine runs.
-        prompt = trial.prompt.messages
-        del prompt, context, runtime
         ...
 ```
 
