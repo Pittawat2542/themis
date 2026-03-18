@@ -9,7 +9,7 @@ from tests.constants import EXPECTED_ROOT_EXPORTS
 
 
 def test_root_package_exports_only_benchmark_first_surface() -> None:
-    assert EXPECTED_ROOT_EXPORTS.issubset(set(themis.__all__))
+    assert set(themis.__all__) == EXPECTED_ROOT_EXPORTS
     assert "ExperimentSpec" not in themis.__all__
     assert "TaskSpec" not in themis.__all__
     assert "PromptTemplateSpec" not in themis.__all__

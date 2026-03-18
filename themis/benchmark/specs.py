@@ -131,4 +131,15 @@ class BenchmarkSpec(SpecBase):
             raise ValueError(
                 f"BenchmarkSpec '{self.benchmark_id}' has duplicate prompt variant id."
             )
+        valid_prompt_variant_ids = set(prompt_variant_ids)
+        for slice_spec in self.slices:
+            missing_prompt_variant_ids = sorted(
+                set(slice_spec.prompt_variant_ids) - valid_prompt_variant_ids
+            )
+            if missing_prompt_variant_ids:
+                missing_joined = ", ".join(missing_prompt_variant_ids)
+                raise ValueError(
+                    f"SliceSpec '{slice_spec.slice_id}' references unknown prompt "
+                    f"variant id(s): {missing_joined}."
+                )
         return self

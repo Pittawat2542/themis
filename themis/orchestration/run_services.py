@@ -375,6 +375,8 @@ class RunPlanningService:
             notes.append(
                 "Best-effort heuristic fallback was used for providers without prompt token estimators."
             )
+        elif not planned_trials:
+            notes.append("No planned trials: no prompt tokens to estimate.")
         elif not notes:
             notes.append(
                 "Best-effort heuristic only: prompt tokens are estimated from prompt templates and dataset payload size."

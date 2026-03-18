@@ -43,6 +43,7 @@ def test_hello_world_docs_match_runnable_example() -> None:
     tutorial = (PROJECT_ROOT / "docs/tutorials/hello-world.md").read_text()
     output = _run_command(sys.executable, "examples/01_hello_world.py").strip()
 
+    assert output
     assert output in quick_start
     assert output in tutorial
 
@@ -74,16 +75,19 @@ def test_quickcheck_docs_match_current_cli() -> None:
     hello_scores = _run_quickcheck(
         "scores",
         "--db",
-        ".cache/themis-examples/01-hello-world-benchmark-first/themis.sqlite3",
+        str(EXAMPLE_CACHE_ROOT / "01-hello-world-benchmark-first" / "themis.sqlite3"),
         "--metric",
         "exact_match",
     ).strip()
+    assert hello_scores
     assert hello_scores in quickcheck_guide
 
     slice_scores = _run_quickcheck(
         "scores",
         "--db",
-        ".cache/themis-examples/04-compare-models-benchmark-first/themis.sqlite3",
+        str(
+            EXAMPLE_CACHE_ROOT / "04-compare-models-benchmark-first" / "themis.sqlite3"
+        ),
         "--metric",
         "exact_match",
         "--slice",

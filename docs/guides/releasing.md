@@ -32,22 +32,45 @@ Substitute the target tag as needed.
 
 ## 2. Run local verification
 
-Release automation assumes the same checks already pass locally.
+Release automation assumes the same checks already pass locally. The release
+workflows also wait for a successful `CI` run on the exact tagged commit, so
+your local preflight should cover both the release-specific validators and the
+core CI quality gates.
+
+For a fast release-tooling sanity check:
 
 ```bash
+uv run pytest tests/test_release_scripts.py -q
+uv run python scripts/ci/validate_release.py --tag v2.1.0
+uv run python scripts/ci/extract_release_notes.py --tag v2.1.0 --changelog CHANGELOG.md --output /tmp/release-notes-v2.1.0.md
+```
+
+For CI parity before tagging:
+
+```bash
+changed_files=( $(git diff --name-only HEAD -- '*.py') )
+if (( ${#changed_files[@]} > 0 )); then
+  uv run ruff format --check "${changed_files[@]}"
+fi
+uv run ruff check themis tests examples scripts
+uv run mypy themis tests
 uv run pytest -q
+uv run pytest tests/storage/test_postgres_backend.py tests/storage/test_migrate.py -q
+uv run pytest tests/docs/test_docs_consistency.py tests/docs/test_public_docstrings.py tests/docs/test_documented_workflows.py tests/docs/test_example_display_paths.py -q
+uv run python scripts/ci/run_examples.py
 uv run mkdocs build --strict
+```
+
+Finish with the release packaging checks:
+
+```bash
 uv build
 uvx --from twine twine check dist/*
 uv run python scripts/ci/check_built_package.py
 ```
 
-If you only need a focused preflight while iterating on release tooling, start
-with:
-
-```bash
-uv run pytest tests/test_release_scripts.py -q
-```
+If your local environment does not have Postgres available, run the Postgres
+storage tests in CI before tagging rather than skipping them silently.
 
 ## 3. Create the release tag
 

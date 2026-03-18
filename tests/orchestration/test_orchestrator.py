@@ -9,6 +9,7 @@ import typing
 
 import pytest
 
+from themis.benchmark.specs import BenchmarkSpec, PromptVariantSpec, SliceSpec
 from themis.contracts.protocols import InferenceResult
 from themis.errors import SpecValidationError
 from themis.orchestration.orchestrator import Orchestrator
@@ -37,6 +38,7 @@ from themis.specs.experiment import (
     InferenceParamsSpec,
     LocalExecutionBackendSpec,
     ProjectSpec,
+    PromptMessage,
     PromptTemplateSpec,
     RuntimeContext,
     StorageSpec,
@@ -64,6 +66,7 @@ from themis.types.enums import (
     ErrorWhere,
     RecordStatus,
     DatasetSource,
+    PromptRole,
     RunStage,
 )
 from themis.types.events import (
@@ -522,6 +525,43 @@ def test_transform_returns_transform_scoped_result() -> None:
     assert extraction is not None
     assert extraction.parsed_answer == "42"
     assert trial.candidates[0].evaluation is None
+
+
+def test_run_benchmark_rejects_non_benchmark_results(monkeypatch) -> None:
+    orchestrator, _engine = _build_orchestrator()
+    benchmark = BenchmarkSpec(
+        benchmark_id="demo-benchmark",
+        models=[ModelSpec(model_id="openai-demo", provider="openai")],
+        slices=[
+            SliceSpec(
+                slice_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+                prompt_variant_ids=["baseline"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="baseline",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Solve: {item.question}",
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=16)]),
+    )
+    wrong_result = ExperimentResult(
+        projection_repo=orchestrator._services.projection_repo,
+        trial_hashes=[],
+    )
+
+    monkeypatch.setattr(orchestrator, "run", lambda *args, **kwargs: wrong_result)
+
+    with pytest.raises(TypeError, match="BenchmarkResult"):
+        orchestrator.run_benchmark(benchmark)
 
 
 def test_evaluate_materializes_required_transforms_if_missing() -> None:

@@ -422,3 +422,34 @@ def test_benchmark_spec_rejects_duplicate_prompt_variant_ids() -> None:
                 params=[InferenceParamsSpec(max_tokens=16)]
             ),
         )
+
+
+def test_benchmark_spec_rejects_slices_with_unknown_prompt_variant_ids() -> None:
+    with pytest.raises(ValidationError, match="missing-variant"):
+        BenchmarkSpec(
+            benchmark_id="demo-benchmark",
+            models=[ModelSpec(model_id="demo-model", provider="demo")],
+            slices=[
+                SliceSpec(
+                    slice_id="qa",
+                    dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                    generation=GenerationSpec(),
+                    prompt_variant_ids=["missing-variant"],
+                    scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+                )
+            ],
+            prompt_variants=[
+                PromptVariantSpec(
+                    id="qa-default",
+                    messages=[
+                        PromptMessage(
+                            role=PromptRole.USER,
+                            content="Solve: {item.question}",
+                        )
+                    ],
+                )
+            ],
+            inference_grid=InferenceGridSpec(
+                params=[InferenceParamsSpec(max_tokens=16)]
+            ),
+        )

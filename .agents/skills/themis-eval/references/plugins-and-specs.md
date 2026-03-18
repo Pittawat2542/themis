@@ -106,6 +106,7 @@ class MyHook:
 from themis import ModelSpec, PromptMessage
 from themis.records import MetricScore
 from themis.specs import JudgeInferenceSpec
+from themis.types.enums import PromptRole
 
 
 class JudgeMetric:
@@ -121,7 +122,7 @@ class JudgeMetric:
                 update={
                     "messages": [
                         PromptMessage(
-                            role="user",
+                            role=PromptRole.USER,
                             content="Judge whether the answer is correct.",
                         )
                     ]

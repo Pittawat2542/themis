@@ -89,15 +89,15 @@ Use quickcheck for a lightweight operator view:
 
 ```bash
 themis-quickcheck scores \
-  --db .cache/themis-examples/04-compare-models/themis.sqlite3 \
+  --db .cache/themis-examples/04-compare-models-benchmark-first/themis.sqlite3 \
   --metric exact_match
 ```
 
 Expected output:
 
 ```text
-ev:fc7ad3e8b3e2	baseline	paired-math	exact_match	0.5000	6
-ev:fc7ad3e8b3e2	candidate	paired-math	exact_match	1.0000	6
+ev:<evaluation-hash>	baseline	qa	exact_match	0.5000	4
+ev:<evaluation-hash>	candidate	qa	exact_match	1.0000	4
 ```
 
 ## Recommended Handoff Bundle

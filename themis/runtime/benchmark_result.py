@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable, Iterator
 
+from themis.overlays import OverlaySelection
 from themis.runtime.comparison import build_comparison_table
 from themis.runtime.experiment_result import ExperimentResult
 from themis.types.enums import PValueCorrection
@@ -59,6 +60,7 @@ class BenchmarkResult(ExperimentResult):
         """Aggregate score rows using benchmark-native summary fields."""
 
         summaries = {row.trial_hash: row for row in self.iter_trial_summaries()}
+        self._validate_group_by_keys(summaries.values(), group_by)
         groups: dict[tuple[JSONValueType, ...], list[float]] = {}
         for row in self._iter_scores(metric_id=metric_id):
             summary = summaries.get(row.trial_hash)
@@ -89,6 +91,7 @@ class BenchmarkResult(ExperimentResult):
         """Return paired comparisons by one benchmark grouping key."""
 
         trial_summaries = list(self.iter_trial_summaries())
+        self._validate_group_by_keys(trial_summaries, [group_by])
         relevant_scores = list(self._iter_scores(metric_id=metric_id))
         scores_by_trial: dict[str, list[ScoreRow]] = {}
         for row in relevant_scores:
@@ -179,12 +182,15 @@ class BenchmarkResult(ExperimentResult):
         aggregate_rows = self.aggregate(
             group_by=["model_id", "slice_id", "metric_id", "prompt_variant_id"]
         )
-        aggregate_path = root / "benchmark-aggregate.json"
-        summary_path = root / "benchmark-summary.md"
+        scope = self._scope_metadata()
+        scope_suffix = scope["overlay_key"].replace(":", "-")
+        aggregate_path = root / f"benchmark-aggregate-{scope_suffix}.json"
+        summary_path = root / f"benchmark-summary-{scope_suffix}.md"
         aggregate_path.write_text(
             json.dumps(
                 {
                     "benchmark_id": self.benchmark_id,
+                    "scope": scope,
                     "rows": aggregate_rows,
                 },
                 indent=2,
@@ -197,6 +203,7 @@ class BenchmarkResult(ExperimentResult):
             count_value = self._int_value(row, "count")
             summary_lines.append(
                 "- "
+                f"scope={scope['overlay_key']} "
                 f"model={row.get('model_id')} "
                 f"slice={row.get('slice_id')} "
                 f"metric={row.get('metric_id')} "
@@ -241,11 +248,18 @@ class BenchmarkResult(ExperimentResult):
     ) -> JSONValueType:
         if key == "metric_id":
             return metric_id
-        if key in {"benchmark_id", "slice_id", "prompt_variant_id"}:
+        if key in {
+            "benchmark_id",
+            "slice_id",
+            "prompt_variant_id",
+            "model_id",
+            "item_id",
+            "status",
+        }:
             return getattr(summary, key)
-        if key in {"model_id", "item_id", "status"}:
-            return getattr(summary, key)
-        return summary.dimensions.get(key)
+        if key in summary.dimensions:
+            return summary.dimensions[key]
+        return None
 
     def _sort_group_key(
         self, values: tuple[JSONValueType, ...]
@@ -268,3 +282,28 @@ class BenchmarkResult(ExperimentResult):
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError(f"{key} must be an int, got {value!r}")
         return value
+
+    def _scope_metadata(self) -> dict[str, str]:
+        return OverlaySelection(
+            transform_hash=self.active_transform_hash,
+            evaluation_hash=self.active_evaluation_hash,
+        ).metadata()
+
+    def _validate_group_by_keys(
+        self,
+        summaries: Iterable[TrialSummaryRow],
+        group_by: list[str],
+    ) -> None:
+        supported_keys = {
+            "metric_id",
+            "benchmark_id",
+            "slice_id",
+            "prompt_variant_id",
+            "model_id",
+            "item_id",
+            "status",
+        }
+        dimension_keys = {key for summary in summaries for key in summary.dimensions}
+        unknown_keys = sorted(set(group_by) - supported_keys - dimension_keys)
+        if unknown_keys:
+            raise ValueError(f"Unsupported group_by key: {', '.join(unknown_keys)}")

@@ -264,7 +264,11 @@ class Orchestrator:
     ) -> BenchmarkResult:
         """Compile and execute one benchmark specification."""
         result = self.run(benchmark, runtime=runtime, progress=progress)
-        assert isinstance(result, BenchmarkResult)
+        if not isinstance(result, BenchmarkResult):
+            raise TypeError(
+                "Orchestrator.run_benchmark expected run() to return a "
+                f"BenchmarkResult, got {type(result).__name__}."
+            )
         return result
 
     def generate(

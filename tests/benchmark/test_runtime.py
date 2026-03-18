@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import cast
 
@@ -122,6 +123,45 @@ def test_benchmark_result_persist_artifacts_writes_bundle(tmp_path: Path) -> Non
 
     assert bundle.aggregate_json_path.exists()
     assert bundle.summary_markdown_path.exists()
+    payload = json.loads(bundle.aggregate_json_path.read_text())
+    assert payload["scope"] == {"overlay_key": "gen"}
+    assert "scope=gen" in bundle.summary_markdown_path.read_text()
+
+
+def test_benchmark_result_persist_artifacts_uses_unique_scope_paths(
+    tmp_path: Path,
+) -> None:
+    result = BenchmarkResult(
+        projection_repo=FakeProjectionRepository(),
+        trial_hashes=["trial-1", "trial-2"],
+        transform_hashes=["transform-1"],
+        evaluation_hashes=["evaluation-1"],
+        benchmark_id="bench-1",
+        slice_ids=["slice-qa"],
+        prompt_variant_ids=["qa-default"],
+    )
+
+    generation_bundle = result.persist_artifacts(storage_root=tmp_path)
+    evaluation_bundle = result.for_evaluation("evaluation-1").persist_artifacts(
+        storage_root=tmp_path
+    )
+
+    assert (
+        generation_bundle.aggregate_json_path != evaluation_bundle.aggregate_json_path
+    )
+    assert (
+        generation_bundle.summary_markdown_path
+        != evaluation_bundle.summary_markdown_path
+    )
+    assert generation_bundle.aggregate_json_path.name == "benchmark-aggregate-gen.json"
+    assert evaluation_bundle.aggregate_json_path.name == (
+        "benchmark-aggregate-ev-evaluation-1.json"
+    )
+    evaluation_payload = json.loads(evaluation_bundle.aggregate_json_path.read_text())
+    assert evaluation_payload["scope"] == {
+        "overlay_key": "ev:evaluation-1",
+        "evaluation_hash": "evaluation-1",
+    }
 
 
 def test_benchmark_result_export_json_scopes_scores_to_active_trial_hashes() -> None:
@@ -213,6 +253,19 @@ def test_benchmark_result_aggregate_handles_missing_dimension_values() -> None:
             "source": "medqa",
         },
     ]
+
+
+def test_benchmark_result_aggregate_rejects_unknown_group_by_keys() -> None:
+    result = BenchmarkResult(
+        projection_repo=FakeProjectionRepository(),
+        trial_hashes=["trial-1", "trial-2"],
+        benchmark_id="bench-1",
+        slice_ids=["slice-qa"],
+        prompt_variant_ids=["qa-default"],
+    )
+
+    with pytest.raises(ValueError, match="Unsupported group_by key"):
+        result.aggregate(group_by=["sice_id"])
 
 
 @pytest.mark.filterwarnings("ignore:.*stats.*:UserWarning")

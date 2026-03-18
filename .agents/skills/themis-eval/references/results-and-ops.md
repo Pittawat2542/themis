@@ -30,6 +30,10 @@ comparison = result.paired_compare(
 bundle = result.persist_artifacts(storage_root=project.storage.root_dir)
 ```
 
+Artifact bundle filenames are scoped by the active overlay key. Generation
+views write `benchmark-aggregate-gen.json`, while evaluation views write
+`benchmark-aggregate-ev-<evaluation_hash>.json`.
+
 ## Export Project And Benchmark Config Reports
 
 ```python
@@ -42,9 +46,9 @@ markdown_report = generate_config_report(bundle, format="markdown")
 ## Quick SQLite Inspection
 
 ```bash
-themis-quickcheck scores --db .cache/themis/run.sqlite3 --metric exact_match --slice qa
-themis-quickcheck scores --db .cache/themis/run.sqlite3 --metric exact_match --dimension source=synthetic
-themis-quickcheck failures --db .cache/themis/run.sqlite3 --limit 20
+themis-quickcheck scores --db .cache/themis-examples/04-compare-models-benchmark-first/themis.sqlite3 --metric exact_match --slice qa
+themis-quickcheck scores --db .cache/themis-examples/01-hello-world-benchmark-first/themis.sqlite3 --metric exact_match --dimension source=synthetic
+themis-quickcheck failures --db .cache/themis-examples/01-hello-world-benchmark-first/themis.sqlite3 --limit 20
 ```
 
 ## Run Progress

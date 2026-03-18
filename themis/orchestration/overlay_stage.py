@@ -66,6 +66,7 @@ class OverlayStageExecutor:
         """Apply one output transform and append overlay-specific extraction events."""
         resolved_plugins = session.require_resolved_plugins()
         attempt = 0
+        last_attempt_candidate: CandidateRecord | None = None
         while True:
             attempt += 1
             try:
@@ -79,6 +80,7 @@ class OverlayStageExecutor:
                         transform.transform_hash
                     ),
                 ).model_copy(update={"provenance": session.provenance})
+                last_attempt_candidate = transformed_candidate
                 self.event_emitter.emit_output_transform_events(
                     candidate.spec_hash,
                     transform,
@@ -119,6 +121,7 @@ class OverlayStageExecutor:
                         "provenance": session.provenance,
                     }
                 )
+                last_attempt_candidate = failed_candidate
                 self.event_emitter.emit_candidate_failure_event(
                     failed_candidate,
                     lambda event_type, **kwargs: self.append_session_event(
@@ -134,9 +137,9 @@ class OverlayStageExecutor:
                     return failed_candidate
             if attempt >= self.max_retries:
                 return (
-                    transformed_candidate
-                    if "transformed_candidate" in locals()
-                    else failed_candidate
+                    last_attempt_candidate
+                    if last_attempt_candidate is not None
+                    else candidate
                 )
             self._append_retry_event(
                 session,
@@ -161,6 +164,7 @@ class OverlayStageExecutor:
         """Apply one evaluation and append overlay-specific scoring events."""
         resolved_plugins = session.require_resolved_plugins()
         attempt = 0
+        last_attempt_candidate: CandidateRecord | None = None
         while True:
             attempt += 1
             judge_service = resolved_plugins.create_judge_service()
@@ -186,6 +190,7 @@ class OverlayStageExecutor:
                     evaluated_candidate,
                     judge_artifact_refs,
                 ).model_copy(update={"provenance": session.provenance})
+                last_attempt_candidate = evaluated_candidate
                 self.event_emitter.emit_evaluation_candidate_events(
                     candidate.spec_hash,
                     evaluation,
@@ -235,6 +240,7 @@ class OverlayStageExecutor:
                         "provenance": session.provenance,
                     }
                 )
+                last_attempt_candidate = failed_candidate
                 self.event_emitter.emit_candidate_failure_event(
                     failed_candidate,
                     lambda event_type, **kwargs: self.append_session_event(
@@ -255,9 +261,9 @@ class OverlayStageExecutor:
                     return failed_candidate
             if attempt >= self.max_retries:
                 return (
-                    evaluated_candidate
-                    if "evaluated_candidate" in locals()
-                    else failed_candidate
+                    last_attempt_candidate
+                    if last_attempt_candidate is not None
+                    else candidate
                 )
             self._append_retry_event(
                 session,

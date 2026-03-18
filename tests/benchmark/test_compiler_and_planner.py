@@ -191,36 +191,34 @@ def test_trial_planner_rejects_unmatched_prompt_family_filters() -> None:
 
 
 def test_trial_planner_rejects_unmatched_prompt_variant_ids() -> None:
-    benchmark = BenchmarkSpec(
-        benchmark_id="math-bench",
-        models=[ModelSpec(model_id="demo-model", provider="demo")],
-        slices=[
-            SliceSpec(
-                slice_id="arithmetic",
-                dataset=DatasetSpec(source=DatasetSource.MEMORY),
-                prompt_variant_ids=["missing-variant"],
-                generation=GenerationSpec(),
-                scores=[ScoreSpec(name="default", metrics=["exact_match"])],
-            )
-        ],
-        prompt_variants=[
-            PromptVariantSpec(
-                id="qa-default",
-                family="qa",
-                messages=[
-                    PromptMessage(
-                        role=PromptRole.USER, content="Question: {item.question}"
-                    )
-                ],
-            )
-        ],
-        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
-    )
-
-    planner = TrialPlanner(dataset_provider=RecordingDatasetProvider())
-
-    with pytest.raises(SpecValidationError, match="missing-variant"):
-        planner.plan_benchmark(benchmark)
+    with pytest.raises(ValidationError, match="missing-variant"):
+        BenchmarkSpec(
+            benchmark_id="math-bench",
+            models=[ModelSpec(model_id="demo-model", provider="demo")],
+            slices=[
+                SliceSpec(
+                    slice_id="arithmetic",
+                    dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                    prompt_variant_ids=["missing-variant"],
+                    generation=GenerationSpec(),
+                    scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+                )
+            ],
+            prompt_variants=[
+                PromptVariantSpec(
+                    id="qa-default",
+                    family="qa",
+                    messages=[
+                        PromptMessage(
+                            role=PromptRole.USER, content="Question: {item.question}"
+                        )
+                    ],
+                )
+            ],
+            inference_grid=InferenceGridSpec(
+                params=[InferenceParamsSpec(max_tokens=32)]
+            ),
+        )
 
 
 def test_slice_spec_rejects_duplicate_parse_names() -> None:

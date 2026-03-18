@@ -221,3 +221,24 @@ def test_task_spec_coerces_item_sampling_spec_to_dataset_query_spec() -> None:
     assert task.dataset_query.kind.value == "subset"
     assert task.dataset_query.count == 2
     assert task.dataset_query.seed == 7
+
+
+def test_task_spec_propagates_unexpected_dataset_query_errors(monkeypatch) -> None:
+    GenerationSpec = getattr(foundational, "GenerationSpec", None)
+    assert GenerationSpec is not None
+
+    def _boom(cls, payload):
+        del cls, payload
+        raise RuntimeError("unexpected dataset query failure")
+
+    monkeypatch.setattr(DatasetQuerySpec, "model_validate", classmethod(_boom))
+
+    with pytest.raises(RuntimeError, match="unexpected dataset query failure"):
+        TaskSpec.model_validate(
+            {
+                "task_id": "sampled",
+                "dataset": DatasetSpec(source=DatasetSource.MEMORY),
+                "dataset_query": {"kind": "all"},
+                "generation": GenerationSpec(),
+            }
+        )

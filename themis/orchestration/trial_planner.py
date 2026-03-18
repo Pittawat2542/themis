@@ -9,6 +9,8 @@ import json
 import random
 from collections.abc import Collection, Mapping, Sequence
 
+from pydantic import ValidationError
+
 from themis.benchmark.compiler import compile_benchmark
 from themis.benchmark.query import DatasetQuerySpec
 from themis.benchmark.specs import BenchmarkSpec, DatasetSliceSpec
@@ -342,10 +344,10 @@ class TrialPlanner:
             payload = validate_json_dict(dict(query), label="task.dataset_query")
             try:
                 return DatasetQuerySpec.model_validate(payload)
-            except Exception:
+            except ValidationError:
                 try:
                     return ItemSamplingSpec.model_validate(payload)
-                except Exception:
+                except ValidationError:
                     return payload
         raise SpecValidationError(
             code=ErrorCode.SCHEMA_MISMATCH,

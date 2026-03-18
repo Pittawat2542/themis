@@ -259,7 +259,7 @@ def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(tmp_path
     assert migrated_payload == manifest_payload
 
 
-def test_migrate_sqlite_store_initializes_legacy_source_schema_before_reading_manifests(
+def test_migrate_sqlite_store_reads_legacy_source_schema_without_mutating_it(
     tmp_path,
 ):
     source_root = tmp_path / "source_legacy_columns"
@@ -312,6 +312,11 @@ def test_migrate_sqlite_store_initializes_legacy_source_schema_before_reading_ma
     assert migrated is not None
     assert migrated.benchmark_spec is not None
     assert migrated.benchmark_spec.benchmark_id == benchmark.benchmark_id
+    with source_manager.get_connection() as conn:
+        source_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(run_manifests)")
+        }
+    assert "benchmark_spec_json" not in source_columns
 
 
 def test_migrate_sqlite_store_rebuilds_overlay_projections_without_blob_copy(
@@ -497,6 +502,27 @@ def test_migrate_sqlite_store_rejects_legacy_observability_refs_without_links(
             source_db_path=source_root / "themis.sqlite3",
             destination_bundle=destination_bundle,
         )
+
+
+def test_migrate_sqlite_store_allows_empty_legacy_observability_refs_without_links(
+    tmp_path,
+):
+    source_root = tmp_path / "source_legacy_empty_refs"
+    source_root.mkdir()
+    source_manager = DatabaseManager(f"sqlite:///{source_root / 'themis.sqlite3'}")
+    source_manager.initialize()
+    with source_manager.get_connection() as conn:
+        with conn:
+            conn.execute("DROP TABLE observability_links")
+
+    destination_bundle = build_storage_bundle(
+        SqliteBlobStorageSpec(root_dir=str(tmp_path / "destination_legacy_empty_refs"))
+    )
+
+    migrate_sqlite_store(
+        source_db_path=source_root / "themis.sqlite3",
+        destination_bundle=destination_bundle,
+    )
 
 
 def test_migrated_run_manifest_can_be_resumed_by_orchestrator(tmp_path):

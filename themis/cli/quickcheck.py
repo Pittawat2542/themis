@@ -228,7 +228,7 @@ def _run_scores(
           ON trial_summary.trial_hash = candidate_summary.trial_hash
          AND trial_summary.overlay_key = candidate_summary.overlay_key
         {where_clause}
-        ORDER BY candidate_summary.overlay_key ASC, trial_summary.model_id ASC, metric_scores.metric_id ASC
+        ORDER BY candidate_summary.overlay_key ASC, trial_summary.model_id ASC, trial_summary.slice_id ASC, metric_scores.metric_id ASC
         """,
         params,
     ).fetchall()
@@ -332,7 +332,10 @@ def _parse_dimension_filters(filters: list[str]) -> dict[str, str]:
 def _load_dimensions(raw: str | None) -> dict[str, str]:
     if not raw:
         return {}
-    loaded = json.loads(raw)
+    try:
+        loaded = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
     if not isinstance(loaded, dict):
         return {}
     return {str(key): str(value) for key, value in loaded.items()}

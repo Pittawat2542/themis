@@ -30,15 +30,11 @@ class ResumeDatasetProvider:
 
 
 class ResumeEngine:
-    def __init__(self) -> None:
-        self.run_count = 0
-
     def infer(self, trial, context, runtime):
         del trial, runtime
-        self.run_count += 1
         return InferenceResult(
             inference=InferenceRecord(
-                spec_hash=f"inf_{context['item_id']}_run{self.run_count}",
+                spec_hash=f"inf_{context['item_id']}",
                 raw_text=str(context["answer"]),
             )
         )

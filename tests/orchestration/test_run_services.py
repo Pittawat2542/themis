@@ -115,6 +115,142 @@ def test_generation_status_uses_latest_terminal_event() -> None:
     assert _generation_status(events) == WorkItemStatus.FAILED
 
 
+def test_estimate_notes_report_empty_plans_without_heuristic_claims() -> None:
+    class FakePlanner(TrialPlanner):
+        def plan_experiment(
+            self,
+            experiment_spec: ExperimentSpec,
+            *,
+            required_stages=None,
+        ) -> list[PlannedTrial]:
+            del experiment_spec, required_stages
+            return []
+
+    class FakeEventRepo:
+        def save_spec(self, spec: SpecBase) -> None:
+            del spec
+
+        def append_event(self, event: TrialEvent) -> None:
+            del event
+
+        def last_event_index(
+            self, trial_hash: str, candidate_id: str | None = None
+        ) -> int | None:
+            del trial_hash, candidate_id
+            return None
+
+        def get_events(
+            self, trial_hash: str, candidate_id: str | None = None
+        ) -> list[TrialEvent]:
+            del trial_hash, candidate_id
+            return []
+
+        def has_projection_for_overlay(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> bool:
+            del trial_hash, transform_hash, evaluation_hash
+            return False
+
+        def latest_terminal_event_type(self, trial_hash: str) -> TrialEventType | None:
+            del trial_hash
+            return None
+
+    class FakeProjectionRepo:
+        def get_trial_record(self, *args, **kwargs) -> TrialRecord | None:
+            del args, kwargs
+            return None
+
+        def get_conversation(self, *args, **kwargs) -> Conversation | None:
+            del args, kwargs
+            return None
+
+        def get_record_timeline(self, *args, **kwargs) -> RecordTimeline | None:
+            del args, kwargs
+            return None
+
+        def get_timeline_view(self, *args, **kwargs) -> RecordTimelineView | None:
+            del args, kwargs
+            return None
+
+        def materialize_trial_record(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+            extra_events: list[TrialEvent] | None = None,
+        ) -> TrialRecord:
+            del trial_hash, transform_hash, evaluation_hash, extra_events
+            return TrialRecord(spec_hash="trial", candidates=[])
+
+        def iter_candidate_scores(self, *args, **kwargs) -> Iterator[ScoreRow]:
+            del args, kwargs
+            return iter(())
+
+        def iter_trial_summaries(self, *args, **kwargs) -> Iterator[TrialSummaryRow]:
+            del args, kwargs
+            return iter(())
+
+        def save_trial_record(
+            self,
+            record: TrialRecord,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> None:
+            del record, transform_hash, evaluation_hash
+
+        def has_trial(
+            self,
+            trial_hash: str,
+            *,
+            transform_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> bool:
+            del trial_hash, transform_hash, evaluation_hash
+            return False
+
+    class FakeProjectionHandler:
+        def on_trial_completed(self, *args, **kwargs) -> TrialRecord | None:
+            del args, kwargs
+            return None
+
+    class FakeManifestRepo:
+        def reconcile_manifest(
+            self,
+            manifest: RunManifest,
+            *,
+            stored_manifest: RunManifest | None = None,
+        ) -> RunManifest:
+            del stored_manifest
+            return manifest
+
+        def save_manifest(self, manifest: RunManifest) -> None:
+            del manifest
+
+    service = RunPlanningService(
+        planner=FakePlanner(),
+        event_repo=FakeEventRepo(),
+        projection_repo=FakeProjectionRepo(),
+        projection_handler=FakeProjectionHandler(),
+        manifest_repo=FakeManifestRepo(),  # type: ignore[arg-type]
+    )
+
+    estimate = service.estimate(_experiment())
+
+    assert estimate.estimated_prompt_tokens == 0
+    assert estimate.total_work_items == 0
+    assert "No planned trials: no prompt tokens to estimate." in estimate.notes
+    assert not any(
+        "Best-effort heuristic only" in note or "heuristic fallback" in note
+        for note in estimate.notes
+    )
+
+
 def test_generation_status_reads_legacy_payload_status_when_event_status_missing() -> (
     None
 ):

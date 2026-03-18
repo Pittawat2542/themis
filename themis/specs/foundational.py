@@ -298,7 +298,7 @@ class TaskSpec(SpecBase):
 
         try:
             return DatasetQuerySpec.model_validate(dict(value))
-        except Exception:
+        except ValidationError:
             return validate_json_dict(dict(value), label="TaskSpec.dataset_query")
 
     @model_validator(mode="after")

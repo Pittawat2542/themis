@@ -3,10 +3,9 @@
 from collections.abc import Sequence
 from pathlib import Path
 
-from themis.benchmark.query import DatasetQuerySpec
-from themis.benchmark.specs import DatasetSliceSpec
 from themis import (
     BenchmarkSpec,
+    DatasetQuerySpec,
     ExecutionPolicySpec,
     InferenceGridSpec,
     InferenceParamsSpec,
@@ -20,6 +19,7 @@ from themis import (
     SliceSpec,
     StorageSpec,
 )
+from themis.benchmark.specs import DatasetSliceSpec
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
 from themis.specs import DatasetSpec, GenerationSpec
@@ -29,6 +29,7 @@ from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 class ArithmeticDatasetProvider:
     def scan(
         self,
+        # DatasetSliceSpec is benchmark-only and not re-exported from themis root.
         slice_spec: DatasetSliceSpec,
         query: DatasetQuerySpec,
     ) -> Sequence[dict[str, str]]:

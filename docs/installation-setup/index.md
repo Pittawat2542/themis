@@ -56,6 +56,9 @@ uv run mkdocs build --strict
 ## Local Verification
 
 ```bash
-uv run pytest tests/benchmark -q
+uv sync --group dev
+uv run ruff check themis tests examples scripts
+uv run mypy themis tests
+uv run pytest -q
 uv run python examples/01_hello_world.py
 ```

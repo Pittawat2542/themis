@@ -4,6 +4,7 @@ from argparse import Namespace
 import logging
 
 from themis.cli.quickcheck import (
+    _load_dimensions,
     _parse_dimension_filters,
     _run_scores,
     build_parser,
@@ -348,6 +349,10 @@ def test_quickcheck_scores_pushes_slice_filter_into_sql() -> None:
 
     assert conn.query is not None
     assert "trial_summary.slice_id = ?" in conn.query
+    assert (
+        "ORDER BY candidate_summary.overlay_key ASC, trial_summary.model_id ASC, "
+        "trial_summary.slice_id ASC, metric_scores.metric_id ASC"
+    ) in conn.query
     assert conn.params is not None
     assert "qa" in conn.params
 
@@ -359,3 +364,7 @@ def test_parse_dimension_filters_warns_on_malformed_entries(caplog) -> None:
     assert parsed == {"source": "synthetic"}
     assert "noequals" in caplog.text
     assert "key=" in caplog.text
+
+
+def test_load_dimensions_returns_empty_dict_for_malformed_json() -> None:
+    assert _load_dimensions("{not-json}") == {}

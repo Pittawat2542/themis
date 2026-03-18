@@ -51,6 +51,7 @@ from themis import (
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord, MetricScore
 from themis.specs import DatasetSpec, GenerationSpec
+from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 
 
 class DemoProvider:
@@ -88,7 +89,10 @@ project = ProjectSpec(
     project_name="hello-world",
     researcher_id="docs",
     global_seed=7,
-    storage=StorageSpec(root_dir=str(Path(".cache/themis/hello-world"))),
+    storage=StorageSpec(
+        root_dir=str(Path(".cache/themis-examples/01-hello-world-benchmark-first")),
+        compression=CompressionCodec.NONE,
+    ),
     execution_policy=ExecutionPolicySpec(),
 )
 
@@ -98,8 +102,9 @@ benchmark = BenchmarkSpec(
     slices=[
         SliceSpec(
             slice_id="arithmetic",
-            dataset=DatasetSpec(source="memory"),
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
             dataset_query=DatasetQuerySpec.subset(1, seed=7),
+            dimensions={"source": "synthetic", "format": "qa"},
             generation=GenerationSpec(),
             prompt_variant_ids=["baseline"],
             scores=[ScoreSpec(name="default", metrics=["exact_match"])],
@@ -109,7 +114,12 @@ benchmark = BenchmarkSpec(
         PromptVariantSpec(
             id="baseline",
             family="qa",
-            messages=[PromptMessage(role="user", content="Solve the arithmetic problem.")],
+            messages=[
+                PromptMessage(
+                    role=PromptRole.USER,
+                    content="Solve the arithmetic problem.",
+                )
+            ],
         )
     ],
     inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
@@ -121,6 +131,11 @@ orchestrator = Orchestrator.from_project_spec(
     dataset_provider=DemoProvider(),
 )
 result = orchestrator.run_benchmark(benchmark)
+
+for row in result.aggregate(
+    group_by=["model_id", "slice_id", "metric_id", "source", "prompt_variant_id"]
+):
+    print(row)
 ```
 
 ## Add Built-In Progress Logging When Needed

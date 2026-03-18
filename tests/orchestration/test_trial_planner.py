@@ -1,4 +1,5 @@
 import pytest
+from themis.benchmark.query import DatasetQuerySpec
 from themis.orchestration.trial_planner import TrialPlanner
 from themis.specs.experiment import (
     DataItemContext,
@@ -503,6 +504,21 @@ def test_trial_planner_can_validate_evaluation_only_task_without_provider_plugin
     )
 
     assert len(planned_trials) == 1
+
+
+def test_trial_planner_propagates_unexpected_dataset_query_validation_errors(
+    monkeypatch,
+):
+    planner = TrialPlanner()
+
+    def _boom(cls, payload):
+        del cls, payload
+        raise RuntimeError("unexpected dataset query failure")
+
+    monkeypatch.setattr(DatasetQuerySpec, "model_validate", classmethod(_boom))
+
+    with pytest.raises(RuntimeError, match="unexpected dataset query failure"):
+        planner._coerce_dataset_query({"kind": "all"})
 
 
 def test_item_sampling_classmethods_preserve_sampling_behavior():
