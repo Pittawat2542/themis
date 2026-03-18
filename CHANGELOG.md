@@ -4,6 +4,47 @@ All notable changes to Themis will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [3.0.0] - 2026-03-18
+
+### Added
+- Added a benchmark-first public authoring surface centered on
+  `BenchmarkSpec`, `SliceSpec`, `PromptVariantSpec`, `ParseSpec`, and
+  `ScoreSpec`, with orchestration support for query-aware dataset providers.
+- Added `BenchmarkResult` as the public result facade with benchmark-native
+  aggregation, paired comparison, artifact persistence, and slice- or
+  prompt-aware inspection via `themis-quickcheck`.
+- Added benchmark compiler/runtime coverage, boxed and normalized text
+  extractors, and a full rewrite of the numbered examples and docs around the
+  new benchmark-first workflow.
+
+### Changed
+- The curated root package, `themis.specs`, and `themis.runtime` namespaces now
+  expose only the benchmark-first public surface, and the docs/README now teach
+  that workflow end to end.
+- Orchestrator planning, execution, retry handling, overlay execution, run
+  manifests, and stage artifact persistence now preserve benchmark metadata
+  across local, resumed, and external-handoff flows.
+- Documentation and docs coverage now explicitly cover provider-backed runs,
+  dataset validation, reproducibility, result analysis, and public API
+  consistency for the benchmark-first surface.
+
+### Fixed
+- Fixed benchmark metadata persistence and replay across projection/event
+  repositories, migration paths, run manifests, and benchmark-aware runtime
+  inspection.
+- Fixed Windows example-path formatting and related display guardrails in the
+  docs and CLI-facing examples.
+
+### Migration Notes
+- `BenchmarkSpec` is now the public authoring model and `BenchmarkResult` is
+  the public read-side facade.
+- `ExperimentSpec`, `ExperimentResult`, `TaskSpec`, `PromptTemplateSpec`,
+  `ItemSamplingSpec`, and related experiment-first types are no longer part of
+  the curated root or `themis.specs` public namespaces.
+- Dataset integrations should use `DatasetProvider.scan(slice_spec, query)`,
+  and result-inspection workflows should move to `BenchmarkResult` and
+  `themis-quickcheck`.
+
 ## [2.1.0] - 2026-03-16
 
 ### Added
