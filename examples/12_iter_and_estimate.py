@@ -130,11 +130,11 @@ def main() -> None:
     print("=== Streaming results ===")
     for trial_record in orchestrator.run_benchmark_iter(benchmark):
         scores = [
-            f"{e.scores[0].value:.1f}"
+            f"{e.metric_scores[0].value:.1f}"
             for c in trial_record.candidates
-            if (e := c.evaluation) and e.scores
+            if (e := c.evaluation) and e.metric_scores
         ]
-        print(f"  trial {trial_record.trial_hash[:12]} → scores: {scores}")
+        print(f"  trial {trial_record.spec_hash[:12]} → scores: {scores}")
     print()
 
     # ── 3. RunDiff.has_invalidated_resume_work ────────────────────────────────

@@ -133,17 +133,17 @@ class PluginRegistry:
             )
         registry = cls()
         for name, factory in mapping.get("engines", {}).items():
-            registry.register_inference_engine(name, factory)
+            registry.register_inference_engine(name, factory)  # type: ignore[arg-type]
         for name, factory in mapping.get("metrics", {}).items():
-            registry.register_metric(name, factory)
+            registry.register_metric(name, factory)  # type: ignore[arg-type]
         for name, factory in mapping.get("extractors", {}).items():
-            registry.register_extractor(name, factory)
+            registry.register_extractor(name, factory)  # type: ignore[arg-type]
         for name, factory in mapping.get("judges", {}).items():
-            registry.register_judge(name, factory)
+            registry.register_judge(name, factory)  # type: ignore[arg-type]
         for name, factory in mapping.get("tools", {}).items():
             registry.register_tool(name, factory)
         for name, hook in mapping.get("hooks", {}).items():
-            registry.register_hook(name, hook)
+            registry.register_hook(name, hook)  # type: ignore[arg-type]
         return registry
 
     def register_inference_engine(

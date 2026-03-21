@@ -13,7 +13,7 @@ from themis.specs.experiment import (
     PromptMessage,
     PromptTurnSpec,
 )
-from themis.types.enums import PromptRole
+from themis.types.enums import DatasetSource, PromptRole
 from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
@@ -163,7 +163,7 @@ class BenchmarkSpec(SpecBase):
         benchmark_id: str,
         *,
         model_id: str,
-        dataset_source: object,
+        dataset_source: DatasetSource,
         dataset_id: str,
         prompt: str,
         metric: str,
@@ -255,9 +255,7 @@ class BenchmarkSpec(SpecBase):
 
         Returns:
             A list of dicts, one per rendered variant, each with keys:
-              - ``prompt_variant_id`` — the variant's stable ID
-              - ``messages`` — list of ``{"role": ..., "content": ...}`` dicts
-              - ``follow_up_turns`` — list of rendered turn dicts (may be empty)
+            ``prompt_variant_id``, ``messages``, and ``follow_up_turns``.
         """
         variants = [
             v

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 
 from themis import (
     BenchmarkSpec,
@@ -70,13 +71,13 @@ class TestBenchmarkSpecPreview:
     def test_preview_renders_item_fields_into_messages(self) -> None:
         benchmark = _make_benchmark()
         result = benchmark.preview({"question": "2 + 2"})
-        messages = result[0]["messages"]
+        messages = cast(list[dict[str, str]], result[0]["messages"])
         assert any("Solve: 2 + 2" in m["content"] for m in messages)
 
     def test_preview_renders_all_roles(self) -> None:
         benchmark = _make_benchmark()
         result = benchmark.preview({"question": "2 + 2"})
-        roles = {m["role"] for m in result[0]["messages"]}
+        roles = {m["role"] for m in cast(list[dict[str, str]], result[0]["messages"])}
         assert "system" in roles
         assert "user" in roles
 
@@ -139,9 +140,10 @@ class TestBenchmarkSpecPreview:
         benchmark = _make_benchmark(prompt_variants=[variant])
         result = benchmark.preview({"q": "5 + 3"})
         assert "follow_up_turns" in result[0]
-        turns = result[0]["follow_up_turns"]
+        turns = cast(list[dict[str, object]], result[0]["follow_up_turns"])
         assert len(turns) == 1
-        assert "Double-check: 5 + 3" in turns[0]["messages"][0]["content"]
+        first_turn_messages = cast(list[dict[str, str]], turns[0]["messages"])
+        assert "Double-check: 5 + 3" in first_turn_messages[0]["content"]
 
     def test_preview_static_variables_available_via_prompt_namespace(self) -> None:
         variant = PromptVariantSpec(
@@ -156,7 +158,8 @@ class TestBenchmarkSpecPreview:
         )
         benchmark = _make_benchmark(prompt_variants=[variant])
         result = benchmark.preview({"question": "What is 3+3?"})
-        assert "(concise)" in result[0]["messages"][0]["content"]
+        messages = cast(list[dict[str, str]], result[0]["messages"])
+        assert "(concise)" in messages[0]["content"]
 
     def test_preview_returns_empty_list_for_unknown_filter_ids(self) -> None:
         benchmark = _make_benchmark()

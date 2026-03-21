@@ -52,7 +52,7 @@ class TestCostEstimateTrialCount:
             estimated_total_tokens=150,
         )
         defaults.update(kwargs)
-        return CostEstimate(**defaults)
+        return CostEstimate(**defaults)  # type: ignore[arg-type]
 
     def test_trial_count_defaults_to_zero(self) -> None:
         estimate = self._make_estimate()
