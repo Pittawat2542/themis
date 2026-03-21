@@ -43,3 +43,19 @@ def test_init_generated_project_runs_preview_mode(tmp_path: Path) -> None:
 
     assert completed.returncode == 0
     assert "Question: What is 2 + 2?" in completed.stdout
+
+
+def test_init_generates_builtin_benchmark_scaffold(tmp_path: Path) -> None:
+    project_root = tmp_path / "starter_eval"
+
+    assert main(["init", str(project_root), "--benchmark", "mmlu_pro"]) == 0
+
+    benchmark_module = (
+        project_root / "starter_eval" / "benchmarks" / "default.py"
+    ).read_text()
+    readme = (project_root / "README.md").read_text()
+
+    assert "get_builtin_benchmark" in benchmark_module
+    assert "mmlu_pro" in benchmark_module
+    assert "THEMIS_STARTER_BENCHMARK" in (project_root / ".env.example").read_text()
+    assert "themis report" in readme

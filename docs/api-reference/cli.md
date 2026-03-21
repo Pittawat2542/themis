@@ -16,6 +16,7 @@ Modes:
 - `inline`
 - `file`
 - `huggingface`
+- `benchmark`
 
 Shared flags:
 
@@ -27,6 +28,14 @@ Shared flags:
 - `--estimate-only`
 - `--format table|json`
 
+Benchmark mode adds:
+
+- `--benchmark`
+- `--subset`
+- `--revision`
+- `--judge-model`
+- `--judge-provider`
+
 ### `themis init`
 
 Generates a starter project with:
@@ -35,6 +44,9 @@ Generates a starter project with:
 - a runnable package scaffold
 - sample local data
 - README commands for `quickcheck` and `report`
+
+Use `--benchmark <id>` to scaffold a built-in benchmark-backed starter instead
+of the default local-data template.
 
 ### `themis quickcheck`
 

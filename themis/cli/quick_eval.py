@@ -29,8 +29,9 @@ from themis import (
     ScoreSpec,
     SliceSpec,
 )
-from themis.cli.starter_catalog import (
+from themis.starter_catalog import (
     StarterDatasetProvider,
+    build_builtin_benchmark_project,
     build_starter_registry,
     load_huggingface_rows as _load_huggingface_rows,
     load_local_rows as _load_local_rows,
@@ -54,11 +55,12 @@ METRIC_EXTRACTORS: dict[str, str | None] = {
 
 @dataclass(frozen=True, slots=True)
 class QuickEvalConfig:
-    mode: Literal["inline", "file", "huggingface"]
+    mode: Literal["inline", "file", "huggingface", "benchmark"]
     model: str
     provider: str
     metric: str
     prompt: str
+    benchmark: str | None
     max_tokens: int
     temperature: float
     top_p: float | None
@@ -85,7 +87,7 @@ def build_app() -> App:
         provider: str = "openai",
         metric: str = "exact_match",
         prompt: str = "{item.input}",
-        max_tokens: int = 1024,
+        max_tokens: int = 8192,
         temperature: float = 0.0,
         top_p: float | None = None,
         seed: int | None = None,
@@ -129,7 +131,7 @@ def build_app() -> App:
         provider: str = "openai",
         metric: str = "exact_match",
         prompt: str = "{item.input}",
-        max_tokens: int = 1024,
+        max_tokens: int = 8192,
         temperature: float = 0.0,
         top_p: float | None = None,
         seed: int | None = None,
@@ -183,7 +185,7 @@ def build_app() -> App:
         provider: str = "openai",
         metric: str = "exact_match",
         prompt: str = "{item.input}",
-        max_tokens: int = 1024,
+        max_tokens: int = 8192,
         temperature: float = 0.0,
         top_p: float | None = None,
         seed: int | None = None,
@@ -230,6 +232,49 @@ def build_app() -> App:
             dataset_provider=provider_instance,
             sample_rows=sample_rows,
             subset=subset,
+        )
+
+    @app.command(name="benchmark")
+    def benchmark(
+        benchmark: str,
+        model: str,
+        provider: str = "openai",
+        subset: int | None = None,
+        revision: str | None = None,
+        judge_model: str | None = None,
+        judge_provider: str | None = None,
+        max_tokens: int = 8192,
+        temperature: float = 0.0,
+        top_p: float | None = None,
+        seed: int | None = None,
+        storage_root: str | None = None,
+        preview: bool = False,
+        estimate_only: bool = False,
+        format: str = "table",
+    ) -> int:
+        config = _build_config(
+            mode="benchmark",
+            model=model,
+            provider=provider,
+            metric="builtin",
+            prompt=f"builtin:{benchmark}",
+            benchmark=benchmark,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            seed=seed,
+            storage_root=storage_root,
+            preview=preview,
+            estimate_only=estimate_only,
+            format=format,
+        )
+        return _run_builtin_benchmark(
+            config,
+            benchmark_id=benchmark,
+            subset=subset,
+            dataset_revision=revision,
+            judge_model_id=judge_model,
+            judge_provider=judge_provider,
         )
 
     return app
@@ -343,6 +388,78 @@ def _run_quick_eval(
         return _emit_quick_eval_error(exc)
 
 
+def _run_builtin_benchmark(
+    config: QuickEvalConfig,
+    *,
+    benchmark_id: str,
+    subset: int | None,
+    dataset_revision: str | None,
+    judge_model_id: str | None,
+    judge_provider: str | None,
+) -> int:
+    try:
+        (
+            project,
+            benchmark,
+            registry,
+            dataset_provider,
+            definition,
+        ) = build_builtin_benchmark_project(
+            benchmark_id=benchmark_id,
+            model_id=config.model,
+            provider=config.provider,
+            storage_root=config.storage_root,
+            max_tokens=config.max_tokens,
+            temperature=config.temperature,
+            top_p=config.top_p,
+            seed=config.seed,
+            subset=subset,
+            dataset_revision=dataset_revision,
+            judge_model_id=judge_model_id,
+            judge_provider=judge_provider,
+        )
+        payload: dict[str, Any] = {
+            "mode": config.mode,
+            "benchmark": definition.benchmark_id,
+            "model": config.model,
+            "provider": config.provider,
+            "metric": definition.metric_id,
+            "storage_root": str(config.storage_root),
+        }
+        if config.preview:
+            payload["preview"] = definition.render_preview(
+                model_id=config.model,
+                provider=config.provider,
+                judge_model_id=judge_model_id,
+                judge_provider=judge_provider,
+            )
+            _emit_quick_eval_output(payload, format=config.format)
+            return 0
+
+        orchestrator = Orchestrator.from_project_spec(
+            project,
+            registry=registry,
+            dataset_provider=dataset_provider,
+        )
+        if config.estimate_only:
+            estimate = orchestrator.estimate(benchmark)
+            payload["estimate"] = estimate.model_dump(mode="json")
+            _emit_quick_eval_output(payload, format=config.format)
+            return 0
+
+        result = orchestrator.run_benchmark(benchmark)
+        setattr(result, "_builtin_scan_stats", dataset_provider.last_scan_stats())
+        payload["rows"] = result.aggregate(
+            group_by=["model_id", "slice_id", "metric_id", "prompt_variant_id"]
+        )
+        payload["summary"] = definition.summarize_result(result)
+        payload["sqlite_db"] = str(config.storage_root / "themis.sqlite3")
+        _emit_quick_eval_output(payload, format=config.format)
+        return 0
+    except Exception as exc:
+        return _emit_quick_eval_error(exc)
+
+
 def _build_benchmark(
     config: QuickEvalConfig,
     *,
@@ -429,11 +546,12 @@ def _build_project(config: QuickEvalConfig) -> ProjectSpec:
 
 def _build_config(
     *,
-    mode: Literal["inline", "file", "huggingface"],
+    mode: Literal["inline", "file", "huggingface", "benchmark"],
     model: str,
     provider: str,
     metric: str,
     prompt: str,
+    benchmark: str | None = None,
     max_tokens: int,
     temperature: float,
     top_p: float | None,
@@ -458,6 +576,7 @@ def _build_config(
         provider=normalized_provider,
         metric=metric,
         prompt=prompt,
+        benchmark=benchmark,
         max_tokens=max_tokens,
         temperature=temperature,
         top_p=top_p,
@@ -502,9 +621,20 @@ def _emit_quick_eval_output(
         return
 
     console = Console()
+    header_lines = [f"mode={payload['mode']}"]
+    if "benchmark" in payload:
+        header_lines.append(f"benchmark={payload['benchmark']}")
+    header_lines.extend(
+        [
+            f"model={payload['model']}",
+            f"provider={payload['provider']}",
+            f"metric={payload['metric']}",
+            f"storage={payload['storage_root']}",
+        ]
+    )
     console.print(
         Panel.fit(
-            f"mode={payload['mode']}\nmodel={payload['model']}\nprovider={payload['provider']}\nmetric={payload['metric']}\nstorage={payload['storage_root']}",
+            "\n".join(header_lines),
             title="Quick Eval",
         )
     )
@@ -552,6 +682,13 @@ def _emit_quick_eval_output(
     console.print(results_table)
     if "sqlite_db" in payload:
         console.print(f"SQLite DB: {payload['sqlite_db']}")
+    if "summary" in payload:
+        summary_table = Table(title="Benchmark Summary")
+        summary_table.add_column("Field")
+        summary_table.add_column("Value")
+        for key, value in payload["summary"].items():
+            summary_table.add_row(str(key), str(value))
+        console.print(summary_table)
 
 
 def _emit_quick_eval_error(exc: Exception) -> int:

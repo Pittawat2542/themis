@@ -41,12 +41,34 @@ Create a starter project when you are ready to edit a real benchmark:
 themis init starter-eval
 ```
 
+Or use one of the built-in benchmark definitions when you want a benchmark-aware
+starter right away:
+
+```bash
+themis quick-eval benchmark \
+  --benchmark mmlu_pro \
+  --model demo-model \
+  --provider demo \
+  --preview \
+  --format json
+```
+
+```bash
+themis init starter-mmlu --benchmark mmlu_pro
+```
+
 That scaffold includes:
 
 - `project.toml` for storage and execution policy
 - a runnable package under `starter_eval/`
 - `data/sample.jsonl`
 - README examples for `themis quickcheck` and `themis report`
+
+To inspect a dataset before wiring a new built-in, use:
+
+```bash
+uv run python scripts/inspect_huggingface_dataset.py TIGER-Lab/MMLU-Pro --split test
+```
 
 ## Go Deeper
 

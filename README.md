@@ -69,6 +69,21 @@ Initialize a real project scaffold when you want editable code and project files
 themis init starter-eval
 ```
 
+Or start from a built-in benchmark definition:
+
+```bash
+themis quick-eval benchmark \
+  --benchmark mmlu_pro \
+  --model demo-model \
+  --provider demo \
+  --preview \
+  --format json
+```
+
+```bash
+themis init starter-mmlu --benchmark mmlu_pro
+```
+
 Then run the shipped hello-world benchmark when you want the smallest code-first example:
 
 ```bash

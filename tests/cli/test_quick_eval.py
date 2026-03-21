@@ -174,3 +174,150 @@ def test_quick_eval_huggingface_surfaces_missing_extra(
     )
 
     assert "themis-eval[datasets]" in capsys.readouterr().err
+
+
+def test_quick_eval_benchmark_preview_uses_builtin_catalog(capsys) -> None:
+    assert (
+        main(
+            [
+                "quick-eval",
+                "benchmark",
+                "--benchmark",
+                "mmlu_pro",
+                "--model",
+                "demo-model",
+                "--provider",
+                "demo",
+                "--preview",
+                "--format",
+                "json",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["mode"] == "benchmark"
+    assert payload["benchmark"] == "mmlu_pro"
+    assert (
+        "Return the best option letter only."
+        in payload["preview"][0]["messages"][0]["content"]
+    )
+
+
+def test_quick_eval_benchmark_defaults_to_8192_max_tokens(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from themis.cli import quick_eval as quick_eval_cli
+
+    observed: dict[str, object] = {}
+
+    class _StubDefinition:
+        benchmark_id = "mmlu_pro"
+        metric_id = "choice_accuracy"
+
+        def render_preview(self, **kwargs):
+            del kwargs
+            return [{"messages": [{"role": "user", "content": "preview"}]}]
+
+    def _stub_build_builtin_benchmark_project(**kwargs):
+        observed.update(kwargs)
+        return object(), object(), object(), object(), _StubDefinition()
+
+    monkeypatch.setattr(
+        quick_eval_cli,
+        "build_builtin_benchmark_project",
+        _stub_build_builtin_benchmark_project,
+    )
+
+    assert (
+        main(
+            [
+                "quick-eval",
+                "benchmark",
+                "--benchmark",
+                "mmlu_pro",
+                "--model",
+                "demo-model",
+                "--provider",
+                "demo",
+                "--preview",
+                "--format",
+                "json",
+                "--storage-root",
+                str(tmp_path / "benchmark-preview"),
+            ]
+        )
+        == 0
+    )
+
+    assert observed["max_tokens"] == 8192
+
+
+def test_quick_eval_benchmark_estimate_uses_builtin_dataset_loader(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    from themis import starter_catalog as starter_catalog_module
+
+    monkeypatch.setattr(
+        starter_catalog_module,
+        "load_huggingface_rows",
+        lambda dataset_id, split, revision: [
+            {"question_id": 1, "question": "2 + 2", "options": ["4"], "answer": "A"},
+            {"question_id": 2, "question": "3 + 3", "options": ["6"], "answer": "A"},
+            {"question_id": 3, "question": "4 + 4", "options": ["8"], "answer": "A"},
+        ],
+    )
+
+    assert (
+        main(
+            [
+                "quick-eval",
+                "benchmark",
+                "--benchmark",
+                "mmlu_pro",
+                "--model",
+                "demo-model",
+                "--provider",
+                "demo",
+                "--subset",
+                "2",
+                "--estimate-only",
+                "--format",
+                "json",
+                "--storage-root",
+                str(tmp_path / "benchmark-estimate"),
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["benchmark"] == "mmlu_pro"
+    assert payload["estimate"]["trial_count"] == 2
+
+
+def test_quick_eval_benchmark_requires_explicit_judge_config(
+    tmp_path: Path, capsys
+) -> None:
+    assert (
+        main(
+            [
+                "quick-eval",
+                "benchmark",
+                "--benchmark",
+                "simpleqa_verified",
+                "--model",
+                "demo-model",
+                "--provider",
+                "demo",
+                "--format",
+                "json",
+                "--storage-root",
+                str(tmp_path / "missing-judge"),
+            ]
+        )
+        == 1
+    )
+
+    assert "judge" in capsys.readouterr().err.lower()
