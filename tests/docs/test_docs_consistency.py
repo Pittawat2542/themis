@@ -17,9 +17,15 @@ def test_readme_and_intro_are_benchmark_first() -> None:
     assert "ExperimentSpec" not in intro
 
 
-def test_quick_start_embeds_current_example_and_storage_root() -> None:
+def test_quick_start_promotes_cli_onboarding_and_example_follow_up() -> None:
     quick_start = (PROJECT_ROOT / "docs/quick-start/index.md").read_text()
 
+    assert "themis quick-eval inline" in quick_start
+    assert "themis init starter-eval" in quick_start
+    assert (
+        ".cache/themis/quick-eval/inline-demo-model-exact-match/themis.sqlite3"
+        in quick_start
+    )
     assert '--8<-- "examples/01_hello_world.py"' in quick_start
     assert "uv run python examples/01_hello_world.py" in quick_start
     assert (

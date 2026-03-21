@@ -46,7 +46,30 @@ Add extras only when needed:
 
 ## Quick Start
 
-Run the shipped hello-world benchmark:
+Start with a zero-friction smoke evaluation:
+
+```bash
+themis quick-eval inline \
+  --model demo-model \
+  --provider demo \
+  --input "2 + 2" \
+  --expected "4" \
+  --format json
+```
+
+That writes a SQLite store under:
+
+```text
+.cache/themis/quick-eval/inline-demo-model-exact-match/themis.sqlite3
+```
+
+Initialize a real project scaffold when you want editable code and project files:
+
+```bash
+themis init starter-eval
+```
+
+Then run the shipped hello-world benchmark when you want the smallest code-first example:
 
 ```bash
 uv run python examples/01_hello_world.py
