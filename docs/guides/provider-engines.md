@@ -18,8 +18,17 @@ class MyEngine:
         ]
         tools = [tool.model_dump(mode="json") for tool in trial.tools]
         tool_handlers = runtime.tool_handlers
+        seed = trial.params.seed
         ...
 ```
+
+Use `trial.params.seed` as the authoritative seed to forward to provider
+requests when the backend supports deterministic seeding. `runtime.candidate_seed`
+mirrors the same effective value for backwards compatibility with older engines.
+The persisted trial-level spec remains the planned `TrialSpec`; executed
+generation params are exposed on candidate projections and candidate timeline
+views instead. Some providers only accept 32-bit seeds, so engines may need to
+truncate before forwarding, for example with `trial.params.seed & 0xFFFFFFFF`.
 
 ## What Themis Preserves
 
@@ -29,6 +38,8 @@ class MyEngine:
 - `runtime.tool_handlers` contains the matching opaque runtime handlers registered for those tool IDs
 - `trial.prompt.id`, `trial.prompt.family`, and `trial.prompt.variables` stay available for routing and logging
 - `trial.task.dimensions`, `trial.task.slice_id`, and `trial.task.benchmark_id` stay available for request metadata and reporting
+- `trial.params.seed` carries the effective deterministic seed for the current candidate when generation seeding is available
+- projected candidates expose `effective_seed` and `effective_inference_params_hash` for the executed generation request
 - `InferenceRecord.raw_text` should contain the terminal non-tool assistant answer when the engine runs an internal agent loop
 - `InferenceResult.conversation` can carry the full tool and node trace back into Themis timelines
 

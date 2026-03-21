@@ -11,7 +11,7 @@ from themis.records.timeline import RecordTimeline
 
 
 class CandidateRecord(RecordBase):
-    """Groups all artifacts produced for one candidate sample through the pipeline."""
+    """Groups candidate artifacts plus executed generation metadata for one sample."""
 
     candidate_id: str | None = Field(
         default=None,
@@ -34,6 +34,16 @@ class CandidateRecord(RecordBase):
     )
 
     inference: InferenceRecord | None = None
+
+    effective_seed: int | None = Field(
+        default=None,
+        description="Executed generation seed for this candidate after defaults are applied.",
+    )
+
+    effective_inference_params_hash: str | None = Field(
+        default=None,
+        description="Hash of the executed InferenceParamsSpec used for this candidate.",
+    )
 
     extractions: list[ExtractionRecord] = Field(default_factory=list)
 

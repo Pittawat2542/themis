@@ -254,6 +254,7 @@ def _planned_trial_id(
     prompt: PromptTemplateSpec,
     params: InferenceParamsSpec,
     item: DataItemContext,
+    project_seed: int | None = 7,
 ) -> str:
     item_str = json.dumps(
         {
@@ -265,6 +266,7 @@ def _planned_trial_id(
     )
     composite = "".join(
         [
+            f"project_seed:{project_seed}",
             model.spec_hash,
             task.spec_hash,
             prompt.spec_hash,
@@ -605,6 +607,38 @@ def test_run_executes_generation_then_transforms_then_evaluations() -> None:
     assert trial is not None
     assert trial.candidates[0].evaluation is not None
     assert trial.candidates[0].evaluation.aggregate_scores["em"] == 1.0
+
+
+def test_run_does_not_reuse_generation_when_project_seed_changes(tmp_path) -> None:
+    registry, engine = _build_registry()
+    storage_root = tmp_path / "runs"
+    project_a = ProjectSpec(
+        project_name="lab-project",
+        researcher_id="researcher-1",
+        global_seed=7,
+        storage=StorageSpec(root_dir=str(storage_root)),
+        execution_policy=ExecutionPolicySpec(),
+    )
+    project_b = project_a.model_copy(update={"global_seed": 8})
+
+    orchestrator_a = Orchestrator.from_project_spec(
+        project_a,
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+    orchestrator_b = Orchestrator.from_project_spec(
+        project_b,
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    result_a = orchestrator_a.run(_build_experiment(), runtime=RuntimeContext())
+    assert len(engine.seen_questions) == 4
+
+    result_b = orchestrator_b.run(_build_experiment(), runtime=RuntimeContext())
+
+    assert len(engine.seen_questions) == 8
+    assert result_a.trial_hashes != result_b.trial_hashes
 
 
 def test_generate_skips_transform_and_metric_validation() -> None:

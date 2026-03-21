@@ -16,7 +16,7 @@ from themis.types.json_types import JSONValueType
 
 
 class RecordTimelineView(BaseModel):
-    """Analysis-oriented single-record projection over timelines and related artifacts."""
+    """Analysis-oriented projection over planned trial data plus executed record details."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -30,6 +30,8 @@ class RecordTimelineView(BaseModel):
     timeline: RecordTimeline
     conversation: Conversation | None = None
     inference: InferenceRecord | None = None
+    effective_seed: int | None = None
+    effective_inference_params_hash: str | None = None
     extractions: list[ExtractionRecord] = Field(default_factory=list)
     evaluation: EvaluationRecord | None = None
     judge_audit: JudgeAuditTrail | None = None

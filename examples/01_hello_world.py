@@ -73,6 +73,9 @@ def main() -> None:
             SliceSpec(
                 slice_id="arithmetic",
                 dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                # Use an explicit seed for a reproducible sampled subset. If
+                # omitted, count-based sampling stays deterministic and follows
+                # provider order instead of randomizing.
                 dataset_query=DatasetQuerySpec.subset(1, seed=7),
                 dimensions={"source": "synthetic", "format": "qa"},
                 prompt_variant_ids=["qa-default"],

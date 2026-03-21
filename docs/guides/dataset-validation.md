@@ -2,6 +2,8 @@
 
 Use this guide before a large run when you want to verify that your
 `dataset_loader` is deterministic, JSON-safe, and compatible with sampling.
+For query-aware dataset providers, the same determinism requirement applies to
+`scan(slice_spec, query)` as well.
 
 ## Start From the Loader Directly
 
@@ -126,6 +128,8 @@ benchmark = benchmark.model_copy(
 ## Common Failure Patterns
 
 - changing item order between runs: breaks reproducibility and makes slices drift
+- treating `seed=None` as permission to randomize: Themis expects deterministic
+  order-based behavior when count-based sampling omits a seed
 - non-string metadata values: makes `metadata_filters` ineffective
 - missing IDs on regression sets: makes failure triage painful
 - huge provider objects in the payload: bloats storage and export bundles

@@ -248,6 +248,7 @@ class TrialEventEmitter:
     ) -> None:
         if candidate.inference is None:
             return
+        self.event_repo.save_spec(trial.params)
         token_usage = candidate.inference.token_usage
         inference_payload = candidate.inference.model_dump(mode="json")
         inference_artifact = artifact_ref(
@@ -265,6 +266,7 @@ class TrialEventEmitter:
                 provider=trial.model.provider,
                 model_id=trial.model.model_id,
                 inference_params_hash=trial.params.spec_hash,
+                effective_seed=candidate.effective_seed,
                 provider_request_id=candidate.inference.provider_request_id,
                 token_usage=(
                     token_usage.model_dump(mode="json")

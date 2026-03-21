@@ -15,7 +15,8 @@ class JudgeCallRecord(RecordBase):
         ..., description="The ID of the metric that requested the judgement."
     )
     judge_spec: JudgeInferenceSpec = Field(
-        ..., description="The requested configuration of the judge model."
+        ...,
+        description="The executed judge-model configuration, including applied seed defaults.",
     )
     rendered_prompt: list[PromptMessage] = Field(
         default_factory=list,

@@ -1,5 +1,4 @@
 from collections.abc import Callable, Mapping
-import time
 from typing import cast
 
 from themis.contracts.protocols import (
@@ -8,6 +7,7 @@ from themis.contracts.protocols import (
     InferenceResult,
     JudgeService,
 )
+from themis.orchestration.seeding import derive_judge_seed, judge_call_id
 from themis.records.candidate import CandidateRecord
 from themis.records.inference import InferenceRecord
 from themis.records.judge import JudgeCallRecord, JudgeAuditTrail
@@ -79,13 +79,31 @@ class DefaultJudgeService(JudgeService):
                 generation=GenerationSpec(),
             )
 
+        candidate_hash = parent_candidate.candidate_id or parent_candidate.spec_hash
+        judge_call_index = len(self.calls.get(parent_candidate.spec_hash, []))
+        engine_runtime = _coerce_runtime_context(runtime.get("runtime_context"))
+        effective_params = judge_spec.params
+        if judge_spec.params.seed is None:
+            effective_params = judge_spec.params.model_copy(
+                update={
+                    "seed": derive_judge_seed(
+                        engine_runtime.candidate_seed,
+                        metric_id,
+                        judge_call_index,
+                    )
+                }
+            )
+        effective_judge_spec = judge_spec.model_copy(
+            update={"params": effective_params}
+        )
+
         judge_trial = TrialSpec(
-            trial_id=f"judge_{parent_candidate.spec_hash}_{metric_id}_{time.time_ns()}",
-            model=judge_spec.model,
+            trial_id=judge_call_id(candidate_hash, metric_id, judge_call_index),
+            model=effective_judge_spec.model,
             task=task_spec,
             item_id=parent_candidate.spec_hash,
             prompt=prompt,
-            params=judge_spec.params,
+            params=effective_judge_spec.params,
             candidate_count=1,
         )
 
@@ -93,7 +111,6 @@ class DefaultJudgeService(JudgeService):
         dataset_context = runtime.get("dataset_context", {})
         if not isinstance(dataset_context, Mapping):
             dataset_context = {}
-        engine_runtime = _coerce_runtime_context(runtime.get("runtime_context"))
         inf_record = _coerce_inference_result(
             engine.infer(
                 judge_trial,
@@ -106,7 +123,7 @@ class DefaultJudgeService(JudgeService):
         call_record = JudgeCallRecord(
             spec_hash=inf_record.spec_hash,
             metric_id=metric_id,
-            judge_spec=judge_spec,
+            judge_spec=effective_judge_spec,
             rendered_prompt=list(prompt.messages),
             inference=inf_record,
         )

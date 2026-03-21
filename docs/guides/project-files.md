@@ -7,7 +7,7 @@ Project files are for shared runtime policy, not for benchmark semantics.
 - storage root
 - storage backend
 - execution policy
-- project seed
+- project seed used as the default deterministic seed namespace for planning and execution
 
 ## Keep in Python
 

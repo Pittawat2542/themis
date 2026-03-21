@@ -1,4 +1,5 @@
 import pytest
+import themis.orchestration.trial_planner as trial_planner_module
 from themis.benchmark.query import DatasetQuerySpec
 from themis.orchestration.trial_planner import TrialPlanner
 from themis.specs.experiment import (
@@ -381,6 +382,64 @@ def test_trial_hash_changes_when_transforms_or_evaluations_change():
     assert task_a.spec_hash != task_b.spec_hash
 
 
+def test_trial_hash_changes_when_project_seed_changes() -> None:
+    experiment = ExperimentSpec(
+        models=[ModelSpec(model_id="gpt-4", provider="openai")],
+        tasks=[
+            TaskSpec(
+                task_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+            )
+        ],
+        prompt_templates=[PromptTemplateSpec(messages=[])],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
+        num_samples=1,
+    )
+
+    class MockDatasetLoader:
+        def load_task_items(self, task: TaskSpec):
+            del task
+            return [{"item_id": "item-1", "question": "6 * 7"}]
+
+    planner_a = TrialPlanner(dataset_loader=MockDatasetLoader(), project_seed=7)
+    planner_b = TrialPlanner(dataset_loader=MockDatasetLoader(), project_seed=8)
+
+    planned_a = planner_a.plan_experiment(experiment)
+    planned_b = planner_b.plan_experiment(experiment)
+
+    assert planned_a[0].trial_spec.spec_hash != planned_b[0].trial_spec.spec_hash
+
+
+def test_trial_hash_changes_when_project_seed_changes_even_with_explicit_params_seed():
+    experiment = ExperimentSpec(
+        models=[ModelSpec(model_id="gpt-4", provider="openai")],
+        tasks=[
+            TaskSpec(
+                task_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+            )
+        ],
+        prompt_templates=[PromptTemplateSpec(messages=[])],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(seed=123)]),
+        num_samples=1,
+    )
+
+    class MockDatasetLoader:
+        def load_task_items(self, task: TaskSpec):
+            del task
+            return [{"item_id": "item-1", "question": "6 * 7"}]
+
+    planner_a = TrialPlanner(dataset_loader=MockDatasetLoader(), project_seed=7)
+    planner_b = TrialPlanner(dataset_loader=MockDatasetLoader(), project_seed=8)
+
+    planned_a = planner_a.plan_experiment(experiment)
+    planned_b = planner_b.plan_experiment(experiment)
+
+    assert planned_a[0].trial_spec.spec_hash != planned_b[0].trial_spec.spec_hash
+
+
 def test_trial_planner_can_validate_generation_stage_without_transform_or_metric_plugins():
     experiment = ExperimentSpec(
         models=[ModelSpec(model_id="gpt-4", provider="openai")],
@@ -550,3 +609,36 @@ def test_item_sampling_classmethods_preserve_sampling_behavior():
     )
     assert len(stratified_items) == 2
     assert {item["bucket"] for item in stratified_items} == {"a", "b"}
+
+
+def test_stratified_sampling_without_seed_uses_deterministic_prefix_selection(
+    monkeypatch,
+):
+    class _RandomMustNotBeUsedWithoutSeed:
+        def __init__(self, seed):
+            if seed is None:
+                raise AssertionError(
+                    "unseeded stratified sampling must be deterministic"
+                )
+
+        def sample(self, population, k):
+            return list(population[:k])
+
+    monkeypatch.setattr(
+        trial_planner_module.random, "Random", _RandomMustNotBeUsedWithoutSeed
+    )
+
+    planner = TrialPlanner()
+    items = [
+        {"item_id": "item-1", "bucket": "a"},
+        {"item_id": "item-2", "bucket": "a"},
+        {"item_id": "item-3", "bucket": "b"},
+        {"item_id": "item-4", "bucket": "b"},
+    ]
+
+    sampled = planner._sample_items(
+        items,
+        ItemSamplingSpec.stratified(2, strata_field="bucket"),
+    )
+
+    assert [item["item_id"] for item in sampled] == ["item-1", "item-3"]
