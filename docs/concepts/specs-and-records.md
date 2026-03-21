@@ -6,9 +6,10 @@
 | --- | --- |
 | `ProjectSpec` | Storage root, seed, and execution policy |
 | `BenchmarkSpec` | Top-level benchmark definition |
-| `SliceSpec` | One dataset slice, prompt scope, dimensions, parses, and scores |
+| `SliceSpec` | One dataset slice, prompt scope, dimensions, parses, scores, and explicit tool selection |
 | `DatasetQuerySpec` | Subset, item IDs, metadata filters, and sampling hints |
-| `PromptVariantSpec` | Prompt family plus message template |
+| `PromptVariantSpec` | Prompt family plus bootstrap messages and optional follow-up turns |
+| `ToolSpec` | Serializable tool definition selected onto agent-capable trials |
 | `ParseSpec` | Named parser pipeline |
 | `ScoreSpec` | Named scoring overlay |
 

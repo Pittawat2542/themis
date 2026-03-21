@@ -15,6 +15,7 @@ from themis.specs.experiment import (
     PostgresBlobStorageSpec,
     ProjectSpec,
     PromptMessage,
+    PromptTurnSpec,
     SqliteBlobStorageSpec,
     StorageSpec,
     TrialSpec,
@@ -31,6 +32,7 @@ from themis.specs.foundational import (
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
+    ToolSpec,
 )
 from themis.errors import SpecValidationError
 from themis.types.enums import (
@@ -82,8 +84,27 @@ def test_inference_params():
 
 
 def test_prompt_template_spec():
-    spec = PromptTemplateSpec(messages=[{"role": "user", "content": "Hello {name}"}])
+    spec = PromptTemplateSpec(
+        messages=[{"role": "developer", "content": "Hello {name}"}],
+        follow_up_turns=[
+            {
+                "messages": [
+                    {"role": "user", "content": "Question: {name}?"},
+                    {"role": "assistant", "content": "Thinking..."},
+                ]
+            }
+        ],
+    )
     assert spec.messages[0].content == "Hello {name}"
+    assert spec.messages[0].role == PromptRole.DEVELOPER
+    assert spec.follow_up_turns == [
+        PromptTurnSpec(
+            messages=[
+                PromptMessage(role=PromptRole.USER, content="Question: {name}?"),
+                PromptMessage(role=PromptRole.ASSISTANT, content="Thinking..."),
+            ]
+        )
+    ]
 
 
 def test_prompt_template_spec_rejects_unknown_message_keys():
@@ -94,9 +115,9 @@ def test_prompt_template_spec_rejects_unknown_message_keys():
 
 
 def test_prompt_message_requires_role_and_content():
-    message = PromptMessage(role=PromptRole.ASSISTANT, content="Done")
+    message = PromptMessage(role=PromptRole.DEVELOPER, content="Done")
 
-    assert message.role == "assistant"
+    assert message.role == "developer"
     assert message.content == "Done"
 
     with pytest.raises(ValidationError):
@@ -111,9 +132,17 @@ def test_trial_spec_validation():
         item_id="item_0",
         prompt=PromptTemplateSpec(messages=[{"role": "user", "content": "Q: {q}"}]),
         params=InferenceParamsSpec(),
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
         candidate_count=5,
     )
     assert trial.candidate_count == 5
+    assert trial.tools[0].id == "search"
 
     with pytest.raises(ValidationError, match="greater than or equal to 1"):
         TrialSpec(
@@ -133,10 +162,18 @@ def test_experiment_spec():
         tasks=[_make_task()],
         prompt_templates=[PromptTemplateSpec(messages=[])],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(temperature=0.0)]),
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
         item_sampling=ItemSamplingSpec(kind="all"),
     )
     assert len(spec.models) == 1
     assert spec.item_sampling.kind == SamplingKind.ALL
+    assert spec.tools[0].id == "search"
 
 
 def test_experiment_spec_empty_validation():
@@ -158,12 +195,35 @@ def test_project_spec():
         global_seed=42,
         storage=SqliteBlobStorageSpec(root_dir="./runs/eval_run_1"),
         execution_policy=ExecutionPolicySpec(),
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
     )
     assert proj.project_name == "eval_run_1"
     assert proj.storage.backend == StorageBackend.SQLITE_BLOB
     assert proj.storage.compression == CompressionCodec.ZSTD
     assert isinstance(proj.execution_backend, LocalExecutionBackendSpec)
     assert proj.execution_backend.kind == "local"
+    assert proj.tools[0].id == "search"
+
+
+def test_runtime_context_excludes_tool_handlers_from_json_dump():
+    runtime = RuntimeContext(
+        run_labels={"phase": "smoke"},
+        tool_handlers={"search": object()},
+    )
+
+    assert runtime.model_dump(mode="json") == {
+        "secrets": {},
+        "environment": {},
+        "run_labels": {"phase": "smoke"},
+        "candidate_seed": None,
+        "resume": None,
+    }
 
 
 def test_project_spec_supports_postgres_blob_storage():

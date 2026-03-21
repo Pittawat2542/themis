@@ -82,6 +82,7 @@ def test_plugin_registry_registration():
     registry.register_extractor(
         "dummy", DummyExtractor, version="0.1.0", plugin_api="1.0"
     )
+    registry.register_tool("search", {"callable": "opaque"})
 
     engine_registration = registry.get_inference_engine_registration("openai")
     assert engine_registration.version == "1.2.3"
@@ -90,9 +91,14 @@ def test_plugin_registry_registration():
     assert isinstance(registry.get_inference_engine("openai"), DummyEngine)
     assert isinstance(registry.get_metric("exact_match"), DummyMetric)
     assert isinstance(registry.get_extractor("dummy"), DummyExtractor)
+    assert registry.has_tool("search") is True
+    assert registry.get_tool("search") == {"callable": "opaque"}
 
     with pytest.raises(SpecValidationError):
         registry.get_extractor("nonexistent")
+
+    with pytest.raises(SpecValidationError):
+        registry.get_tool("nonexistent")
 
 
 def test_plugin_registry_removes_unused_extension_points():

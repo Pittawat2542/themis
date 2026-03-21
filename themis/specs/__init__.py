@@ -15,6 +15,7 @@ __all__ = [
     "ParseSpec",
     "ScoreSpec",
     "ModelSpec",
+    "ToolSpec",
     "DatasetSpec",
     "GenerationSpec",
     "JudgeInferenceSpec",
@@ -26,6 +27,7 @@ __all__ = [
     "InferenceParamsSpec",
     "InferenceGridSpec",
     "PromptMessage",
+    "PromptTurnSpec",
     "ProjectSpec",
 ]
 
@@ -37,6 +39,7 @@ _DYNAMIC_EXPORTS = {
     "ParseSpec": ("themis.benchmark.specs", "ParseSpec"),
     "ScoreSpec": ("themis.benchmark.specs", "ScoreSpec"),
     "ModelSpec": ("themis.specs.foundational", "ModelSpec"),
+    "ToolSpec": ("themis.specs.foundational", "ToolSpec"),
     "DatasetSpec": ("themis.specs.foundational", "DatasetSpec"),
     "GenerationSpec": ("themis.specs.foundational", "GenerationSpec"),
     "JudgeInferenceSpec": ("themis.specs.foundational", "JudgeInferenceSpec"),
@@ -48,6 +51,7 @@ _DYNAMIC_EXPORTS = {
     "InferenceParamsSpec": ("themis.specs.experiment", "InferenceParamsSpec"),
     "InferenceGridSpec": ("themis.specs.experiment", "InferenceGridSpec"),
     "PromptMessage": ("themis.specs.experiment", "PromptMessage"),
+    "PromptTurnSpec": ("themis.specs.experiment", "PromptTurnSpec"),
     "ProjectSpec": ("themis.specs.experiment", "ProjectSpec"),
 }
 

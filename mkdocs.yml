@@ -139,6 +139,7 @@ nav:
       - Example Catalog: guides/examples.md
       - Build a Dataset Provider: guides/dataset-loaders.md
       - Author Parse Pipelines and Scores: guides/plugins.md
+      - Author Agent Evaluations and Tools: guides/agent-evals-and-tools.md
       - Build a Provider Engine: guides/provider-engines.md
       - Author Project Files: guides/project-files.md
       - Hand Off Generation or Evaluation: guides/external-stage-handoffs.md

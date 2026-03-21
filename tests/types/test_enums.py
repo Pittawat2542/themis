@@ -99,6 +99,7 @@ def test_artifact_role_values():
 def test_prompt_role_values():
     assert set(PromptRole) == {
         PromptRole.SYSTEM,
+        PromptRole.DEVELOPER,
         PromptRole.USER,
         PromptRole.ASSISTANT,
         PromptRole.TOOL,

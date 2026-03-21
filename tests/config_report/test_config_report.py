@@ -15,6 +15,7 @@ from themis import (
     ProjectSpec,
     PromptMessage,
     SqliteBlobStorageSpec,
+    ToolSpec,
     generate_config_report,
 )
 from themis.config_report import (
@@ -24,7 +25,12 @@ from themis.config_report import (
 )
 from themis.config_report.renderers import ConfigReportRenderer
 from themis.config_report.types import ConfigReportFormat, ConfigReportVerbosity
-from themis.specs.experiment import ExperimentSpec, ItemSamplingSpec, PromptTemplateSpec
+from themis.specs.experiment import (
+    ExperimentSpec,
+    ItemSamplingSpec,
+    PromptTemplateSpec,
+    RuntimeContext,
+)
 from themis.specs.foundational import DatasetSpec, EvaluationSpec, TaskSpec
 from themis.types.enums import DatasetSource, PromptRole
 
@@ -120,7 +126,7 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     normalized_root_source = _normalized_path(root.source_file)
     assert normalized_root_source is not None
     assert normalized_root_source.endswith("themis/specs/experiment.py")
-    assert root.source_line == 79
+    assert root.source_line == 93
 
     max_tokens = next(
         parameter for parameter in root.parameters if parameter.name == "max_tokens"
@@ -134,7 +140,7 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     normalized_max_tokens_source = _normalized_path(max_tokens.source_file)
     assert normalized_max_tokens_source is not None
     assert normalized_max_tokens_source.endswith("themis/specs/experiment.py")
-    assert max_tokens.source_line == 89
+    assert max_tokens.source_line == 103
     assert max_tokens.declared_in == "InferenceParamsSpec"
 
 
@@ -161,6 +167,39 @@ def test_build_config_report_document_collects_nested_bundle_bottom_up() -> None
     assert task_item_node.path == "$.experiment.tasks[0]"
     assert task_item_node.depth == 3
     assert any(parameter.name == "task_id" for parameter in task_item_node.parameters)
+
+
+def test_build_config_report_document_includes_declared_tools_but_hides_runtime_handlers() -> (
+    None
+):
+    config = {
+        "project": _build_project().model_copy(
+            update={
+                "tools": [
+                    ToolSpec(
+                        id="search",
+                        description="Project search tool.",
+                        input_schema={"type": "object"},
+                    )
+                ]
+            }
+        ),
+        "runtime": RuntimeContext(
+            run_labels={"phase": "smoke"},
+            tool_handlers={"search": object()},
+        ),
+    }
+
+    root = build_config_report_document(config, entrypoint="tests:tools").root
+    project_node = _find_child(root, "project")
+    runtime_node = _find_child(root, "runtime")
+    tools_node = _find_child(project_node, "tools")
+
+    assert tools_node.children
+    assert all(
+        parameter.name != "tool_handlers" for parameter in runtime_node.parameters
+    )
+    assert all(child.name != "tool_handlers" for child in runtime_node.children)
 
 
 def test_build_config_report_document_resolves_inheritance_metadata() -> None:

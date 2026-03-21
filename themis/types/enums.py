@@ -116,6 +116,7 @@ class PromptRole(str, Enum):
     """Conversation role attached to prompts and tool traces."""
 
     SYSTEM = "system"
+    DEVELOPER = "developer"
     USER = "user"
     ASSISTANT = "assistant"
     TOOL = "tool"

@@ -1,14 +1,14 @@
-"""Compatibility checks for providers, extractors, metrics, and run stages."""
+"""Compatibility checks for providers, tools, extractors, metrics, and run stages."""
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 import warnings
 from typing import TYPE_CHECKING, TypeAlias
 
 from themis.errors import SpecValidationError
 from themis.registry.plugin_registry import PluginRegistry, SUPPORTED_PLUGIN_API_MAJOR
-from themis.specs.experiment import TrialSpec
+from themis.specs.experiment import ToolHandler, TrialSpec
 from themis.specs.foundational import EvaluationSpec, OutputTransformSpec
 from themis.types.enums import ErrorCode, RunStage
 from themis.types.issues import Issue
@@ -186,6 +186,37 @@ def check_generation_trial(trial: TrialSpec, registry: PluginRegistry) -> list[I
 def validate_generation_trial(trial: TrialSpec, registry: PluginRegistry) -> None:
     """Raise `SpecValidationError` when generation compatibility fails."""
     _raise_on_first_issue(check_generation_trial(trial, registry))
+
+
+def resolve_runtime_tool_handlers(
+    trial: TrialSpec,
+    registry: PluginRegistry,
+    *,
+    runtime_handlers: Mapping[str, ToolHandler],
+) -> dict[str, ToolHandler]:
+    """Resolve selected tool handlers using runtime overrides before registry entries."""
+
+    handlers: dict[str, ToolHandler] = {}
+    missing_tool_ids: list[str] = []
+    for tool in trial.tools:
+        if tool.id in runtime_handlers:
+            handlers[tool.id] = runtime_handlers[tool.id]
+            continue
+        if registry.has_tool(tool.id):
+            handlers[tool.id] = registry.get_tool(tool.id)
+            continue
+        missing_tool_ids.append(tool.id)
+    if missing_tool_ids:
+        missing_joined = ", ".join(sorted(set(missing_tool_ids)))
+        raise SpecValidationError(
+            code=ErrorCode.PLUGIN_INCOMPATIBLE,
+            message=(
+                f"Selected tool handler(s) not found for: {missing_joined}. "
+                "Register the tool in PluginRegistry or provide it in "
+                "RuntimeContext.tool_handlers before inference."
+            ),
+        )
+    return handlers
 
 
 def check_output_transform(

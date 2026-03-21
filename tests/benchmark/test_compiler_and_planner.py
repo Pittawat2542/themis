@@ -12,9 +12,11 @@ from themis import (
     ModelSpec,
     ParseSpec,
     PromptMessage,
+    PromptTurnSpec,
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
+    ToolSpec,
 )
 from themis.benchmark.specs import DatasetSliceSpec
 from themis.benchmark.compiler import compile_benchmark
@@ -24,7 +26,12 @@ from themis.specs.experiment import DataItemContext
 from themis.specs.experiment import ExperimentSpec
 from themis.specs.experiment import PromptTemplateSpec
 from themis.types.enums import DatasetSource, PromptRole, SamplingKind
-from themis.specs.foundational import DatasetSpec, ExtractorRefSpec, GenerationSpec
+from themis.specs.foundational import (
+    DatasetSpec,
+    ExtractorRefSpec,
+    GenerationSpec,
+    TaskSpec,
+)
 
 
 class RecordingDatasetProvider:
@@ -99,6 +106,275 @@ def test_compile_benchmark_maps_prompt_applicability_and_slice_metadata() -> Non
     assert task.allowed_prompt_template_ids == ["qa-default"]
     assert isinstance(task.dataset_query, DatasetQuerySpec)
     assert task.dataset_query.count == 5
+
+
+def test_compile_benchmark_preserves_follow_up_turns() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.DEVELOPER,
+                        content="Use tools carefully.",
+                    ),
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Solve: {item.question}",
+                    ),
+                ],
+                follow_up_turns=[
+                    PromptTurnSpec(
+                        messages=[
+                            PromptMessage(
+                                role=PromptRole.USER,
+                                content="Continue with {runtime.run_labels[phase]}",
+                            )
+                        ]
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    experiment = compile_benchmark(benchmark)
+
+    assert experiment.prompt_templates == [
+        PromptTemplateSpec(
+            id="agent-default",
+            family="agent",
+            messages=[
+                PromptMessage(
+                    role=PromptRole.DEVELOPER,
+                    content="Use tools carefully.",
+                ),
+                PromptMessage(
+                    role=PromptRole.USER,
+                    content="Solve: {item.question}",
+                ),
+            ],
+            follow_up_turns=[
+                PromptTurnSpec(
+                    messages=[
+                        PromptMessage(
+                            role=PromptRole.USER,
+                            content="Continue with {runtime.run_labels[phase]}",
+                        )
+                    ]
+                )
+            ],
+        )
+    ]
+
+
+def test_compile_benchmark_preserves_tool_ids() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search", "calculator"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            ),
+            ToolSpec(
+                id="calculator",
+                description="Calculate",
+                input_schema={"type": "object"},
+            ),
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    experiment = compile_benchmark(benchmark)
+
+    assert [tool.id for tool in experiment.tools] == ["search", "calculator"]
+    assert experiment.tasks[0].tool_ids == ["search", "calculator"]
+
+
+def test_compile_benchmark_rejects_unknown_slice_tool_ids() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                tool_ids=["missing-tool"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    with pytest.raises(ValueError, match="agent-bench.*agentic.*missing-tool"):
+        compile_benchmark(benchmark)
+
+
+def test_compile_benchmark_merges_project_tools_with_benchmark_overrides() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search", "calculator", "lookup"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Benchmark search override",
+                input_schema={"type": "object"},
+            ),
+            ToolSpec(
+                id="lookup",
+                description="Benchmark lookup",
+                input_schema={"type": "object"},
+            ),
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    experiment = compile_benchmark(
+        benchmark,
+        project_tools=[
+            ToolSpec(
+                id="search",
+                description="Project search",
+                input_schema={"type": "object"},
+            ),
+            ToolSpec(
+                id="calculator",
+                description="Project calculator",
+                input_schema={"type": "object"},
+            ),
+        ],
+    )
+
+    assert [tool.id for tool in experiment.tools] == ["search", "calculator", "lookup"]
+    assert {tool.id: tool.description for tool in experiment.tools} == {
+        "search": "Benchmark search override",
+        "calculator": "Project calculator",
+        "lookup": "Benchmark lookup",
+    }
+
+
+def test_compile_benchmark_rejects_unknown_slice_tool_ids_from_unvalidated_copy() -> (
+    None
+):
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    ).model_copy(
+        update={
+            "slices": [
+                SliceSpec(
+                    slice_id="agentic",
+                    dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                    prompt_variant_ids=["agent-default"],
+                    generation=GenerationSpec(),
+                    tool_ids=["search"],
+                ).model_copy(update={"tool_ids": ["missing-tool"]})
+            ]
+        }
+    )
+
+    with pytest.raises(ValueError, match="agent-bench.*agentic.*missing-tool"):
+        compile_benchmark(benchmark)
 
 
 def test_trial_planner_uses_dataset_provider_query_pushdown_and_prompt_filters() -> (
@@ -219,6 +495,154 @@ def test_trial_planner_rejects_unmatched_prompt_variant_ids() -> None:
                 params=[InferenceParamsSpec(max_tokens=32)]
             ),
         )
+
+
+def test_trial_planner_materializes_selected_tools_on_trial_specs() -> None:
+    experiment = ExperimentSpec(
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        tasks=[
+            TaskSpec(
+                task_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+                tool_ids=["search"],
+            )
+        ],
+        prompt_templates=[
+            PromptTemplateSpec(
+                id="agent-default",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Question: {item.question}",
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            ),
+            ToolSpec(
+                id="calculator",
+                description="Calculate",
+                input_schema={"type": "object"},
+            ),
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    planner = TrialPlanner(dataset_provider=RecordingDatasetProvider())
+
+    planned_trials = planner.plan_experiment(experiment)
+
+    assert len(planned_trials) == 1
+    assert [tool.id for tool in planned_trials[0].trial_spec.tools] == ["search"]
+
+
+def test_trial_planner_rejects_unknown_task_tool_ids() -> None:
+    experiment = ExperimentSpec(
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        tasks=[
+            TaskSpec(
+                task_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                generation=GenerationSpec(),
+                tool_ids=["missing-tool"],
+            )
+        ],
+        prompt_templates=[
+            PromptTemplateSpec(
+                id="agent-default",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Question: {item.question}",
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    planner = TrialPlanner(dataset_provider=RecordingDatasetProvider())
+
+    with pytest.raises(SpecValidationError, match="missing-tool"):
+        planner.plan_experiment(experiment)
+
+
+def test_trial_planner_plan_benchmark_merges_project_tools() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search", "calculator"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Benchmark search override",
+                input_schema={"type": "object"},
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    planner = TrialPlanner(dataset_provider=RecordingDatasetProvider())
+
+    planned_trials = planner.plan_benchmark(
+        benchmark,
+        project_tools=[
+            ToolSpec(
+                id="search",
+                description="Project search",
+                input_schema={"type": "object"},
+            ),
+            ToolSpec(
+                id="calculator",
+                description="Project calculator",
+                input_schema={"type": "object"},
+            ),
+        ],
+    )
+
+    assert len(planned_trials) == 1
+    assert [tool.id for tool in planned_trials[0].trial_spec.tools] == [
+        "search",
+        "calculator",
+    ]
+    assert {
+        tool.id: tool.description for tool in planned_trials[0].trial_spec.tools
+    } == {
+        "search": "Benchmark search override",
+        "calculator": "Project calculator",
+    }
 
 
 def test_slice_spec_rejects_duplicate_parse_names() -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from themis import PromptMessage
-from themis.prompting import render_prompt_messages
+from themis import PromptMessage, PromptTurnSpec
+from themis.prompting import render_follow_up_turns, render_prompt_messages
 from themis.types.enums import PromptRole
 
 
@@ -43,3 +43,36 @@ def test_render_prompt_messages_preserves_placeholder_for_deep_missing_access() 
     )
 
     assert rendered == [{"role": "user", "content": "Question: {item}"}]
+
+
+def test_render_follow_up_turns_uses_benchmark_namespaces() -> None:
+    rendered = render_follow_up_turns(
+        [
+            PromptTurnSpec(
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.DEVELOPER,
+                        content="Re-check {prompt.family}.",
+                    ),
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Question: {item.question} [{runtime.run_labels[phase]}]",
+                    ),
+                ]
+            )
+        ],
+        {
+            "item": {"question": "2 + 2"},
+            "prompt": {"family": "qa"},
+            "runtime": {"run_labels": {"phase": "turn-2"}},
+        },
+    )
+
+    assert rendered == [
+        {
+            "messages": [
+                {"role": "developer", "content": "Re-check qa."},
+                {"role": "user", "content": "Question: 2 + 2 [turn-2]"},
+            ]
+        }
+    ]

@@ -8,9 +8,10 @@ Themis now documents one benchmark-first public API.
 | --- | --- |
 | `ProjectSpec` | Shared storage, seed, and execution policy |
 | `BenchmarkSpec` | Models, slices, prompt variants, parse pipelines, and scores |
-| `SliceSpec` | One benchmark slice with dataset config, dimensions, and allowed prompts |
+| `SliceSpec` | One benchmark slice with dataset config, dimensions, allowed prompts, and explicit tool selection |
 | `DatasetQuerySpec` | Subset, filters, item pinning, and sampling hints |
-| `PromptVariantSpec` | A reusable prompt family and message template |
+| `PromptVariantSpec` | A reusable prompt family with bootstrap messages and optional follow-up turns |
+| `ToolSpec` | A serializable tool definition passed to selected agent-capable trials |
 | `ParseSpec` | A named parser pipeline |
 | `ScoreSpec` | A named scoring overlay, optionally tied to a parse pipeline |
 | `PluginRegistry` | Runtime lookup for engines, parsers, metrics, judges, and hooks |
@@ -30,10 +31,14 @@ Use this split when deciding where logic belongs:
 
 - project-wide runtime policy: `ProjectSpec`
 - benchmark semantics: `BenchmarkSpec`
+- agent and tool authoring: bootstrap prompt variants plus `ToolSpec` and `SliceSpec.tool_ids`
 - provider-specific execution: `InferenceEngine`
 - answer parsing: `ParseSpec` + extractor chain
 - scoring: `ScoreSpec` + metrics
 - read-side analysis: `BenchmarkResult`
+
+For the full agent and tool authoring flow, see
+[Author Agent Evaluations and Tools](../guides/agent-evals-and-tools.md).
 
 ## Public Imports
 
@@ -49,9 +54,11 @@ from themis import (
     PluginRegistry,
     ProjectSpec,
     PromptMessage,
+    PromptTurnSpec,
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
+    ToolSpec,
     generate_config_report,
 )
 ```

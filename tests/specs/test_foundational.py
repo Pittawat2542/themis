@@ -11,6 +11,7 @@ from themis.specs.foundational import (
     ModelSpec,
     RenameFieldTransform,
     TaskSpec,
+    ToolSpec,
 )
 from themis.benchmark.query import DatasetQuerySpec
 from themis.specs.experiment import InferenceParamsSpec, ItemSamplingSpec
@@ -24,6 +25,19 @@ def test_model_spec():
     assert spec.model_id == "gpt-4"
     assert spec.provider == "openai"
     assert spec.extras["api_version"] == "2024-02-15"
+
+
+def test_tool_spec():
+    spec = ToolSpec(
+        id="search",
+        description="Search the corpus.",
+        input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+        extras={"source": "project"},
+    )
+
+    assert spec.id == "search"
+    assert spec.input_schema["type"] == "object"
+    assert spec.extras == {"source": "project"}
 
 
 def test_dataset_spec():
@@ -56,8 +70,10 @@ def test_task_spec():
         task_id="math_eval",
         dataset=dataset,
         generation=GenerationSpec(),
+        tool_ids=["search"],
     )
     assert spec.task_id == "math_eval"
+    assert spec.tool_ids == ["search"]
 
 
 def test_task_spec_validation():

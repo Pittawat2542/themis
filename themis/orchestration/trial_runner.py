@@ -29,8 +29,9 @@ from themis.orchestration.trial_finalizer import TrialFinalizer
 from themis.records.candidate import CandidateRecord
 from themis.records.provenance import ProvenanceRecord
 from themis.records.trial import TrialRecord
+from themis.registry.compatibility import resolve_runtime_tool_handlers
 from themis.registry.plugin_registry import PluginRegistry
-from themis.specs.experiment import RuntimeContext, TrialSpec
+from themis.specs.experiment import RuntimeContext, ToolHandler, TrialSpec
 from themis.storage.artifact_store import ArtifactStore
 from themis.telemetry.bus import TelemetryBus
 from themis.types.enums import ErrorCode, RecordStatus
@@ -150,11 +151,19 @@ class TrialRunner:
         prepared_trial = resolved_plugins.hooks.apply_pre_inference(
             prepare_benchmark_prompt(trial, dataset_context, base_runtime)
         )
+        prepared_runtime = base_runtime.model_copy(
+            update={
+                "tool_handlers": self._resolve_tool_handlers(
+                    prepared_trial,
+                    base_runtime=base_runtime,
+                )
+            }
+        )
         session = self.session_preparer.prepare_trial_session(
             trial,
             prepared_trial,
             dataset_context,
-            base_runtime,
+            prepared_runtime,
             provenance,
         )
         session.resolved_plugins = resolved_plugins
@@ -321,6 +330,18 @@ class TrialRunner:
         if isinstance(runtime_context, Mapping):
             return RuntimeContext.model_validate(dict(runtime_context))
         raise TypeError("runtime_context must be a RuntimeContext, mapping, or None.")
+
+    def _resolve_tool_handlers(
+        self,
+        trial: TrialSpec,
+        *,
+        base_runtime: RuntimeContext,
+    ) -> dict[str, ToolHandler]:
+        return resolve_runtime_tool_handlers(
+            trial,
+            self.registry,
+            runtime_handlers=base_runtime.tool_handlers,
+        )
 
     def _build_provenance(self) -> ProvenanceRecord:
         return ProvenanceRecord(

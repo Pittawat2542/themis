@@ -69,7 +69,11 @@ class ResolvedPipelineHooks:
         )
 
     def apply_pre_inference(self, trial: TrialSpec) -> TrialSpec:
-        prompt = RenderedPrompt(messages=list(trial.prompt.messages))
+        prompt = RenderedPrompt(
+            messages=list(trial.prompt.messages),
+            follow_up_turns=list(trial.prompt.follow_up_turns),
+            tools=list(trial.tools),
+        )
         for hook in self.pre_inference:
             prompt = hook(trial, prompt)
         return trial.model_copy(
@@ -79,7 +83,9 @@ class ResolvedPipelineHooks:
                     family=trial.prompt.family,
                     variables=dict(trial.prompt.variables),
                     messages=prompt.messages,
-                )
+                    follow_up_turns=prompt.follow_up_turns,
+                ),
+                "tools": prompt.tools,
             }
         )
 

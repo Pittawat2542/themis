@@ -9,7 +9,11 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from themis.benchmark.compiler import compile_benchmark
+from themis.benchmark.compiler import (
+    compile_benchmark,
+    merge_tool_specs,
+    normalize_benchmark_spec,
+)
 from themis.benchmark.specs import BenchmarkSpec
 from themis.contracts.protocols import DatasetLoader
 from themis.contracts.protocols import DatasetProvider
@@ -636,16 +640,24 @@ class Orchestrator:
         self,
         source_spec: ExperimentSpec | BenchmarkSpec,
     ) -> _NormalizedSourceSpec:
+        project_tools = self.project_spec.tools if self.project_spec is not None else []
         if isinstance(source_spec, BenchmarkSpec):
+            merged_benchmark = normalize_benchmark_spec(
+                source_spec,
+                project_tools=project_tools,
+            )
             return _NormalizedSourceSpec(
                 source_kind="benchmark",
-                source_spec=source_spec,
-                experiment_spec=compile_benchmark(source_spec),
-                benchmark_spec=source_spec,
+                source_spec=merged_benchmark,
+                experiment_spec=compile_benchmark(merged_benchmark),
+                benchmark_spec=merged_benchmark,
             )
+        merged_experiment = source_spec.model_copy(
+            update={"tools": merge_tool_specs(project_tools, list(source_spec.tools))}
+        )
         return _NormalizedSourceSpec(
             source_kind="experiment",
-            source_spec=source_spec,
-            experiment_spec=source_spec,
+            source_spec=merged_experiment,
+            experiment_spec=merged_experiment,
             benchmark_spec=None,
         )

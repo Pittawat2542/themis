@@ -18,13 +18,14 @@ from themis.specs.experiment import (
     InferenceParamsSpec,
     PostgresBlobStorageSpec,
     PromptMessage,
+    PromptTurnSpec,
     ProjectSpec,
     SqliteBlobStorageSpec,
     StorageConfig,
     StorageSpec,
 )
-from themis.specs.foundational import ModelSpec
 from themis.registry.plugin_registry import PluginRegistry
+from themis.specs.foundational import ModelSpec, ToolSpec
 
 __all__ = [
     "__version__",
@@ -44,8 +45,10 @@ __all__ = [
     "ExecutionPolicySpec",
     "InferenceGridSpec",
     "PromptMessage",
+    "PromptTurnSpec",
     "InferenceParamsSpec",
     "ModelSpec",
+    "ToolSpec",
     "PluginRegistry",
     "generate_config_report",
 ]

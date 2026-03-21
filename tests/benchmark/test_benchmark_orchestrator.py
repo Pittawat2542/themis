@@ -18,12 +18,15 @@ from themis import (
     PluginRegistry,
     ProjectSpec,
     PromptMessage,
+    PromptTurnSpec,
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
     StorageSpec,
+    ToolSpec,
 )
 from themis.contracts.protocols import InferenceResult
+from themis.contracts.protocols import RenderedPrompt
 from themis.orchestration.run_manifest import RunHandle
 from themis.records import InferenceRecord, MetricScore
 from themis.specs.experiment import RuntimeContext
@@ -216,6 +219,324 @@ def test_orchestrator_runs_benchmark_and_returns_benchmark_result(
             "source": "synthetic",
         }
     ]
+
+
+def test_orchestrator_renders_bootstrap_and_follow_up_turns_for_agent_prompts(
+    tmp_path: Path,
+) -> None:
+    seen: dict[str, object] = {}
+
+    class AgentEngine:
+        def infer(self, trial, context, runtime):
+            del context, runtime
+            seen["bootstrap"] = [
+                (message.role.value, message.content)
+                for message in trial.prompt.messages
+            ]
+            seen["follow_up_turns"] = [
+                [(message.role.value, message.content) for message in turn.messages]
+                for turn in trial.prompt.follow_up_turns
+            ]
+            return InferenceResult(
+                inference=InferenceRecord(
+                    spec_hash="inf_rendered_agent",
+                    raw_text="4",
+                )
+            )
+
+    class RenderingMetric:
+        def score(self, trial, candidate, context):
+            del trial, candidate, context
+            return MetricScore(metric_id="exact_match", value=1.0)
+
+    project = _build_project(tmp_path)
+    registry = PluginRegistry()
+    registry.register_inference_engine("demo", AgentEngine())
+    registry.register_metric("exact_match", RenderingMetric())
+
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_provider=DemoDatasetProvider(),
+    )
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-benchmark",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                dataset_query=DatasetQuerySpec.subset(1, seed=7),
+                dimensions={"source": "synthetic"},
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.DEVELOPER,
+                        content="Follow {prompt.family}.",
+                    ),
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Solve: {item.question}",
+                    ),
+                ],
+                follow_up_turns=[
+                    PromptTurnSpec(
+                        messages=[
+                            PromptMessage(
+                                role=PromptRole.USER,
+                                content="Double check in {runtime.run_labels[phase]} mode.",
+                            )
+                        ]
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=16)]),
+    )
+
+    result = orchestrator.run_benchmark(
+        benchmark,
+        runtime=RuntimeContext(run_labels={"phase": "turn-2"}),
+    )
+
+    assert isinstance(result, BenchmarkResult)
+    assert seen == {
+        "bootstrap": [
+            ("developer", "Follow agent."),
+            ("user", "Solve: 2 + 2"),
+        ],
+        "follow_up_turns": [[("user", "Double check in turn-2 mode.")]],
+    }
+
+
+def test_orchestrator_merges_project_and_benchmark_tools_and_injects_handlers(
+    tmp_path: Path,
+) -> None:
+    search_handler = object()
+    calculator_handler = object()
+    seen: dict[str, object] = {}
+
+    class ToolAwareEngine:
+        def infer(self, trial, context, runtime):
+            del context
+            seen["tool_descriptions"] = {
+                tool.id: tool.description for tool in trial.tools
+            }
+            seen["tool_handler_keys"] = sorted(runtime.tool_handlers)
+            seen["tool_handler_identity"] = runtime.tool_handlers["search"]
+            return InferenceResult(
+                inference=InferenceRecord(spec_hash="inf_tooling", raw_text="4")
+            )
+
+    class RenderingMetric:
+        def score(self, trial, candidate, context):
+            del trial, candidate, context
+            return MetricScore(metric_id="exact_match", value=1.0)
+
+    project = _build_project(tmp_path).model_copy(
+        update={
+            "tools": [
+                ToolSpec(
+                    id="search",
+                    description="Project search",
+                    input_schema={"type": "object"},
+                ),
+                ToolSpec(
+                    id="calculator",
+                    description="Project calculator",
+                    input_schema={"type": "object"},
+                ),
+            ]
+        }
+    )
+    registry = PluginRegistry()
+    registry.register_inference_engine("demo", ToolAwareEngine())
+    registry.register_metric("exact_match", RenderingMetric())
+    registry.register_tool("search", search_handler)
+    registry.register_tool("calculator", calculator_handler)
+
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_provider=DemoDatasetProvider(),
+    )
+    benchmark = BenchmarkSpec(
+        benchmark_id="tool-benchmark",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                dataset_query=DatasetQuerySpec.subset(1, seed=7),
+                prompt_variant_ids=["qa-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search", "calculator"],
+                scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="qa-default",
+                family="qa",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Benchmark search override",
+                input_schema={
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                },
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=16)]),
+    )
+
+    result = orchestrator.run_benchmark(benchmark)
+
+    assert isinstance(result, BenchmarkResult)
+    assert seen["tool_descriptions"] == {
+        "search": "Benchmark search override",
+        "calculator": "Project calculator",
+    }
+    assert seen["tool_handler_keys"] == ["calculator", "search"]
+    assert seen["tool_handler_identity"] is search_handler
+
+
+def test_pre_inference_hook_can_mutate_tools_without_losing_follow_up_turns(
+    tmp_path: Path,
+) -> None:
+    search_handler = object()
+    calculator_handler = object()
+    seen: dict[str, object] = {}
+
+    class FilteringHook:
+        def pre_inference(self, trial, prompt: RenderedPrompt) -> RenderedPrompt:
+            del trial
+            seen["hook_tool_ids"] = [tool.id for tool in prompt.tools]
+            seen["hook_follow_up_turns"] = len(prompt.follow_up_turns)
+            return prompt.model_copy(
+                update={"tools": [tool for tool in prompt.tools if tool.id == "search"]}
+            )
+
+        def post_inference(self, trial, result):
+            return result
+
+        def pre_extraction(self, trial, candidate):
+            return candidate
+
+        def post_extraction(self, trial, candidate):
+            return candidate
+
+        def pre_eval(self, trial, candidate):
+            return candidate
+
+        def post_eval(self, trial, candidate):
+            return candidate
+
+    class ToolAwareEngine:
+        def infer(self, trial, context, runtime):
+            del context
+            seen["engine_tool_ids"] = [tool.id for tool in trial.tools]
+            seen["engine_follow_up_turns"] = len(trial.prompt.follow_up_turns)
+            seen["engine_tool_handler_keys"] = sorted(runtime.tool_handlers)
+            return InferenceResult(
+                inference=InferenceRecord(spec_hash="inf_tool_filter", raw_text="4")
+            )
+
+    class RenderingMetric:
+        def score(self, trial, candidate, context):
+            del trial, candidate, context
+            return MetricScore(metric_id="exact_match", value=1.0)
+
+    project = _build_project(tmp_path).model_copy(
+        update={
+            "tools": [
+                ToolSpec(
+                    id="search",
+                    description="Project search",
+                    input_schema={"type": "object"},
+                ),
+                ToolSpec(
+                    id="calculator",
+                    description="Project calculator",
+                    input_schema={"type": "object"},
+                ),
+            ]
+        }
+    )
+    registry = PluginRegistry()
+    registry.register_inference_engine("demo", ToolAwareEngine())
+    registry.register_metric("exact_match", RenderingMetric())
+    registry.register_hook("filtering", FilteringHook())
+    registry.register_tool("search", search_handler)
+    registry.register_tool("calculator", calculator_handler)
+
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_provider=DemoDatasetProvider(),
+    )
+    benchmark = BenchmarkSpec(
+        benchmark_id="tool-hook-benchmark",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                dataset_query=DatasetQuerySpec.subset(1, seed=7),
+                prompt_variant_ids=["qa-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search", "calculator"],
+                scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="qa-default",
+                family="qa",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+                follow_up_turns=[
+                    PromptTurnSpec(
+                        messages=[
+                            PromptMessage(
+                                role=PromptRole.USER,
+                                content="Double check the answer.",
+                            )
+                        ]
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=16)]),
+    )
+
+    result = orchestrator.run_benchmark(benchmark)
+
+    assert isinstance(result, BenchmarkResult)
+    assert seen["hook_tool_ids"] == ["search", "calculator"]
+    assert seen["hook_follow_up_turns"] == 1
+    assert seen["engine_tool_ids"] == ["search"]
+    assert seen["engine_follow_up_turns"] == 1
+    assert seen["engine_tool_handler_keys"] == ["search"]
 
 
 def _build_project(tmp_path: Path) -> ProjectSpec:

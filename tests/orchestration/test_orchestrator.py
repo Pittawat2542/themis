@@ -54,6 +54,7 @@ from themis.specs.foundational import (
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
+    ToolSpec,
 )
 from themis.storage.factory import build_storage_bundle
 from themis.storage.event_repo import SqliteEventRepository
@@ -1526,4 +1527,44 @@ def test_orchestrator_estimate_uses_engine_prompt_token_estimators(tmp_path) -> 
     assert estimate.estimated_prompt_tokens == 492
     assert any(
         "engine-provided prompt token estimators" in note for note in estimate.notes
+    )
+
+
+def test_orchestrator_estimate_counts_declared_tools_in_fallback_prompt_tokens(
+    tmp_path,
+) -> None:
+    registry, _engine = _build_registry()
+    orchestrator = Orchestrator.from_project_spec(
+        _build_project_spec(tmp_path),
+        registry=registry,
+        dataset_loader=MockDatasetLoader(),
+    )
+
+    baseline_estimate = orchestrator.estimate(_build_experiment())
+    tool_estimate = orchestrator.estimate(
+        _build_experiment().model_copy(
+            update={
+                "tools": [
+                    ToolSpec(
+                        id="search",
+                        description="Search over the project corpus.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                            "required": ["query"],
+                        },
+                    )
+                ],
+                "tasks": [
+                    _build_experiment()
+                    .tasks[0]
+                    .model_copy(update={"tool_ids": ["search"]})
+                ],
+            }
+        )
+    )
+
+    assert (
+        tool_estimate.estimated_prompt_tokens
+        > baseline_estimate.estimated_prompt_tokens
     )

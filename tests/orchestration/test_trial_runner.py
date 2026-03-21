@@ -21,7 +21,15 @@ from themis.errors import (
 from themis.orchestration.trial_runner import TrialRunner
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.records.candidate import CandidateRecord
-from themis.records.conversation import Conversation, MessageEvent, MessagePayload
+from themis.records.conversation import (
+    Conversation,
+    MessageEvent,
+    MessagePayload,
+    ToolCallEvent,
+    ToolCallPayload,
+    ToolResultEvent,
+    ToolResultPayload,
+)
 from themis.records.evaluation import MetricScore
 from themis.records.extraction import ExtractionRecord
 from themis.records.inference import InferenceRecord, TokenUsage
@@ -35,13 +43,16 @@ from themis.specs.foundational import (
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
+    ToolSpec,
 )
 from themis.specs.experiment import (
     InferenceParamsSpec,
     PromptMessage,
+    PromptTurnSpec,
     PromptTemplateSpec,
     TrialSpec,
 )
+from themis.contracts.protocols import RenderedPrompt
 from themis.telemetry.bus import TelemetryBus, TelemetryEventName
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.storage.artifact_store import ArtifactStore
@@ -291,6 +302,212 @@ def test_trial_runner_continues_when_telemetry_subscriber_fails(trial_spec, capl
     assert TelemetryEventName.METRIC_END in [event.name for event in seen]
     assert TelemetryEventName.TRIAL_END in [event.name for event in seen]
     assert "Telemetry subscriber failed for" in caplog.text
+
+
+def test_trial_runner_emits_tool_result_telemetry(trial_spec):
+    class AgentTraceEngine(InferenceEngine):
+        def infer(self, trial, context: DatasetContext, runtime):
+            del trial, context, runtime
+            return InferenceResult(
+                inference=InferenceRecord(
+                    spec_hash="inf_hash",
+                    raw_text="42",
+                ),
+                conversation=Conversation(
+                    events=[
+                        ToolCallEvent(
+                            role=PromptRole.ASSISTANT,
+                            payload=ToolCallPayload(
+                                tool_name="lookup",
+                                tool_arguments={"question": "6 * 7"},
+                                call_id="call-1",
+                            ),
+                            event_index=0,
+                        ),
+                        ToolResultEvent(
+                            role=PromptRole.TOOL,
+                            payload=ToolResultPayload(
+                                call_id="call-1",
+                                result={"answer": "42"},
+                                is_error=False,
+                            ),
+                            event_index=1,
+                        ),
+                        MessageEvent(
+                            role=PromptRole.ASSISTANT,
+                            payload=MessagePayload(content="42"),
+                            event_index=2,
+                        ),
+                    ]
+                ),
+            )
+
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", AgentTraceEngine())
+    registry.register_extractor("mock", MockExtractor())
+    registry.register_metric("em", MockMetric())
+
+    repo = MockEventRepo()
+    bus = TelemetryBus()
+    seen = []
+    bus.subscribe(seen.append)
+    runner = TrialRunner(
+        registry,
+        event_repo=repo,
+        telemetry_bus=bus,
+        parallel_candidates=1,
+    )
+
+    runner.run_trial(
+        trial_spec.model_copy(update={"candidate_count": 1}),
+        {"question": "6 * 7", "answer": "42"},
+        RuntimeContext(),
+    )
+
+    assert TelemetryEventName.TOOL_CALL in [event.name for event in seen]
+    assert TelemetryEventName.TOOL_RESULT in [event.name for event in seen]
+
+
+def test_trial_runner_rejects_selected_tools_without_handlers_before_inference(
+    trial_spec,
+):
+    seen = {"called": False}
+
+    class ToolAwareEngine(InferenceEngine):
+        def infer(self, trial, context: DatasetContext, runtime):
+            del trial, context, runtime
+            seen["called"] = True
+            return InferenceResult(
+                inference=InferenceRecord(spec_hash="inf_hash", raw_text="42")
+            )
+
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", ToolAwareEngine())
+    registry.register_extractor("mock", MockExtractor())
+    registry.register_metric("em", MockMetric())
+
+    runner = TrialRunner(registry, event_repo=MockEventRepo(), parallel_candidates=1)
+
+    with pytest.raises(SpecValidationError, match="search"):
+        runner.run_trial(
+            trial_spec.model_copy(
+                update={
+                    "candidate_count": 1,
+                    "tools": [
+                        ToolSpec(
+                            id="search",
+                            description="Search",
+                            input_schema={"type": "object"},
+                        )
+                    ],
+                }
+            ),
+            {"question": "6 * 7", "answer": "42"},
+            RuntimeContext(),
+        )
+
+    assert seen["called"] is False
+
+
+def test_trial_runner_prefers_runtime_tool_handlers_over_registry(trial_spec):
+    registry_handler = object()
+    runtime_handler = object()
+    seen: dict[str, object] = {}
+
+    class ToolAwareEngine(InferenceEngine):
+        def infer(self, trial, context: DatasetContext, runtime):
+            del trial, context
+            seen["handler"] = runtime.tool_handlers["search"]
+            return InferenceResult(
+                inference=InferenceRecord(spec_hash="inf_hash", raw_text="42")
+            )
+
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", ToolAwareEngine())
+    registry.register_extractor("mock", MockExtractor())
+    registry.register_metric("em", MockMetric())
+    registry.register_tool("search", registry_handler)
+
+    runner = TrialRunner(registry, event_repo=MockEventRepo(), parallel_candidates=1)
+
+    runner.run_trial(
+        trial_spec.model_copy(
+            update={
+                "candidate_count": 1,
+                "tools": [
+                    ToolSpec(
+                        id="search",
+                        description="Search",
+                        input_schema={"type": "object"},
+                    )
+                ],
+            }
+        ),
+        {"question": "6 * 7", "answer": "42"},
+        RuntimeContext(tool_handlers={"search": runtime_handler}),
+    )
+
+    assert seen["handler"] is runtime_handler
+
+
+def test_trial_runner_rejects_hook_added_tools_without_handlers(trial_spec):
+    seen = {"called": False}
+
+    class AddingHook:
+        def pre_inference(self, trial, prompt: RenderedPrompt) -> RenderedPrompt:
+            del trial
+            return prompt.model_copy(
+                update={
+                    "tools": list(prompt.tools)
+                    + [
+                        ToolSpec(
+                            id="search",
+                            description="Search",
+                            input_schema={"type": "object"},
+                        )
+                    ]
+                }
+            )
+
+        def post_inference(self, trial, result):
+            return result
+
+        def pre_extraction(self, trial, candidate):
+            return candidate
+
+        def post_extraction(self, trial, candidate):
+            return candidate
+
+        def pre_eval(self, trial, candidate):
+            return candidate
+
+        def post_eval(self, trial, candidate):
+            return candidate
+
+    class ToolAwareEngine(InferenceEngine):
+        def infer(self, trial, context: DatasetContext, runtime):
+            del trial, context, runtime
+            seen["called"] = True
+            return InferenceResult(
+                inference=InferenceRecord(spec_hash="inf_hash", raw_text="42")
+            )
+
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", ToolAwareEngine())
+    registry.register_extractor("mock", MockExtractor())
+    registry.register_metric("em", MockMetric())
+    registry.register_hook("add-tool", AddingHook())
+
+    runner = TrialRunner(registry, event_repo=MockEventRepo(), parallel_candidates=1)
+
+    with pytest.raises(SpecValidationError, match="search"):
+        runner.run_trial(
+            trial_spec.model_copy(update={"candidate_count": 1}),
+            {"question": "6 * 7", "answer": "42"},
+            RuntimeContext(),
+        )
+
+    assert seen["called"] is False
 
 
 def test_trial_runner_prepares_full_resolved_stage_runtime(trial_spec):
@@ -778,6 +995,69 @@ def test_trial_runner_emits_required_stage_metadata_and_artifact_refs(trial_spec
     assert evaluation_event.metadata.details_hash is not None
     assert evaluation_event.artifact_refs[0].role == "metric_details"
     assert isinstance(evaluation_event.metadata, EvaluationCompletedEventMetadata)
+
+
+def test_trial_runner_persists_rendered_follow_up_turns_in_prompt_payload(trial_spec):
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", MockInferenceEngine())
+    registry.register_extractor("mock", MockExtractor())
+    registry.register_metric("em", MockMetric())
+
+    repo = MockEventRepo()
+    runner = TrialRunner(registry, event_repo=repo, parallel_candidates=1)
+
+    runner.run_trial(
+        trial_spec.model_copy(
+            update={
+                "candidate_count": 1,
+                "task": trial_spec.task.model_copy(
+                    update={"benchmark_id": "agent-bench", "slice_id": "agentic"}
+                ),
+                "prompt": PromptTemplateSpec(
+                    id="agent-bootstrap",
+                    messages=[
+                        PromptMessage(
+                            role=PromptRole.DEVELOPER,
+                            content="Use {runtime.run_labels[phase]}.",
+                        ),
+                        PromptMessage(
+                            role=PromptRole.USER,
+                            content="Solve {item.question}.",
+                        ),
+                    ],
+                    follow_up_turns=[
+                        PromptTurnSpec(
+                            messages=[
+                                PromptMessage(
+                                    role=PromptRole.USER,
+                                    content="Continue with {item.answer}.",
+                                )
+                            ]
+                        )
+                    ],
+                ),
+            }
+        ),
+        {"question": "6 * 7", "answer": "42"},
+        RuntimeContext(run_labels={"phase": "tools"}),
+    )
+
+    prompt_event = next(
+        event
+        for event in repo.events
+        if event.stage == TimelineStage.PROMPT_RENDER and event.candidate_id is None
+    )
+
+    assert prompt_event.payload == {
+        "messages": [
+            {"role": "developer", "content": "Use tools."},
+            {"role": "user", "content": "Solve 6 * 7."},
+        ],
+        "follow_up_turns": [
+            {"messages": [{"role": "user", "content": "Continue with 42."}]}
+        ],
+        "tools": [],
+    }
 
 
 def test_trial_runner_emits_overlay_hashes_for_stage_events(trial_spec):
