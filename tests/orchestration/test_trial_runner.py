@@ -1,5 +1,7 @@
-from themis.types.enums import PromptRole, RunStage
 import asyncio
+from typing import cast
+
+from themis.types.enums import PromptRole, RunStage
 
 import pytest
 
@@ -57,6 +59,7 @@ from themis.telemetry.bus import TelemetryBus, TelemetryEventName
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.storage.artifact_store import ArtifactStore
 from themis.storage.event_repo import SqliteEventRepository
+from themis.storage._protocols import StorageConnectionManager
 from themis.storage.projection_repo import SqliteProjectionRepository
 from themis.types.enums import ErrorCode, RecordStatus as EventStatus, DatasetSource
 from themis.types.events import (
@@ -191,6 +194,7 @@ class JudgeAwareMetric(Metric):
             runtime={
                 "task_spec": trial.task,
                 "dataset_context": context,
+                "runtime_context": context["runtime_context"],
             },
         )
         return MetricScore(
@@ -1240,6 +1244,7 @@ def test_trial_runner_persists_emitted_artifacts_in_blob_store_and_index(
         registry,
         event_repo=event_repo,
         artifact_store=artifact_store,
+        project_seed=17,
         parallel_candidates=1,
     )
 
@@ -1285,6 +1290,7 @@ def test_trial_runner_persists_judge_audit_artifacts_and_projection_hydrates_the
         registry,
         event_repo=event_repo,
         artifact_store=artifact_store,
+        project_seed=17,
         parallel_candidates=1,
     )
 
@@ -1337,6 +1343,285 @@ def test_trial_runner_persists_judge_audit_artifacts_and_projection_hydrates_the
         PromptMessage(role=PromptRole.USER, content="Rate this answer.")
     ]
     assert timeline_view.judge_audit.judge_calls[0].inference.raw_text == "SCORE: 5/5"
+    assert timeline_view.judge_audit.judge_calls[0].judge_spec.params.seed is not None
+
+
+def test_trial_runner_fills_effective_seed_for_unset_generation_params() -> None:
+    class SeedCapturingEngine(InferenceEngine):
+        def __init__(self) -> None:
+            self.seen_trial_seeds: list[int | None] = []
+            self.seen_runtime_seeds: list[int | None] = []
+
+        def infer(self, trial, context: DatasetContext, runtime: RuntimeContext):
+            del context
+            self.seen_trial_seeds.append(trial.params.seed)
+            self.seen_runtime_seeds.append(runtime.candidate_seed)
+            return InferenceResult(
+                inference=InferenceRecord(
+                    spec_hash=f"inf_{trial.item_id}_{trial.params.seed}",
+                    raw_text="42",
+                )
+            )
+
+    engine = SeedCapturingEngine()
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", engine)
+
+    repo = MockEventRepo()
+    runner = TrialRunner(
+        registry, event_repo=repo, project_seed=17, parallel_candidates=1
+    )
+    trial = TrialSpec(
+        trial_id="seeded_trial",
+        model=ModelSpec(model_id="gpt-4", provider="openai"),
+        task=TaskSpec(
+            task_id="qa",
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
+            generation=GenerationSpec(),
+        ),
+        item_id="item-1",
+        prompt=PromptTemplateSpec(messages=[]),
+        params=InferenceParamsSpec(),
+        candidate_count=2,
+    )
+
+    runner.run_trial(trial, {"question": "6 * 7"}, RuntimeContext())
+
+    assert len(engine.seen_trial_seeds) == 2
+    assert all(seed is not None for seed in engine.seen_trial_seeds)
+    assert engine.seen_trial_seeds == engine.seen_runtime_seeds
+    assert len(set(engine.seen_trial_seeds)) == 2
+
+    inference_events = [
+        event
+        for event in repo.get_events(trial.spec_hash)
+        if event.event_type == TrialEventType.INFERENCE_COMPLETED
+    ]
+    assert len(inference_events) == 2
+    for event in inference_events:
+        assert isinstance(event.metadata, InferenceCompletedEventMetadata)
+        assert event.metadata.effective_seed in engine.seen_trial_seeds
+        assert event.metadata.inference_params_hash is not None
+        assert event.metadata.inference_params_hash != trial.params.spec_hash
+    persisted_effective_seeds = [
+        event.metadata.effective_seed
+        for event in inference_events
+        if isinstance(event.metadata, InferenceCompletedEventMetadata)
+        and event.metadata.effective_seed is not None
+    ]
+    assert sorted(persisted_effective_seeds) == sorted(
+        seed for seed in engine.seen_trial_seeds if seed is not None
+    )
+
+
+def test_trial_runner_storage_projection_exposes_candidate_effective_params(
+    tmp_path,
+) -> None:
+    class SeedCapturingEngine(InferenceEngine):
+        def __init__(self) -> None:
+            self.seen_trial_seeds: list[int | None] = []
+
+        def infer(self, trial, context: DatasetContext, runtime: RuntimeContext):
+            del context, runtime
+            self.seen_trial_seeds.append(trial.params.seed)
+            return InferenceResult(
+                inference=InferenceRecord(
+                    spec_hash=f"inf_{trial.item_id}_{trial.params.seed}",
+                    raw_text="42",
+                )
+            )
+
+    engine = SeedCapturingEngine()
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", engine)
+
+    manager = DatabaseManager(f"sqlite:///{tmp_path}/effective_seed.db")
+    manager.initialize()
+    event_repo = SqliteEventRepository(cast(StorageConnectionManager, manager))
+    projection_repo = SqliteProjectionRepository(
+        cast(StorageConnectionManager, manager)
+    )
+    runner = TrialRunner(
+        registry, event_repo=event_repo, project_seed=17, parallel_candidates=1
+    )
+    trial = TrialSpec(
+        trial_id="seeded_trial",
+        model=ModelSpec(model_id="gpt-4", provider="openai"),
+        task=TaskSpec(
+            task_id="qa",
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
+            generation=GenerationSpec(),
+        ),
+        item_id="item-1",
+        prompt=PromptTemplateSpec(messages=[]),
+        params=InferenceParamsSpec(),
+        candidate_count=2,
+    )
+
+    record = runner.run_trial(trial, {"question": "6 * 7"}, RuntimeContext())
+    projection_repo.materialize_trial_record(trial.spec_hash)
+
+    projected = projection_repo.get_trial_record(trial.spec_hash)
+    assert projected is not None
+    assert projected.trial_spec is not None
+    assert projected.trial_spec.params.seed is None
+    assert [
+        candidate.effective_seed for candidate in projected.candidates
+    ] == engine.seen_trial_seeds
+    assert all(
+        candidate.effective_inference_params_hash is not None
+        for candidate in projected.candidates
+    )
+    assert all(
+        candidate.effective_inference_params_hash != trial.params.spec_hash
+        for candidate in projected.candidates
+    )
+
+    candidate_id = record.candidates[0].candidate_id
+    assert candidate_id is not None
+    timeline_view = projection_repo.get_timeline_view(candidate_id, "candidate")
+    assert timeline_view is not None
+    assert timeline_view.trial_spec.params.seed is None
+    assert timeline_view.effective_seed == engine.seen_trial_seeds[0]
+    assert timeline_view.effective_inference_params_hash is not None
+
+
+def test_projection_replay_without_effective_seed_metadata_defaults_to_none(
+    tmp_path,
+) -> None:
+    manager = DatabaseManager(f"sqlite:///{tmp_path}/legacy_seed_metadata.db")
+    manager.initialize()
+    event_repo = SqliteEventRepository(cast(StorageConnectionManager, manager))
+    projection_repo = SqliteProjectionRepository(
+        cast(StorageConnectionManager, manager)
+    )
+
+    trial = TrialSpec(
+        trial_id="legacy_trial",
+        model=ModelSpec(model_id="gpt-4", provider="openai"),
+        task=TaskSpec(
+            task_id="qa",
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
+            generation=GenerationSpec(),
+        ),
+        item_id="item-1",
+        prompt=PromptTemplateSpec(messages=[]),
+        params=InferenceParamsSpec(),
+        candidate_count=1,
+    )
+    event_repo.save_spec(trial)
+    event_repo.append_event(
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=1,
+            event_id=f"{trial.spec_hash}:1",
+            event_type=TrialEventType.TRIAL_STARTED,
+        )
+    )
+    event_repo.append_event(
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=2,
+            event_id=f"{trial.spec_hash}:2",
+            candidate_id="candidate_1",
+            event_type=TrialEventType.CANDIDATE_STARTED,
+            payload={"sample_index": 0},
+        )
+    )
+    event_repo.append_event(
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=3,
+            event_id=f"{trial.spec_hash}:3",
+            candidate_id="candidate_1",
+            event_type=TrialEventType.INFERENCE_COMPLETED,
+            stage=TimelineStage.INFERENCE,
+            status=EventStatus.OK,
+            metadata=InferenceCompletedEventMetadata(
+                provider="openai",
+                model_id="gpt-4",
+                inference_params_hash=trial.params.spec_hash,
+            ),
+            payload=InferenceRecord(spec_hash="inf_hash", raw_text="42").model_dump(
+                mode="json"
+            ),
+        )
+    )
+    event_repo.append_event(
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=4,
+            event_id=f"{trial.spec_hash}:4",
+            candidate_id="candidate_1",
+            event_type=TrialEventType.CANDIDATE_COMPLETED,
+            status=EventStatus.OK,
+            payload={"status": EventStatus.OK.value},
+        )
+    )
+    event_repo.append_event(
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=5,
+            event_id=f"{trial.spec_hash}:5",
+            event_type=TrialEventType.TRIAL_COMPLETED,
+            status=EventStatus.OK,
+            payload={"status": EventStatus.OK.value},
+        )
+    )
+
+    projection_repo.materialize_trial_record(trial.spec_hash)
+    record = projection_repo.get_trial_record(trial.spec_hash)
+    assert record is not None
+    candidate = record.candidates[0]
+    assert candidate.effective_seed is None
+    assert candidate.effective_inference_params_hash == trial.params.spec_hash
+
+    timeline_view = projection_repo.get_timeline_view("candidate_1", "candidate")
+    assert timeline_view is not None
+    assert timeline_view.effective_seed is None
+    assert timeline_view.effective_inference_params_hash == trial.params.spec_hash
+
+
+def test_trial_runner_preserves_explicit_generation_seed() -> None:
+    class SeedCapturingEngine(InferenceEngine):
+        def __init__(self) -> None:
+            self.seen_trial_seeds: list[int | None] = []
+            self.seen_runtime_seeds: list[int | None] = []
+
+        def infer(self, trial, context: DatasetContext, runtime: RuntimeContext):
+            del context
+            self.seen_trial_seeds.append(trial.params.seed)
+            self.seen_runtime_seeds.append(runtime.candidate_seed)
+            return InferenceResult(
+                inference=InferenceRecord(spec_hash="inf_hash", raw_text="42")
+            )
+
+    engine = SeedCapturingEngine()
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", engine)
+
+    repo = MockEventRepo()
+    runner = TrialRunner(
+        registry, event_repo=repo, project_seed=17, parallel_candidates=1
+    )
+    trial = TrialSpec(
+        trial_id="seeded_trial",
+        model=ModelSpec(model_id="gpt-4", provider="openai"),
+        task=TaskSpec(
+            task_id="qa",
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
+            generation=GenerationSpec(),
+        ),
+        item_id="item-1",
+        prompt=PromptTemplateSpec(messages=[]),
+        params=InferenceParamsSpec(seed=123),
+        candidate_count=2,
+    )
+
+    runner.run_trial(trial, {"question": "6 * 7"}, RuntimeContext())
+
+    assert engine.seen_trial_seeds == [123, 123]
+    assert engine.seen_runtime_seeds == [123, 123]
 
 
 def test_trial_runner_maps_provider_failures_with_context() -> None:

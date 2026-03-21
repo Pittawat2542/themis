@@ -52,10 +52,12 @@ class TrialPlanner:
         dataset_loader: DatasetLoader | None = None,
         dataset_provider: DatasetProvider | None = None,
         registry: PluginRegistry | None = None,
+        project_seed: int | None = None,
     ) -> None:
         self.dataset_loader = dataset_loader
         self.dataset_provider = dataset_provider
         self.registry = registry
+        self.project_seed = project_seed
 
     def plan_benchmark(
         self,
@@ -136,6 +138,7 @@ class TrialPlanner:
 
                         composite = "".join(
                             [
+                                f"project_seed:{self.project_seed}",
                                 model.spec_hash,
                                 task.spec_hash,
                                 prompt.spec_hash,
@@ -307,7 +310,7 @@ class TrialPlanner:
             buckets.setdefault(key, []).append(item)
 
         count = min(sampling.count or len(item_list), len(item_list))
-        picker = random.Random(sampling.seed)
+        picker = random.Random(sampling.seed) if sampling.seed is not None else None
         sampled: list[DatasetItem] = []
         remaining = count
         bucket_items = list(buckets.values())
@@ -318,7 +321,10 @@ class TrialPlanner:
             take = min(target, len(bucket), remaining)
             if take == len(bucket):
                 sampled.extend(bucket)
+            elif sampling.seed is None:
+                sampled.extend(bucket[:take])
             else:
+                assert picker is not None
                 sampled.extend(picker.sample(bucket, take))
             remaining = count - len(sampled)
             if remaining <= 0:

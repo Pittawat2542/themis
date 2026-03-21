@@ -5,6 +5,7 @@
 Reuse the same:
 
 - `ProjectSpec.storage.root_dir`
+- `ProjectSpec.global_seed`
 - benchmark or experiment source spec
 - active stage configuration
 
@@ -12,6 +13,10 @@ When a completed projection already exists for that trial hash and overlay, the
 executor skips the work instead of recomputing it. Generation resume is keyed by
 `trial_hash`; transform and evaluation resume are keyed by deterministic
 `transform_hash` and `evaluation_hash`.
+
+Changing `ProjectSpec.global_seed` intentionally changes planned trial identity.
+That disables reuse of previous generation, transform, and evaluation artifacts
+from a different seed namespace.
 
 Only successful overlays are skipped. If a transform or evaluation overlay
 fails, rerunning the same experiment executes that overlay again while reusing
@@ -111,6 +116,7 @@ trial = result.get_trial(result.trial_hashes[0])
 candidate_view = result.view_timeline(trial.candidates[0].candidate_id)
 
 print(candidate_view.inference.raw_text)
+print(candidate_view.effective_seed)
 
 if candidate_view.conversation is not None:
     print(len(candidate_view.conversation.events))
@@ -125,6 +131,11 @@ if candidate_view.observability is not None:
 Use the trial view when you care about run-level stage timing. Use the candidate
 view when you need the concrete inference, extraction, evaluation, judge, or
 observability payloads tied to one candidate.
+`trial.trial_spec` and `candidate_view.trial_spec` remain the planned trial
+spec. Use `candidate.effective_seed`, `candidate.effective_inference_params_hash`,
+or the same fields on `candidate_view` when you need the executed generation
+params for one sample. Judge-backed metrics persist the executed seeded judge
+config inside `candidate_view.judge_audit`.
 
 ## Inspect Specific Overlays
 

@@ -12,7 +12,13 @@ from themis.records.extraction import ExtractionRecord
 from themis.records.inference import InferenceRecord
 from themis.records.timeline import RecordTimeline
 from themis.types.enums import RecordStatus
-from themis.types.events import ArtifactRole, TimelineStage, TrialEvent, TrialEventType
+from themis.types.events import (
+    ArtifactRole,
+    InferenceCompletedEventMetadata,
+    TimelineStage,
+    TrialEvent,
+    TrialEventType,
+)
 
 _CONVERSATION_EVENT_ADAPTER: TypeAdapter[ConversationEvent] = TypeAdapter(
     ConversationEvent
@@ -43,6 +49,8 @@ class CandidateReplayState:
     sample_index: int
     status: RecordStatus = RecordStatus.OK
     inference: InferenceRecord | None = None
+    effective_seed: int | None = None
+    effective_inference_params_hash: str | None = None
     extractions: list[ExtractionRecord] = field(default_factory=list)
     evaluation: EvaluationRecord | None = None
     error: ErrorRecord | None = None
@@ -67,6 +75,11 @@ class CandidateReplayState:
             )
         if event.stage == TimelineStage.INFERENCE and event.payload is not None:
             self.inference = InferenceRecord.model_validate(event.payload)
+            if isinstance(event.metadata, InferenceCompletedEventMetadata):
+                self.effective_seed = event.metadata.effective_seed
+                self.effective_inference_params_hash = (
+                    event.metadata.inference_params_hash
+                )
         elif event.stage == TimelineStage.EXTRACTION and event.payload is not None:
             self.extractions.append(ExtractionRecord.model_validate(event.payload))
         elif event.stage == TimelineStage.EVALUATION and event.payload is not None:
@@ -103,6 +116,8 @@ class CandidateReplayState:
             else None,
             timeline=timeline,
             inference=self.inference,
+            effective_seed=self.effective_seed,
+            effective_inference_params_hash=self.effective_inference_params_hash,
             extractions=list(self.extractions),
             evaluation=self.evaluation,
             judge_audits=list(self.judge_audit_refs),

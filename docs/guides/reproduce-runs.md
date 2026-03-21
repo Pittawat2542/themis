@@ -8,6 +8,7 @@ configuration for a paper, or rebuild analysis from persisted storage.
 For a reproducible handoff, share:
 
 - the project file or inline `ProjectSpec` payload
+- the exact `ProjectSpec.global_seed`
 - the `run_id` from `submit()` or `plan()`
 - the storage root path, or a redacted Postgres connection description plus blob root
 - a config report for the exact run snapshot
@@ -35,6 +36,11 @@ config-report.md
 
 Use the persisted-run mode when you want the exact stored `RunManifest`
 snapshot rather than the current local Python code.
+
+When you need to confirm the exact generation request that executed, inspect the
+candidate-level `effective_seed` and `effective_inference_params_hash` fields
+from the stored projection or candidate timeline view. Judge-backed evaluations
+persist their executed seeded config inside the judge audit trail.
 
 ## Reload the Run in Python
 

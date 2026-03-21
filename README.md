@@ -26,6 +26,7 @@ Themis now documents and supports one public authoring flow:
 - Bootstrap prompt sequences, scripted follow-up turns, and first-class tool passing for agent-capable engines
 - Projection-backed results with `slice_id`, `prompt_variant_id`, and semantic dimensions
 - Local-first storage and deterministic reuse of completed work
+- Seed-aware planning and per-candidate deterministic execution defaults
 
 ## Installation
 

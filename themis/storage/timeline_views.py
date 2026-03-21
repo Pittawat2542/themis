@@ -149,6 +149,8 @@ class ProjectionTimelineViews:
             timeline=timeline,
             conversation=candidate.conversation,
             inference=candidate.inference,
+            effective_seed=candidate.effective_seed,
+            effective_inference_params_hash=candidate.effective_inference_params_hash,
             extractions=candidate.extractions,
             evaluation=candidate.evaluation,
             judge_audit=self.codecs.load_judge_audit(candidate.judge_audits),

@@ -169,11 +169,14 @@ class OverlayStageExecutor:
             attempt += 1
             judge_service = resolved_plugins.create_judge_service()
             try:
+                evaluation_runtime = session.base_runtime.model_copy(
+                    update={"candidate_seed": candidate.effective_seed}
+                )
                 evaluated_candidate = evaluate_candidate(
                     session.trial,
                     self.registry,
                     session.dataset_context,
-                    session.base_runtime,
+                    evaluation_runtime,
                     candidate,
                     evaluation,
                     judge_service=judge_service,

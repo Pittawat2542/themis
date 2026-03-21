@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import time
 from collections.abc import Callable
 
@@ -18,6 +17,11 @@ from themis.orchestration.runner_state import (
     TrialExecutionSession,
     candidate_from_terminal_events,
     resume_state_from_events,
+)
+from themis.orchestration.seeding import (
+    derive_candidate_seed,
+    effective_trial_seed,
+    trial_with_effective_seed,
 )
 from themis.records.candidate import CandidateRecord
 from themis.registry.plugin_registry import PluginRegistry
@@ -106,6 +110,11 @@ class GenerationStageExecutor:
         while True:
             attempt += 1
             stage_results: CandidateStageResults | None = None
+            candidate_seed = self._candidate_seed(trial.spec_hash, cand_index)
+            execution_trial = trial_with_effective_seed(
+                prepared_trial,
+                candidate_seed=candidate_seed,
+            )
             try:
                 generated_candidate = generate_candidate(
                     trial,
@@ -114,13 +123,20 @@ class GenerationStageExecutor:
                     self._candidate_runtime_context(
                         session.base_runtime,
                         resume_state=resume_state,
-                        candidate_seed=self._candidate_seed(
-                            trial.spec_hash, cand_index
+                        candidate_seed=effective_trial_seed(
+                            execution_trial,
+                            candidate_seed=candidate_seed,
                         ),
                     ),
                     cand_index,
-                    prepared_trial=prepared_trial,
+                    prepared_trial=execution_trial,
                     resolved_generation=resolved_plugins.generation,
+                )
+                generated_candidate = generated_candidate.model_copy(
+                    update={
+                        "effective_seed": execution_trial.params.seed,
+                        "effective_inference_params_hash": execution_trial.params.spec_hash,
+                    }
                 )
                 stage_results = CandidateStageResults(
                     generated_candidate=generated_candidate,
@@ -164,7 +180,7 @@ class GenerationStageExecutor:
                     update={"provenance": session.provenance}
                 )
                 self.event_emitter.emit_candidate_stage_events(
-                    trial,
+                    execution_trial,
                     stage_results,
                     lambda event_type, **kwargs: self.append_session_event(
                         session,
@@ -239,12 +255,7 @@ class GenerationStageExecutor:
         )
 
     def _candidate_seed(self, trial_hash: str, cand_index: int) -> int | None:
-        if self.project_seed is None:
-            return None
-        digest = hashlib.sha256(
-            f"{self.project_seed}:{trial_hash}:{cand_index}".encode("utf-8")
-        ).hexdigest()
-        return int(digest[:16], 16)
+        return derive_candidate_seed(self.project_seed, trial_hash, cand_index)
 
     def _should_retry(self, candidate: CandidateRecord) -> bool:
         if candidate.status != RecordStatus.ERROR or candidate.error is None:

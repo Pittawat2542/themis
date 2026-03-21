@@ -57,6 +57,7 @@ def build_orchestrator_services(
         dataset_loader=dataset_loader,
         dataset_provider=dataset_provider,
         registry=registry,
+        project_seed=project_seed,
     )
     runner = TrialRunner(
         registry=registry,

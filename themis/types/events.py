@@ -105,6 +105,7 @@ class InferenceCompletedEventMetadata(TrialEventMetadata):
     provider: str | None = None
     model_id: str | None = None
     inference_params_hash: str | None = None
+    effective_seed: int | None = None
     provider_request_id: str | None = None
     token_usage: JSONDict = Field(default_factory=dict)
 
