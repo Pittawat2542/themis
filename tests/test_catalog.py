@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+import inspect
 
 import pytest
 
-import themis.starter_catalog as starter_catalog
+import themis.catalog as catalog
 from themis import DatasetQuerySpec
 from themis.benchmark.specs import DatasetSliceSpec
+from themis.catalog.datasets import common as dataset_common
+from themis.catalog.datasets.common import _normalize_healthbench_rows
+from themis.catalog.runtime.common import _build_judge_spec
 from themis.specs.foundational import DatasetSpec
 from themis.types.enums import DatasetSource
 from themis.types.events import ScoreRow
@@ -47,7 +51,7 @@ class _StubResult:
 
 
 def test_public_catalog_lists_requested_benchmarks() -> None:
-    assert set(starter_catalog.list_builtin_benchmarks()) == {
+    assert set(catalog.list_catalog_benchmarks()) == {
         "encyclo_k",
         "healthbench",
         "hle",
@@ -59,7 +63,7 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
 
 
 def test_builtin_runtime_defaults_use_8192_generator_tokens() -> None:
-    definition = starter_catalog.get_builtin_benchmark("mmlu_pro")
+    definition = catalog.get_catalog_benchmark("mmlu_pro")
 
     config = definition.build_runtime_config(
         model_id="demo-model",
@@ -70,7 +74,7 @@ def test_builtin_runtime_defaults_use_8192_generator_tokens() -> None:
 
 
 def test_builtin_judge_spec_defaults_use_8192_tokens() -> None:
-    judge_spec = starter_catalog._build_judge_spec(
+    judge_spec = _build_judge_spec(
         model_id="judge-model",
         provider="demo",
     )
@@ -91,7 +95,7 @@ def test_mcq_benchmark_builders_use_expected_dataset_defaults(
     dataset_id: str,
     split: str,
 ) -> None:
-    definition = starter_catalog.get_builtin_benchmark(benchmark_id)
+    definition = catalog.get_catalog_benchmark(benchmark_id)
 
     benchmark = definition.build_benchmark(model_id="demo-model", provider="demo")
 
@@ -109,14 +113,14 @@ def test_mcq_benchmark_builders_use_expected_dataset_defaults(
 def test_judge_backed_benchmark_builders_require_explicit_judge_config(
     benchmark_id: str,
 ) -> None:
-    definition = starter_catalog.get_builtin_benchmark(benchmark_id)
+    definition = catalog.get_catalog_benchmark(benchmark_id)
 
     with pytest.raises(ValueError, match="judge"):
         definition.build_benchmark(model_id="demo-model", provider="demo")
 
 
 def test_render_preview_uses_dataset_native_messages_for_healthbench() -> None:
-    definition = starter_catalog.get_builtin_benchmark("healthbench")
+    definition = catalog.get_catalog_benchmark("healthbench")
 
     preview = definition.render_preview(
         model_id="demo-model",
@@ -132,7 +136,7 @@ def test_render_preview_uses_dataset_native_messages_for_healthbench() -> None:
 def test_healthbench_row_normalizer_populates_prompt_text_for_runtime_rendering() -> (
     None
 ):
-    normalized = starter_catalog._normalize_healthbench_rows(
+    normalized = _normalize_healthbench_rows(
         [
             {
                 "item_id": "hb-1",
@@ -153,7 +157,7 @@ def test_healthbench_row_normalizer_populates_prompt_text_for_runtime_rendering(
 
 
 def test_render_preview_formats_mcq_prompt_from_fixture_sample() -> None:
-    definition = starter_catalog.get_builtin_benchmark("mmlu_pro")
+    definition = catalog.get_catalog_benchmark("mmlu_pro")
 
     preview = definition.render_preview(model_id="demo-model", provider="demo")
 
@@ -162,7 +166,7 @@ def test_render_preview_formats_mcq_prompt_from_fixture_sample() -> None:
 
 
 def test_render_preview_formats_hle_prompt_without_template_errors() -> None:
-    definition = starter_catalog.get_builtin_benchmark("hle")
+    definition = catalog.get_catalog_benchmark("hle")
 
     preview = definition.render_preview(
         model_id="demo-model",
@@ -178,7 +182,7 @@ def test_render_preview_formats_hle_prompt_without_template_errors() -> None:
 
 
 def test_starter_dataset_provider_applies_supported_dataset_transforms() -> None:
-    provider = starter_catalog.StarterDatasetProvider(
+    provider = catalog.CatalogDatasetProvider(
         memory_rows=[{"question": "2 + 2", "answer": "4"}]
     )
     slice_spec = DatasetSliceSpec(
@@ -208,7 +212,7 @@ def test_starter_dataset_provider_applies_supported_dataset_transforms() -> None
 
 
 def test_starter_dataset_provider_rejects_python_dataset_transforms() -> None:
-    provider = starter_catalog.StarterDatasetProvider(
+    provider = catalog.CatalogDatasetProvider(
         memory_rows=[{"question": "2 + 2", "answer": "4"}]
     )
     slice_spec = DatasetSliceSpec(
@@ -230,12 +234,61 @@ def test_starter_dataset_provider_rejects_python_dataset_transforms() -> None:
         list(provider.scan(slice_spec, DatasetQuerySpec()))
 
 
-def test_build_starter_registry_registers_multiple_providers() -> None:
-    registry = starter_catalog.build_starter_registry(["demo", "openai"])
+def test_build_catalog_registry_registers_multiple_providers() -> None:
+    registry = catalog.build_catalog_registry(["demo", "openai"])
 
     assert registry.has_inference_engine("demo")
     assert registry.has_inference_engine("openai")
     assert registry.has_metric("choice_accuracy")
+    assert inspect.isclass(registry.get_metric_registration("choice_accuracy").factory)
+    assert inspect.isclass(registry.get_inference_engine_registration("demo").factory)
+
+
+@pytest.mark.parametrize(
+    ("benchmark_id", "metric_type", "metric_module"),
+    [
+        (
+            "simpleqa_verified",
+            "SimpleQAVerifiedJudgeMetric",
+            "themis.catalog.runtime.metrics.simpleqa_verified",
+        ),
+        (
+            "healthbench",
+            "HealthBenchRubricMetric",
+            "themis.catalog.runtime.metrics.healthbench",
+        ),
+        (
+            "lpfqa",
+            "LPFQAJudgeMetric",
+            "themis.catalog.runtime.metrics.lpfqa",
+        ),
+        (
+            "hle",
+            "HLEJudgeMetric",
+            "themis.catalog.runtime.metrics.hle",
+        ),
+    ],
+)
+def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
+    benchmark_id: str,
+    metric_type: str,
+    metric_module: str,
+) -> None:
+    definition = catalog.get_catalog_benchmark(benchmark_id)
+    registry = catalog.build_catalog_registry("demo")
+
+    definition.register_required_components(
+        registry,
+        judge_model_id="judge-model",
+        judge_provider="demo",
+    )
+
+    registration = registry.get_metric_registration(definition.metric_id)
+    metric = registry.get_metric(definition.metric_id)
+
+    assert callable(registration.factory)
+    assert type(metric).__name__ == metric_type
+    assert type(metric).__module__ == metric_module
 
 
 @pytest.mark.parametrize(
@@ -244,37 +297,37 @@ def test_build_starter_registry_registers_multiple_providers() -> None:
         (
             "mmlu_pro",
             "BuiltinMMLUProDatasetProvider",
-            "themis._starter_catalog.datasets.mmlu_pro",
+            "themis.catalog.datasets.mmlu_pro",
         ),
         (
             "supergpqa",
             "BuiltinSuperGPQADatasetProvider",
-            "themis._starter_catalog.datasets.supergpqa",
+            "themis.catalog.datasets.supergpqa",
         ),
         (
             "encyclo_k",
             "BuiltinEncycloKDatasetProvider",
-            "themis._starter_catalog.datasets.encyclo_k",
+            "themis.catalog.datasets.encyclo_k",
         ),
         (
             "simpleqa_verified",
             "BuiltinSimpleQAVerifiedDatasetProvider",
-            "themis._starter_catalog.datasets.simpleqa_verified",
+            "themis.catalog.datasets.simpleqa_verified",
         ),
         (
             "healthbench",
             "BuiltinHealthBenchDatasetProvider",
-            "themis._starter_catalog.datasets.healthbench",
+            "themis.catalog.datasets.healthbench",
         ),
         (
             "lpfqa",
             "BuiltinLPFQADatasetProvider",
-            "themis._starter_catalog.datasets.lpfqa",
+            "themis.catalog.datasets.lpfqa",
         ),
         (
             "hle",
             "BuiltinHLEDatasetProvider",
-            "themis._starter_catalog.datasets.hle",
+            "themis.catalog.datasets.hle",
         ),
     ],
 )
@@ -283,7 +336,7 @@ def test_builtin_benchmarks_use_benchmark_specific_dataset_providers(
     provider_type: str,
     provider_module: str,
 ) -> None:
-    definition = starter_catalog.get_builtin_benchmark(benchmark_id)
+    definition = catalog.get_catalog_benchmark(benchmark_id)
 
     provider = definition.build_dataset_provider()
 
@@ -298,7 +351,7 @@ def test_builtin_benchmarks_use_benchmark_specific_dataset_providers(
 def test_specialized_dataset_providers_inline_their_own_implementation(
     benchmark_id: str,
 ) -> None:
-    definition = starter_catalog.get_builtin_benchmark(benchmark_id)
+    definition = catalog.get_catalog_benchmark(benchmark_id)
 
     provider = definition.build_dataset_provider()
     direct_base_name = type(provider).__bases__[0].__name__
@@ -307,7 +360,7 @@ def test_specialized_dataset_providers_inline_their_own_implementation(
 
 
 def test_simpleqa_summary_uses_f1_and_attempted_math_from_metric_details() -> None:
-    definition = starter_catalog.get_builtin_benchmark("simpleqa_verified")
+    definition = catalog.get_catalog_benchmark("simpleqa_verified")
     rows = [
         ScoreRow(
             trial_hash="trial-1",
@@ -342,7 +395,7 @@ def test_simpleqa_summary_uses_f1_and_attempted_math_from_metric_details() -> No
 
 
 def test_healthbench_summary_reports_mean_score_and_tag_breakdowns() -> None:
-    definition = starter_catalog.get_builtin_benchmark("healthbench")
+    definition = catalog.get_catalog_benchmark("healthbench")
     rows = [
         ScoreRow(
             trial_hash="trial-1",
@@ -369,7 +422,7 @@ def test_healthbench_summary_reports_mean_score_and_tag_breakdowns() -> None:
 
 
 def test_hle_summary_reports_accuracy_ci_calibration_and_skipped_images() -> None:
-    definition = starter_catalog.get_builtin_benchmark("hle")
+    definition = catalog.get_catalog_benchmark("hle")
     rows = [
         ScoreRow(
             trial_hash="trial-1",
@@ -399,7 +452,7 @@ def test_hle_summary_reports_accuracy_ci_calibration_and_skipped_images() -> Non
 
 
 def test_inspect_huggingface_dataset_uses_loader_hooks_for_schema_and_samples() -> None:
-    summary = starter_catalog.inspect_huggingface_dataset(
+    summary = catalog.inspect_huggingface_dataset(
         "demo/qa",
         split="test",
         metadata_loader=lambda dataset_id, revision: {
@@ -423,9 +476,9 @@ def test_inspect_huggingface_dataset_uses_loader_hooks_for_schema_and_samples() 
 
 
 def test_catalog_fixtures_are_available_for_all_builtin_benchmarks() -> None:
-    fixture_root = Path(starter_catalog.__file__).resolve().parent / "starter_fixtures"
+    fixture_root = Path(catalog.__file__).resolve().parent.parent / "starter_fixtures"
 
-    for benchmark_id in starter_catalog.list_builtin_benchmarks():
+    for benchmark_id in catalog.list_catalog_benchmarks():
         assert (fixture_root / f"{benchmark_id}.json").exists()
 
 
@@ -467,12 +520,12 @@ def test_load_huggingface_rows_disables_image_decoding_for_iteration(
             return fake_dataset
 
     monkeypatch.setattr(
-        starter_catalog,
+        dataset_common,
         "import_optional",
         lambda module_name, *, extra: _FakeDatasetsModule,
     )
 
-    rows = starter_catalog.load_huggingface_rows("cais/hle", "test")
+    rows = catalog.load_huggingface_rows("cais/hle", "test")
 
     assert rows == [{"item_id": "item-1", "question": "What is 2 + 2?", "answer": "4"}]
     assert fake_dataset.cast_calls == [
@@ -516,12 +569,12 @@ def test_load_huggingface_rows_retries_healthbench_with_streaming(
             raise _DatasetGenerationError("broken non-streaming cast")
 
     monkeypatch.setattr(
-        starter_catalog,
+        dataset_common,
         "import_optional",
         lambda module_name, *, extra: _FakeDatasetsModule,
     )
 
-    rows = starter_catalog.load_huggingface_rows("openai/healthbench", "test")
+    rows = catalog.load_huggingface_rows("openai/healthbench", "test")
 
     assert rows == [
         {

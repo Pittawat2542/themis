@@ -7,13 +7,13 @@ import argparse
 import json
 from pathlib import Path
 
-from themis.starter_catalog import inspect_huggingface_dataset
+from themis.catalog import inspect_huggingface_dataset
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Inspect a Hugging Face dataset for Themis starter benchmark wiring."
+            "Inspect a Hugging Face dataset for Themis catalog benchmark wiring."
         )
     )
     parser.add_argument("dataset_id", help="Hugging Face dataset repo id.")

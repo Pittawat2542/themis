@@ -1,4 +1,4 @@
-"""Dataset provider for google/simpleqa-verified."""
+"""Dataset provider for m-a-p/LPFQA."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ from themis.specs.foundational import DatasetSpec
 
 from .common import (
     BuiltinDatasetProvider,
-    StarterNormalizedRows,
-    _normalize_simpleqa_rows,
+    CatalogNormalizedRows,
+    _normalize_lpfqa_rows,
     load_huggingface_rows,
 )
 
 
-class BuiltinSimpleQAVerifiedDatasetProvider(BuiltinDatasetProvider):
+class BuiltinLPFQADatasetProvider(BuiltinDatasetProvider):
     def __init__(self, *, huggingface_loader=None) -> None:
         super().__init__(huggingface_loader=huggingface_loader or load_huggingface_rows)
 
@@ -20,5 +20,5 @@ class BuiltinSimpleQAVerifiedDatasetProvider(BuiltinDatasetProvider):
         self,
         rows: list[dict[str, object]],
         dataset: DatasetSpec,
-    ) -> StarterNormalizedRows:
-        return _normalize_simpleqa_rows(rows, dataset)
+    ) -> CatalogNormalizedRows:
+        return _normalize_lpfqa_rows(rows, dataset)

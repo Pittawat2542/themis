@@ -1,8 +1,8 @@
-"""Built-in starter dataset providers and shared helpers."""
+"""Built-in catalog dataset providers and shared helpers."""
 
 from .common import (
-    StarterDatasetProvider,
-    StarterNormalizedRows,
+    CatalogDatasetProvider,
+    CatalogNormalizedRows,
     _normalize_healthbench_rows,
     _prompt_messages_from_context,
     inspect_huggingface_dataset,
@@ -25,8 +25,8 @@ __all__ = [
     "BuiltinMMLUProDatasetProvider",
     "BuiltinSimpleQAVerifiedDatasetProvider",
     "BuiltinSuperGPQADatasetProvider",
-    "StarterDatasetProvider",
-    "StarterNormalizedRows",
+    "CatalogDatasetProvider",
+    "CatalogNormalizedRows",
     "_normalize_healthbench_rows",
     "_prompt_messages_from_context",
     "inspect_huggingface_dataset",

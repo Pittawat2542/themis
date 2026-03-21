@@ -6,7 +6,7 @@ from themis.specs.foundational import DatasetSpec
 
 from .common import (
     BuiltinDatasetProvider,
-    StarterNormalizedRows,
+    CatalogNormalizedRows,
     _normalize_hle_rows,
     load_hle_rows,
 )
@@ -20,5 +20,5 @@ class BuiltinHLEDatasetProvider(BuiltinDatasetProvider):
         self,
         rows: list[dict[str, object]],
         dataset: DatasetSpec,
-    ) -> StarterNormalizedRows:
+    ) -> CatalogNormalizedRows:
         return _normalize_hle_rows(rows, dataset)

@@ -24,8 +24,12 @@ def test_init_generates_lean_project_scaffold(tmp_path: Path) -> None:
     assert (project_root / "starter_eval" / "datasets" / "__init__.py").exists()
 
     readme = (project_root / "README.md").read_text()
+    settings_module = (project_root / "starter_eval" / "settings.py").read_text()
     assert "themis quickcheck scores" in readme
     assert "themis report" in readme
+    assert "class CatalogSettings" in settings_module
+    assert "THEMIS_CATALOG_PROVIDER" in settings_module
+    assert "THEMIS_CATALOG_MODEL" in settings_module
 
 
 def test_init_generated_project_runs_preview_mode(tmp_path: Path) -> None:
@@ -53,9 +57,13 @@ def test_init_generates_builtin_benchmark_scaffold(tmp_path: Path) -> None:
     benchmark_module = (
         project_root / "starter_eval" / "benchmarks" / "default.py"
     ).read_text()
+    dataset_module = (
+        project_root / "starter_eval" / "datasets" / "builtin.py"
+    ).read_text()
     readme = (project_root / "README.md").read_text()
 
-    assert "get_builtin_benchmark" in benchmark_module
+    assert "get_catalog_benchmark" in benchmark_module
     assert "mmlu_pro" in benchmark_module
-    assert "THEMIS_STARTER_BENCHMARK" in (project_root / ".env.example").read_text()
+    assert "get_catalog_benchmark" in dataset_module
+    assert "THEMIS_CATALOG_BENCHMARK" in (project_root / ".env.example").read_text()
     assert "themis report" in readme

@@ -176,7 +176,7 @@ def test_quick_eval_huggingface_surfaces_missing_extra(
     assert "themis-eval[datasets]" in capsys.readouterr().err
 
 
-def test_quick_eval_benchmark_preview_uses_builtin_catalog(capsys) -> None:
+def test_quick_eval_benchmark_preview_uses_catalog(capsys) -> None:
     assert (
         main(
             [
@@ -220,14 +220,14 @@ def test_quick_eval_benchmark_defaults_to_8192_max_tokens(
             del kwargs
             return [{"messages": [{"role": "user", "content": "preview"}]}]
 
-    def _stub_build_builtin_benchmark_project(**kwargs):
+    def _stub_build_catalog_benchmark_project(**kwargs):
         observed.update(kwargs)
         return object(), object(), object(), object(), _StubDefinition()
 
     monkeypatch.setattr(
         quick_eval_cli,
-        "build_builtin_benchmark_project",
-        _stub_build_builtin_benchmark_project,
+        "build_catalog_benchmark_project",
+        _stub_build_catalog_benchmark_project,
     )
 
     assert (
@@ -257,10 +257,10 @@ def test_quick_eval_benchmark_defaults_to_8192_max_tokens(
 def test_quick_eval_benchmark_estimate_uses_builtin_dataset_loader(
     tmp_path: Path, capsys, monkeypatch
 ) -> None:
-    from themis import starter_catalog as starter_catalog_module
+    import themis.catalog as catalog_module
 
     monkeypatch.setattr(
-        starter_catalog_module,
+        catalog_module,
         "load_huggingface_rows",
         lambda dataset_id, split, revision: [
             {"question_id": 1, "question": "2 + 2", "options": ["4"], "answer": "A"},

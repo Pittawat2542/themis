@@ -1,4 +1,4 @@
-"""Dataset providers and Hugging Face loading helpers for starter benchmarks."""
+"""Dataset providers and Hugging Face loading helpers for catalog benchmarks."""
 
 from __future__ import annotations
 
@@ -21,13 +21,13 @@ Confidence: {confidence}%"""
 
 
 @dataclass(frozen=True, slots=True)
-class StarterNormalizedRows:
+class CatalogNormalizedRows:
     rows: list[dict[str, object]]
     stats: JSONDict = field(default_factory=dict)
 
 
-class StarterDatasetProvider:
-    """Dataset provider covering inline, local-file, and HuggingFace starters."""
+class CatalogDatasetProvider:
+    """Dataset provider covering inline, local-file, and HuggingFace catalogs."""
 
     def __init__(
         self,
@@ -50,18 +50,18 @@ class StarterDatasetProvider:
         elif dataset.source == DatasetSource.LOCAL:
             dataset_path = dataset.dataset_id or dataset.data_dir
             if dataset_path is None:
-                raise ValueError("Local starter datasets require a dataset path.")
+                raise ValueError("Local catalog datasets require a dataset path.")
             rows = self._local_loader(Path(dataset_path))
         elif dataset.source == DatasetSource.HUGGINGFACE:
             if dataset.dataset_id is None:
-                raise ValueError("HuggingFace starter datasets require a dataset_id.")
+                raise ValueError("HuggingFace catalog datasets require a dataset_id.")
             rows = self._huggingface_loader(
                 dataset.dataset_id,
                 dataset.split,
                 dataset.revision,
             )
         else:
-            raise ValueError(f"Unsupported starter dataset source '{dataset.source}'.")
+            raise ValueError(f"Unsupported catalog dataset source '{dataset.source}'.")
         normalized = self.prepare_rows(rows, dataset)
         filtered = _apply_query(normalized.rows, query)
         self._last_scan_stats = {
@@ -76,14 +76,14 @@ class StarterDatasetProvider:
         self,
         rows: list[dict[str, object]],
         dataset: DatasetSpec,
-    ) -> StarterNormalizedRows:
+    ) -> CatalogNormalizedRows:
         return _normalize_rows_for_provider(rows, dataset, self._row_normalizer)
 
     def last_scan_stats(self) -> JSONDict:
         return dict(self._last_scan_stats)
 
 
-class BuiltinDatasetProvider(StarterDatasetProvider):
+class BuiltinDatasetProvider(CatalogDatasetProvider):
     """Benchmark-aware Hugging Face dataset provider base used by built-ins."""
 
     def __init__(self, *, huggingface_loader=None) -> None:
@@ -121,14 +121,14 @@ class BuiltinDatasetProvider(StarterDatasetProvider):
         self,
         rows: list[dict[str, object]],
         dataset: DatasetSpec,
-    ) -> StarterNormalizedRows:
-        return StarterNormalizedRows(rows=[dict(row) for row in rows])
+    ) -> CatalogNormalizedRows:
+        return CatalogNormalizedRows(rows=[dict(row) for row in rows])
 
     def prepare_rows(
         self,
         rows: list[dict[str, object]],
         dataset: DatasetSpec,
-    ) -> StarterNormalizedRows:
+    ) -> CatalogNormalizedRows:
         return _normalize_rows_for_provider(rows, dataset, self.normalize_loaded_rows)
 
 
@@ -146,12 +146,12 @@ class BuiltinMCQDatasetProvider(BuiltinDatasetProvider):
         self,
         rows: list[dict[str, object]],
         dataset: DatasetSpec,
-    ) -> StarterNormalizedRows:
+    ) -> CatalogNormalizedRows:
         return _normalize_mcq_rows(rows, dataset, metadata_keys=self._metadata_keys)
 
 
 def load_local_rows(path: Path) -> list[dict[str, object]]:
-    """Load starter dataset rows from JSONL or CSV."""
+    """Load catalog dataset rows from JSONL or CSV."""
 
     if path.suffix.lower() == ".jsonl":
         rows: list[dict[str, object]] = []
@@ -168,7 +168,7 @@ def load_local_rows(path: Path) -> list[dict[str, object]]:
     if path.suffix.lower() == ".csv":
         with path.open(newline="") as fh:
             return _assign_missing_item_ids([dict(row) for row in csv.DictReader(fh)])
-    raise ValueError("Starter local datasets must use .jsonl or .csv.")
+    raise ValueError("Catalog local datasets must use .jsonl or .csv.")
 
 
 def load_huggingface_rows(
@@ -178,7 +178,7 @@ def load_huggingface_rows(
     *,
     datasets_module=None,
 ) -> list[dict[str, object]]:
-    """Load starter dataset rows from a HuggingFace dataset identifier."""
+    """Load catalog dataset rows from a HuggingFace dataset identifier."""
 
     datasets = datasets_module or import_optional("datasets", extra="datasets")
     try:
@@ -351,7 +351,7 @@ def _apply_dataset_transforms(
             continue
         if transform.kind == "python":
             raise ValueError(
-                "DatasetSpec python transforms are not supported by StarterDatasetProvider."
+                "DatasetSpec python transforms are not supported by CatalogDatasetProvider."
             )
     return transformed_rows
 
@@ -360,15 +360,15 @@ def _normalize_rows_for_provider(
     rows: list[dict[str, object]],
     dataset: DatasetSpec,
     row_normalizer,
-) -> StarterNormalizedRows:
+) -> CatalogNormalizedRows:
     assigned = _assign_missing_item_ids(rows)
     normalized = (
         row_normalizer(assigned, dataset)
         if row_normalizer is not None
-        else StarterNormalizedRows(rows=assigned)
+        else CatalogNormalizedRows(rows=assigned)
     )
     transformed = _apply_dataset_transforms(normalized.rows, dataset)
-    return StarterNormalizedRows(rows=transformed, stats=normalized.stats)
+    return CatalogNormalizedRows(rows=transformed, stats=normalized.stats)
 
 
 def _metadata_dict(payload: dict[str, object], keys: list[str]) -> dict[str, str]:
@@ -404,7 +404,7 @@ def _normalize_mcq_rows(
     dataset: DatasetSpec,
     *,
     metadata_keys: list[str],
-) -> StarterNormalizedRows:
+) -> CatalogNormalizedRows:
     del dataset
     normalized: list[dict[str, object]] = []
     for row in rows:
@@ -412,13 +412,13 @@ def _normalize_mcq_rows(
         payload["options_text"] = _format_options_text(payload.get("options"))
         payload["metadata"] = _metadata_dict(payload, metadata_keys)
         normalized.append(payload)
-    return StarterNormalizedRows(rows=normalized)
+    return CatalogNormalizedRows(rows=normalized)
 
 
 def _normalize_simpleqa_rows(
     rows: list[dict[str, object]],
     dataset: DatasetSpec,
-) -> StarterNormalizedRows:
+) -> CatalogNormalizedRows:
     del dataset
     normalized: list[dict[str, object]] = []
     for row in rows:
@@ -430,13 +430,13 @@ def _normalize_simpleqa_rows(
         )
         payload.setdefault("expected_response", str(payload.get("answer", "")))
         normalized.append(payload)
-    return StarterNormalizedRows(rows=normalized)
+    return CatalogNormalizedRows(rows=normalized)
 
 
 def _normalize_healthbench_rows(
     rows: list[dict[str, object]],
     dataset: DatasetSpec,
-) -> StarterNormalizedRows:
+) -> CatalogNormalizedRows:
     del dataset
     normalized: list[dict[str, object]] = []
     for row in rows:
@@ -456,13 +456,13 @@ def _normalize_healthbench_rows(
             if isinstance(ideal_completion, str):
                 payload["expected_response"] = ideal_completion
         normalized.append(payload)
-    return StarterNormalizedRows(rows=normalized)
+    return CatalogNormalizedRows(rows=normalized)
 
 
 def _normalize_lpfqa_rows(
     rows: list[dict[str, object]],
     dataset: DatasetSpec,
-) -> StarterNormalizedRows:
+) -> CatalogNormalizedRows:
     del dataset
     normalized: list[dict[str, object]] = []
     for row in rows:
@@ -473,13 +473,13 @@ def _normalize_lpfqa_rows(
             str(payload.get("response_reference", ""))
         )
         normalized.append(payload)
-    return StarterNormalizedRows(rows=normalized)
+    return CatalogNormalizedRows(rows=normalized)
 
 
 def _normalize_hle_rows(
     rows: list[dict[str, object]],
     dataset: DatasetSpec,
-) -> StarterNormalizedRows:
+) -> CatalogNormalizedRows:
     del dataset
     normalized: list[dict[str, object]] = []
     skipped = 0
@@ -497,7 +497,7 @@ def _normalize_hle_rows(
             confidence=100,
         )
         normalized.append(payload)
-    return StarterNormalizedRows(
+    return CatalogNormalizedRows(
         rows=normalized,
         stats={"skipped_image_count": skipped},
     )

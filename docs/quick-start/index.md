@@ -35,7 +35,7 @@ Expected output:
 }
 ```
 
-Create a starter project when you are ready to edit a real benchmark:
+Create a catalog project when you are ready to edit a real benchmark:
 
 ```bash
 themis init starter-eval

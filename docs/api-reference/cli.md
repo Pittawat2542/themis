@@ -38,7 +38,7 @@ Benchmark mode adds:
 
 ### `themis init`
 
-Generates a starter project with:
+Generates a catalog project with:
 
 - `project.toml`
 - a runnable package scaffold

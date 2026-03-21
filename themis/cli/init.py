@@ -1,4 +1,4 @@
-"""Project scaffold generator for Themis starter projects."""
+"""Project scaffold generator for Themis catalog projects."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def build_app() -> App:
 
     app = App(
         name="init",
-        help="Generate a lean benchmark-first starter project.",
+        help="Generate a lean benchmark-first catalog project.",
     )
 
     @app.default
@@ -29,9 +29,9 @@ def build_app() -> App:
     ) -> int:
         try:
             if benchmark is not None:
-                from themis.starter_catalog import get_builtin_benchmark
+                from themis.catalog import get_catalog_benchmark
 
-                get_builtin_benchmark(benchmark)
+                get_catalog_benchmark(benchmark)
             project_root = Path(path)
             package_name = _package_name(project_root.name)
             normalized_provider = provider.replace("-", "_")
@@ -57,7 +57,7 @@ def build_app() -> App:
             for destination, content in files.items():
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_text(content)
-            Console().print(f"Initialized starter project at {project_root}")
+            Console().print(f"Initialized catalog project at {project_root}")
             return 0
         except Exception as exc:
             Console(stderr=True).print(str(exc))
@@ -131,11 +131,11 @@ def _build_scaffold_files(
         ).lstrip(),
         project_root / ".env.example": dedent(
             f"""
-            THEMIS_STARTER_PROVIDER={provider}
-            THEMIS_STARTER_MODEL={model}
-            THEMIS_STARTER_BENCHMARK=
-            THEMIS_STARTER_JUDGE_MODEL=
-            THEMIS_STARTER_JUDGE_PROVIDER=
+            THEMIS_CATALOG_PROVIDER={provider}
+            THEMIS_CATALOG_MODEL={model}
+            THEMIS_CATALOG_BENCHMARK=
+            THEMIS_CATALOG_JUDGE_MODEL=
+            THEMIS_CATALOG_JUDGE_PROVIDER=
             OPENAI_API_KEY=
             OPENAI_COMPAT_API_KEY=
             OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8000/v1
@@ -151,7 +151,7 @@ def _build_scaffold_files(
         project_root / "data" / "sample.jsonl": sample_jsonl,
         project_root
         / package_name
-        / "__init__.py": '"""Starter benchmark package."""\n',
+        / "__init__.py": '"""Catalog benchmark package."""\n',
         project_root / package_name / "__main__.py": dedent(
             f"""
             from {package_name}.app import main
@@ -167,14 +167,14 @@ def _build_scaffold_files(
         ),
         project_root / package_name / "registry.py": dedent(
             """
-            from themis.starter_catalog import build_starter_registry
+            from themis.catalog import build_catalog_registry
 
             from .settings import get_settings
 
 
             def build_registry():
                 settings = get_settings()
-                return build_starter_registry(settings.provider_name)
+                return build_catalog_registry(settings.provider_name)
             """
         ).lstrip(),
         project_root / package_name / "benchmarks" / "__init__.py": dedent(
@@ -198,11 +198,11 @@ def _build_scaffold_files(
         ).lstrip(),
         project_root / package_name / "datasets" / "local_file.py": dedent(
             """
-            from themis.starter_catalog import StarterDatasetProvider
+            from themis.catalog import CatalogDatasetProvider
 
 
             def build_dataset_provider():
-                return StarterDatasetProvider()
+                return CatalogDatasetProvider()
             """
         ).lstrip(),
         project_root / package_name / "app.py": _app_template(
@@ -222,12 +222,12 @@ def _settings_template(*, provider: str, model: str) -> str:
 
 
         @dataclass(frozen=True)
-        class StarterSettings:
-            provider: str = os.getenv("THEMIS_STARTER_PROVIDER", "{provider}")
-            model_id: str = os.getenv("THEMIS_STARTER_MODEL", "{model}")
-            benchmark_id: str = os.getenv("THEMIS_STARTER_BENCHMARK", "")
-            judge_model_id: str | None = os.getenv("THEMIS_STARTER_JUDGE_MODEL") or None
-            judge_provider: str | None = os.getenv("THEMIS_STARTER_JUDGE_PROVIDER") or None
+        class CatalogSettings:
+            provider: str = os.getenv("THEMIS_CATALOG_PROVIDER", "{provider}")
+            model_id: str = os.getenv("THEMIS_CATALOG_MODEL", "{model}")
+            benchmark_id: str = os.getenv("THEMIS_CATALOG_BENCHMARK", "")
+            judge_model_id: str | None = os.getenv("THEMIS_CATALOG_JUDGE_MODEL") or None
+            judge_provider: str | None = os.getenv("THEMIS_CATALOG_JUDGE_PROVIDER") or None
             openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
             openai_compat_api_key: str | None = os.getenv("OPENAI_COMPAT_API_KEY")
             openai_compat_base_url: str = os.getenv(
@@ -259,8 +259,8 @@ def _settings_template(*, provider: str, model: str) -> str:
                 return {{}}
 
 
-        def get_settings() -> StarterSettings:
-            return StarterSettings()
+        def get_settings() -> CatalogSettings:
+            return CatalogSettings()
         """
     ).lstrip()
 
@@ -356,7 +356,7 @@ def _app_template(*, package_name: str) -> str:
             ProgressRendererType,
             ProgressVerbosity,
         )
-        from themis.starter_catalog import load_local_rows
+        from themis.catalog import load_local_rows
 
         from {package_name}.benchmarks import build_benchmark
         from {package_name}.datasets import build_dataset_provider
@@ -365,7 +365,7 @@ def _app_template(*, package_name: str) -> str:
 
 
         def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-            parser = argparse.ArgumentParser(description="Run the starter Themis benchmark.")
+            parser = argparse.ArgumentParser(description="Run the catalog Themis benchmark.")
             parser.add_argument("--preview", action="store_true")
             parser.add_argument("--estimate-only", action="store_true")
             parser.add_argument("--format", choices=("table", "json"), default="table")
@@ -489,7 +489,7 @@ def _readme_template(
         f"""
         # {package_name}
 
-        Starter benchmark scaffold generated by `themis init`.
+        Catalog benchmark scaffold generated by `themis init`.
 
         ## Defaults
 
@@ -569,11 +569,11 @@ def _build_builtin_scaffold_files(
         ).lstrip(),
         project_root / ".env.example": dedent(
             f"""
-            THEMIS_STARTER_PROVIDER={provider}
-            THEMIS_STARTER_MODEL={model}
-            THEMIS_STARTER_BENCHMARK={benchmark}
-            THEMIS_STARTER_JUDGE_MODEL=
-            THEMIS_STARTER_JUDGE_PROVIDER=
+            THEMIS_CATALOG_PROVIDER={provider}
+            THEMIS_CATALOG_MODEL={model}
+            THEMIS_CATALOG_BENCHMARK={benchmark}
+            THEMIS_CATALOG_JUDGE_MODEL=
+            THEMIS_CATALOG_JUDGE_PROVIDER=
             OPENAI_API_KEY=
             OPENAI_COMPAT_API_KEY=
             OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8000/v1
@@ -583,7 +583,7 @@ def _build_builtin_scaffold_files(
             f"""
             # {package_name}
 
-            Starter benchmark scaffold generated by `themis init`.
+            Catalog benchmark scaffold generated by `themis init`.
 
             ## Defaults
 
@@ -618,7 +618,7 @@ def _build_builtin_scaffold_files(
         ).lstrip(),
         project_root
         / package_name
-        / "__init__.py": '"""Starter benchmark package."""\n',
+        / "__init__.py": '"""Catalog benchmark package."""\n',
         project_root / package_name / "__main__.py": dedent(
             f"""
             from {package_name}.app import main
@@ -634,7 +634,7 @@ def _build_builtin_scaffold_files(
         ),
         project_root / package_name / "registry.py": dedent(
             """
-            from themis.starter_catalog import build_starter_registry
+            from themis.catalog import build_catalog_registry
 
             from .settings import get_settings
 
@@ -644,7 +644,7 @@ def _build_builtin_scaffold_files(
                 providers = [settings.provider_name]
                 if settings.judge_provider_name:
                     providers.append(settings.judge_provider_name)
-                return build_starter_registry(providers)
+                return build_catalog_registry(providers)
             """
         ).lstrip(),
         project_root / package_name / "benchmarks" / "__init__.py": dedent(
@@ -656,11 +656,11 @@ def _build_builtin_scaffold_files(
         ).lstrip(),
         project_root / package_name / "benchmarks" / "default.py": dedent(
             f"""
-            from themis.starter_catalog import get_builtin_benchmark
+            from themis.catalog import get_catalog_benchmark
 
 
             def _definition(settings):
-                return get_builtin_benchmark(settings.benchmark_id or "{benchmark}")
+                return get_catalog_benchmark(settings.benchmark_id or "{benchmark}")
 
 
             def build_benchmark(settings):
@@ -694,14 +694,14 @@ def _build_builtin_scaffold_files(
         ).lstrip(),
         project_root / package_name / "datasets" / "builtin.py": dedent(
             f"""
-            from themis.starter_catalog import get_builtin_benchmark
+            from themis.catalog import get_catalog_benchmark
 
             from {package_name}.settings import get_settings
 
 
             def build_dataset_provider():
                 settings = get_settings()
-                return get_builtin_benchmark(
+                return get_catalog_benchmark(
                     settings.benchmark_id or "{benchmark}"
                 ).build_dataset_provider()
             """
@@ -745,7 +745,7 @@ def _builtin_app_template(*, package_name: str) -> str:
 
 
         def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-            parser = argparse.ArgumentParser(description="Run the starter Themis benchmark.")
+            parser = argparse.ArgumentParser(description="Run the catalog Themis benchmark.")
             parser.add_argument("--preview", action="store_true")
             parser.add_argument("--estimate-only", action="store_true")
             parser.add_argument("--format", choices=("table", "json"), default="table")

@@ -13,7 +13,11 @@ from themis.cli.report import build_app as build_report_app
 
 
 def build_app() -> App:
-    """Build the top-level Themis Cyclopts app."""
+    """Build the top-level Themis Cyclopts app.
+
+    Returns:
+        App: Configured root CLI application with all subcommands attached.
+    """
 
     app = App(
         name="themis",
@@ -28,6 +32,14 @@ def build_app() -> App:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the top-level Themis CLI."""
+    """Run the top-level Themis CLI.
+
+    Args:
+        argv: Optional command-line arguments. When ``None``, Cyclopts reads from
+            the process command line.
+
+    Returns:
+        int: Shell-style exit status from the invoked CLI command.
+    """
 
     return invoke_app(build_app(), argv)

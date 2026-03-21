@@ -23,7 +23,15 @@ from themis.types.json_validation import format_validation_error
 
 
 def build_app(*, standalone: bool = False) -> App:
-    """Build the config-report Cyclopts app."""
+    """Build the config-report Cyclopts app.
+
+    Args:
+        standalone: Whether to use the standalone executable name instead of the
+            nested parent-command name.
+
+    Returns:
+        App: Configured report CLI application.
+    """
 
     app = App(
         name="themis-report" if standalone else "report",
@@ -135,7 +143,15 @@ def _load_run_manifest_bundle(project_file: str, run_id: str) -> dict[str, objec
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the config-report CLI."""
+    """Run the config-report CLI.
+
+    Args:
+        argv: Optional command-line arguments. When ``None``, Cyclopts reads from
+            the process command line.
+
+    Returns:
+        int: Shell-style exit status from the invoked CLI command.
+    """
 
     return invoke_app(build_app(standalone=True), argv)
 

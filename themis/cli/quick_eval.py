@@ -29,10 +29,10 @@ from themis import (
     ScoreSpec,
     SliceSpec,
 )
-from themis.starter_catalog import (
-    StarterDatasetProvider,
-    build_builtin_benchmark_project,
-    build_starter_registry,
+from themis.catalog import (
+    CatalogDatasetProvider,
+    build_catalog_benchmark_project,
+    build_catalog_registry,
     load_huggingface_rows as _load_huggingface_rows,
     load_local_rows as _load_local_rows,
 )
@@ -280,8 +280,8 @@ def build_app() -> App:
     return app
 
 
-class QuickEvalDatasetProvider(StarterDatasetProvider):
-    """Starter dataset provider that maps user fields onto `input` and `expected`."""
+class QuickEvalDatasetProvider(CatalogDatasetProvider):
+    """Catalog dataset provider that maps user fields onto `input` and `expected`."""
 
     def __init__(
         self,
@@ -351,7 +351,7 @@ def _run_quick_eval(
         benchmark = _build_benchmark(config, dataset_spec=dataset_spec, subset=subset)
         if not sample_rows:
             raise ValueError("Quick eval requires at least one dataset row.")
-        registry = build_starter_registry(config.provider)
+        registry = build_catalog_registry(config.provider)
         project = _build_project(config)
         orchestrator = Orchestrator.from_project_spec(
             project,
@@ -404,7 +404,7 @@ def _run_builtin_benchmark(
             registry,
             dataset_provider,
             definition,
-        ) = build_builtin_benchmark_project(
+        ) = build_catalog_benchmark_project(
             benchmark_id=benchmark_id,
             model_id=config.model,
             provider=config.provider,

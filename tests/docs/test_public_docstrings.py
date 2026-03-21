@@ -50,23 +50,15 @@ DOCSTRING_TARGETS = [
 
 QUALITY_EXPECTATIONS = {
     PROJECT_ROOT / "themis/cli/main.py": {
-        "build_parser",
+        "build_app",
         "main",
     },
     PROJECT_ROOT / "themis/cli/quickcheck.py": {
-        "add_quickcheck_arguments",
-        "configure_quickcheck_parser",
-        "build_parser",
-        "add_quickcheck_subparser",
-        "run_with_args",
+        "build_app",
         "main",
     },
     PROJECT_ROOT / "themis/cli/report.py": {
-        "add_report_arguments",
-        "configure_report_parser",
-        "build_parser",
-        "add_report_subparser",
-        "run_with_args",
+        "build_app",
         "main",
     },
     PROJECT_ROOT / "themis/config_report/api.py": {

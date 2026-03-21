@@ -23,7 +23,15 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 
 def build_app(*, standalone: bool = False) -> App:
-    """Build the quickcheck Cyclopts app."""
+    """Build the quickcheck Cyclopts app.
+
+    Args:
+        standalone: Whether to use the standalone executable name instead of the
+            nested parent-command name.
+
+    Returns:
+        App: Configured quickcheck CLI application.
+    """
 
     app = App(
         name="themis-quickcheck" if standalone else "quickcheck",
@@ -79,7 +87,15 @@ def build_app(*, standalone: bool = False) -> App:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the quickcheck CLI and dispatch to the selected summary command."""
+    """Run the quickcheck CLI and dispatch to the selected summary command.
+
+    Args:
+        argv: Optional command-line arguments. When ``None``, Cyclopts reads from
+            the process command line.
+
+    Returns:
+        int: Shell-style exit status from the invoked CLI command.
+    """
 
     return invoke_app(build_app(standalone=True), argv)
 
