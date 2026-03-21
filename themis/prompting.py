@@ -45,7 +45,9 @@ class _SafeNamespace(dict[str, object]):
 def _build_context_mapping(
     namespaces: Mapping[str, object],
 ) -> tuple[dict[str, object], _SafeNamespace]:
-    context = {key: _ValueProxy(value) for key, value in namespaces.items()}
+    context: dict[str, object] = {
+        key: _ValueProxy(value) for key, value in namespaces.items()
+    }
     return context, _SafeNamespace(context)
 
 
