@@ -40,6 +40,10 @@ Every numbered example in this directory uses the benchmark-first public API.
 uv run python examples/01_hello_world.py
 ```
 
+When an example shows `DatasetQuerySpec.subset(..., seed=...)`, the explicit
+seed is there to make subset selection reproducible. Omitting the seed keeps
+count-based sampling deterministic and order-based.
+
 The published examples catalog is [docs/guides/examples.md](../docs/guides/examples.md).
 
 ## Scope

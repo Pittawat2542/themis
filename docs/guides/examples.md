@@ -2,6 +2,10 @@
 
 All numbered examples use the benchmark-first public surface.
 
+Examples that use `DatasetQuerySpec.subset(..., seed=...)` do so to make subset
+selection reproducible. Omitting the seed keeps count-based sampling
+deterministic and order-based rather than random.
+
 | Example | Focus |
 | --- | --- |
 | `01_hello_world.py` | Smallest benchmark run |

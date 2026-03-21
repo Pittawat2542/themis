@@ -138,6 +138,10 @@ for row in result.aggregate(
     print(row)
 ```
 
+Use an explicit `seed=` when you want a reproducible sampled subset. If you
+omit the seed for count-based sampling, Themis keeps deterministic order-based
+selection from the provider instead of randomizing.
+
 ## Add Built-In Progress Logging When Needed
 
 ```python

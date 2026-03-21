@@ -34,6 +34,9 @@ and these references. Do not send the user into retired experiment/task APIs.
 - Start from the smallest bundled benchmark pattern and adapt it.
 - Use `DatasetProvider.scan(slice_spec, query)` for data access.
 - Use `BenchmarkSpec` plus `SliceSpec`; do not propose `ExperimentSpec` or `TaskSpec`.
+- Treat count-based sampling without an explicit seed as deterministic and
+  order-based. Add `seed=` only when the user wants a reproducible pseudo-random
+  subset instead of the provider's stable prefix.
 - Treat prompt rendering as orchestration-owned for benchmark runs. Engines receive rendered `trial.prompt.messages`, rendered `trial.prompt.follow_up_turns`, selected `trial.tools`, matching `runtime.tool_handlers`, and preserved prompt metadata such as `trial.prompt.id`, `trial.prompt.family`, and `trial.prompt.variables`.
 - Use `ParseSpec` for parsing and keep metrics focused on scoring parsed outputs.
 - Use `BenchmarkResult.aggregate(...)` and `paired_compare(...)` before reaching for lower-level report APIs.
@@ -41,6 +44,9 @@ and these references. Do not send the user into retired experiment/task APIs.
 - Use `themis.specs` for supporting public spec imports such as `DatasetSpec`, `GenerationSpec`, and `JudgeInferenceSpec`.
 - Use `progress=` plus `themis.progress.ProgressConfig` when the user wants live logs or snapshots.
 - Use `themis-quickcheck` when the user wants SQLite inspection without importing benchmark code.
+- When discussing engine seeding, note that `trial.params.seed` may be wider
+  than 32 bits; some providers require truncation such as
+  `trial.params.seed & 0xFFFFFFFF`.
 - If the workspace does not contain Themis source or examples, continue using only this skill's references and the installed package surface.
 
 ## Default Workflow
