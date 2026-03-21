@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from themis.benchmark.query import DatasetQuerySpec
@@ -235,7 +237,7 @@ class BenchmarkSpec(SpecBase):
         item: dict[str, object],
         *,
         prompt_variant_ids: list[str] | None = None,
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         """Dry-run render all prompt variants against a sample item dict.
 
         Returns one entry per matching prompt variant showing exactly what
@@ -262,14 +264,18 @@ class BenchmarkSpec(SpecBase):
             for v in self.prompt_variants
             if prompt_variant_ids is None or v.id in prompt_variant_ids
         ]
-        results: list[dict[str, object]] = []
+        results: list[dict[str, Any]] = []
         for variant in variants:
-            namespaces: dict[str, object] = {
+            namespaces: dict[str, Any] = {
                 "item": item,
                 "prompt": {
                     "family": variant.family,
                     "variables": variant.variables,
-                    **variant.variables,
+                    **{
+                        k: v
+                        for k, v in variant.variables.items()
+                        if k not in ("family", "variables")
+                    },
                 },
             }
             rendered_messages = render_prompt_messages(variant.messages, namespaces)
