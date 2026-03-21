@@ -1,0 +1,18 @@
+{
+  "dataset_id": "m-a-p/SuperGPQA",
+  "split": "train",
+  "gated": false,
+  "modalities": ["text"],
+  "samples": [
+    {
+      "item_id": "supergpqa-1",
+      "question": "Which gas is most abundant in Earth's atmosphere?",
+      "options": ["Oxygen", "Hydrogen", "Nitrogen", "Carbon dioxide"],
+      "answer_letter": "C",
+      "discipline": "science",
+      "field": "chemistry",
+      "subfield": "atmospheric chemistry",
+      "difficulty": "medium"
+    }
+  ]
+}

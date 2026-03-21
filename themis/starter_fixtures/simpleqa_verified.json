@@ -1,0 +1,18 @@
+{
+  "dataset_id": "google/simpleqa-verified",
+  "split": "eval",
+  "gated": false,
+  "modalities": ["text"],
+  "samples": [
+    {
+      "item_id": "simpleqa-1",
+      "original_index": 1,
+      "problem": "What is the chemical symbol for gold?",
+      "answer": "Au",
+      "topic": "chemistry",
+      "answer_type": "short_text",
+      "multi_step": false,
+      "requires_reasoning": false
+    }
+  ]
+}

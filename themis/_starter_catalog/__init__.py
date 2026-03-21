@@ -1,0 +1,1 @@
+"""Internal starter catalog package."""

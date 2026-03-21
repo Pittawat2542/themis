@@ -38,6 +38,10 @@ def _raw_text(candidate: CandidateRecord) -> str:
 
 
 _BOXED_PATTERN = re.compile(r"\\boxed\s*\{([^{}]+)\}", re.IGNORECASE | re.DOTALL)
+_JSON_FENCE_PATTERN = re.compile(
+    r"```(?:json)?\s*(?P<payload>.+?)\s*```",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _last_boxed_text(text: str) -> str | None:
@@ -51,6 +55,38 @@ def _normalize_text(text: str) -> str:
     cleaned = text.strip().casefold()
     cleaned = cleaned.strip(string.punctuation + " ")
     return " ".join(cleaned.split())
+
+
+def extract_embedded_json_payload(text: str) -> JSONValueType:
+    """Extract a JSON object/array embedded inside mixed model output."""
+
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("No JSON payload found in the inference output.")
+
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+
+    for match in _JSON_FENCE_PATTERN.finditer(text):
+        payload = match.group("payload").strip()
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char not in "[{":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        return payload
+
+    raise ValueError("No JSON payload found in the inference output.")
 
 
 def _success(
@@ -177,6 +213,25 @@ class JsonSchemaExtractor:
         except jsonschema.exceptions.ValidationError as exc:
             return _failure("json_schema", candidate, cfg, exc.message)
         return _success("json_schema", candidate, cfg, parsed)
+
+
+class EmbeddedJsonExtractor:
+    """Extract a JSON payload from fenced or mixed-text model output."""
+
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, JSONValueType] | None = None,
+    ) -> ExtractionRecord:
+        """Extract a JSON payload embedded inside the candidate output."""
+        del trial
+        cfg = dict(config or {})
+        try:
+            parsed = extract_embedded_json_payload(_raw_text(candidate))
+        except ValueError as exc:
+            return _failure("embedded_json", candidate, cfg, str(exc))
+        return _success("embedded_json", candidate, cfg, parsed)
 
 
 class FirstNumberExtractor:

@@ -120,6 +120,7 @@ def test_registry_ships_builtin_extractors():
 
     assert registry.has_extractor("regex")
     assert registry.has_extractor("json_schema")
+    assert registry.has_extractor("embedded_json")
     assert registry.has_extractor("first_number")
     assert registry.has_extractor("choice_letter")
     assert registry.has_extractor("boxed_text")
@@ -251,3 +252,30 @@ def test_json_schema_extractor_returns_install_hint_when_optional_dependency_is_
         extraction.failure_reason
         == 'Install it with `uv add "themis-eval[extractors]"`.'
     )
+
+
+def test_embedded_json_extractor_parses_fenced_json_payload() -> None:
+    extractor = PluginRegistry().get_extractor("embedded_json")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate('Result:\n```json\n{"answer_score": 1, "reason": "matches"}\n```'),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == {"answer_score": 1, "reason": "matches"}
+
+
+def test_embedded_json_extractor_parses_json_inside_mixed_text() -> None:
+    extractor = PluginRegistry().get_extractor("embedded_json")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate('analysis...\n{"criteria_met": true, "explanation": "ok"}\nthanks'),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == {
+        "criteria_met": True,
+        "explanation": "ok",
+    }

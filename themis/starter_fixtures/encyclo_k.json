@@ -1,0 +1,18 @@
+{
+  "dataset_id": "m-a-p/Encyclo-K",
+  "split": "test",
+  "gated": false,
+  "modalities": ["text"],
+  "samples": [
+    {
+      "item_id": "encyclo-k-1",
+      "question": "What is the capital city of Canada?",
+      "options": ["Toronto", "Vancouver", "Ottawa", "Montreal"],
+      "answer_letter": "C",
+      "discipline": "humanities",
+      "field": "geography",
+      "subfield": "capitals",
+      "difficulty": "easy"
+    }
+  ]
+}

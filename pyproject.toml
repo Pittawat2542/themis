@@ -44,7 +44,14 @@ include = [
 ]
 
 [tool.setuptools.package-data]
-"themis" = ["py.typed", "*.pyi", "records/*.pyi", "stats/*.pyi", "types/*.pyi"]
+"themis" = [
+    "py.typed",
+    "*.pyi",
+    "records/*.pyi",
+    "starter_fixtures/*.json",
+    "stats/*.pyi",
+    "types/*.pyi",
+]
 
 [project.optional-dependencies]
 dev = [
