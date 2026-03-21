@@ -224,6 +224,44 @@ def test_compile_benchmark_preserves_tool_ids() -> None:
     assert experiment.tasks[0].tool_ids == ["search", "calculator"]
 
 
+def test_compile_benchmark_rejects_unknown_slice_tool_ids() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                tool_ids=["missing-tool"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    with pytest.raises(ValueError, match="agent-bench.*agentic.*missing-tool"):
+        compile_benchmark(benchmark)
+
+
 def test_compile_benchmark_merges_project_tools_with_benchmark_overrides() -> None:
     benchmark = BenchmarkSpec(
         benchmark_id="agent-bench",
@@ -285,6 +323,58 @@ def test_compile_benchmark_merges_project_tools_with_benchmark_overrides() -> No
         "calculator": "Project calculator",
         "lookup": "Benchmark lookup",
     }
+
+
+def test_compile_benchmark_rejects_unknown_slice_tool_ids_from_unvalidated_copy() -> (
+    None
+):
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        tools=[
+            ToolSpec(
+                id="search",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    ).model_copy(
+        update={
+            "slices": [
+                SliceSpec(
+                    slice_id="agentic",
+                    dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                    prompt_variant_ids=["agent-default"],
+                    generation=GenerationSpec(),
+                    tool_ids=["search"],
+                ).model_copy(update={"tool_ids": ["missing-tool"]})
+            ]
+        }
+    )
+
+    with pytest.raises(ValueError, match="agent-bench.*agentic.*missing-tool"):
+        compile_benchmark(benchmark)
 
 
 def test_trial_planner_uses_dataset_provider_query_pushdown_and_prompt_filters() -> (

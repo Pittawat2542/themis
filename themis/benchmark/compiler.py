@@ -66,9 +66,15 @@ def compile_benchmark(
         for variant in benchmark.prompt_variants
     ]
     variants_by_id = {variant.id: variant for variant in benchmark.prompt_variants}
+    tool_ids = {tool.id for tool in benchmark.tools}
     tasks: list[TaskSpec] = []
     for slice_spec in benchmark.slices:
         allowed_prompt_ids = _allowed_prompt_ids(slice_spec, variants_by_id)
+        selected_tool_ids = _validated_tool_ids(
+            benchmark_id=benchmark.benchmark_id,
+            slice_spec=slice_spec,
+            known_tool_ids=tool_ids,
+        )
         tasks.append(
             TaskSpec(
                 task_id=slice_spec.slice_id,
@@ -101,7 +107,7 @@ def compile_benchmark(
                     if slice_spec.prompt_families
                     else None
                 ),
-                tool_ids=list(slice_spec.tool_ids),
+                tool_ids=selected_tool_ids,
             )
         )
     return ExperimentSpec(
@@ -150,3 +156,18 @@ def _allowed_prompt_ids(
             )
         return prompt_ids
     return list(variants_by_id)
+
+
+def _validated_tool_ids(
+    *,
+    benchmark_id: str,
+    slice_spec: SliceSpec,
+    known_tool_ids: set[str],
+) -> list[str]:
+    unknown_tool_ids = sorted(set(slice_spec.tool_ids) - known_tool_ids)
+    if unknown_tool_ids:
+        raise ValueError(
+            f"BenchmarkSpec '{benchmark_id}' slice '{slice_spec.slice_id}' "
+            f"references unknown tool id(s): {', '.join(unknown_tool_ids)}."
+        )
+    return list(slice_spec.tool_ids)
