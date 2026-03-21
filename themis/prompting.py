@@ -42,6 +42,13 @@ class _SafeNamespace(dict[str, object]):
         return _ValueProxy("{" + key + "}", placeholder="{" + key + "}")
 
 
+def _build_context_mapping(
+    namespaces: Mapping[str, object],
+) -> tuple[dict[str, object], _SafeNamespace]:
+    context = {key: _ValueProxy(value) for key, value in namespaces.items()}
+    return context, _SafeNamespace(context)
+
+
 def _rendered_content(
     template: str,
     context: dict[str, object],
@@ -62,10 +69,7 @@ def render_prompt_messages(
 ) -> list[dict[str, str]]:
     """Render prompt messages against benchmark-native namespaces."""
 
-    context: dict[str, object] = {}
-    for key, value in namespaces.items():
-        context[key] = _ValueProxy(value)
-    mapping = _SafeNamespace(context)
+    context, mapping = _build_context_mapping(namespaces)
     rendered: list[dict[str, str]] = []
     for message in messages:
         content = _rendered_content(
@@ -86,10 +90,7 @@ def render_follow_up_turns(
 ) -> list[dict[str, list[dict[str, str]]]]:
     """Render scripted follow-up turns against benchmark-native namespaces."""
 
-    context: dict[str, object] = {}
-    for key, value in namespaces.items():
-        context[key] = _ValueProxy(value)
-    mapping = _SafeNamespace(context)
+    context, mapping = _build_context_mapping(namespaces)
     rendered_turns: list[dict[str, list[dict[str, str]]]] = []
     for turn in turns:
         rendered_turns.append(

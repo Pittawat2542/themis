@@ -416,8 +416,6 @@ class TrialSpec(SpecBase):
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> TrialSpec:
-        if self.candidate_count < 1:
-            raise ValueError("Candidate count must be >= 1")
         _validate_unique_tool_ids(self.tools, owner_label="TrialSpec")
         return self
 

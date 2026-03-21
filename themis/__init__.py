@@ -24,9 +24,8 @@ from themis.specs.experiment import (
     StorageConfig,
     StorageSpec,
 )
-from themis.specs.foundational import ModelSpec
-from themis.specs.foundational import ToolSpec
 from themis.registry.plugin_registry import PluginRegistry
+from themis.specs.foundational import ModelSpec, ToolSpec
 
 __all__ = [
     "__version__",

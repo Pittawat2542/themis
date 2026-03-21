@@ -181,40 +181,28 @@ def prepare_benchmark_prompt(
             "metadata",
             {str(key): value for key, value in item_metadata.items()},
         )
+    render_namespace = {
+        "item": item_namespace,
+        "slice": {
+            "benchmark_id": trial.task.benchmark_id,
+            "slice_id": trial.task.slice_id or trial.task.task_id,
+            "dimensions": dict(trial.task.dimensions),
+        },
+        "prompt": {
+            "id": trial.prompt.id,
+            "family": trial.prompt.family,
+            "variables": dict(trial.prompt.variables),
+        },
+        "runtime": runtime.model_dump(mode="json"),
+    }
     rendered_messages = render_prompt_messages(
         trial.prompt.messages,
-        {
-            "item": item_namespace,
-            "slice": {
-                "benchmark_id": trial.task.benchmark_id,
-                "slice_id": trial.task.slice_id or trial.task.task_id,
-                "dimensions": dict(trial.task.dimensions),
-            },
-            "prompt": {
-                "id": trial.prompt.id,
-                "family": trial.prompt.family,
-                "variables": dict(trial.prompt.variables),
-            },
-            "runtime": runtime.model_dump(mode="json"),
-        },
+        render_namespace,
         strict=True,
     )
     rendered_follow_up_turns = render_follow_up_turns(
         trial.prompt.follow_up_turns,
-        {
-            "item": item_namespace,
-            "slice": {
-                "benchmark_id": trial.task.benchmark_id,
-                "slice_id": trial.task.slice_id or trial.task.task_id,
-                "dimensions": dict(trial.task.dimensions),
-            },
-            "prompt": {
-                "id": trial.prompt.id,
-                "family": trial.prompt.family,
-                "variables": dict(trial.prompt.variables),
-            },
-            "runtime": runtime.model_dump(mode="json"),
-        },
+        render_namespace,
         strict=True,
     )
     return trial.model_copy(

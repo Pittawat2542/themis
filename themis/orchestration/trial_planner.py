@@ -30,6 +30,7 @@ from themis.specs.experiment import (
     TrialSpec,
 )
 from themis.specs.foundational import ToolSpec
+from themis.specs.foundational import TaskSpec
 from themis.types.enums import ErrorCode, SamplingKind
 from themis.types.json_types import JSONValueType
 from themis.types.json_validation import validate_json_dict, validate_json_value
@@ -180,7 +181,7 @@ class TrialPlanner:
     def _resolve_task_tools(
         self,
         experiment: ExperimentSpec,
-        task,
+        task: TaskSpec,
     ) -> list[ToolSpec]:
         if not task.tool_ids:
             return []
