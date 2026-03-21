@@ -1,6 +1,8 @@
 """Evaluate an agent-style engine with scripted turns and first-class tools."""
 
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import cast
 
 from themis import (
     BenchmarkSpec,
@@ -59,7 +61,13 @@ class ScriptedAgentEngine:
         assert [tool.id for tool in trial.tools] == ["calculator"]
         assert trial.tools[0].description == "Benchmark arithmetic tool."
         assert sorted(runtime.tool_handlers) == ["calculator"]
-        final_answer = str(context["answer"])
+        calculator = runtime.tool_handlers["calculator"]
+        tool_result = cast(
+            Callable[[object], object],
+            calculator,
+        )({"expression": "6 * 7"})
+        tool_payload = cast(Mapping[str, object], tool_result)
+        final_answer = str(tool_payload["value"])
         conversation = Conversation(
             events=[
                 MessageEvent(
@@ -98,9 +106,8 @@ class ScriptedAgentEngine:
         )
         return InferenceResult(
             inference=InferenceRecord(
-                spec_hash=f"inf_{context['item_id']}",
+                spec_hash=f"inf_{trial.item_id}",
                 raw_text=final_answer,
-                conversation=conversation,
             ),
             conversation=conversation,
         )
@@ -116,11 +123,20 @@ class ExactMatchMetric:
         )
 
 
+def calculator_handler(arguments: object) -> dict[str, str]:
+    if not isinstance(arguments, Mapping):
+        raise TypeError("calculator handler expected a mapping of arguments")
+    expression = arguments.get("expression")
+    if expression != "6 * 7":
+        raise ValueError(f"unexpected calculator expression: {expression!r}")
+    return {"value": "42"}
+
+
 def main() -> None:
     registry = PluginRegistry()
     registry.register_inference_engine("agent-demo", ScriptedAgentEngine())
     registry.register_metric("exact_match", ExactMatchMetric())
-    registry.register_tool("calculator", object())
+    registry.register_tool("calculator", calculator_handler)
 
     project = ProjectSpec(
         project_name="agent-eval-benchmark",
