@@ -34,7 +34,11 @@
 
 ::: themis.specs.experiment.PromptMessage
 
+::: themis.specs.experiment.PromptTurnSpec
+
 ::: themis.specs.foundational.ModelSpec
+
+::: themis.specs.foundational.ToolSpec
 
 ::: themis.specs.foundational.DatasetSpec
 

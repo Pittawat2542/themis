@@ -148,3 +148,11 @@ result = orchestrator.run_benchmark(
     progress=ProgressConfig(renderer=ProgressRendererType.LOG),
 )
 ```
+
+## Move To The Agent Pattern Only When Needed
+
+If the user needs bootstrap `system` or `developer` messages, scripted
+follow-up turns, or first-class tool passing, keep the same benchmark-first
+flow and then switch to `references/agent-evals-and-tools.md`.
+
+The canonical advanced example is `examples/10_agent_eval.py`.

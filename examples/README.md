@@ -31,6 +31,9 @@ Every numbered example in this directory uses the benchmark-first public API.
 9. `09_experiment_evolution.py`
    Evolves a benchmark by adding models and prompt variants.
 
+10. `10_agent_eval.py`
+   Demonstrates bootstrap prompts, scripted follow-up turns, benchmark tool overrides, slice-level tool selection, runtime tool handlers, and agent traces.
+
 ## Run One
 
 ```bash

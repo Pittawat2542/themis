@@ -11,7 +11,10 @@ Main imports:
 - `ParseSpec`
 - `ScoreSpec`
 - `ProjectSpec`
+- `PromptMessage`
+- `PromptTurnSpec`
 - `ModelSpec`
+- `ToolSpec`
 - `PluginRegistry`
 - `Orchestrator`
 - `BenchmarkResult`

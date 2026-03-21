@@ -13,6 +13,7 @@ All numbered examples use the benchmark-first public surface.
 | `07_judge_metric.py` | Judge-backed metric |
 | `08_external_stage_handoff.py` | External scoring handoff |
 | `09_experiment_evolution.py` | Incremental benchmark evolution |
+| `10_agent_eval.py` | Bootstrap prompts, follow-up turns, tool declaration and selection, runtime handlers, and agent traces |
 
 ## Intentionally Untouched
 

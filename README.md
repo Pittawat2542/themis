@@ -11,7 +11,7 @@
 Themis now documents and supports one public authoring flow:
 
 - `ProjectSpec` for shared storage and execution policy
-- `BenchmarkSpec` for benchmark slices, prompt variants, parse pipelines, and scores
+- `BenchmarkSpec` for benchmark slices, prompt variants, parse pipelines, scores, and agent-style prompt flows
 - `PluginRegistry` for engines, parsers, metrics, judges, and hooks
 - `Orchestrator` for planning, execution, handoffs, and imports
 - `BenchmarkResult` for aggregation, paired comparison, artifact bundles, and timelines
@@ -23,6 +23,7 @@ Themis now documents and supports one public authoring flow:
 - Benchmark-native authoring instead of experiment-matrix bookkeeping
 - Query-aware dataset providers for subset, filter, and pushdown sampling
 - Explicit prompt variants and parse pipelines instead of payload hacks
+- Bootstrap prompt sequences, scripted follow-up turns, and first-class tool passing for agent-capable engines
 - Projection-backed results with `slice_id`, `prompt_variant_id`, and semantic dimensions
 - Local-first storage and deterministic reuse of completed work
 
@@ -79,6 +80,10 @@ Runnable examples live in [`examples/`](examples/):
 - `07_judge_metric.py`
 - `08_external_stage_handoff.py`
 - `09_experiment_evolution.py`
+- `10_agent_eval.py`
+
+`10_agent_eval.py` is the canonical advanced example for bootstrap prompts,
+follow-up turns, tool declaration and selection, and returned agent traces.
 
 `examples/medical_reasoning_eval` is intentionally left untouched as a handoff
 reference. It is not the recommended public authoring pattern after the
