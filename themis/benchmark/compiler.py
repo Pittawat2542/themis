@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from themis.benchmark.specs import BenchmarkSpec, PromptVariantSpec, SliceSpec
 from themis.errors import SpecValidationError
 from themis.specs.experiment import ExperimentSpec, PromptTemplateSpec
@@ -10,13 +12,49 @@ from themis.specs.foundational import (
     ExtractorChainSpec,
     OutputTransformSpec,
     TaskSpec,
+    ToolSpec,
 )
 from themis.types.enums import ErrorCode
 
 
-def compile_benchmark(benchmark: BenchmarkSpec) -> ExperimentSpec:
+def merge_tool_specs(
+    base_tools: Sequence[ToolSpec],
+    override_tools: Sequence[ToolSpec],
+) -> list[ToolSpec]:
+    """Merge ordered tool declarations with same-id overrides."""
+
+    merged: dict[str, ToolSpec] = {tool.id: tool for tool in base_tools}
+    for tool in override_tools:
+        merged[tool.id] = tool
+    ordered_ids = [tool.id for tool in base_tools]
+    for tool in override_tools:
+        if tool.id not in ordered_ids:
+            ordered_ids.append(tool.id)
+    return [merged[tool_id] for tool_id in ordered_ids]
+
+
+def normalize_benchmark_spec(
+    benchmark: BenchmarkSpec,
+    *,
+    project_tools: Sequence[ToolSpec] = (),
+) -> BenchmarkSpec:
+    """Return a benchmark with project and benchmark tool declarations merged."""
+
+    return benchmark.model_copy(
+        update={
+            "tools": merge_tool_specs(project_tools, benchmark.tools),
+        }
+    )
+
+
+def compile_benchmark(
+    benchmark: BenchmarkSpec,
+    *,
+    project_tools: Sequence[ToolSpec] = (),
+) -> ExperimentSpec:
     """Lower a benchmark spec into the private experiment/task execution IR."""
 
+    benchmark = normalize_benchmark_spec(benchmark, project_tools=project_tools)
     prompt_templates = [
         PromptTemplateSpec(
             id=variant.id,
@@ -63,12 +101,14 @@ def compile_benchmark(benchmark: BenchmarkSpec) -> ExperimentSpec:
                     if slice_spec.prompt_families
                     else None
                 ),
+                tool_ids=list(slice_spec.tool_ids),
             )
         )
     return ExperimentSpec(
         models=benchmark.models,
         tasks=tasks,
         prompt_templates=prompt_templates,
+        tools=benchmark.tools,
         inference_grid=benchmark.inference_grid,
         num_samples=benchmark.num_samples,
     )

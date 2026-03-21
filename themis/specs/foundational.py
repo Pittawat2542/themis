@@ -41,6 +41,31 @@ class ModelSpec(SpecBase):
     )
 
 
+class ToolSpec(SpecBase):
+    """Serializable tool metadata forwarded to agent-capable inference engines."""
+
+    id: str = Field(..., description="Stable tool identifier exposed to engines.")
+    description: str = Field(..., description="Human-readable tool description.")
+    input_schema: JSONDict = Field(
+        ...,
+        description="Structured argument schema understood by the receiving engine.",
+    )
+    extras: JSONDict = Field(
+        default_factory=dict,
+        description="Optional tool metadata preserved for custom engines.",
+    )
+
+
+def _validate_unique_tool_ids(
+    tools: list[ToolSpec],
+    *,
+    owner_label: str,
+) -> None:
+    tool_ids = [tool.id for tool in tools]
+    if len(tool_ids) != len(set(tool_ids)):
+        raise ValueError(f"{owner_label} has duplicate tool id.")
+
+
 def _default_judge_params() -> InferenceParamsSpec:
     from themis.specs.experiment import InferenceParamsSpec
 
@@ -274,6 +299,10 @@ class TaskSpec(SpecBase):
         default=None,
         description="Optional prompt-family selector preserved from BenchmarkSpec.",
     )
+    tool_ids: list[str] = Field(
+        default_factory=list,
+        description="Explicit ordered tool IDs selected for this task.",
+    )
 
     @field_validator("dataset_query", mode="before")
     @classmethod
@@ -326,4 +355,6 @@ class TaskSpec(SpecBase):
                     f"TaskSpec '{self.task_id}' references unknown output transform "
                     f"'{evaluation.transform}'."
                 )
+        if len(self.tool_ids) != len(set(self.tool_ids)):
+            raise ValueError(f"TaskSpec '{self.task_id}' has duplicate tool id.")
         return self

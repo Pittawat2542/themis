@@ -65,7 +65,14 @@ class TrialSessionPreparer:
                 "messages": [
                     message.model_dump(mode="json")
                     for message in prepared_trial.prompt.messages
-                ]
+                ],
+                "follow_up_turns": [
+                    turn.model_dump(mode="json")
+                    for turn in prepared_trial.prompt.follow_up_turns
+                ],
+                "tools": [
+                    tool.model_dump(mode="json") for tool in prepared_trial.tools
+                ],
             },
             label="rendered prompt",
         )

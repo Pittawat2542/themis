@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
 import itertools
 import json
 import random
-from collections.abc import Collection, Mapping, Sequence
 
 from pydantic import ValidationError
 
@@ -29,6 +29,7 @@ from themis.specs.experiment import (
     PromptTemplateSpec,
     TrialSpec,
 )
+from themis.specs.foundational import ToolSpec
 from themis.types.enums import ErrorCode, SamplingKind
 from themis.types.json_types import JSONValueType
 from themis.types.json_validation import validate_json_dict, validate_json_value
@@ -60,11 +61,12 @@ class TrialPlanner:
         benchmark: BenchmarkSpec,
         *,
         required_stages: Collection[TrialStage] | None = None,
+        project_tools: Sequence[ToolSpec] = (),
     ) -> list[PlannedTrial]:
         """Compile and plan one benchmark specification."""
 
         return self.plan_experiment(
-            compile_benchmark(benchmark),
+            compile_benchmark(benchmark, project_tools=project_tools),
             required_stages=required_stages,
         )
 
@@ -78,6 +80,10 @@ class TrialPlanner:
         trials: list[PlannedTrial] = []
         task_prompts = {
             task.task_id: self._resolve_task_prompts(experiment, task)
+            for task in experiment.tasks
+        }
+        selected_tools_by_task = {
+            task.task_id: self._resolve_task_tools(experiment, task)
             for task in experiment.tasks
         }
 
@@ -115,6 +121,7 @@ class TrialPlanner:
             for task in experiment.tasks:
                 items = task_items.get(task.task_id, [])
                 prompts = task_prompts[task.task_id]
+                selected_tools = selected_tools_by_task[task.task_id]
                 for prompt, params in itertools.product(prompts, params_grid):
                     for item in items:
                         item_str = json.dumps(
@@ -142,6 +149,7 @@ class TrialPlanner:
                             task=task,
                             prompt=prompt,
                             params=params,
+                            tools=selected_tools,
                             item_id=item.item_id,
                             candidate_count=experiment.num_samples,
                             metadata=validate_json_dict(
@@ -168,6 +176,28 @@ class TrialPlanner:
                         )
 
         return trials
+
+    def _resolve_task_tools(
+        self,
+        experiment: ExperimentSpec,
+        task,
+    ) -> list[ToolSpec]:
+        if not task.tool_ids:
+            return []
+        tools_by_id = {tool.id: tool for tool in experiment.tools}
+        missing_tool_ids = [
+            tool_id for tool_id in task.tool_ids if tool_id not in tools_by_id
+        ]
+        if missing_tool_ids:
+            missing_joined = ", ".join(sorted(set(missing_tool_ids)))
+            raise SpecValidationError(
+                code=ErrorCode.SCHEMA_MISMATCH,
+                message=(
+                    f"Task '{task.slice_id or task.task_id}' references unknown "
+                    f"tool id(s): {missing_joined}."
+                ),
+            )
+        return [tools_by_id[tool_id] for tool_id in task.tool_ids]
 
     def _resolve_task_prompts(
         self,

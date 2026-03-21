@@ -25,6 +25,7 @@ from themis.specs.experiment import (
     StorageSpec,
 )
 from themis.specs.foundational import ModelSpec
+from themis.specs.foundational import ToolSpec
 from themis.registry.plugin_registry import PluginRegistry
 
 __all__ = [
@@ -48,6 +49,7 @@ __all__ = [
     "PromptTurnSpec",
     "InferenceParamsSpec",
     "ModelSpec",
+    "ToolSpec",
     "PluginRegistry",
     "generate_config_report",
 ]

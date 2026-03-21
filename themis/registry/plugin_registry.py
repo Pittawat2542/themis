@@ -17,7 +17,7 @@ from themis.contracts.protocols import (
     PipelineHook,
 )
 from themis.errors import SpecValidationError
-from themis.specs.experiment import TrialSpec
+from themis.specs.experiment import ToolHandler, TrialSpec
 from themis.types.enums import ErrorCode, ResponseFormat
 
 
@@ -85,6 +85,7 @@ class PluginRegistry:
         self._extractors: dict[str, PluginRegistration[Extractor]] = {}
         self._metrics: dict[str, PluginRegistration[Metric]] = {}
         self._judges: dict[str, PluginRegistration[JudgeService]] = {}
+        self._tools: dict[str, PluginRegistration[ToolHandler]] = {}
         self._hooks: list[HookRegistration] = []
         self._register_builtin_extractors()
 
@@ -162,6 +163,23 @@ class PluginRegistry:
             registration_order=self._next_registration_order(),
         )
 
+    def register_tool(
+        self,
+        name: str,
+        factory: Callable[[], ToolHandler] | type[ToolHandler] | ToolHandler,
+        *,
+        version: str = "0.0.0",
+        plugin_api: str = "1.0",
+    ) -> None:
+        """Register an opaque runtime tool handler."""
+        self._tools[name] = PluginRegistration(
+            name=name,
+            factory=factory,
+            version=version,
+            plugin_api=plugin_api,
+            registration_order=self._next_registration_order(),
+        )
+
     def register_hook(
         self,
         name: str,
@@ -204,6 +222,10 @@ class PluginRegistry:
         """Return whether a judge service exists for ``name``."""
         return name in self._judges
 
+    def has_tool(self, name: str) -> bool:
+        """Return whether an opaque runtime tool handler exists for ``name``."""
+        return name in self._tools
+
     def get_inference_engine_registration(
         self, name: str
     ) -> InferenceEngineRegistration:
@@ -232,6 +254,15 @@ class PluginRegistry:
                 message=f"Metric {name} not found in registry.",
             )
         return self._metrics[name]
+
+    def get_tool_registration(self, name: str) -> PluginRegistration[ToolHandler]:
+        """Fetch tool registration metadata for ``name``."""
+        if name not in self._tools:
+            raise SpecValidationError(
+                code=ErrorCode.PLUGIN_INCOMPATIBLE,
+                message=f"Tool {name} not found in registry.",
+            )
+        return self._tools[name]
 
     def get_inference_engine(self, name: str) -> InferenceEngine:
         """Instantiate or return the registered inference engine for ``name``."""
@@ -263,6 +294,11 @@ class PluginRegistry:
         return self._instantiate(
             self._judges[name].factory, required_methods=("judge",)
         )
+
+    def get_tool(self, name: str) -> ToolHandler:
+        """Instantiate or return the registered runtime tool handler for ``name``."""
+        registration = self.get_tool_registration(name)
+        return self._instantiate(registration.factory, required_methods=())
 
     def iter_hook_registrations(self) -> list[HookRegistration]:
         """Return hook registrations ordered by priority then registration order."""

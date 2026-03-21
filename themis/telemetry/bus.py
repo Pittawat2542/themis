@@ -24,6 +24,7 @@ class TelemetryEventName(StrEnum):
     TRIAL_END = "trial_end"
     CONVERSATION_EVENT = "conversation_event"
     TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
     EXTRACTOR_ATTEMPT = "extractor_attempt"
     METRIC_START = "metric_start"
     METRIC_END = "metric_end"

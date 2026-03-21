@@ -21,11 +21,12 @@ from themis.specs.base import SpecBase
 from themis.specs.experiment import (
     DataItemContext,
     PromptMessage,
+    PromptTurnSpec,
     PromptTemplateSpec,
     RuntimeContext,
     TrialSpec,
 )
-from themis.specs.foundational import JudgeInferenceSpec, TaskSpec
+from themis.specs.foundational import JudgeInferenceSpec, TaskSpec, ToolSpec
 from themis.types.enums import RecordType
 from themis.types.events import ScoreRow, TrialEvent, TrialEventType, TrialSummaryRow
 from themis.types.json_types import JSONValueType
@@ -55,6 +56,8 @@ class RenderedPrompt(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     messages: list[PromptMessage] = Field(default_factory=list)
+    follow_up_turns: list[PromptTurnSpec] = Field(default_factory=list)
+    tools: list[ToolSpec] = Field(default_factory=list)
 
 
 @runtime_checkable

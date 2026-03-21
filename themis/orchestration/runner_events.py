@@ -333,3 +333,5 @@ class TrialEventEmitter:
             )
             if kind == "tool_call":
                 self.telemetry_bus.emit(TelemetryEventName.TOOL_CALL, **payload)
+            if kind == "tool_result":
+                self.telemetry_bus.emit(TelemetryEventName.TOOL_RESULT, **payload)

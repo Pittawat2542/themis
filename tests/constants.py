@@ -23,5 +23,6 @@ EXPECTED_ROOT_EXPORTS = {
     "SqliteBlobStorageSpec",
     "StorageConfig",
     "StorageSpec",
+    "ToolSpec",
     "generate_config_report",
 }

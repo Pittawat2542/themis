@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 
-from themis.benchmark.compiler import compile_benchmark
+from themis.benchmark.compiler import compile_benchmark, normalize_benchmark_spec
 from themis.benchmark.specs import BenchmarkSpec
 from themis.contracts.protocols import (
     ProjectionHandler as ProjectionHandlerProtocol,
@@ -161,9 +161,16 @@ class RunPlanningService:
         """Plans the canonical source spec while preserving benchmark provenance."""
 
         if isinstance(source_spec, BenchmarkSpec):
+            project_tools = (
+                self.project_spec.tools if self.project_spec is not None else ()
+            )
+            normalized_benchmark = normalize_benchmark_spec(
+                source_spec,
+                project_tools=project_tools,
+            )
             return self.plan(
-                compile_benchmark(source_spec),
-                benchmark_spec=source_spec,
+                compile_benchmark(normalized_benchmark),
+                benchmark_spec=normalized_benchmark,
             )
         return self.plan(source_spec)
 
@@ -347,6 +354,21 @@ class RunPlanningService:
                 prompt_chars = sum(
                     len(message.content)
                     for message in planned_trial.trial_spec.prompt.messages
+                )
+                prompt_chars += sum(
+                    len(message.content)
+                    for turn in planned_trial.trial_spec.prompt.follow_up_turns
+                    for message in turn.messages
+                )
+                prompt_chars += len(
+                    json.dumps(
+                        [
+                            tool.model_dump(mode="json")
+                            for tool in planned_trial.trial_spec.tools
+                        ],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
                 )
                 dataset_chars = len(
                     json.dumps(

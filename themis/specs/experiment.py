@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Annotated
-from typing import Literal
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import (
     BaseModel,
@@ -16,8 +15,15 @@ from pydantic import (
 )
 
 from themis._replay import ResumeState
+from themis.config_report.metadata import config_reportable
 from themis.specs.base import SpecBase
-from themis.specs.foundational import JudgeInferenceSpec, ModelSpec, TaskSpec
+from themis.specs.foundational import (
+    JudgeInferenceSpec,
+    ModelSpec,
+    TaskSpec,
+    ToolSpec,
+    _validate_unique_tool_ids,
+)
 from themis.types.enums import (
     CompressionCodec,
     PromptRole,
@@ -26,6 +32,8 @@ from themis.types.enums import (
     StorageBackend,
 )
 from themis.types.json_types import JSONDict, JSONValueType
+
+ToolHandler: TypeAlias = object
 
 
 class DataItemContext(BaseModel):
@@ -57,6 +65,7 @@ class DataItemContext(BaseModel):
         return self.payload.items()
 
 
+@config_reportable(hidden_fields={"tool_handlers"})
 class RuntimeContext(BaseModel):
     """Execution-only runtime inputs and deterministic per-candidate state."""
 
@@ -67,6 +76,11 @@ class RuntimeContext(BaseModel):
     run_labels: dict[str, str] = Field(default_factory=dict)
     candidate_seed: int | None = Field(default=None)
     resume: ResumeState | None = Field(default=None)
+    tool_handlers: dict[str, ToolHandler] = Field(
+        default_factory=dict,
+        exclude=True,
+        json_schema_extra={"exclude_from_hash": True},
+    )
 
     def __getitem__(self, key: str) -> object:
         return getattr(self, key)
@@ -389,6 +403,10 @@ class TrialSpec(SpecBase):
     )
     prompt: PromptTemplateSpec
     params: InferenceParamsSpec
+    tools: list[ToolSpec] = Field(
+        default_factory=list,
+        description="Serializable tool definitions selected for this trial.",
+    )
     candidate_count: int = Field(
         default=1, ge=1, description="Number of independent candidates to generate."
     )
@@ -400,6 +418,7 @@ class TrialSpec(SpecBase):
     def _validate_semantic(self) -> TrialSpec:
         if self.candidate_count < 1:
             raise ValueError("Candidate count must be >= 1")
+        _validate_unique_tool_ids(self.tools, owner_label="TrialSpec")
         return self
 
 
@@ -414,6 +433,10 @@ class ExperimentSpec(SpecBase):
     tasks: list[TaskSpec] = Field(..., description="Evaluation tasks to run against.")
     prompt_templates: list[PromptTemplateSpec] = Field(
         ..., description="Prompt templates to multiplex."
+    )
+    tools: list[ToolSpec] = Field(
+        default_factory=list,
+        description="Serializable tool declarations available to task selections.",
     )
     inference_grid: InferenceGridSpec = Field(
         ..., description="Typed sampling grid to cartesian product."
@@ -433,6 +456,7 @@ class ExperimentSpec(SpecBase):
             raise ValueError("ExperimentSpec must have at least one prompt template.")
         if self.num_samples < 1:
             raise ValueError("ExperimentSpec num_samples must be >= 1.")
+        _validate_unique_tool_ids(self.tools, owner_label="ExperimentSpec")
         return self
 
 
@@ -454,6 +478,10 @@ class ProjectSpec(SpecBase):
     execution_policy: ExecutionPolicySpec = Field(
         ..., description="Shared retry and circuit-breaker policy."
     )
+    tools: list[ToolSpec] = Field(
+        default_factory=list,
+        description="Reusable project-level tool declarations available to runs.",
+    )
     execution_backend: ExecutionBackendConfig = Field(
         default_factory=LocalExecutionBackendSpec,
         description="Execution backend used for local, worker-pool, or batch orchestration.",
@@ -461,6 +489,11 @@ class ProjectSpec(SpecBase):
     metadata: dict[str, str] = Field(
         default_factory=dict, description="User-defined project metadata."
     )
+
+    @model_validator(mode="after")
+    def _validate_semantic(self) -> ProjectSpec:
+        _validate_unique_tool_ids(self.tools, owner_label="ProjectSpec")
+        return self
 
 
 JudgeInferenceSpec.model_rebuild(

@@ -83,7 +83,12 @@ class CandidateImporter:
                     "messages": [
                         message.model_dump(mode="json")
                         for message in trial.prompt.messages
-                    ]
+                    ],
+                    "follow_up_turns": [
+                        turn.model_dump(mode="json")
+                        for turn in trial.prompt.follow_up_turns
+                    ],
+                    "tools": [tool.model_dump(mode="json") for tool in trial.tools],
                 },
             )
             for candidate in sorted(
