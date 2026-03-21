@@ -177,6 +177,19 @@ def test_plugin_registry_from_dict_builtin_extractors_still_present() -> None:
     assert registry.has_extractor("choice_letter")
 
 
+def test_plugin_registry_from_dict_registers_tools() -> None:
+    class DummyTool:
+        pass
+
+    registry = PluginRegistry.from_dict({"tools": {"demo-tool": DummyTool()}})
+    assert registry.has_tool("demo-tool")
+
+
+def test_plugin_registry_from_dict_registers_hooks() -> None:
+    registry = PluginRegistry.from_dict({"hooks": {"demo-hook": _NoOpHook()}})
+    assert registry.has_hook("demo-hook")
+
+
 def test_engine_capabilities_supports_seed_defaults_false() -> None:
     caps = EngineCapabilities()
     assert caps.supports_seed is False

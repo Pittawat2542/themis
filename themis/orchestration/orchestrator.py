@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import tomllib
 from typing import Literal
@@ -59,6 +60,8 @@ from themis.storage.run_manifest_repo import RunManifestRepository
 from themis.telemetry.bus import TelemetryBus
 from themis.types.enums import ErrorCode, RunStage
 from themis.types.json_validation import format_validation_error
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -337,8 +340,15 @@ class Orchestrator:
                 evaluation_hashes=collect_evaluation_hashes(single),
             )
             trial_record = single_result.get_trial(planned_trial.trial_spec.spec_hash)
-            if trial_record is not None:
-                yield trial_record
+            if trial_record is None:
+                _logger.warning(
+                    "Trial record not found after execution; "
+                    "spec_hash=%r planned_trial=%r",
+                    planned_trial.trial_spec.spec_hash,
+                    planned_trial,
+                )
+                continue
+            yield trial_record
 
     def generate(
         self,
