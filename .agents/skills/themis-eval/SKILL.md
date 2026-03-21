@@ -24,10 +24,10 @@ and these references. Do not send the user into retired experiment/task APIs.
 ## Read The Right Reference
 
 - Read `references/getting-started.md` for installation, the core benchmark flow, and example selection.
-- Read `references/plugins-and-specs.md` when defining dataset providers, slices, prompt variants, parse pipelines, engines, metrics, hooks, or judge-backed metrics.
-- Read `references/agent-evals-and-tools.md` when the user needs bootstrap message sequences, follow-up turns, or first-class tool passing.
-- Read `references/results-and-ops.md` when inspecting aggregates, timelines, artifact bundles, run progress, config reports, or `themis-quickcheck`.
-- Read `references/advanced-workflows.md` for project files, external handoffs, benchmark evolution, scaling, and telemetry.
+- Consult `references/plugins-and-specs.md` when defining dataset providers, slices, prompt variants, parse pipelines, engines, metrics, hooks, or judge-backed metrics.
+- See `references/agent-evals-and-tools.md` when the user needs bootstrap message sequences, follow-up turns, or first-class tool passing.
+- Refer to `references/results-and-ops.md` when inspecting aggregates, timelines, artifact bundles, run progress, config reports, or `themis-quickcheck`.
+- Use `references/advanced-workflows.md` for project files, external handoffs, benchmark evolution, scaling, and telemetry.
 
 ## Working Rules
 
