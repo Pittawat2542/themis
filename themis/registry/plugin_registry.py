@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 import inspect
-from typing import Any, Generic, TypeVar, cast
+from typing import Generic, TypeVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -102,7 +102,7 @@ class PluginRegistry:
         self._register_builtin_extractors()
 
     @classmethod
-    def from_dict(cls, mapping: dict[str, dict[str, Any]]) -> "PluginRegistry":
+    def from_dict(cls, mapping: dict[str, dict[str, object]]) -> "PluginRegistry":
         """Construct a registry from a plain dict, reducing per-run registration boilerplate.
 
         Each top-level key selects a plugin category; the value is a ``{name: factory}``
