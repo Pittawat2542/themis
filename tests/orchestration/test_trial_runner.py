@@ -365,7 +365,7 @@ def test_trial_runner_emits_tool_result_telemetry(trial_spec):
     )
 
     assert TelemetryEventName.TOOL_CALL in [event.name for event in seen]
-    assert "tool_result" in [event.name for event in seen]
+    assert TelemetryEventName.TOOL_RESULT in [event.name for event in seen]
 
 
 def test_trial_runner_rejects_selected_tools_without_handlers_before_inference(
