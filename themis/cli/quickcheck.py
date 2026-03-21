@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
 import sqlite3
 from pathlib import Path
 from statistics import mean
-from typing import Any
 
+from cyclopts import App
+
+from themis.cli._common import invoke_app
 from themis.overlays import OverlaySelection
 
 logger = logging.getLogger(__name__)
@@ -21,140 +22,66 @@ def _connect(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def add_quickcheck_arguments(subparsers: argparse._SubParsersAction[Any]) -> None:
-    """Attach quickcheck subcommands to an argparse subparser collection.
+def build_app(*, standalone: bool = False) -> App:
+    """Build the quickcheck Cyclopts app."""
 
-    Args:
-        subparsers: The argparse subparser collection that should receive the
-            `failures`, `scores`, and `latency` commands.
-    """
-
-    failures = subparsers.add_parser("failures")
-    failures.add_argument("--db", required=True)
-    failures.add_argument("--limit", type=int, default=10)
-    failures.add_argument("--transform-hash")
-    failures.add_argument("--evaluation-hash")
-
-    scores = subparsers.add_parser("scores")
-    scores.add_argument("--db", required=True)
-    scores.add_argument("--metric")
-    scores.add_argument("--slice")
-    scores.add_argument(
-        "--dimension",
-        action="append",
-        default=[],
-        help="Exact-match dimension filter in key=value form.",
+    app = App(
+        name="themis-quickcheck" if standalone else "quickcheck",
+        help="Read stored SQLite projections without importing benchmark code.",
     )
-    scores.add_argument("--evaluation-hash")
 
-    latency = subparsers.add_parser("latency")
-    latency.add_argument("--db", required=True)
-    latency.add_argument("--transform-hash")
-    latency.add_argument("--evaluation-hash")
-
-
-def configure_quickcheck_parser(
-    parser: argparse.ArgumentParser,
-) -> argparse.ArgumentParser:
-    """Configure one parser to serve the quickcheck CLI.
-
-    Args:
-        parser: The parser to configure for quickcheck dispatch.
-
-    Returns:
-        The same parser after subcommands and dispatch metadata are attached.
-    """
-
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    add_quickcheck_arguments(subparsers)
-    parser.set_defaults(handler=run_with_args, _parser=parser)
-    return parser
-
-
-def build_parser(*, prog: str = "themis-quickcheck") -> argparse.ArgumentParser:
-    """Build the quickcheck CLI parser.
-
-    Args:
-        prog: Program name displayed in usage text.
-
-    Returns:
-        A fully configured parser for the standalone quickcheck CLI.
-    """
-
-    parser = argparse.ArgumentParser(prog=prog)
-    return configure_quickcheck_parser(parser)
-
-
-def add_quickcheck_subparser(
-    subparsers: argparse._SubParsersAction[Any],
-) -> argparse.ArgumentParser:
-    """Add the quickcheck command to a parent CLI.
-
-    Args:
-        subparsers: Parent CLI subparser collection that should receive the
-            `quickcheck` command.
-
-    Returns:
-        The configured quickcheck parser that was attached to the parent CLI.
-    """
-
-    parser = subparsers.add_parser("quickcheck")
-    return configure_quickcheck_parser(parser)
-
-
-def run_with_args(args: argparse.Namespace) -> int:
-    """Execute the parsed quickcheck command.
-
-    Args:
-        args: Parsed quickcheck arguments including the selected subcommand and
-            any overlay filters.
-
-    Returns:
-        A shell-compatible exit status for the selected quickcheck query.
-    """
-
-    db_path = Path(args.db)
-    with _connect(str(db_path)) as conn:
-        if args.command == "failures":
+    @app.command(name="failures")
+    def failures(
+        db: str,
+        limit: int = 10,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> int:
+        with _connect(str(Path(db))) as conn:
             return _run_failures(
                 conn,
-                limit=args.limit,
-                transform_hash=args.transform_hash,
-                evaluation_hash=args.evaluation_hash,
+                limit=limit,
+                transform_hash=transform_hash,
+                evaluation_hash=evaluation_hash,
             )
-        if args.command == "scores":
+
+    @app.command(name="scores")
+    def scores(
+        db: str,
+        metric: str | None = None,
+        slice: str | None = None,
+        dimension: list[str] | None = None,
+        evaluation_hash: str | None = None,
+    ) -> int:
+        with _connect(str(Path(db))) as conn:
             return _run_scores(
                 conn,
-                metric_id=args.metric,
-                slice_id=args.slice,
-                dimension_filters=args.dimension,
-                evaluation_hash=args.evaluation_hash,
+                metric_id=metric,
+                slice_id=slice,
+                dimension_filters=dimension or [],
+                evaluation_hash=evaluation_hash,
             )
-        if args.command == "latency":
+
+    @app.command(name="latency")
+    def latency(
+        db: str,
+        transform_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> int:
+        with _connect(str(Path(db))) as conn:
             return _run_latency(
                 conn,
-                transform_hash=args.transform_hash,
-                evaluation_hash=args.evaluation_hash,
+                transform_hash=transform_hash,
+                evaluation_hash=evaluation_hash,
             )
-    return 2
+
+    return app
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the quickcheck CLI and dispatch to the selected summary command.
+    """Run the quickcheck CLI and dispatch to the selected summary command."""
 
-    Args:
-        argv: Optional argument vector to parse instead of `sys.argv`.
-
-    Returns:
-        A shell-compatible exit status for the selected quickcheck command.
-
-    Raises:
-        SystemExit: Propagated by argparse when invalid CLI input is supplied.
-    """
-
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    return run_with_args(args)
+    return invoke_app(build_app(standalone=True), argv)
 
 
 def _run_failures(
@@ -276,23 +203,54 @@ def _run_latency(
         transform_hash=transform_hash,
         evaluation_hash=evaluation_hash,
     )
+    clauses = []
+    params: list[object] = []
+    if overlay_selection.overlay_key is not None:
+        clauses.append("candidate_summary.overlay_key = ?")
+        params.append(overlay_selection.overlay_key)
+    else:
+        clauses.append("candidate_summary.overlay_key = 'gen'")
+    where_clause = f"WHERE {' AND '.join(clauses)}"
     rows = conn.execute(
-        """
+        f"""
         SELECT latency_ms, tokens_in, tokens_out
         FROM candidate_summary
-        WHERE overlay_key = ?
+        {where_clause}
         ORDER BY latency_ms ASC
         """,
-        (overlay_selection.overlay_key,),
+        params,
     ).fetchall()
-    latencies = [row["latency_ms"] for row in rows if row["latency_ms"] is not None]
-    tokens_in = [row["tokens_in"] for row in rows if row["tokens_in"] is not None]
-    tokens_out = [row["tokens_out"] for row in rows if row["tokens_out"] is not None]
+    latencies = [
+        float(row["latency_ms"]) for row in rows if row["latency_ms"] is not None
+    ]
+    tokens_in = [
+        float(row["tokens_in"]) for row in rows if row["tokens_in"] is not None
+    ]
+    tokens_out = [
+        float(row["tokens_out"]) for row in rows if row["tokens_out"] is not None
+    ]
+    if not latencies:
+        print(
+            " ".join(
+                [
+                    "count=0",
+                    "latency_ms(avg=n/a,p50=n/a,p95=n/a)",
+                    "tokens_in(avg=n/a)",
+                    "tokens_out(avg=n/a)",
+                ]
+            )
+        )
+        return 0
     print(
         " ".join(
             [
                 f"count={len(rows)}",
-                f"latency_ms(avg={_format_stat(latencies)},p50={_percentile(latencies, 50)},p95={_percentile(latencies, 95)})",
+                (
+                    "latency_ms("
+                    f"avg={_format_stat(latencies)},"
+                    f"p50={_percentile(latencies, 50)},"
+                    f"p95={_percentile(latencies, 95)})"
+                ),
                 f"tokens_in(avg={_format_stat(tokens_in)})",
                 f"tokens_out(avg={_format_stat(tokens_out)})",
             ]
@@ -301,52 +259,54 @@ def _run_latency(
     return 0
 
 
-def _format_stat(values: list[int | float]) -> str:
-    if not values:
-        return "n/a"
-    return f"{mean(values):.2f}"
-
-
-def _percentile(values: list[int | float], percentile: int) -> str:
-    if not values:
-        return "n/a"
-    ordered = sorted(values)
-    index = int(round((percentile / 100) * (len(ordered) - 1)))
-    return f"{ordered[index]:.2f}"
-
-
 def _parse_dimension_filters(filters: list[str]) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for item in filters:
-        key, separator, value = item.partition("=")
-        if separator != "=" or not key or not value:
+        key, sep, value = item.partition("=")
+        if not sep or not key or not value:
             logger.warning(
-                "Ignoring malformed dimension filter %r: expected non-empty key=value.",
-                item,
+                "Ignoring malformed dimension filter %r; expected key=value.", item
             )
             continue
         parsed[key] = value
     return parsed
 
 
-def _load_dimensions(raw: str | None) -> dict[str, str]:
-    if not raw:
+def _load_dimensions(payload: str | None) -> dict[str, str]:
+    if not payload:
         return {}
     try:
-        loaded = json.loads(raw)
+        raw = json.loads(payload)
     except json.JSONDecodeError:
         return {}
-    if not isinstance(loaded, dict):
+    if not isinstance(raw, dict):
         return {}
-    return {str(key): str(value) for key, value in loaded.items()}
+    return {
+        str(key): str(value)
+        for key, value in raw.items()
+        if value is not None and not isinstance(value, (dict, list))
+    }
 
 
-def _dimensions_match(dimensions: dict[str, str], filters: dict[str, str]) -> bool:
-    for key, expected_value in filters.items():
-        if dimensions.get(key) != expected_value:
+def _dimensions_match(
+    dimensions: dict[str, str],
+    expected: dict[str, str],
+) -> bool:
+    for key, value in expected.items():
+        if dimensions.get(key) != value:
             return False
     return True
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def _format_stat(values: list[float]) -> str:
+    if not values:
+        return "n/a"
+    return f"{mean(values):.2f}"
+
+
+def _percentile(values: list[float], percentile: int) -> str:
+    if not values:
+        return "n/a"
+    ordered = sorted(values)
+    index = int(round((percentile / 100) * (len(ordered) - 1)))
+    return f"{ordered[index]:.2f}"

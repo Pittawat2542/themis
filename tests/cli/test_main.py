@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
-from types import SimpleNamespace
 
 from themis import (
     BenchmarkSpec,
@@ -126,26 +125,14 @@ def _persisted_benchmark_manifest_bundle(
     return project_path, project, benchmark
 
 
-class _StubParser:
-    def __init__(
-        self, *, parse_exit: object = None, handler_exit: object = None
-    ) -> None:
-        self._parse_exit = parse_exit
-        self._handler_exit = handler_exit
+def test_parent_cli_help_lists_primary_commands(capsys) -> None:
+    assert main(["--help"]) == 0
 
-    def parse_args(self, argv: list[str] | None) -> object:
-        del argv
-        if self._parse_exit is not None:
-            raise SystemExit(self._parse_exit)
-
-        def _handler(args: object) -> int:
-            del args
-            raise SystemExit(self._handler_exit)
-
-        return SimpleNamespace(handler=_handler)
-
-    def error(self, message: str) -> None:
-        raise AssertionError(message)
+    out = capsys.readouterr().out
+    assert "quick-eval" in out
+    assert "quickcheck" in out
+    assert "report" in out
+    assert "init" in out
 
 
 def test_parent_cli_dispatches_quickcheck_help(capsys) -> None:
@@ -281,18 +268,24 @@ def test_parent_cli_report_accepts_full_verbosity(tmp_path: Path, capsys) -> Non
     assert payload["header"]["verbosity"] == "full"
 
 
-def test_parent_cli_dispatches_quickcheck_from_installed_entrypoint(
-    monkeypatch, capsys
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["themis", "quickcheck", "--help"])
+def test_parent_cli_report_rejects_run_id_without_project_file(capsys) -> None:
+    assert (
+        main(
+            [
+                "report",
+                "--factory",
+                "tests.cli.fixture_factories:build_config_bundle",
+                "--run-id",
+                "unexpected",
+            ]
+        )
+        == 1
+    )
 
-    assert main() == 0
-    assert "failures" in capsys.readouterr().out
+    assert "--run-id requires --project-file." in capsys.readouterr().err
 
 
-def test_parent_cli_dispatches_report_from_installed_entrypoint(
-    monkeypatch, capsys
-) -> None:
+def test_parent_cli_dispatches_from_installed_entrypoint(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         sys,
         "argv",
@@ -311,16 +304,6 @@ def test_parent_cli_dispatches_report_from_installed_entrypoint(
     assert payload["header"]["project_name"] == "factory-report-demo"
 
 
-def test_parent_cli_normalizes_system_exit_codes(monkeypatch) -> None:
-    monkeypatch.setattr("themis.cli.main.build_parser", lambda: _StubParser())
-
-    assert main(["ignored"]) == 0
-
-
-def test_parent_cli_maps_string_system_exit_to_shell_failure(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "themis.cli.main.build_parser",
-        lambda: _StubParser(handler_exit="report generation failed"),
-    )
-
-    assert main(["ignored"]) == 1
+def test_parent_cli_returns_shell_failure_for_unknown_command(capsys) -> None:
+    assert main(["not-a-command"]) == 1
+    assert "Unknown command" in capsys.readouterr().err
