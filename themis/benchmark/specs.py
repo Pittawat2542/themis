@@ -5,12 +5,15 @@ from __future__ import annotations
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from themis.benchmark.query import DatasetQuerySpec
+from themis.prompting import render_follow_up_turns, render_prompt_messages
 from themis.specs.base import SpecBase
 from themis.specs.experiment import (
     InferenceGridSpec,
+    InferenceParamsSpec,
     PromptMessage,
     PromptTurnSpec,
 )
+from themis.types.enums import PromptRole
 from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
@@ -31,7 +34,14 @@ class PromptVariantSpec(SpecBase):
     follow_up_turns: list[PromptTurnSpec] = Field(default_factory=list)
     variables: JSONDict = Field(
         default_factory=dict,
-        description="Static prompt-scoped variables exposed to prompt rendering.",
+        description=(
+            "Static prompt-scoped variables injected into the ``{prompt.*}`` "
+            "rendering namespace. These are defined once per variant and do not "
+            "change per item. For per-item dynamic values, use ``{item.<field>}`` "
+            "in message content — those are resolved from the dataset item payload "
+            "at render time. Example: ``variables={'tone': 'concise'}`` combined "
+            "with a message template ``'Respond in a {prompt.tone} style: {item.question}'``."
+        ),
     )
 
 
@@ -71,7 +81,16 @@ class ScoreSpec(SpecBase):
 
 
 class DatasetSliceSpec(SpecBase):
-    """Public dataset-provider contract for one benchmark slice scan request."""
+    """Public dataset-provider contract for one benchmark slice scan request.
+
+    This is the read-only view that ``DatasetProvider.scan()`` receives.  It
+    carries only the fields needed for a provider to decide *which* items to
+    return — dataset identity, benchmark context, and semantic dimensions.
+
+    It is **not** the authoring spec.  If you are writing a ``BenchmarkSpec``
+    you should use :class:`SliceSpec` instead, which includes prompt variant
+    selection, parse pipelines, score passes, and dataset query controls.
+    """
 
     benchmark_id: str | None = Field(default=None)
     slice_id: str = Field(..., min_length=1)
@@ -80,7 +99,17 @@ class DatasetSliceSpec(SpecBase):
 
 
 class SliceSpec(SpecBase):
-    """One benchmark slice with dataset identity, queries, prompts, and scoring."""
+    """One benchmark slice with dataset identity, queries, prompts, and scoring.
+
+    This is the **full authoring spec** used inside :class:`BenchmarkSpec`.  It
+    owns the complete pipeline definition for one slice: which dataset to use,
+    how to query/sample it, which prompt variants to run, which tools to pass,
+    and how to parse and score outputs.
+
+    The narrower :class:`DatasetSliceSpec` is what your ``DatasetProvider.scan()``
+    implementation receives — it contains only the fields needed to resolve items,
+    not the full pipeline definition.
+    """
 
     slice_id: str = Field(..., min_length=1)
     dataset: DatasetSpec = Field(...)
@@ -127,6 +156,134 @@ class BenchmarkSpec(SpecBase):
     tools: list[ToolSpec] = Field(default_factory=list)
     inference_grid: InferenceGridSpec = Field(...)
     num_samples: int = Field(default=1, ge=1)
+
+    @classmethod
+    def simple(
+        cls,
+        benchmark_id: str,
+        *,
+        model_id: str,
+        dataset_source: object,
+        dataset_id: str,
+        prompt: str,
+        metric: str,
+        provider: str = "openai",
+        slice_id: str | None = None,
+    ) -> "BenchmarkSpec":
+        """Construct a minimal single-model, single-slice benchmark for quick exploration.
+
+        This factory reduces the boilerplate for common "run one model against one
+        dataset with one prompt" workflows.  It produces a fully valid
+        :class:`BenchmarkSpec` that can be passed directly to
+        ``Orchestrator.run_benchmark()``.
+
+        For more control (multiple models, prompt variants, inference parameter
+        sweeps, custom parse pipelines) build a :class:`BenchmarkSpec` directly.
+
+        Args:
+            benchmark_id: Stable benchmark identifier.
+            model_id: The model to evaluate (e.g. ``"gpt-4o"``).
+            dataset_source: Dataset source enum value (e.g. ``DatasetSource.HUGGINGFACE``).
+            dataset_id: Dataset identifier string passed to the dataset provider.
+            prompt: User-turn prompt template. Use ``{item.<field>}`` placeholders for
+                    dataset item values (e.g. ``"Solve: {item.question}"``).
+            metric: Registered metric name used to score outputs (e.g. ``"exact_match"``).
+            provider: Inference engine provider name. Defaults to ``"openai"``.
+            slice_id: Override the slice ID. Defaults to ``benchmark_id``.
+
+        Returns:
+            A :class:`BenchmarkSpec` with one model, one slice, one prompt variant,
+            and one scoring pass.
+
+        Example::
+
+            benchmark = BenchmarkSpec.simple(
+                benchmark_id="gsm8k-quick",
+                model_id="gpt-4o",
+                dataset_source=DatasetSource.HUGGINGFACE,
+                dataset_id="openai/gsm8k",
+                prompt="Solve step by step: {item.question}",
+                metric="exact_match",
+            )
+            result = orchestrator.run_benchmark(benchmark)
+        """
+        resolved_slice_id = slice_id or benchmark_id
+        variant_id = f"{benchmark_id}-default"
+        return cls(
+            benchmark_id=benchmark_id,
+            models=[ModelSpec(model_id=model_id, provider=provider)],
+            slices=[
+                SliceSpec(
+                    slice_id=resolved_slice_id,
+                    dataset=DatasetSpec(source=dataset_source, dataset_id=dataset_id),
+                    prompt_variant_ids=[variant_id],
+                    generation=GenerationSpec(),
+                    scores=[ScoreSpec(name="default", metrics=[metric])],
+                )
+            ],
+            prompt_variants=[
+                PromptVariantSpec(
+                    id=variant_id,
+                    messages=[PromptMessage(role=PromptRole.USER, content=prompt)],
+                )
+            ],
+            inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
+        )
+
+    def preview(
+        self,
+        item: dict[str, object],
+        *,
+        prompt_variant_ids: list[str] | None = None,
+    ) -> list[dict[str, object]]:
+        """Dry-run render all prompt variants against a sample item dict.
+
+        Returns one entry per matching prompt variant showing exactly what
+        messages (and follow-up turns) the model would receive for ``item``,
+        without executing inference or touching storage.
+
+        This is useful for:
+
+        - Verifying prompt templates look correct before a full run
+        - Generating human-readable documentation of prompt variants
+        - Debugging ``{item.*}`` and ``{prompt.*}`` rendering placeholders
+
+        Args:
+            item: A sample dataset item payload dict (e.g. ``{"question": "2+2"}``).
+            prompt_variant_ids: Optional allow-list of variant IDs to preview.
+                When ``None``, all variants defined in the benchmark are rendered.
+
+        Returns:
+            A list of dicts, one per rendered variant, each with keys:
+              - ``prompt_variant_id`` — the variant's stable ID
+              - ``messages`` — list of ``{"role": ..., "content": ...}`` dicts
+              - ``follow_up_turns`` — list of rendered turn dicts (may be empty)
+        """
+        variants = [
+            v
+            for v in self.prompt_variants
+            if prompt_variant_ids is None or v.id in prompt_variant_ids
+        ]
+        results: list[dict[str, object]] = []
+        for variant in variants:
+            namespaces: dict[str, object] = {
+                "item": item,
+                "prompt": {
+                    "family": variant.family,
+                    "variables": variant.variables,
+                    **variant.variables,
+                },
+            }
+            rendered_messages = render_prompt_messages(variant.messages, namespaces)
+            rendered_turns = render_follow_up_turns(variant.follow_up_turns, namespaces)
+            results.append(
+                {
+                    "prompt_variant_id": variant.id,
+                    "messages": rendered_messages,
+                    "follow_up_turns": rendered_turns,
+                }
+            )
+        return results
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> "BenchmarkSpec":

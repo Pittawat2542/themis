@@ -223,7 +223,34 @@ def test_runtime_context_excludes_tool_handlers_from_json_dump():
         "run_labels": {"phase": "smoke"},
         "candidate_seed": None,
         "resume": None,
+        "tool_handler_versions": {},
     }
+
+
+def test_runtime_context_tool_handler_versions_defaults_empty() -> None:
+    runtime = RuntimeContext()
+    assert runtime.tool_handler_versions == {}
+
+
+def test_runtime_context_tool_handler_versions_stored_and_serialized() -> None:
+    runtime = RuntimeContext(
+        tool_handler_versions={"search": "1.2.0", "calculator": "0.3.1"}
+    )
+    assert runtime.tool_handler_versions["search"] == "1.2.0"
+    assert runtime.tool_handler_versions["calculator"] == "0.3.1"
+    dumped = runtime.model_dump(mode="json")
+    assert dumped["tool_handler_versions"] == {"search": "1.2.0", "calculator": "0.3.1"}
+
+
+def test_runtime_context_tool_handler_versions_independent_of_tool_handlers() -> None:
+    """Versions are persisted; handlers are excluded from serialization."""
+    runtime = RuntimeContext(
+        tool_handlers={"search": object()},
+        tool_handler_versions={"search": "2.0.0"},
+    )
+    dumped = runtime.model_dump(mode="json")
+    assert "tool_handlers" not in dumped
+    assert dumped["tool_handler_versions"] == {"search": "2.0.0"}
 
 
 def test_project_spec_supports_postgres_blob_storage():

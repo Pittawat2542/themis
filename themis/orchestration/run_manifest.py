@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from themis.benchmark.specs import BenchmarkSpec
 from themis.records.candidate import CandidateRecord
@@ -116,6 +116,18 @@ class RunDiff(BaseModel):
     added_evaluation_hashes: list[str] = Field(default_factory=list)
     removed_evaluation_hashes: list[str] = Field(default_factory=list)
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def has_invalidated_resume_work(self) -> bool:
+        """True when previously-completed trials would be abandoned by this change.
+
+        A non-empty ``removed_trial_hashes`` means the treatment spec no longer
+        includes work that has already been executed against this storage root.
+        Researchers should inspect this flag before applying a spec change to an
+        existing run to avoid silently discarding completed results.
+        """
+        return bool(self.removed_trial_hashes)
+
 
 class RunHandle(BaseModel):
     """Operator-facing snapshot of run progress for local or async execution."""
@@ -143,6 +155,17 @@ class CostEstimate(BaseModel):
     backend_kind: str
     total_work_items: int
     work_items_by_stage: dict[str, int] = Field(default_factory=dict)
+    trial_count: int = Field(
+        default=0,
+        description="Total number of unique trials in the planned matrix.",
+    )
+    trial_matrix: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Breakdown of the trial matrix dimensions "
+            "(e.g. models, prompt_variants, inference_params, dataset_items)."
+        ),
+    )
     estimated_prompt_tokens: int
     estimated_completion_tokens: int
     estimated_total_tokens: int

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 import tomllib
@@ -274,6 +275,70 @@ class Orchestrator:
                 f"BenchmarkResult, got {type(result).__name__}."
             )
         return result
+
+    def run_benchmark_iter(
+        self,
+        benchmark: BenchmarkSpec,
+        *,
+        runtime: RuntimeContext | None = None,
+    ) -> Iterator[TrialRecord]:
+        """Execute a benchmark and yield each :class:`TrialRecord` as it completes.
+
+        Unlike :meth:`run_benchmark`, which blocks until all trials finish and
+        returns a :class:`BenchmarkResult`, this generator executes trials
+        one-at-a-time and yields a :class:`TrialRecord` after each trial's full
+        pipeline (generation → transform → evaluation) completes.
+
+        This enables early inspection, incremental logging, or stopping the run
+        after the first N results — without waiting for the full matrix.
+
+        Note:
+            The current implementation executes trials sequentially rather than
+            in parallel.  It sacrifices some throughput in exchange for the
+            ability to observe results incrementally.
+
+        Args:
+            benchmark: The benchmark specification to execute.
+            runtime: Optional runtime context (secrets, tool handlers, labels).
+
+        Yields:
+            :class:`TrialRecord` objects, one per completed trial, in planning
+            order.
+
+        Example::
+
+            for trial_record in orchestrator.run_benchmark_iter(benchmark):
+                print(trial_record.trial_hash, trial_record.status)
+                if should_stop_early(trial_record):
+                    break
+        """
+        normalized = self._normalize_source_spec(benchmark)
+        planned_trials = self._services.planner.plan_experiment(
+            normalized.experiment_spec
+        )
+
+        for planned_trial in planned_trials:
+            single = [planned_trial]
+            has_generation = planned_trial.trial_spec.task.generation is not None
+            has_transforms = bool(planned_trial.trial_spec.task.output_transforms)
+            has_evaluations = bool(planned_trial.trial_spec.task.evaluations)
+
+            if has_generation:
+                self._services.executor.execute_generation_trials(single, runtime)
+            if has_transforms:
+                self._services.executor.execute_transforms(single, runtime)
+            if has_evaluations:
+                self._services.executor.execute_evaluations(single, runtime)
+
+            # Build a single-trial result so get_trial() uses the right evaluation hash.
+            single_result = self._run_planning.build_result(
+                single,
+                transform_hashes=collect_transform_hashes(single),
+                evaluation_hashes=collect_evaluation_hashes(single),
+            )
+            trial_record = single_result.get_trial(planned_trial.trial_spec.spec_hash)
+            if trial_record is not None:
+                yield trial_record
 
     def generate(
         self,
