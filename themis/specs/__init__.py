@@ -26,6 +26,7 @@ __all__ = [
     "InferenceParamsSpec",
     "InferenceGridSpec",
     "PromptMessage",
+    "PromptTurnSpec",
     "ProjectSpec",
 ]
 
@@ -48,6 +49,7 @@ _DYNAMIC_EXPORTS = {
     "InferenceParamsSpec": ("themis.specs.experiment", "InferenceParamsSpec"),
     "InferenceGridSpec": ("themis.specs.experiment", "InferenceGridSpec"),
     "PromptMessage": ("themis.specs.experiment", "PromptMessage"),
+    "PromptTurnSpec": ("themis.specs.experiment", "PromptTurnSpec"),
     "ProjectSpec": ("themis.specs.experiment", "ProjectSpec"),
 }
 

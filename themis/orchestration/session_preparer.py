@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 from themis.contracts.protocols import DatasetContext, TrialEventRepository
-from themis.prompting import render_prompt_messages
+from themis.prompting import render_follow_up_turns, render_prompt_messages
 from themis.orchestration.runner_state import (
     TrialExecutionSession,
     artifact_ref,
@@ -14,7 +14,12 @@ from themis.orchestration.runner_state import (
 )
 from themis.orchestration.task_resolution import resolve_task_stages
 from themis.records.provenance import ProvenanceRecord
-from themis.specs.experiment import PromptMessage, RuntimeContext, TrialSpec
+from themis.specs.experiment import (
+    PromptMessage,
+    PromptTurnSpec,
+    RuntimeContext,
+    TrialSpec,
+)
 from themis.storage.artifact_store import ArtifactStore
 from themis.types.enums import RecordStatus
 from themis.types.events import (
@@ -187,6 +192,24 @@ def prepare_benchmark_prompt(
         },
         strict=True,
     )
+    rendered_follow_up_turns = render_follow_up_turns(
+        trial.prompt.follow_up_turns,
+        {
+            "item": item_namespace,
+            "slice": {
+                "benchmark_id": trial.task.benchmark_id,
+                "slice_id": trial.task.slice_id or trial.task.task_id,
+                "dimensions": dict(trial.task.dimensions),
+            },
+            "prompt": {
+                "id": trial.prompt.id,
+                "family": trial.prompt.family,
+                "variables": dict(trial.prompt.variables),
+            },
+            "runtime": runtime.model_dump(mode="json"),
+        },
+        strict=True,
+    )
     return trial.model_copy(
         update={
             "prompt": trial.prompt.model_copy(
@@ -194,7 +217,11 @@ def prepare_benchmark_prompt(
                     "messages": [
                         PromptMessage.model_validate(message)
                         for message in rendered_messages
-                    ]
+                    ],
+                    "follow_up_turns": [
+                        PromptTurnSpec.model_validate(turn)
+                        for turn in rendered_follow_up_turns
+                    ],
                 }
             )
         }

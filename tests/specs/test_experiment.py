@@ -15,6 +15,7 @@ from themis.specs.experiment import (
     PostgresBlobStorageSpec,
     ProjectSpec,
     PromptMessage,
+    PromptTurnSpec,
     SqliteBlobStorageSpec,
     StorageSpec,
     TrialSpec,
@@ -82,8 +83,27 @@ def test_inference_params():
 
 
 def test_prompt_template_spec():
-    spec = PromptTemplateSpec(messages=[{"role": "user", "content": "Hello {name}"}])
+    spec = PromptTemplateSpec(
+        messages=[{"role": "developer", "content": "Hello {name}"}],
+        follow_up_turns=[
+            {
+                "messages": [
+                    {"role": "user", "content": "Question: {name}?"},
+                    {"role": "assistant", "content": "Thinking..."},
+                ]
+            }
+        ],
+    )
     assert spec.messages[0].content == "Hello {name}"
+    assert spec.messages[0].role == PromptRole.DEVELOPER
+    assert spec.follow_up_turns == [
+        PromptTurnSpec(
+            messages=[
+                PromptMessage(role=PromptRole.USER, content="Question: {name}?"),
+                PromptMessage(role=PromptRole.ASSISTANT, content="Thinking..."),
+            ]
+        )
+    ]
 
 
 def test_prompt_template_spec_rejects_unknown_message_keys():
@@ -94,9 +114,9 @@ def test_prompt_template_spec_rejects_unknown_message_keys():
 
 
 def test_prompt_message_requires_role_and_content():
-    message = PromptMessage(role=PromptRole.ASSISTANT, content="Done")
+    message = PromptMessage(role=PromptRole.DEVELOPER, content="Done")
 
-    assert message.role == "assistant"
+    assert message.role == "developer"
     assert message.content == "Done"
 
     with pytest.raises(ValidationError):

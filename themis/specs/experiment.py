@@ -129,6 +129,18 @@ class PromptMessage(BaseModel):
         return value
 
 
+class PromptTurnSpec(BaseModel):
+    """One ordered follow-up turn appended after bootstrap prompt execution."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    messages: list[PromptMessage] = Field(
+        ...,
+        min_length=1,
+        description="Structured messages emitted for one scripted follow-up turn.",
+    )
+
+
 class PromptTemplateSpec(SpecBase):
     """Structured chat-style prompt template carried through planning and hooks."""
 
@@ -145,7 +157,11 @@ class PromptTemplateSpec(SpecBase):
     )
     messages: list[PromptMessage] = Field(
         ...,
-        description="List of templated messages mimicking standard Chat formats.",
+        description="Initial bootstrap message sequence rendered before inference.",
+    )
+    follow_up_turns: list[PromptTurnSpec] = Field(
+        default_factory=list,
+        description="Ordered scripted follow-up turns rendered after bootstrap.",
     )
 
 

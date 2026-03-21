@@ -16,6 +16,7 @@ EXPECTED_ROOT_EXPORTS = {
     "PostgresBlobStorageSpec",
     "ProjectSpec",
     "PromptMessage",
+    "PromptTurnSpec",
     "PromptVariantSpec",
     "ScoreSpec",
     "SliceSpec",

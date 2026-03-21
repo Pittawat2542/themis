@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from themis.specs.experiment import PromptMessage
+from themis.specs.experiment import PromptMessage, PromptTurnSpec
 
 
 class _ValueProxy:
@@ -42,6 +42,18 @@ class _SafeNamespace(dict[str, object]):
         return _ValueProxy("{" + key + "}", placeholder="{" + key + "}")
 
 
+def _rendered_content(
+    template: str,
+    context: dict[str, object],
+    mapping: _SafeNamespace,
+    *,
+    strict: bool,
+) -> str:
+    if strict:
+        return template.format_map(context)
+    return template.format_map(mapping)
+
+
 def render_prompt_messages(
     messages: list[PromptMessage],
     namespaces: Mapping[str, object],
@@ -56,9 +68,44 @@ def render_prompt_messages(
     mapping = _SafeNamespace(context)
     rendered: list[dict[str, str]] = []
     for message in messages:
-        if strict:
-            content = message.content.format_map(context)
-        else:
-            content = message.content.format_map(mapping)
+        content = _rendered_content(
+            message.content,
+            context,
+            mapping,
+            strict=strict,
+        )
         rendered.append({"role": message.role.value, "content": content})
     return rendered
+
+
+def render_follow_up_turns(
+    turns: list[PromptTurnSpec],
+    namespaces: Mapping[str, object],
+    *,
+    strict: bool = False,
+) -> list[dict[str, list[dict[str, str]]]]:
+    """Render scripted follow-up turns against benchmark-native namespaces."""
+
+    context: dict[str, object] = {}
+    for key, value in namespaces.items():
+        context[key] = _ValueProxy(value)
+    mapping = _SafeNamespace(context)
+    rendered_turns: list[dict[str, list[dict[str, str]]]] = []
+    for turn in turns:
+        rendered_turns.append(
+            {
+                "messages": [
+                    {
+                        "role": message.role.value,
+                        "content": _rendered_content(
+                            message.content,
+                            context,
+                            mapping,
+                            strict=strict,
+                        ),
+                    }
+                    for message in turn.messages
+                ]
+            }
+        )
+    return rendered_turns

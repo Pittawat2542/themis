@@ -6,7 +6,11 @@ from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from themis.benchmark.query import DatasetQuerySpec
 from themis.specs.base import SpecBase
-from themis.specs.experiment import InferenceGridSpec, PromptMessage
+from themis.specs.experiment import (
+    InferenceGridSpec,
+    PromptMessage,
+    PromptTurnSpec,
+)
 from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
@@ -22,6 +26,7 @@ class PromptVariantSpec(SpecBase):
     id: str = Field(..., min_length=1)
     family: str | None = Field(default=None)
     messages: list[PromptMessage] = Field(..., min_length=1)
+    follow_up_turns: list[PromptTurnSpec] = Field(default_factory=list)
     variables: JSONDict = Field(
         default_factory=dict,
         description="Static prompt-scoped variables exposed to prompt rendering.",

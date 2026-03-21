@@ -22,6 +22,7 @@ def compile_benchmark(benchmark: BenchmarkSpec) -> ExperimentSpec:
             id=variant.id,
             family=variant.family,
             messages=variant.messages,
+            follow_up_turns=variant.follow_up_turns,
             variables=variant.variables,
         )
         for variant in benchmark.prompt_variants
