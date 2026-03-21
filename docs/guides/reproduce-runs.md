@@ -112,6 +112,42 @@ For paper or review workflows, a practical bundle is the minimum portable bundle
 above plus the exact example DB or artifact directory when you expect someone
 else to re-run `themis-quickcheck` or hydrate timelines locally.
 
+## Track Tool Handler Versions
+
+When running agent evaluations with tool-using models, record which version of
+each tool handler was active so the execution trace remains interpretable after
+the handler logic changes:
+
+```python
+from themis.specs.experiment import RuntimeContext
+
+runtime = RuntimeContext(
+    tool_handlers={"search": my_search_fn, "calculator": my_calc_fn},
+    tool_handler_versions={"search": "2.1.0", "calculator": "0.4.0"},
+)
+result = orchestrator.run_benchmark(benchmark, runtime=runtime)
+```
+
+`tool_handler_versions` is serialised and stored alongside the rest of the
+runtime context, so it appears in config reports and timeline views. Unlike
+`tool_handlers`, which is excluded from serialisation, the versions field is
+persisted and queryable.
+
+## Detect Spec Changes That Invalidate Resume Work
+
+Before applying a modified `BenchmarkSpec` to an existing storage root, check
+whether completed trials would be lost:
+
+```python
+diff = orchestrator.diff_specs(old_benchmark, new_benchmark)
+if diff.has_invalidated_resume_work:
+    print(f"Warning: {len(diff.removed_trial_hashes)} completed trial(s) would be abandoned.")
+```
+
+`RunDiff.has_invalidated_resume_work` is `True` whenever `removed_trial_hashes`
+is non-empty.  Adding a new model or prompt variant never triggers this flag —
+only removing or replacing existing ones does.
+
 ## Next Steps
 
 - Use [Generate Config Reports](config-reports.md) for the full report API.

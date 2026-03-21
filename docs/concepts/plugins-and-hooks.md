@@ -30,3 +30,46 @@
 - `regex`
 
 Use those before writing a custom extractor.
+
+## Registering Plugins
+
+**Individual registration** (most explicit):
+
+```python
+registry = PluginRegistry()
+registry.register_inference_engine("openai", OpenAIEngine)
+registry.register_metric("exact_match", ExactMatchMetric)
+```
+
+**Bulk registration with `from_dict`** (less boilerplate for common setups):
+
+```python
+registry = PluginRegistry.from_dict({
+    "engines":  {"openai": OpenAIEngine, "anthropic": AnthropicEngine},
+    "metrics":  {"exact_match": ExactMatchMetric, "bleu": BleuMetric},
+    "extractors": {"my_parser": MyExtractor},  # supplements built-ins
+})
+```
+
+Supported keys: `engines`, `metrics`, `extractors`, `judges`, `tools`, `hooks`.
+Built-in extractors are always registered regardless of the mapping.
+
+## Declaring Engine Seed Support
+
+Use `EngineCapabilities.supports_seed` to signal whether an engine honours
+the `seed` field in `InferenceParamsSpec`.  Themis uses this flag to surface
+warnings when a seeded benchmark runs against an engine that ignores seeds:
+
+```python
+from themis import EngineCapabilities
+
+registry.register_inference_engine(
+    "my-engine",
+    MyEngine,
+    capabilities=EngineCapabilities(supports_seed=True),
+)
+```
+
+When `supports_seed=False` (the default), Themis-level candidate seed derivation
+still provides reproducible execution planning, but the engine itself may produce
+non-deterministic outputs.

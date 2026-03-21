@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import get_args, overload
 
+from themis.config_report.source_index import load_source_index
+
 import pytest
 
 from themis import (
@@ -126,7 +128,10 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     normalized_root_source = _normalized_path(root.source_file)
     assert normalized_root_source is not None
     assert normalized_root_source.endswith("themis/specs/experiment.py")
-    assert root.source_line == 93
+    src_index = load_source_index(root.source_file)
+    cls_info = src_index.get_class_info("InferenceParamsSpec")
+    assert cls_info is not None
+    assert root.source_line == cls_info.source_line
 
     max_tokens = next(
         parameter for parameter in root.parameters if parameter.name == "max_tokens"
@@ -140,7 +145,7 @@ def test_build_config_report_document_collects_leaf_metadata() -> None:
     normalized_max_tokens_source = _normalized_path(max_tokens.source_file)
     assert normalized_max_tokens_source is not None
     assert normalized_max_tokens_source.endswith("themis/specs/experiment.py")
-    assert max_tokens.source_line == 103
+    assert max_tokens.source_line == cls_info.field_lines.get("max_tokens")
     assert max_tokens.declared_in == "InferenceParamsSpec"
 
 

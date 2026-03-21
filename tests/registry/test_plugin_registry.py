@@ -130,3 +130,89 @@ def test_plugin_registry_rejects_partial_pipeline_hooks():
 
     with pytest.raises(SpecValidationError, match="PipelineHook"):
         registry.register_hook("partial", PartialHook())
+
+
+def test_plugin_registry_from_dict_registers_engines_metrics_extractors() -> None:
+    registry = PluginRegistry.from_dict(
+        {
+            "engines": {"demo": DummyEngine},
+            "metrics": {"exact_match": DummyMetric},
+            "extractors": {"dummy": DummyExtractor},
+        }
+    )
+    assert registry.has_inference_engine("demo")
+    assert registry.has_metric("exact_match")
+    assert registry.has_extractor("dummy")
+
+
+def test_plugin_registry_from_dict_empty_mapping_gives_empty_registry() -> None:
+    registry = PluginRegistry.from_dict({})
+    assert not registry.has_inference_engine("anything")
+    assert not registry.has_metric("anything")
+
+
+def test_plugin_registry_from_dict_registers_judges() -> None:
+    class DummyJudge:
+        def judge(self, *args, **kwargs):
+            pass
+
+        def consume_audit_trail(self):
+            return []
+
+    registry = PluginRegistry.from_dict({"judges": {"llm-judge": DummyJudge}})
+    assert registry.has_judge("llm-judge")
+
+
+def test_plugin_registry_from_dict_raises_on_unknown_key() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="unknown"):
+        PluginRegistry.from_dict({"unknown_section": {"x": object()}})
+
+
+def test_plugin_registry_from_dict_builtin_extractors_still_present() -> None:
+    """Built-in extractors should remain available after from_dict construction."""
+    registry = PluginRegistry.from_dict({"metrics": {"em": DummyMetric}})
+    assert registry.has_extractor("first_number")
+    assert registry.has_extractor("choice_letter")
+
+
+def test_plugin_registry_from_dict_registers_tools() -> None:
+    class DummyTool:
+        pass
+
+    registry = PluginRegistry.from_dict({"tools": {"demo-tool": DummyTool()}})
+    assert registry.has_tool("demo-tool")
+
+
+def test_plugin_registry_from_dict_registers_hooks() -> None:
+    registry = PluginRegistry.from_dict({"hooks": {"demo-hook": _NoOpHook()}})
+    assert registry.has_hook("demo-hook")
+
+
+def test_engine_capabilities_supports_seed_defaults_false() -> None:
+    caps = EngineCapabilities()
+    assert caps.supports_seed is False
+
+
+def test_engine_capabilities_supports_seed_can_be_set_true() -> None:
+    caps = EngineCapabilities(supports_seed=True)
+    assert caps.supports_seed is True
+
+
+def test_engine_capabilities_supports_seed_preserved_in_registration() -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine(
+        "seed-aware-engine",
+        DummyEngine,
+        capabilities=EngineCapabilities(supports_seed=True),
+    )
+    registration = registry.get_inference_engine_registration("seed-aware-engine")
+    assert registration.capabilities.supports_seed is True
+
+
+def test_engine_capabilities_no_seed_support_preserved_in_registration() -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine("seed-unaware-engine", DummyEngine)
+    registration = registry.get_inference_engine_registration("seed-unaware-engine")
+    assert registration.capabilities.supports_seed is False

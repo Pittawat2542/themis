@@ -38,6 +38,14 @@ class EngineCapabilities(BaseModel):
         default_factory=_default_response_formats
     )
     supports_logprobs: bool = False
+    supports_seed: bool = Field(
+        default=False,
+        description=(
+            "Whether the engine honours the ``seed`` field in InferenceParamsSpec. "
+            "When False, deterministic seeding relies solely on Themis-level candidate "
+            "seed derivation; the engine may still produce non-deterministic outputs."
+        ),
+    )
     max_context_tokens: int | None = None
 
 
@@ -79,6 +87,10 @@ class PluginRegistry:
     Instance-scoped registry for protocol implementations and plugin metadata.
     """
 
+    _KNOWN_MAPPING_KEYS: frozenset[str] = frozenset(
+        {"engines", "metrics", "extractors", "judges", "hooks", "tools"}
+    )
+
     def __init__(self) -> None:
         self._registration_order = 0
         self._inference_engines: dict[str, InferenceEngineRegistration] = {}
@@ -88,6 +100,51 @@ class PluginRegistry:
         self._tools: dict[str, PluginRegistration[ToolHandler]] = {}
         self._hooks: list[HookRegistration] = []
         self._register_builtin_extractors()
+
+    @classmethod
+    def from_dict(cls, mapping: dict[str, dict[str, object]]) -> "PluginRegistry":
+        """Construct a registry from a plain dict, reducing per-run registration boilerplate.
+
+        Each top-level key selects a plugin category; the value is a ``{name: factory}``
+        mapping.  Built-in extractors are always registered regardless of what ``mapping``
+        contains.
+
+        Supported keys:
+          - ``engines``   — inference engine factories
+          - ``metrics``   — metric factories
+          - ``extractors`` — extractor factories (supplements built-ins)
+          - ``judges``    — judge service factories
+          - ``tools``     — opaque tool handler factories
+          - ``hooks``     — ``PipelineHook`` instances (registered in iteration order)
+
+        Example::
+
+            registry = PluginRegistry.from_dict({
+                "engines":  {"openai": OpenAIEngine},
+                "metrics":  {"exact_match": ExactMatchMetric},
+                "extractors": {"my_parser": MyExtractor},
+            })
+        """
+        unknown = set(mapping) - cls._KNOWN_MAPPING_KEYS
+        if unknown:
+            raise ValueError(
+                f"PluginRegistry.from_dict received unknown mapping key(s): "
+                f"{sorted(unknown)}. Supported keys: {sorted(cls._KNOWN_MAPPING_KEYS)}."
+            )
+        registry = cls()
+        for name, factory in mapping.get("engines", {}).items():
+            registry.register_inference_engine(name, factory)  # type: ignore[arg-type]
+        for name, factory in mapping.get("metrics", {}).items():
+            registry.register_metric(name, factory)  # type: ignore[arg-type]
+        for name, factory in mapping.get("extractors", {}).items():
+            registry.register_extractor(name, factory)  # type: ignore[arg-type]
+        for name, factory in mapping.get("judges", {}).items():
+            registry.register_judge(name, factory)  # type: ignore[arg-type]
+        for name, factory in mapping.get("tools", {}).items():
+            registry.register_tool(name, factory)
+        for name, hook in mapping.get("hooks", {}).items():
+            registry.register_hook(name, hook)  # type: ignore[arg-type]
+        return registry
 
     def register_inference_engine(
         self,
@@ -225,6 +282,10 @@ class PluginRegistry:
     def has_tool(self, name: str) -> bool:
         """Return whether an opaque runtime tool handler exists for ``name``."""
         return name in self._tools
+
+    def has_hook(self, name: str) -> bool:
+        """Return whether a pipeline hook with ``name`` is registered."""
+        return any(h.name == name for h in self._hooks)
 
     def get_inference_engine_registration(
         self, name: str

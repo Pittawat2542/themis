@@ -81,6 +81,16 @@ class RuntimeContext(BaseModel):
         exclude=True,
         json_schema_extra={"exclude_from_hash": True},
     )
+    tool_handler_versions: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Optional version strings for registered tool handlers, keyed by tool ID. "
+            "Use this to record which implementation version handled each tool call so "
+            "that execution traces remain interpretable when handler logic changes between "
+            "runs. Unlike ``tool_handlers``, this field is persisted and included in "
+            "serialisation. Example: ``{'search': '2.1.0', 'calculator': '0.4.0'}``."
+        ),
+    )
 
     def __getitem__(self, key: str) -> object:
         return getattr(self, key)
@@ -167,7 +177,14 @@ class PromptTemplateSpec(SpecBase):
     )
     variables: JSONDict = Field(
         default_factory=dict,
-        description="Static prompt-scoped variables exposed to prompt rendering.",
+        description=(
+            "Static prompt-scoped variables injected into the ``{prompt.*}`` "
+            "rendering namespace. These are defined once per template and do not "
+            "change per item. For per-item dynamic values, use ``{item.<field>}`` "
+            "in message content — those are resolved from the dataset item payload "
+            "at render time. Example: ``variables={'tone': 'concise'}`` combined "
+            "with a message template ``'Respond in a {prompt.tone} style: {item.question}'``."
+        ),
     )
     messages: list[PromptMessage] = Field(
         ...,

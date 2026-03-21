@@ -406,11 +406,34 @@ class RunPlanningService:
         notes.append(
             "Provider pricing is not configured, so estimated_total_cost is unavailable."
         )
+        trial_matrix = {
+            "models": len({t.trial_spec.model.model_id for t in planned_trials}),
+            "prompt_variants": len(
+                {
+                    t.trial_spec.prompt.id
+                    for t in planned_trials
+                    if t.trial_spec.prompt.id
+                }
+            ),
+            "inference_params": len(
+                {t.trial_spec.params.spec_hash for t in planned_trials}
+            ),
+            "dataset_items": len({t.trial_spec.item_id for t in planned_trials}),
+        }
+        notes.append(
+            f"Trial matrix: {trial_matrix['models']} model(s) × "
+            f"{trial_matrix['prompt_variants']} prompt variant(s) × "
+            f"{trial_matrix['inference_params']} inference param set(s) × "
+            f"{trial_matrix['dataset_items']} dataset item(s) = "
+            f"{len(planned_trials)} trial(s)."
+        )
         return CostEstimate(
             run_id=manifest.run_id,
             backend_kind=manifest.backend_kind,
             total_work_items=len(manifest.work_items),
             work_items_by_stage=work_items_by_stage,
+            trial_count=len(planned_trials),
+            trial_matrix=trial_matrix,
             estimated_prompt_tokens=estimated_prompt_tokens,
             estimated_completion_tokens=completion_token_budget,
             estimated_total_tokens=estimated_prompt_tokens + completion_token_budget,

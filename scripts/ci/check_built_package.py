@@ -32,6 +32,7 @@ EXPECTED_ROOT_EXPORTS = {
     "StorageSpec",
     "SqliteBlobStorageSpec",
     "PostgresBlobStorageSpec",
+    "EngineCapabilities",
     "PluginRegistry",
     "generate_config_report",
 }

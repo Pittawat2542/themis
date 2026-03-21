@@ -6,6 +6,7 @@ EXPECTED_ROOT_EXPORTS = {
     "BenchmarkResult",
     "BenchmarkSpec",
     "DatasetQuerySpec",
+    "EngineCapabilities",
     "ExecutionPolicySpec",
     "InferenceGridSpec",
     "InferenceParamsSpec",
