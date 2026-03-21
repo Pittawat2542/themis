@@ -27,7 +27,8 @@ requests when the backend supports deterministic seeding. `runtime.candidate_see
 mirrors the same effective value for backwards compatibility with older engines.
 The persisted trial-level spec remains the planned `TrialSpec`; executed
 generation params are exposed on candidate projections and candidate timeline
-views instead.
+views instead. Some providers only accept 32-bit seeds, so engines may need to
+truncate before forwarding, for example with `trial.params.seed & 0xFFFFFFFF`.
 
 ## What Themis Preserves
 

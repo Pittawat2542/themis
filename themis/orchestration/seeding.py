@@ -8,6 +8,12 @@ from themis.specs.experiment import TrialSpec
 
 
 def _seed_digest_int(*parts: object) -> int:
+    """_seed_digest_int returns an int from the first 16 SHA-256 hex chars.
+
+    That yields a value in the 0..2**64-1 range. Some inference backends only
+    accept 32-bit seeds, so callers or engines may need to truncate the result
+    before use, for example with ``seed & 0xFFFFFFFF``.
+    """
     digest = hashlib.sha256(
         ":".join(str(part) for part in parts).encode("utf-8")
     ).hexdigest()
