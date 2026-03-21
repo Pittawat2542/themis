@@ -344,7 +344,7 @@ def test_sqlite_and_postgres_share_storage_schema_contract():
     assert postgres_manager.STORE_FORMAT_VERSION is storage_schema.STORE_FORMAT_VERSION
 
 
-def test_apply_sql_script_executes_individual_statements():
+def test_apply_sql_script_executes_individual_statements() -> None:
     executed: list[tuple[str, tuple[object, ...]]] = []
 
     class FakeConnection:

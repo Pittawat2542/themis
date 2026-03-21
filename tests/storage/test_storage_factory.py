@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import get_type_hints
 
 import pytest
@@ -20,7 +21,7 @@ from themis.storage.factory import StorageBundle
 from themis.types.enums import ErrorCode
 
 
-def test_build_storage_bundle_supports_sqlite_blob(tmp_path):
+def test_build_storage_bundle_supports_sqlite_blob(tmp_path: Path) -> None:
     bundle = build_storage_bundle(
         SqliteBlobStorageSpec(root_dir=str(tmp_path / "runs"))
     )
@@ -31,7 +32,9 @@ def test_build_storage_bundle_supports_sqlite_blob(tmp_path):
     assert isinstance(bundle.blob_store, LocalBlobStore)
 
 
-def test_build_storage_bundle_requires_postgres_extra(tmp_path, monkeypatch):
+def test_build_storage_bundle_requires_postgres_extra(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from themis import storage as module
 
     def raise_missing_optional(module_name: str, *, extra: str):
@@ -113,14 +116,16 @@ def test_postgres_bundle_uses_shared_storage_repository_classes(tmp_path, monkey
     assert bundle.observability_store.__class__ is SqliteObservabilityStore
 
 
-def test_postgres_connection_manager_returns_explicit_storage_contract(monkeypatch):
+def test_postgres_connection_manager_returns_explicit_storage_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     executed: list[tuple[str, tuple[object, ...]]] = []
 
     class FakeCursor:
-        def fetchone(self):
+        def fetchone(self) -> None:
             return None
 
-        def fetchall(self):
+        def fetchall(self) -> list[object]:
             return []
 
     class FakeRawConnection:
@@ -131,11 +136,11 @@ def test_postgres_connection_manager_returns_explicit_storage_contract(monkeypat
             executed.append((query, params))
             return FakeCursor()
 
-        def __enter__(self):
+        def __enter__(self) -> FakeRawConnection:
             self.entered = True
             return self
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
             self.exited = True
             return None
 
@@ -165,23 +170,25 @@ def test_postgres_connection_manager_returns_explicit_storage_contract(monkeypat
         assert isinstance(conn, StorageConnection)
         conn.execute("SELECT ?, ?", ("a", 1))
         with pytest.raises(AttributeError):
-            conn.executescript("SELECT 1; ; SELECT 2;")
+            getattr(conn, "executescript")("SELECT 1; ; SELECT 2;")
         with pytest.raises(AttributeError):
-            conn.secret_method()
+            getattr(conn, "secret_method")()
 
     assert executed == [
         ("SELECT %s, %s", ("a", 1)),
     ]
 
 
-def test_postgres_connection_manager_reopens_closed_cached_connections(monkeypatch):
+def test_postgres_connection_manager_reopens_closed_cached_connections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     connect_calls: list[int] = []
 
     class FakeCursor:
-        def fetchone(self):
+        def fetchone(self) -> None:
             return None
 
-        def fetchall(self):
+        def fetchall(self) -> list[object]:
             return []
 
     class FakeRawConnection:

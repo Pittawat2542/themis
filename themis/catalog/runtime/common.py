@@ -321,14 +321,13 @@ def _parse_simpleqa_grade(
     if match is None:
         return "NOT_ATTEMPTED"
     token = match.group(1).upper().replace(" ", "_")
-    return {
-        "A": "CORRECT",
-        "B": "INCORRECT",
-        "C": "NOT_ATTEMPTED",
-        "NOT_ATTEMPTED": "NOT_ATTEMPTED",
-        "CORRECT": "CORRECT",
-        "INCORRECT": "INCORRECT",
-    }.get(token, "NOT_ATTEMPTED")
+    if token in {"A", "CORRECT"}:
+        return "CORRECT"
+    if token in {"B", "INCORRECT"}:
+        return "INCORRECT"
+    if token in {"C", "NOT_ATTEMPTED"}:
+        return "NOT_ATTEMPTED"
+    return "NOT_ATTEMPTED"
 
 
 def _simpleqa_demo_grade(question: str, target: str, predicted_answer: str) -> str:

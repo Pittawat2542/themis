@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import cast
+
+from themis.contracts.protocols import InferenceEngine, Metric
 from themis import PluginRegistry
 from themis.registry import EngineCapabilities
 
@@ -14,18 +17,24 @@ from .metrics.common import (
 )
 from .common import _normalize_provider_name
 
-_SHARED_METRIC_FACTORIES = {
-    "exact_match": ExactMatchMetric,
-    "normalized_exact_match": NormalizedExactMatchMetric,
-    "choice_accuracy": ChoiceAccuracyMetric,
-    "numeric_exact_match": NumericExactMatchMetric,
+_SHARED_METRIC_FACTORIES: dict[str, type[Metric]] = {
+    "exact_match": cast(type[Metric], ExactMatchMetric),
+    "normalized_exact_match": cast(type[Metric], NormalizedExactMatchMetric),
+    "choice_accuracy": cast(type[Metric], ChoiceAccuracyMetric),
+    "numeric_exact_match": cast(type[Metric], NumericExactMatchMetric),
 }
 
-_ENGINE_REGISTRATIONS = {
-    "demo": (DemoEngine, EngineCapabilities(supports_seed=True)),
-    "openai": (OpenAIChatEngine, EngineCapabilities(supports_seed=True)),
+_ENGINE_REGISTRATIONS: dict[str, tuple[type[InferenceEngine], EngineCapabilities]] = {
+    "demo": (
+        cast(type[InferenceEngine], DemoEngine),
+        EngineCapabilities(supports_seed=True),
+    ),
+    "openai": (
+        cast(type[InferenceEngine], OpenAIChatEngine),
+        EngineCapabilities(supports_seed=True),
+    ),
     "openai_compatible": (
-        OpenAICompatibleChatEngine,
+        cast(type[InferenceEngine], OpenAICompatibleChatEngine),
         EngineCapabilities(supports_seed=True),
     ),
 }

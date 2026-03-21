@@ -9,7 +9,6 @@ from importlib import resources
 import json
 import math
 from pathlib import Path
-from typing import cast
 
 from themis import (
     BenchmarkSpec,
@@ -27,16 +26,25 @@ from themis import (
     SliceSpec,
     SqliteBlobStorageSpec,
 )
-from themis.specs.foundational import DatasetSpec, ExtractorRefSpec, GenerationSpec
+from themis.specs.foundational import (
+    DatasetSpec,
+    ExtractorRefSpec,
+    GenerationSpec,
+    JinjaTransform,
+    RenameFieldTransform,
+)
 from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 from themis.types.events import ScoreRow
 from themis.types.json_types import JSONDict
+from themis.types.json_validation import validate_json_dict
 
 from . import datasets as _datasets
 from . import runtime as _runtime
 from .datasets import CatalogDatasetProvider
 
 _MCQ_CHOICES = list("ABCDEFGHIJ")
+
+type CatalogRow = dict[str, object]
 
 BenchmarkBuilder = Callable[
     ["CatalogBenchmarkDefinition", "CatalogBenchmarkRuntimeConfig"],
@@ -191,7 +199,9 @@ class CatalogBenchmarkDefinition:
         benchmark = self.builder(self, config)
         dataset = benchmark.slices[0].dataset
         provider_instance = self.build_dataset_provider()
-        sample_rows = provider_instance.prepare_rows(fixture["samples"], dataset).rows
+        sample_rows = provider_instance.prepare_rows(
+            _fixture_samples(fixture), dataset
+        ).rows
         sample = sample_rows[0]
         if self.preview_renderer is not None:
             return self.preview_renderer(self, config, sample)
@@ -309,21 +319,27 @@ def mean_summary(metric_id: str, result) -> JSONDict:
     rows = iter_score_rows(result, metric_id)
     count = len(rows)
     mean = sum(row.score for row in rows) / count if count else 0.0
-    return {"metric_id": metric_id, "count": count, "mean": mean}
+    return _json_dict(
+        {"metric_id": metric_id, "count": count, "mean": mean},
+        label=f"{metric_id} summary",
+    )
 
 
 def summarize_simpleqa(_definition, result) -> JSONDict:
     rows = iter_score_rows(result, "simpleqa_verified_score")
     count = len(rows)
     if count == 0:
-        return {
-            "metric_id": "simpleqa_verified_score",
-            "count": 0,
-            "correct_rate": 0.0,
-            "attempted_rate": 0.0,
-            "accuracy_given_attempted": 0.0,
-            "f1": 0.0,
-        }
+        return _json_dict(
+            {
+                "metric_id": "simpleqa_verified_score",
+                "count": 0,
+                "correct_rate": 0.0,
+                "attempted_rate": 0.0,
+                "accuracy_given_attempted": 0.0,
+                "f1": 0.0,
+            },
+            label="simpleqa summary",
+        )
     correct_rate = (
         sum(1.0 for row in rows if row.details.get("grade") == "CORRECT") / count
     )
@@ -342,14 +358,17 @@ def summarize_simpleqa(_definition, result) -> JSONDict:
         if (accuracy_given_attempted + correct_rate) > 0
         else 0.0
     )
-    return {
-        "metric_id": "simpleqa_verified_score",
-        "count": count,
-        "correct_rate": correct_rate,
-        "attempted_rate": attempted_rate,
-        "accuracy_given_attempted": accuracy_given_attempted,
-        "f1": f1,
-    }
+    return _json_dict(
+        {
+            "metric_id": "simpleqa_verified_score",
+            "count": count,
+            "correct_rate": correct_rate,
+            "attempted_rate": attempted_rate,
+            "accuracy_given_attempted": accuracy_given_attempted,
+            "f1": f1,
+        },
+        label="simpleqa summary",
+    )
 
 
 def summarize_healthbench(_definition, result) -> JSONDict:
@@ -358,17 +377,21 @@ def summarize_healthbench(_definition, result) -> JSONDict:
     mean_score = sum(row.score for row in rows) / count if count else 0.0
     tag_values: dict[str, list[float]] = {}
     for row in rows:
-        for tag in row.details.get("example_tags", []):
+        for tag in _detail_str_list(row.details.get("example_tags")):
             if isinstance(tag, str):
                 tag_values.setdefault(tag, []).append(row.score)
-    return {
-        "metric_id": "healthbench_score",
-        "count": count,
-        "mean_overall_score": mean_score,
-        "tag_means": {
-            tag: sum(values) / len(values) for tag, values in sorted(tag_values.items())
+    return _json_dict(
+        {
+            "metric_id": "healthbench_score",
+            "count": count,
+            "mean_overall_score": mean_score,
+            "tag_means": {
+                tag: sum(values) / len(values)
+                for tag, values in sorted(tag_values.items())
+            },
         },
-    }
+        label="healthbench summary",
+    )
 
 
 def summarize_hle(_definition, result) -> JSONDict:
@@ -379,7 +402,10 @@ def summarize_hle(_definition, result) -> JSONDict:
         1.96 * math.sqrt(accuracy * (1 - accuracy) / count) if count else 0.0
     )
     confidences = [
-        max(0.0, min(1.0, float(row.details.get("confidence", 100)) / 100.0))
+        max(
+            0.0,
+            min(1.0, _coerce_score_float(row.details.get("confidence"), 100.0) / 100.0),
+        )
         for row in rows
     ]
     truths = [float(bool(row.details.get("correct", False))) for row in rows]
@@ -388,15 +414,21 @@ def summarize_hle(_definition, result) -> JSONDict:
         truths=truths,
         accuracy=accuracy,
     )
-    scan_stats = getattr(result, "_builtin_scan_stats", {}) or {}
-    return {
-        "metric_id": "hle_accuracy",
-        "count": count,
-        "accuracy": accuracy,
-        "confidence_interval_half_width": confidence_interval_half_width,
-        "calibration_error": calibration_error,
-        "skipped_image_count": int(scan_stats.get("skipped_image_count", 0) or 0),
-    }
+    scan_stats = _detail_mapping(getattr(result, "_builtin_scan_stats", {}) or {})
+    return _json_dict(
+        {
+            "metric_id": "hle_accuracy",
+            "count": count,
+            "accuracy": accuracy,
+            "confidence_interval_half_width": confidence_interval_half_width,
+            "calibration_error": calibration_error,
+            "skipped_image_count": _coerce_score_int(
+                scan_stats.get("skipped_image_count"),
+                0,
+            ),
+        },
+        label="hle summary",
+    )
 
 
 def hle_calibration_error(
@@ -457,19 +489,17 @@ def mcq_dataset_spec(
         split=definition.split,
         revision=config.dataset_revision,
         transforms=[
-            {
-                "kind": "rename",
-                "field": "expected",
-                "source_field": expected_source_field,
-            },
-            {
-                "kind": "jinja",
-                "field": "prompt_text",
-                "template": (
+            RenameFieldTransform(
+                field="expected",
+                source_field=expected_source_field,
+            ),
+            JinjaTransform(
+                field="prompt_text",
+                template=(
                     "Question:\n{question}\n\nOptions:\n{options_text}\n\n"
                     "Return the best option letter only."
                 ),
-            },
+            ),
         ],
     )
 
@@ -507,7 +537,10 @@ def build_mcq_benchmark(
                         extractors=[
                             ExtractorRefSpec(
                                 id="choice_letter",
-                                config={"choices": _MCQ_CHOICES},
+                                config=_json_dict(
+                                    {"choices": _MCQ_CHOICES},
+                                    label="mcq extractor config",
+                                ),
                             )
                         ],
                     )
@@ -566,11 +599,10 @@ def build_simpleqa_benchmark(
                     split=definition.split,
                     revision=config.dataset_revision,
                     transforms=[
-                        {
-                            "kind": "rename",
-                            "field": "prompt_text",
-                            "source_field": "problem",
-                        }
+                        RenameFieldTransform(
+                            field="prompt_text",
+                            source_field="problem",
+                        )
                     ],
                 ),
                 dataset_query=make_dataset_query(config),
@@ -675,11 +707,10 @@ def build_lpfqa_benchmark(
                     split=definition.split,
                     revision=config.dataset_revision,
                     transforms=[
-                        {
-                            "kind": "rename",
-                            "field": "prompt_text",
-                            "source_field": "prompt",
-                        }
+                        RenameFieldTransform(
+                            field="prompt_text",
+                            source_field="prompt",
+                        )
                     ],
                 ),
                 dataset_query=make_dataset_query(config),
@@ -733,22 +764,20 @@ def build_hle_benchmark(
                     split=definition.split,
                     revision=config.dataset_revision,
                     transforms=[
-                        {
-                            "kind": "rename",
-                            "field": "expected",
-                            "source_field": "answer",
-                        },
-                        {
-                            "kind": "jinja",
-                            "field": "prompt_text",
-                            "template": (
+                        RenameFieldTransform(
+                            field="expected",
+                            source_field="answer",
+                        ),
+                        JinjaTransform(
+                            field="prompt_text",
+                            template=(
                                 "Your response should be in the following format:\n"
                                 "Explanation: your explanation for your answer choice\n"
                                 "Answer: your chosen answer\n"
                                 "Confidence: your confidence score between 0% and 100% "
                                 "for your answer\n\nQuestion:\n{question}"
                             ),
-                        },
+                        ),
                     ],
                 ),
                 dataset_query=make_dataset_query(config),
@@ -856,11 +885,14 @@ def render_healthbench_preview(
 ) -> list[JSONDict]:
     del definition, config
     return [
-        {
-            "prompt_variant_id": "healthbench-default",
-            "messages": _datasets._prompt_messages_from_context(sample),
-            "follow_up_turns": [],
-        }
+        _json_dict(
+            {
+                "prompt_variant_id": "healthbench-default",
+                "messages": _datasets._prompt_messages_from_context(sample),
+                "follow_up_turns": [],
+            },
+            label="healthbench preview",
+        )
     ]
 
 
@@ -870,4 +902,60 @@ def load_fixture(benchmark_id: str) -> JSONDict:
         .joinpath("starter_fixtures", f"{benchmark_id}.json")
         .open("r", encoding="utf-8") as fh
     ):
-        return cast(JSONDict, json.load(fh))
+        return _json_dict(json.load(fh), label=f"catalog fixture {benchmark_id}")
+
+
+def _json_dict(value: object, *, label: str) -> JSONDict:
+    return validate_json_dict(value, label=label)
+
+
+def _fixture_samples(fixture: JSONDict) -> list[CatalogRow]:
+    samples = fixture.get("samples", [])
+    if not isinstance(samples, list):
+        raise ValueError("Catalog fixtures must define a list of sample rows.")
+    rows: list[CatalogRow] = []
+    for sample in samples:
+        if not isinstance(sample, dict):
+            raise ValueError("Catalog fixture samples must be JSON objects.")
+        rows.append({str(key): value for key, value in sample.items()})
+    return rows
+
+
+def _detail_mapping(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _detail_str_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _coerce_score_float(value: object, default: float) -> float:
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _coerce_score_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default

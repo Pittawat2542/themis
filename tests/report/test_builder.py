@@ -13,8 +13,10 @@ from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, Tri
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.events import ScoreRow, TrialSummaryRow
 from themis.types.enums import PValueCorrection, RecordStatus, DatasetSource
+from themis.types.json_types import JSONDict
 import tempfile
 import os
+from typing import cast
 
 
 def test_report_builder_basic():
@@ -255,7 +257,7 @@ def test_report_metadata_builder_collects_overlay_and_provenance_metadata():
     assert metadata.extras["provenance"]["git_commits"] == ["abc123"]
 
 
-def test_report_builder_includes_pairwise_comparisons_and_provenance():
+def test_report_builder_includes_pairwise_comparisons_and_provenance() -> None:
     trials: list[TrialRecord] = []
     score_rows: list[ScoreRow] = []
     treatment_scores = [1.0, 0.9, 1.0, 0.8, 0.9]
@@ -273,7 +275,10 @@ def test_report_builder_includes_pairwise_comparisons_and_provenance():
                 model=ModelSpec(model_id=model_id, provider="openai"),
                 task=TaskSpec(
                     task_id="math",
-                    dataset=DatasetSpec(source="memory", revision="rev-a"),
+                    dataset=DatasetSpec(
+                        source=DatasetSource.MEMORY,
+                        revision="rev-a",
+                    ),
                     generation=GenerationSpec(),
                 ),
                 item_id=f"item-{index}",
@@ -315,16 +320,19 @@ def test_report_builder_includes_pairwise_comparisons_and_provenance():
     }
     comparisons = report.get_table("paired_comparisons")
     assert comparisons is not None
-    assert comparisons.data[0]["baseline_model_id"] == "baseline"
-    assert comparisons.data[0]["treatment_model_id"] == "treatment"
-    assert comparisons.data[0]["delta_mean"] > 0.0
-    assert comparisons.data[0]["adjustment_method"] == "holm"
-    assert comparisons.data[0]["adjusted_p_value"] >= comparisons.data[0]["p_value"]
+    comparison = cast(JSONDict, comparisons.data[0])
+    assert comparison["baseline_model_id"] == "baseline"
+    assert comparison["treatment_model_id"] == "treatment"
+    delta_mean = float(cast(float, comparison["delta_mean"]))
+    adjusted_p_value = float(cast(float, comparison["adjusted_p_value"]))
+    p_value = float(cast(float, comparison["p_value"]))
+    assert delta_mean > 0.0
+    assert comparison["adjustment_method"] == "holm"
+    assert adjusted_p_value >= p_value
     assert report.metadata.themis_version == themis.__version__
     assert report.metadata.extras["dataset_revisions"] == ["rev-a"]
-    assert report.metadata.extras["provenance"]["themis_versions"] == [
-        themis.__version__
-    ]
+    provenance = cast(JSONDict, report.metadata.extras["provenance"])
+    assert provenance["themis_versions"] == [themis.__version__]
 
 
 def test_report_metadata_defaults_to_package_version():

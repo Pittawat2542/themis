@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 import csv
 from dataclasses import dataclass, field
 import json
@@ -14,15 +15,24 @@ from themis import PromptMessage
 from themis.specs.foundational import DatasetSpec
 from themis.types.enums import DatasetSource, PromptRole, SamplingKind
 from themis.types.json_types import JSONDict
+from themis.types.json_validation import validate_json_dict
 
 _HLE_RESPONSE_TEMPLATE = """Explanation: {explanation}
 Answer: {answer}
 Confidence: {confidence}%"""
 
+type CatalogRow = dict[str, object]
+type CatalogPromptMessage = dict[str, str]
+type CatalogMetadataLoader = Callable[[str, str | None], JSONDict]
+type CatalogRowLoader = Callable[[str, str, str | None], list[CatalogRow]]
+type CatalogRowNormalizer = Callable[
+    [list[CatalogRow], DatasetSpec], "CatalogNormalizedRows"
+]
+
 
 @dataclass(frozen=True, slots=True)
 class CatalogNormalizedRows:
-    rows: list[dict[str, object]]
+    rows: list[CatalogRow]
     stats: JSONDict = field(default_factory=dict)
 
 
@@ -32,10 +42,10 @@ class CatalogDatasetProvider:
     def __init__(
         self,
         *,
-        memory_rows: list[dict[str, object]] | None = None,
-        huggingface_loader=None,
-        local_loader=None,
-        row_normalizer=None,
+        memory_rows: list[CatalogRow] | None = None,
+        huggingface_loader: CatalogRowLoader | None = None,
+        local_loader: Callable[[Path], list[CatalogRow]] | None = None,
+        row_normalizer: CatalogRowNormalizer | None = None,
     ) -> None:
         self._memory_rows = list(memory_rows or [])
         self._huggingface_loader = huggingface_loader or load_huggingface_rows
@@ -74,7 +84,7 @@ class CatalogDatasetProvider:
 
     def prepare_rows(
         self,
-        rows: list[dict[str, object]],
+        rows: list[CatalogRow],
         dataset: DatasetSpec,
     ) -> CatalogNormalizedRows:
         return _normalize_rows_for_provider(rows, dataset, self._row_normalizer)
@@ -119,14 +129,14 @@ class BuiltinDatasetProvider(CatalogDatasetProvider):
 
     def normalize_loaded_rows(
         self,
-        rows: list[dict[str, object]],
+        rows: list[CatalogRow],
         dataset: DatasetSpec,
     ) -> CatalogNormalizedRows:
         return CatalogNormalizedRows(rows=[dict(row) for row in rows])
 
     def prepare_rows(
         self,
-        rows: list[dict[str, object]],
+        rows: list[CatalogRow],
         dataset: DatasetSpec,
     ) -> CatalogNormalizedRows:
         return _normalize_rows_for_provider(rows, dataset, self.normalize_loaded_rows)
@@ -144,13 +154,13 @@ class BuiltinMCQDatasetProvider(BuiltinDatasetProvider):
 
     def normalize_loaded_rows(
         self,
-        rows: list[dict[str, object]],
+        rows: list[CatalogRow],
         dataset: DatasetSpec,
     ) -> CatalogNormalizedRows:
         return _normalize_mcq_rows(rows, dataset, metadata_keys=self._metadata_keys)
 
 
-def load_local_rows(path: Path) -> list[dict[str, object]]:
+def load_local_rows(path: Path) -> list[CatalogRow]:
     """Load catalog dataset rows from JSONL or CSV."""
 
     if path.suffix.lower() == ".jsonl":
@@ -177,7 +187,7 @@ def load_huggingface_rows(
     revision: str | None = None,
     *,
     datasets_module=None,
-) -> list[dict[str, object]]:
+) -> list[CatalogRow]:
     """Load catalog dataset rows from a HuggingFace dataset identifier."""
 
     datasets = datasets_module or import_optional("datasets", extra="datasets")
@@ -203,7 +213,7 @@ def load_hle_rows(
     revision: str | None = None,
     *,
     datasets_module=None,
-) -> list[dict[str, object]]:
+) -> list[CatalogRow]:
     """Load HLE rows without forcing image decoding during iteration."""
 
     datasets = datasets_module or import_optional("datasets", extra="datasets")
@@ -218,7 +228,7 @@ def load_healthbench_rows(
     revision: str | None = None,
     *,
     datasets_module=None,
-) -> list[dict[str, object]]:
+) -> list[CatalogRow]:
     """Load HealthBench rows with a dataset-specific streaming fallback."""
 
     datasets = datasets_module or import_optional("datasets", extra="datasets")
@@ -242,8 +252,8 @@ def inspect_huggingface_dataset(
     *,
     split: str = "test",
     revision: str | None = None,
-    metadata_loader=None,
-    row_loader=None,
+    metadata_loader: CatalogMetadataLoader | None = None,
+    row_loader: CatalogRowLoader | None = None,
     max_samples: int = 3,
     datasets_module=None,
 ) -> JSONDict:
@@ -267,20 +277,23 @@ def inspect_huggingface_dataset(
             datasets_module=datasets,
         )
     )
-    return {
-        "dataset_id": dataset_id,
-        "split": split,
-        "revision": revision,
-        "splits": list(metadata.get("splits", [])),
-        "gated": bool(metadata.get("gated", False)),
-        "modalities": list(metadata.get("modalities", [])),
-        "fields": _infer_field_types(rows),
-        "row_count": len(rows),
-        "samples": [dict(row) for row in rows[:max_samples]],
-    }
+    return validate_json_dict(
+        {
+            "dataset_id": dataset_id,
+            "split": split,
+            "revision": revision,
+            "splits": _string_list(metadata.get("splits")),
+            "gated": bool(metadata.get("gated", False)),
+            "modalities": _string_list(metadata.get("modalities")),
+            "fields": _infer_field_types(rows),
+            "row_count": len(rows),
+            "samples": _json_rows(rows[:max_samples], label="catalog dataset samples"),
+        },
+        label="catalog dataset inspection",
+    )
 
 
-def _apply_query(rows: list[dict[str, object]], query) -> list[dict[str, object]]:
+def _apply_query(rows: list[CatalogRow], query) -> list[CatalogRow]:
     filtered = list(rows)
     if query.metadata_filters:
         filtered = [
@@ -307,11 +320,11 @@ def _apply_query(rows: list[dict[str, object]], query) -> list[dict[str, object]
         field = query.strata_field
         if not field:
             return filtered
-        buckets: dict[str, list[dict[str, object]]] = {}
+        buckets: dict[str, list[CatalogRow]] = {}
         for row in filtered:
             buckets.setdefault(_row_metadata_value(row, field), []).append(row)
         randomizer = random.Random(query.seed)
-        samples: list[dict[str, object]] = []
+        samples: list[CatalogRow] = []
         for bucket_rows in buckets.values():
             if len(bucket_rows) <= count:
                 samples.extend(bucket_rows)
@@ -321,8 +334,8 @@ def _apply_query(rows: list[dict[str, object]], query) -> list[dict[str, object]
     return filtered
 
 
-def _assign_missing_item_ids(rows: list[dict[str, object]]) -> list[dict[str, object]]:
-    normalized: list[dict[str, object]] = []
+def _assign_missing_item_ids(rows: list[CatalogRow]) -> list[CatalogRow]:
+    normalized: list[CatalogRow] = []
     for index, row in enumerate(rows, start=1):
         payload = dict(row)
         payload.setdefault("item_id", payload.get("id", f"item-{index}"))
@@ -330,15 +343,15 @@ def _assign_missing_item_ids(rows: list[dict[str, object]]) -> list[dict[str, ob
     return normalized
 
 
-def _render_string_template(template: str, payload: dict[str, object]) -> str:
+def _render_string_template(template: str, payload: CatalogRow) -> str:
     message = PromptMessage(role=PromptRole.USER, content=template)
     return render_prompt_messages([message], payload, strict=True)[0]["content"]
 
 
 def _apply_dataset_transforms(
-    rows: list[dict[str, object]],
+    rows: list[CatalogRow],
     dataset: DatasetSpec,
-) -> list[dict[str, object]]:
+) -> list[CatalogRow]:
     transformed_rows = [dict(row) for row in rows]
     for transform in dataset.transforms:
         if transform.kind == "rename":
@@ -357,9 +370,9 @@ def _apply_dataset_transforms(
 
 
 def _normalize_rows_for_provider(
-    rows: list[dict[str, object]],
+    rows: list[CatalogRow],
     dataset: DatasetSpec,
-    row_normalizer,
+    row_normalizer: CatalogRowNormalizer | None,
 ) -> CatalogNormalizedRows:
     assigned = _assign_missing_item_ids(rows)
     normalized = (
@@ -371,7 +384,7 @@ def _normalize_rows_for_provider(
     return CatalogNormalizedRows(rows=transformed, stats=normalized.stats)
 
 
-def _metadata_dict(payload: dict[str, object], keys: list[str]) -> dict[str, str]:
+def _metadata_dict(payload: CatalogRow, keys: list[str]) -> dict[str, str]:
     metadata: dict[str, str] = {}
     for key in keys:
         value = payload.get(key)
@@ -400,13 +413,13 @@ def _extract_lpfqa_reference_answer(text: str) -> str:
 
 
 def _normalize_mcq_rows(
-    rows: list[dict[str, object]],
+    rows: list[CatalogRow],
     dataset: DatasetSpec,
     *,
     metadata_keys: list[str],
 ) -> CatalogNormalizedRows:
     del dataset
-    normalized: list[dict[str, object]] = []
+    normalized: list[CatalogRow] = []
     for row in rows:
         payload = dict(row)
         payload["options_text"] = _format_options_text(payload.get("options"))
@@ -416,11 +429,11 @@ def _normalize_mcq_rows(
 
 
 def _normalize_simpleqa_rows(
-    rows: list[dict[str, object]],
+    rows: list[CatalogRow],
     dataset: DatasetSpec,
 ) -> CatalogNormalizedRows:
     del dataset
-    normalized: list[dict[str, object]] = []
+    normalized: list[CatalogRow] = []
     for row in rows:
         payload = dict(row)
         payload["item_id"] = str(payload.get("original_index", payload["item_id"]))
@@ -434,18 +447,18 @@ def _normalize_simpleqa_rows(
 
 
 def _normalize_healthbench_rows(
-    rows: list[dict[str, object]],
+    rows: list[CatalogRow],
     dataset: DatasetSpec,
 ) -> CatalogNormalizedRows:
     del dataset
-    normalized: list[dict[str, object]] = []
+    normalized: list[CatalogRow] = []
     for row in rows:
         payload = dict(row)
         payload["item_id"] = str(payload.get("prompt_id", payload["item_id"]))
-        payload["prompt_messages"] = _prompt_messages_from_payload(payload)
+        prompt_messages = _prompt_messages_from_payload(payload)
+        payload["prompt_messages"] = prompt_messages
         payload["prompt_text"] = "\n\n".join(
-            f"{message['role']}: {message['content']}"
-            for message in payload["prompt_messages"]
+            f"{message['role']}: {message['content']}" for message in prompt_messages
         )
         payload["metadata"] = {
             "prompt_id": str(payload.get("prompt_id", payload["item_id"]))
@@ -460,11 +473,11 @@ def _normalize_healthbench_rows(
 
 
 def _normalize_lpfqa_rows(
-    rows: list[dict[str, object]],
+    rows: list[CatalogRow],
     dataset: DatasetSpec,
 ) -> CatalogNormalizedRows:
     del dataset
-    normalized: list[dict[str, object]] = []
+    normalized: list[CatalogRow] = []
     for row in rows:
         payload = dict(row)
         payload["item_id"] = str(payload.get("prompt_id", payload["item_id"]))
@@ -477,11 +490,11 @@ def _normalize_lpfqa_rows(
 
 
 def _normalize_hle_rows(
-    rows: list[dict[str, object]],
+    rows: list[CatalogRow],
     dataset: DatasetSpec,
 ) -> CatalogNormalizedRows:
     del dataset
-    normalized: list[dict[str, object]] = []
+    normalized: list[CatalogRow] = []
     skipped = 0
     for row in rows:
         payload = dict(row)
@@ -503,11 +516,11 @@ def _normalize_hle_rows(
     )
 
 
-def _prompt_messages_from_payload(payload: dict[str, object]) -> list[dict[str, str]]:
+def _prompt_messages_from_payload(payload: CatalogRow) -> list[CatalogPromptMessage]:
     prompt = payload.get("prompt")
     if not isinstance(prompt, list):
         return []
-    messages: list[dict[str, str]] = []
+    messages: list[CatalogPromptMessage] = []
     for entry in prompt:
         if not isinstance(entry, dict):
             continue
@@ -518,11 +531,11 @@ def _prompt_messages_from_payload(payload: dict[str, object]) -> list[dict[str, 
     return messages
 
 
-def _prompt_messages_from_context(context: object) -> list[dict[str, str]]:
-    if hasattr(context, "get"):
-        payload = context.get("prompt_messages")  # type: ignore[attr-defined]
+def _prompt_messages_from_context(context: object) -> list[CatalogPromptMessage]:
+    if isinstance(context, Mapping):
+        payload = context.get("prompt_messages")
         if isinstance(payload, list):
-            messages: list[dict[str, str]] = []
+            messages: list[CatalogPromptMessage] = []
             for entry in payload:
                 if (
                     isinstance(entry, dict)
@@ -539,7 +552,7 @@ def _prompt_messages_from_context(context: object) -> list[dict[str, str]]:
     return []
 
 
-def _row_metadata_value(row: dict[str, object], key: str) -> str:
+def _row_metadata_value(row: CatalogRow, key: str) -> str:
     metadata = row.get("metadata")
     if isinstance(metadata, dict) and key in metadata:
         return str(metadata[key])
@@ -595,24 +608,30 @@ def _default_dataset_metadata(
         builder = datasets.load_dataset_builder(dataset_id, revision=revision)
     except Exception as exc:
         message = str(exc).lower()
-        return {
-            "dataset_id": dataset_id,
-            "gated": "agree to share your contact information" in message
-            or "access" in message
-            and "denied" in message,
-            "splits": [],
-            "modalities": [],
-            "error": str(exc),
-        }
+        return validate_json_dict(
+            {
+                "dataset_id": dataset_id,
+                "gated": "agree to share your contact information" in message
+                or "access" in message
+                and "denied" in message,
+                "splits": [],
+                "modalities": [],
+                "error": str(exc),
+            },
+            label="catalog dataset metadata",
+        )
     features = getattr(builder.info, "features", {}) or {}
     splits = sorted(list((getattr(builder.info, "splits", {}) or {}).keys()))
     modalities = _infer_modalities_from_features(features)
-    return {
-        "dataset_id": dataset_id,
-        "gated": False,
-        "splits": splits,
-        "modalities": modalities,
-    }
+    return validate_json_dict(
+        {
+            "dataset_id": dataset_id,
+            "gated": False,
+            "splits": splits,
+            "modalities": modalities,
+        },
+        label="catalog dataset metadata",
+    )
 
 
 def _infer_modalities_from_features(features: object) -> list[str]:
@@ -631,11 +650,24 @@ def _infer_modalities_from_features(features: object) -> list[str]:
     return modalities
 
 
-def _infer_field_types(rows: list[dict[str, object]]) -> JSONDict:
+def _infer_field_types(rows: list[CatalogRow]) -> JSONDict:
     field_types: JSONDict = {}
     for row in rows:
         for key, value in row.items():
             if key in field_types or value is None:
                 continue
             field_types[key] = type(value).__name__
-    return field_types
+    return validate_json_dict(field_types, label="catalog dataset fields")
+
+
+def _json_rows(rows: list[CatalogRow], *, label: str) -> list[JSONDict]:
+    return [
+        validate_json_dict(dict(row), label=f"{label}[{index}]")
+        for index, row in enumerate(rows)
+    ]
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]

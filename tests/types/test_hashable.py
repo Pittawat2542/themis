@@ -10,7 +10,7 @@ class MockSpec(HashableMixin, BaseModel):
     created_at: datetime = Field(json_schema_extra={"exclude_from_hash": True})
 
 
-def test_hashable_mixin_canonical_dict():
+def test_hashable_mixin_canonical_dict() -> None:
     # Canonical JSON requires sorted keys, stable list order, no NaN, UTC ISO8601
     dt = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc)
     spec = MockSpec(name="test", items=["c", "a", "b"], count=42, created_at=dt)
@@ -28,7 +28,7 @@ def test_hashable_mixin_canonical_dict():
     }
 
 
-def test_hashable_mixin_compute_hash():
+def test_hashable_mixin_compute_hash() -> None:
     dt1 = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc)
     dt2 = datetime(2026, 3, 8, 13, 0, 0, tzinfo=timezone.utc)
 
@@ -46,7 +46,7 @@ def test_hashable_mixin_compute_hash():
     assert len(spec1.compute_hash(short=True)) == 12
 
 
-def test_hashable_mixin_nested_models():
+def test_hashable_mixin_nested_models() -> None:
     class NestedSpec(HashableMixin, BaseModel):
         value: str
 
@@ -58,7 +58,7 @@ def test_hashable_mixin_nested_models():
     assert canonical == {"nested": {"value": "inner"}}
 
 
-def test_hashable_mixin_short_hash_is_prefix_of_full_identity():
+def test_hashable_mixin_short_hash_is_prefix_of_full_identity() -> None:
     spec = MockSpec(
         name="test",
         items=["a", "b"],

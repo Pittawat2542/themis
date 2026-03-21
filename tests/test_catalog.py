@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 import inspect
+from typing import cast
 
 import pytest
 
@@ -11,9 +13,15 @@ from themis.benchmark.specs import DatasetSliceSpec
 from themis.catalog.datasets import common as dataset_common
 from themis.catalog.datasets.common import _normalize_healthbench_rows
 from themis.catalog.runtime.common import _build_judge_spec
-from themis.specs.foundational import DatasetSpec
+from themis.specs.foundational import (
+    DatasetSpec,
+    JinjaTransform,
+    PythonTransform,
+    RenameFieldTransform,
+)
 from themis.types.enums import DatasetSource
 from themis.types.events import ScoreRow
+from themis.types.json_types import JSONDict
 
 
 class _StubProjectionRepo:
@@ -48,6 +56,23 @@ class _StubResult:
         self.trial_hashes = sorted({row.trial_hash for row in score_rows})
         self.active_evaluation_hash = None
         self._builtin_scan_stats = dict(scan_stats or {})
+
+
+def _row_mapping(value: object) -> dict[str, object]:
+    assert isinstance(value, dict)
+    return {str(key): item for key, item in value.items()}
+
+
+def _json_mapping(value: object) -> JSONDict:
+    assert isinstance(value, dict)
+    return cast(JSONDict, value)
+
+
+def _first_preview_message(preview: Sequence[JSONDict]) -> dict[str, object]:
+    messages = preview[0].get("messages")
+    assert isinstance(messages, list)
+    assert messages
+    return _row_mapping(messages[0])
 
 
 def test_public_catalog_lists_requested_benchmarks() -> None:
@@ -129,8 +154,10 @@ def test_render_preview_uses_dataset_native_messages_for_healthbench() -> None:
         judge_provider="demo",
     )
 
-    assert preview[0]["messages"][0]["role"] == "user"
-    assert "postpartum depression" in preview[0]["messages"][0]["content"]
+    message = _first_preview_message(preview)
+
+    assert message["role"] == "user"
+    assert "postpartum depression" in str(message["content"])
 
 
 def test_healthbench_row_normalizer_populates_prompt_text_for_runtime_rendering() -> (
@@ -160,9 +187,10 @@ def test_render_preview_formats_mcq_prompt_from_fixture_sample() -> None:
     definition = catalog.get_catalog_benchmark("mmlu_pro")
 
     preview = definition.render_preview(model_id="demo-model", provider="demo")
+    message = _first_preview_message(preview)
 
-    assert "Question:" in preview[0]["messages"][0]["content"]
-    assert "Return the best option letter only." in preview[0]["messages"][0]["content"]
+    assert "Question:" in str(message["content"])
+    assert "Return the best option letter only." in str(message["content"])
 
 
 def test_render_preview_formats_hle_prompt_without_template_errors() -> None:
@@ -175,7 +203,7 @@ def test_render_preview_formats_hle_prompt_without_template_errors() -> None:
         judge_provider="demo",
     )
 
-    content = preview[0]["messages"][0]["content"]
+    content = str(_first_preview_message(preview)["content"])
     assert "Explanation:" in content
     assert "Answer:" in content
     assert "Confidence:" in content
@@ -191,24 +219,23 @@ def test_starter_dataset_provider_applies_supported_dataset_transforms() -> None
         dataset=DatasetSpec(
             source=DatasetSource.MEMORY,
             transforms=[
-                {
-                    "kind": "rename",
-                    "field": "rendered_question",
-                    "source_field": "question",
-                },
-                {
-                    "kind": "jinja",
-                    "field": "prompt_text",
-                    "template": "Solve: {rendered_question}",
-                },
+                RenameFieldTransform(
+                    field="rendered_question",
+                    source_field="question",
+                ),
+                JinjaTransform(
+                    field="prompt_text",
+                    template="Solve: {rendered_question}",
+                ),
             ],
         ),
     )
 
     rows = list(provider.scan(slice_spec, DatasetQuerySpec()))
+    first_row = _row_mapping(rows[0])
 
-    assert rows[0]["rendered_question"] == "2 + 2"
-    assert rows[0]["prompt_text"] == "Solve: 2 + 2"
+    assert first_row["rendered_question"] == "2 + 2"
+    assert first_row["prompt_text"] == "Solve: 2 + 2"
 
 
 def test_starter_dataset_provider_rejects_python_dataset_transforms() -> None:
@@ -221,11 +248,10 @@ def test_starter_dataset_provider_rejects_python_dataset_transforms() -> None:
         dataset=DatasetSpec(
             source=DatasetSource.MEMORY,
             transforms=[
-                {
-                    "kind": "python",
-                    "field": "normalized",
-                    "config": {"callable": "demo.normalize"},
-                }
+                PythonTransform(
+                    field="normalized",
+                    config={"callable": "demo.normalize"},
+                )
             ],
         ),
     )
@@ -414,11 +440,12 @@ def test_healthbench_summary_reports_mean_score_and_tag_breakdowns() -> None:
     ]
 
     summary = definition.summarize_result(_StubResult(rows))
+    tag_means = _json_mapping(summary["tag_means"])
 
     assert summary["count"] == 2
     assert summary["mean_overall_score"] == pytest.approx(0.75)
-    assert summary["tag_means"]["theme:communication"] == pytest.approx(0.75)
-    assert summary["tag_means"]["axis:safety"] == pytest.approx(1.0)
+    assert tag_means["theme:communication"] == pytest.approx(0.75)
+    assert tag_means["axis:safety"] == pytest.approx(1.0)
 
 
 def test_hle_summary_reports_accuracy_ci_calibration_and_skipped_images() -> None:
@@ -443,10 +470,12 @@ def test_hle_summary_reports_accuracy_ci_calibration_and_skipped_images() -> Non
     summary = definition.summarize_result(
         _StubResult(rows, scan_stats={"skipped_image_count": 4})
     )
+    confidence_interval_half_width = summary["confidence_interval_half_width"]
 
     assert summary["count"] == 2
     assert summary["accuracy"] == pytest.approx(0.5)
-    assert summary["confidence_interval_half_width"] > 0.0
+    assert isinstance(confidence_interval_half_width, int | float)
+    assert confidence_interval_half_width > 0.0
     assert summary["calibration_error"] == pytest.approx(0.3)
     assert summary["skipped_image_count"] == 4
 
@@ -466,13 +495,16 @@ def test_inspect_huggingface_dataset_uses_loader_hooks_for_schema_and_samples() 
             {"question": "3 + 3", "answer": "6"},
         ],
     )
+    fields = _json_mapping(summary["fields"])
+    samples = summary["samples"]
 
     assert summary["dataset_id"] == "demo/qa"
     assert summary["splits"] == ["train", "test"]
     assert summary["modalities"] == ["text"]
     assert summary["row_count"] == 2
-    assert summary["fields"]["question"] == "str"
-    assert len(summary["samples"]) == 2
+    assert fields["question"] == "str"
+    assert isinstance(samples, list)
+    assert len(samples) == 2
 
 
 def test_catalog_fixtures_are_available_for_all_builtin_benchmarks() -> None:

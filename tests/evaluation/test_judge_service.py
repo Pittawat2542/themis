@@ -1,41 +1,78 @@
+from collections.abc import Callable
+
 import pytest
 
+from themis.contracts.protocols import DatasetContext, InferenceEngine, InferenceResult
 from themis.evaluation.judge_service import DefaultJudgeService
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import (
     InferenceParamsSpec,
+    PromptMessage,
     PromptTemplateSpec,
     RuntimeContext,
+    TrialSpec,
 )
 from themis.specs.foundational import JudgeInferenceSpec, ModelSpec
 from themis.records.candidate import CandidateRecord
 from themis.records.inference import InferenceRecord
+from themis.types.enums import PromptRole
 
 
 class MockJudgeInferenceEngine:
-    def __init__(self):
+    def __init__(self) -> None:
         self.params_seen: list[InferenceParamsSpec] = []
         self.trial_ids_seen: list[str] = []
 
-    def infer(self, trial, dataset_context, runtime_context):
+    def infer(
+        self,
+        trial: TrialSpec,
+        dataset_context: DatasetContext,
+        runtime_context: RuntimeContext,
+    ) -> InferenceResult:
+        del dataset_context
         assert isinstance(runtime_context, RuntimeContext)
         self.params_seen.append(trial.params)
         self.trial_ids_seen.append(trial.trial_id)
-        return InferenceRecord(spec_hash="judge_inf_hash", raw_text="SCORE: 5/5")
+        return InferenceResult(
+            inference=InferenceRecord(
+                spec_hash="judge_inf_hash",
+                raw_text="SCORE: 5/5",
+            )
+        )
 
 
-def _resolver_from_registry(registry: PluginRegistry):
+def _resolver_from_registry(
+    registry: PluginRegistry,
+) -> Callable[[str], InferenceEngine]:
     return registry.get_inference_engine
 
 
-def test_default_judge_service_rejects_registry_service_locator():
+def test_default_judge_service_rejects_registry_service_locator() -> None:
     registry = PluginRegistry()
+    judge_service = DefaultJudgeService(
+        engine_resolver=registry,  # type: ignore[arg-type]
+    )
 
     with pytest.raises(TypeError):
-        DefaultJudgeService(registry)
+        judge_service.judge(
+            metric_id="test_judge_metric",
+            parent_candidate=CandidateRecord(spec_hash="parent_cand_123"),
+            judge_spec=JudgeInferenceSpec(
+                model=ModelSpec(model_id="judge-model", provider="judge_provider")
+            ),
+            prompt=PromptTemplateSpec(
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Rate this.",
+                    )
+                ]
+            ),
+            runtime={"dataset_context": {}},
+        )
 
 
-def test_default_judge_service():
+def test_default_judge_service() -> None:
     registry = PluginRegistry()
     engine = MockJudgeInferenceEngine()
     registry.register_inference_engine("judge_provider", engine)
@@ -49,8 +86,10 @@ def test_default_judge_service():
     judge_spec = JudgeInferenceSpec(
         model=ModelSpec(model_id="judge-model", provider="judge_provider")
     )
-    prompt = PromptTemplateSpec(messages=[{"role": "user", "content": "Rate this."}])
-    runtime = {"task_spec": None, "dataset_context": {}}
+    prompt = PromptTemplateSpec(
+        messages=[PromptMessage(role=PromptRole.USER, content="Rate this.")]
+    )
+    runtime: dict[str, object] = {"task_spec": None, "dataset_context": {}}
 
     # Execute judge
     inf_record = judge_service.judge(
@@ -79,7 +118,7 @@ def test_default_judge_service():
     assert judge_service.consume_audit_trail("parent_cand_123") is None
 
 
-def test_default_judge_service_multisample():
+def test_default_judge_service_multisample() -> None:
     registry = PluginRegistry()
     registry.register_inference_engine("judge_provider", MockJudgeInferenceEngine())
     judge_service = DefaultJudgeService(
@@ -90,7 +129,9 @@ def test_default_judge_service_multisample():
     judge_spec = JudgeInferenceSpec(
         model=ModelSpec(model_id="judge-model", provider="judge_provider")
     )
-    prompt = PromptTemplateSpec(messages=[{"role": "user", "content": "Rate this."}])
+    prompt = PromptTemplateSpec(
+        messages=[PromptMessage(role=PromptRole.USER, content="Rate this.")]
+    )
 
     import time
 
@@ -112,10 +153,11 @@ def test_default_judge_service_multisample():
     )
 
     trail = judge_service.consume_audit_trail("parent_cand_123")
+    assert trail is not None
     assert len(trail.judge_calls) == 2
 
 
-def test_default_judge_service_concurrency():
+def test_default_judge_service_concurrency() -> None:
     registry = PluginRegistry()
     registry.register_inference_engine("judge_provider", MockJudgeInferenceEngine())
     judge_service = DefaultJudgeService(
@@ -136,13 +178,15 @@ def test_default_judge_service_concurrency():
 
     # Audit trail for cand2 should ONLY have 1 call, and cand1 should have 2
     trail2 = judge_service.consume_audit_trail("cand_2")
+    assert trail2 is not None
     assert len(trail2.judge_calls) == 1
 
     trail1 = judge_service.consume_audit_trail("cand_1")
+    assert trail1 is not None
     assert len(trail1.judge_calls) == 2
 
 
-def test_default_judge_service_uses_explicit_judge_params():
+def test_default_judge_service_uses_explicit_judge_params() -> None:
     registry = PluginRegistry()
     engine = MockJudgeInferenceEngine()
     registry.register_inference_engine("judge_provider", engine)
@@ -155,16 +199,18 @@ def test_default_judge_service_uses_explicit_judge_params():
         parent_candidate=CandidateRecord(spec_hash="parent_cand_123"),
         judge_spec=JudgeInferenceSpec(
             model=ModelSpec(model_id="judge-model", provider="judge_provider"),
-            params={"temperature": 0.7, "max_tokens": 16},
+            params=InferenceParamsSpec(temperature=0.7, max_tokens=16),
         ),
-        prompt=PromptTemplateSpec(messages=[{"role": "user", "content": "Rate this."}]),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="Rate this.")]
+        ),
         runtime={"dataset_context": {}},
     )
 
     assert engine.params_seen == [InferenceParamsSpec(temperature=0.7, max_tokens=16)]
 
 
-def test_default_judge_service_derives_deterministic_trial_ids_and_seeds():
+def test_default_judge_service_derives_deterministic_trial_ids_and_seeds() -> None:
     registry = PluginRegistry()
     engine = MockJudgeInferenceEngine()
     registry.register_inference_engine("judge_provider", engine)
@@ -181,7 +227,7 @@ def test_default_judge_service_derives_deterministic_trial_ids_and_seeds():
                 model=ModelSpec(model_id="judge-model", provider="judge_provider")
             ),
             prompt=PromptTemplateSpec(
-                messages=[{"role": "user", "content": "Rate this."}]
+                messages=[PromptMessage(role=PromptRole.USER, content="Rate this.")]
             ),
             runtime={
                 "dataset_context": {},
@@ -217,7 +263,7 @@ def test_default_judge_service_derives_deterministic_trial_ids_and_seeds():
                 model=ModelSpec(model_id="judge-model", provider="judge_provider")
             ),
             prompt=PromptTemplateSpec(
-                messages=[{"role": "user", "content": "Rate this."}]
+                messages=[PromptMessage(role=PromptRole.USER, content="Rate this.")]
             ),
             runtime={
                 "dataset_context": {},
@@ -227,7 +273,7 @@ def test_default_judge_service_derives_deterministic_trial_ids_and_seeds():
     assert [params.seed for params in second_engine.params_seen] == first_run_seeds
 
 
-def test_default_judge_service_audit_trail_preserves_explicit_judge_seed():
+def test_default_judge_service_audit_trail_preserves_explicit_judge_seed() -> None:
     registry = PluginRegistry()
     engine = MockJudgeInferenceEngine()
     registry.register_inference_engine("judge_provider", engine)
@@ -240,9 +286,11 @@ def test_default_judge_service_audit_trail_preserves_explicit_judge_seed():
         parent_candidate=CandidateRecord(spec_hash="parent_cand_123"),
         judge_spec=JudgeInferenceSpec(
             model=ModelSpec(model_id="judge-model", provider="judge_provider"),
-            params={"seed": 123, "temperature": 0.7},
+            params=InferenceParamsSpec(seed=123, temperature=0.7),
         ),
-        prompt=PromptTemplateSpec(messages=[{"role": "user", "content": "Rate this."}]),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="Rate this.")]
+        ),
         runtime={
             "dataset_context": {},
             "runtime_context": RuntimeContext(candidate_seed=101),
@@ -255,11 +303,11 @@ def test_default_judge_service_audit_trail_preserves_explicit_judge_seed():
     assert trail.judge_calls[0].judge_spec.params.temperature == 0.7
 
 
-def test_default_judge_service_accepts_explicit_engine_resolver():
+def test_default_judge_service_accepts_explicit_engine_resolver() -> None:
     engine = MockJudgeInferenceEngine()
     seen: list[str] = []
 
-    def resolve_engine(provider: str):
+    def resolve_engine(provider: str) -> InferenceEngine:
         seen.append(provider)
         return engine
 
@@ -271,7 +319,9 @@ def test_default_judge_service_accepts_explicit_engine_resolver():
         judge_spec=JudgeInferenceSpec(
             model=ModelSpec(model_id="judge-model", provider="judge_provider")
         ),
-        prompt=PromptTemplateSpec(messages=[{"role": "user", "content": "Rate this."}]),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="Rate this.")]
+        ),
         runtime={"dataset_context": {}},
     )
 

@@ -1,11 +1,14 @@
-import pytest
+from pathlib import Path
 import threading
+from typing import Any, cast
+
+import pytest
 
 from themis.storage.artifact_store import ArtifactStore
 from themis.errors import StorageError
 
 
-def test_artifact_store_put_and_get_blob(tmp_path):
+def test_artifact_store_put_and_get_blob(tmp_path: Path) -> None:
     store = ArtifactStore(base_path=tmp_path)
 
     payload = b'{"complex":["data",123]}'
@@ -21,20 +24,20 @@ def test_artifact_store_put_and_get_blob(tmp_path):
     assert store.get_blob(blob_ref) == payload
 
 
-def test_artifact_store_read_not_found(tmp_path):
+def test_artifact_store_read_not_found(tmp_path: Path) -> None:
     store = ArtifactStore(base_path=tmp_path)
     with pytest.raises(StorageError, match="Artifact sha256:fakehash not found"):
         store.get_blob("sha256:fakehash")
 
 
-def test_artifact_store_write_json_wraps_non_json_safe_payloads(tmp_path):
+def test_artifact_store_write_json_wraps_non_json_safe_payloads(tmp_path: Path) -> None:
     store = ArtifactStore(base_path=tmp_path)
 
     with pytest.raises(StorageError, match="application/json"):
-        store.write_json({"bad": object()})
+        store.write_json(cast(Any, {"bad": object()}))
 
 
-def test_artifact_store_uses_thread_local_codecs(tmp_path):
+def test_artifact_store_uses_thread_local_codecs(tmp_path: Path) -> None:
     store = ArtifactStore(base_path=tmp_path)
     thread_count = 4
     start = threading.Barrier(thread_count + 1)
