@@ -8,6 +8,7 @@ from themis.specs.foundational import (
     ExtractorRefSpec,
     JinjaTransform,
     JudgeInferenceSpec,
+    McpServerSpec,
     ModelSpec,
     RenameFieldTransform,
     TaskSpec,
@@ -38,6 +39,84 @@ def test_tool_spec():
     assert spec.id == "search"
     assert spec.input_schema["type"] == "object"
     assert spec.extras == {"source": "project"}
+
+
+def test_mcp_server_spec_supports_remote_server_and_allowed_tools():
+    spec = McpServerSpec(
+        id="dice",
+        server_label="dice",
+        server_url="https://dmcp-server.deno.dev/sse",
+        allowed_tools=["roll", "stats"],
+        require_approval="never",
+        authorization_secret_name="DICE_TOKEN",
+    )
+
+    assert spec.server_url == "https://dmcp-server.deno.dev/sse"
+    assert spec.connector_id is None
+    assert spec.allowed_tools == ["roll", "stats"]
+    assert spec.authorization_secret_name == "DICE_TOKEN"
+
+
+def test_mcp_server_spec_requires_exactly_one_connection_target():
+    with pytest.raises(
+        ValidationError, match="requires exactly one of server_url or connector_id"
+    ):
+        McpServerSpec(id="bad", server_label="bad", require_approval="never")
+
+    with pytest.raises(
+        ValidationError, match="requires exactly one of server_url or connector_id"
+    ):
+        McpServerSpec(
+            id="bad",
+            server_label="bad",
+            server_url="https://example.com/mcp",
+            connector_id="connector_dropbox",
+            require_approval="never",
+        )
+
+
+def test_mcp_server_spec_normalizes_blank_connection_targets() -> None:
+    by_connector = McpServerSpec(
+        id="calendar",
+        server_label="google_calendar",
+        server_url="   ",
+        connector_id="connector_googlecalendar",
+        require_approval="never",
+    )
+    assert by_connector.server_url is None
+    assert by_connector.connector_id == "connector_googlecalendar"
+
+    by_url = McpServerSpec(
+        id="dice",
+        server_label="dice",
+        server_url="https://dmcp-server.deno.dev/sse",
+        connector_id="  ",
+        require_approval="never",
+    )
+    assert by_url.server_url == "https://dmcp-server.deno.dev/sse"
+    assert by_url.connector_id is None
+
+    with pytest.raises(
+        ValidationError, match="requires exactly one of server_url or connector_id"
+    ):
+        McpServerSpec(
+            id="bad",
+            server_label="bad",
+            server_url=" ",
+            connector_id="\t",
+            require_approval="never",
+        )
+
+
+def test_mcp_server_spec_requires_explicit_require_approval() -> None:
+    with pytest.raises(ValidationError, match="require_approval"):
+        McpServerSpec.model_validate(
+            {
+                "id": "dice",
+                "server_label": "dice",
+                "server_url": "https://dmcp-server.deno.dev/sse",
+            }
+        )
 
 
 def test_dataset_spec():
@@ -71,9 +150,11 @@ def test_task_spec():
         dataset=dataset,
         generation=GenerationSpec(),
         tool_ids=["search"],
+        mcp_server_ids=["dice"],
     )
     assert spec.task_id == "math_eval"
     assert spec.tool_ids == ["search"]
+    assert spec.mcp_server_ids == ["dice"]
 
 
 def test_task_spec_validation():
@@ -161,6 +242,16 @@ def test_task_spec_rejects_evaluation_with_unknown_transform():
             evaluations=[
                 EvaluationSpec(name="judge", transform="missing", metrics=["em"])
             ],
+        )
+
+
+def test_task_spec_rejects_duplicate_mcp_server_ids():
+    with pytest.raises(ValidationError, match="duplicate MCP server id"):
+        TaskSpec(
+            task_id="dup_mcp",
+            dataset=DatasetSpec(source=DatasetSource.MEMORY),
+            generation=getattr(foundational, "GenerationSpec")(),
+            mcp_server_ids=["dice", "dice"],
         )
 
 

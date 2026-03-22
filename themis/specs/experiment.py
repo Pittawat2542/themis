@@ -19,9 +19,11 @@ from themis.config_report.metadata import config_reportable
 from themis.specs.base import SpecBase
 from themis.specs.foundational import (
     JudgeInferenceSpec,
+    McpServerSpec,
     ModelSpec,
     TaskSpec,
     ToolSpec,
+    _validate_unique_mcp_server_ids,
     _validate_unique_tool_ids,
 )
 from themis.types.enums import (
@@ -449,6 +451,10 @@ class TrialSpec(SpecBase):
         default_factory=list,
         description="Serializable tool definitions selected for this trial.",
     )
+    mcp_servers: list[McpServerSpec] = Field(
+        default_factory=list,
+        description="Serializable MCP server definitions selected for this trial.",
+    )
     candidate_count: int = Field(
         default=1, ge=1, description="Number of independent candidates to generate."
     )
@@ -459,6 +465,7 @@ class TrialSpec(SpecBase):
     @model_validator(mode="after")
     def _validate_semantic(self) -> TrialSpec:
         _validate_unique_tool_ids(self.tools, owner_label="TrialSpec")
+        _validate_unique_mcp_server_ids(self.mcp_servers, owner_label="TrialSpec")
         return self
 
 
@@ -477,6 +484,10 @@ class ExperimentSpec(SpecBase):
     tools: list[ToolSpec] = Field(
         default_factory=list,
         description="Serializable tool declarations available to task selections.",
+    )
+    mcp_servers: list[McpServerSpec] = Field(
+        default_factory=list,
+        description="Serializable MCP server declarations available to task selections.",
     )
     inference_grid: InferenceGridSpec = Field(
         ..., description="Typed sampling grid to cartesian product."
@@ -497,6 +508,7 @@ class ExperimentSpec(SpecBase):
         if self.num_samples < 1:
             raise ValueError("ExperimentSpec num_samples must be >= 1.")
         _validate_unique_tool_ids(self.tools, owner_label="ExperimentSpec")
+        _validate_unique_mcp_server_ids(self.mcp_servers, owner_label="ExperimentSpec")
         return self
 
 
@@ -522,6 +534,10 @@ class ProjectSpec(SpecBase):
         default_factory=list,
         description="Reusable project-level tool declarations available to runs.",
     )
+    mcp_servers: list[McpServerSpec] = Field(
+        default_factory=list,
+        description="Reusable project-level MCP server declarations available to runs.",
+    )
     execution_backend: ExecutionBackendConfig = Field(
         default_factory=LocalExecutionBackendSpec,
         description="Execution backend used for local, worker-pool, or batch orchestration.",
@@ -533,6 +549,7 @@ class ProjectSpec(SpecBase):
     @model_validator(mode="after")
     def _validate_semantic(self) -> ProjectSpec:
         _validate_unique_tool_ids(self.tools, owner_label="ProjectSpec")
+        _validate_unique_mcp_server_ids(self.mcp_servers, owner_label="ProjectSpec")
         return self
 
 

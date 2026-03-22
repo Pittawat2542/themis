@@ -46,6 +46,10 @@ class EngineCapabilities(BaseModel):
             "seed derivation; the engine may still produce non-deterministic outputs."
         ),
     )
+    supports_mcp: bool = Field(
+        default=False,
+        description="Whether the engine can execute trials that expose MCP servers.",
+    )
     max_context_tokens: int | None = None
 
 

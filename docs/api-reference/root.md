@@ -14,6 +14,7 @@ Main imports:
 - `PromptMessage`
 - `PromptTurnSpec`
 - `ModelSpec`
+- `McpServerSpec`
 - `ToolSpec`
 - `PluginRegistry`
 - `Orchestrator`

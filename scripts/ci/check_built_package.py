@@ -22,6 +22,7 @@ EXPECTED_ROOT_EXPORTS = {
     "ExecutionPolicySpec",
     "InferenceGridSpec",
     "InferenceParamsSpec",
+    "McpServerSpec",
     "PromptMessage",
     "PromptTurnSpec",
     "PromptVariantSpec",

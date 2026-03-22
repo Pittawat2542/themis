@@ -20,8 +20,10 @@ from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    McpServerSpec,
     ModelSpec,
     ToolSpec,
+    _validate_unique_mcp_server_ids,
     _validate_unique_tool_ids,
 )
 from themis.types.json_types import JSONDict
@@ -120,6 +122,7 @@ class SliceSpec(SpecBase):
     prompt_variant_ids: list[str] = Field(default_factory=list)
     prompt_families: list[str] = Field(default_factory=list)
     tool_ids: list[str] = Field(default_factory=list)
+    mcp_server_ids: list[str] = Field(default_factory=list)
     generation: GenerationSpec | None = Field(default=None)
     parses: list[ParseSpec] = Field(default_factory=list)
     scores: list[ScoreSpec] = Field(default_factory=list)
@@ -145,6 +148,10 @@ class SliceSpec(SpecBase):
                 )
         if len(self.tool_ids) != len(set(self.tool_ids)):
             raise ValueError(f"SliceSpec '{self.slice_id}' has duplicate tool id.")
+        if len(self.mcp_server_ids) != len(set(self.mcp_server_ids)):
+            raise ValueError(
+                f"SliceSpec '{self.slice_id}' has duplicate MCP server id."
+            )
         return self
 
 
@@ -156,6 +163,7 @@ class BenchmarkSpec(SpecBase):
     slices: list[SliceSpec] = Field(..., min_length=1)
     prompt_variants: list[PromptVariantSpec] = Field(..., min_length=1)
     tools: list[ToolSpec] = Field(default_factory=list)
+    mcp_servers: list[McpServerSpec] = Field(default_factory=list)
     inference_grid: InferenceGridSpec = Field(...)
     num_samples: int = Field(default=1, ge=1)
 
@@ -315,4 +323,5 @@ class BenchmarkSpec(SpecBase):
                     f"variant id(s): {missing_joined}."
                 )
         _validate_unique_tool_ids(self.tools, owner_label="BenchmarkSpec")
+        _validate_unique_mcp_server_ids(self.mcp_servers, owner_label="BenchmarkSpec")
         return self

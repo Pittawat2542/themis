@@ -9,6 +9,7 @@ from themis import (
     DatasetQuerySpec,
     InferenceGridSpec,
     InferenceParamsSpec,
+    McpServerSpec,
     ModelSpec,
     ParseSpec,
     PromptMessage,
@@ -224,6 +225,47 @@ def test_compile_benchmark_preserves_tool_ids() -> None:
     assert experiment.tasks[0].tool_ids == ["search", "calculator"]
 
 
+def test_compile_benchmark_preserves_mcp_server_ids() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="openai")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                mcp_server_ids=["dice"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice",
+                server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    experiment = compile_benchmark(benchmark)
+
+    assert [server.id for server in experiment.mcp_servers] == ["dice"]
+    assert experiment.tasks[0].mcp_server_ids == ["dice"]
+
+
 def test_compile_benchmark_rejects_unknown_slice_tool_ids() -> None:
     benchmark = BenchmarkSpec(
         benchmark_id="agent-bench",
@@ -259,6 +301,37 @@ def test_compile_benchmark_rejects_unknown_slice_tool_ids() -> None:
     )
 
     with pytest.raises(ValueError, match="agent-bench.*agentic.*missing-tool"):
+        compile_benchmark(benchmark)
+
+
+def test_compile_benchmark_rejects_unknown_slice_mcp_server_ids() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="openai")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                mcp_server_ids=["missing-mcp"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    with pytest.raises(ValueError, match="agent-bench.*agentic.*missing-mcp"):
         compile_benchmark(benchmark)
 
 
@@ -322,6 +395,80 @@ def test_compile_benchmark_merges_project_tools_with_benchmark_overrides() -> No
         "search": "Benchmark search override",
         "calculator": "Project calculator",
         "lookup": "Benchmark lookup",
+    }
+
+
+def test_compile_benchmark_merges_project_mcp_servers_with_benchmark_overrides() -> (
+    None
+):
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="openai")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                mcp_server_ids=["dice", "calendar", "docs"],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice-override",
+                server_url="https://example.com/dice",
+                require_approval="never",
+            ),
+            McpServerSpec(
+                id="docs",
+                server_label="docs",
+                server_url="https://example.com/docs",
+                require_approval="never",
+            ),
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    experiment = compile_benchmark(
+        benchmark,
+        project_tools=[],
+        project_mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice",
+                server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
+            ),
+            McpServerSpec(
+                id="calendar",
+                server_label="google_calendar",
+                connector_id="connector_googlecalendar",
+                require_approval="never",
+            ),
+        ],
+    )
+
+    assert [server.id for server in experiment.mcp_servers] == [
+        "dice",
+        "calendar",
+        "docs",
+    ]
+    assert {server.id: server.server_label for server in experiment.mcp_servers} == {
+        "dice": "dice-override",
+        "calendar": "google_calendar",
+        "docs": "docs",
     }
 
 

@@ -73,6 +73,10 @@ class TrialSessionPreparer:
                 "tools": [
                     tool.model_dump(mode="json") for tool in prepared_trial.tools
                 ],
+                "mcp_servers": [
+                    server.model_dump(mode="json")
+                    for server in prepared_trial.mcp_servers
+                ],
             },
             label="rendered prompt",
         )

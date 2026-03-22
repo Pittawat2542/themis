@@ -29,6 +29,7 @@ from themis.specs.foundational import (
     ExtractorChainSpec,
     EvaluationSpec,
     GenerationSpec,
+    McpServerSpec,
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
@@ -167,10 +168,19 @@ def test_trial_spec_validation():
                 input_schema={"type": "object"},
             )
         ],
+        mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice",
+                server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
+            )
+        ],
         candidate_count=5,
     )
     assert trial.candidate_count == 5
     assert trial.tools[0].id == "search"
+    assert trial.mcp_servers[0].id == "dice"
 
     with pytest.raises(ValidationError, match="greater than or equal to 1"):
         TrialSpec(
@@ -197,11 +207,20 @@ def test_experiment_spec():
                 input_schema={"type": "object"},
             )
         ],
+        mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice",
+                server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
+            )
+        ],
         item_sampling=ItemSamplingSpec(kind="all"),
     )
     assert len(spec.models) == 1
     assert spec.item_sampling.kind == SamplingKind.ALL
     assert spec.tools[0].id == "search"
+    assert spec.mcp_servers[0].id == "dice"
 
 
 def test_experiment_spec_empty_validation():
@@ -230,6 +249,15 @@ def test_project_spec():
                 input_schema={"type": "object"},
             )
         ],
+        mcp_servers=[
+            McpServerSpec(
+                id="calendar",
+                server_label="google_calendar",
+                connector_id="connector_googlecalendar",
+                require_approval="never",
+                authorization_secret_name="GOOGLE_CALENDAR_TOKEN",
+            )
+        ],
     )
     assert proj.project_name == "eval_run_1"
     assert proj.storage.backend == StorageBackend.SQLITE_BLOB
@@ -237,6 +265,32 @@ def test_project_spec():
     assert isinstance(proj.execution_backend, LocalExecutionBackendSpec)
     assert proj.execution_backend.kind == "local"
     assert proj.tools[0].id == "search"
+    assert proj.mcp_servers[0].connector_id == "connector_googlecalendar"
+
+
+def test_project_spec_rejects_duplicate_mcp_server_ids() -> None:
+    with pytest.raises(ValidationError, match="duplicate MCP server id"):
+        ProjectSpec(
+            project_name="eval_run_1",
+            researcher_id="researcher_1",
+            global_seed=42,
+            storage=SqliteBlobStorageSpec(root_dir="./runs/eval_run_1"),
+            execution_policy=ExecutionPolicySpec(),
+            mcp_servers=[
+                McpServerSpec(
+                    id="dice",
+                    server_label="dice",
+                    server_url="https://dmcp-server.deno.dev/sse",
+                    require_approval="never",
+                ),
+                McpServerSpec(
+                    id="dice",
+                    server_label="dice-override",
+                    server_url="https://example.com/mcp",
+                    require_approval="never",
+                ),
+            ],
+        )
 
 
 def test_runtime_context_excludes_tool_handlers_from_json_dump():

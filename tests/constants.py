@@ -12,6 +12,7 @@ EXPECTED_ROOT_EXPORTS = {
     "ExecutionPolicySpec",
     "InferenceGridSpec",
     "InferenceParamsSpec",
+    "McpServerSpec",
     "ModelSpec",
     "Orchestrator",
     "ParseSpec",

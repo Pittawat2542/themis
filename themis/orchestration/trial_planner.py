@@ -29,8 +29,7 @@ from themis.specs.experiment import (
     PromptTemplateSpec,
     TrialSpec,
 )
-from themis.specs.foundational import ToolSpec
-from themis.specs.foundational import TaskSpec
+from themis.specs.foundational import McpServerSpec, TaskSpec, ToolSpec
 from themis.types.enums import ErrorCode, SamplingKind
 from themis.types.json_types import JSONValueType
 from themis.types.json_validation import validate_json_dict, validate_json_value
@@ -65,11 +64,16 @@ class TrialPlanner:
         *,
         required_stages: Collection[TrialStage] | None = None,
         project_tools: Sequence[ToolSpec] = (),
+        project_mcp_servers: Sequence[McpServerSpec] = (),
     ) -> list[PlannedTrial]:
         """Compile and plan one benchmark specification."""
 
         return self.plan_experiment(
-            compile_benchmark(benchmark, project_tools=project_tools),
+            compile_benchmark(
+                benchmark,
+                project_tools=project_tools,
+                project_mcp_servers=project_mcp_servers,
+            ),
             required_stages=required_stages,
         )
 
@@ -87,6 +91,10 @@ class TrialPlanner:
         }
         selected_tools_by_task = {
             task.task_id: self._resolve_task_tools(experiment, task)
+            for task in experiment.tasks
+        }
+        selected_mcp_servers_by_task = {
+            task.task_id: self._resolve_task_mcp_servers(experiment, task)
             for task in experiment.tasks
         }
 
@@ -125,6 +133,7 @@ class TrialPlanner:
                 items = task_items.get(task.task_id, [])
                 prompts = task_prompts[task.task_id]
                 selected_tools = selected_tools_by_task[task.task_id]
+                selected_mcp_servers = selected_mcp_servers_by_task[task.task_id]
                 for prompt, params in itertools.product(prompts, params_grid):
                     for item in items:
                         item_str = json.dumps(
@@ -154,6 +163,7 @@ class TrialPlanner:
                             prompt=prompt,
                             params=params,
                             tools=selected_tools,
+                            mcp_servers=selected_mcp_servers,
                             item_id=item.item_id,
                             candidate_count=experiment.num_samples,
                             metadata=validate_json_dict(
@@ -202,6 +212,30 @@ class TrialPlanner:
                 ),
             )
         return [tools_by_id[tool_id] for tool_id in task.tool_ids]
+
+    def _resolve_task_mcp_servers(
+        self,
+        experiment: ExperimentSpec,
+        task: TaskSpec,
+    ) -> list[McpServerSpec]:
+        if not task.mcp_server_ids:
+            return []
+        servers_by_id = {server.id: server for server in experiment.mcp_servers}
+        missing_server_ids = [
+            server_id
+            for server_id in task.mcp_server_ids
+            if server_id not in servers_by_id
+        ]
+        if missing_server_ids:
+            missing_joined = ", ".join(sorted(set(missing_server_ids)))
+            raise SpecValidationError(
+                code=ErrorCode.SCHEMA_MISMATCH,
+                message=(
+                    f"Task '{task.slice_id or task.task_id}' references unknown "
+                    f"MCP server id(s): {missing_joined}."
+                ),
+            )
+        return [servers_by_id[server_id] for server_id in task.mcp_server_ids]
 
     def _resolve_task_prompts(
         self,

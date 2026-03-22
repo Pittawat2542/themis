@@ -4,8 +4,10 @@ from collections.abc import Sequence
 import inspect
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import MagicMock
 
 import pytest
+from pydantic import SecretStr
 
 import themis.catalog as catalog
 from themis import BenchmarkDefinition, DatasetQuerySpec
@@ -24,15 +26,31 @@ from themis.catalog.datasets.common import (
     _normalize_superchem_rows,
 )
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
-from themis.errors import ThemisError
-from themis.catalog.runtime.common import _build_judge_spec
+from themis.errors import SpecValidationError, ThemisError
+from themis.catalog.runtime.common import (
+    _build_judge_spec,
+    _coerce_usage_int,
+    _openai_mcp_tool_payload,
+    _openai_response_input_message,
+    _run_openai_chat_inference,
+)
+from themis.contracts.protocols import InferenceResult
+from themis.specs.experiment import (
+    InferenceParamsSpec,
+    PromptMessage,
+    PromptTemplateSpec,
+    RuntimeContext,
+)
 from themis.specs.foundational import (
     DatasetSpec,
     JinjaTransform,
+    McpServerSpec,
+    ModelSpec,
     PythonTransform,
     RenameFieldTransform,
 )
-from themis.types.enums import DatasetSource, ErrorCode
+from themis.records.conversation import ToolCallEvent, ToolResultEvent
+from themis.types.enums import DatasetSource, ErrorCode, PromptRole
 from themis.types.events import ScoreRow
 from themis.types.json_types import JSONDict
 
@@ -194,6 +212,229 @@ def test_builtin_judge_spec_defaults_use_8192_tokens() -> None:
     )
 
     assert judge_spec.params.max_tokens == 8192
+
+
+def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = SimpleNamespace(
+        id="resp_123",
+        usage=SimpleNamespace(
+            prompt_tokens=11,
+            completion_tokens=7,
+            total_tokens=18,
+        ),
+        output=[
+            SimpleNamespace(
+                type="mcp_call",
+                id="mcp_1",
+                server_label="dice",
+                name="roll",
+                arguments='{"expression":"2d4+1"}',
+            ),
+            SimpleNamespace(
+                type="mcp_call_output",
+                id="mcp_1_out",
+                call_id="mcp_1",
+                output='{"value":"6"}',
+            ),
+            SimpleNamespace(type="message"),
+        ],
+        output_text="6",
+    )
+    responses = MagicMock()
+    responses.create.return_value = response
+    client = SimpleNamespace(responses=responses)
+    openai_module = SimpleNamespace(OpenAI=MagicMock(return_value=client))
+    monkeypatch.setattr(
+        "themis.catalog.runtime.common.import_optional",
+        lambda name, extra: openai_module,
+    )
+
+    trial = SimpleNamespace(
+        trial_id="trial_mcp_123",
+        model=ModelSpec(model_id="gpt-5", provider="openai"),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="Roll 2d4+1")]
+        ),
+        params=InferenceParamsSpec(
+            max_tokens=64,
+            temperature=0.1,
+            top_p=0.9,
+            seed=7,
+            extras={"reasoning": {"effort": "medium"}},
+        ),
+        mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice",
+                server_url="https://dmcp-server.deno.dev/sse",
+                allowed_tools=["roll"],
+                require_approval="never",
+                authorization_secret_name="DICE_TOKEN",
+            )
+        ],
+    )
+
+    result = _run_openai_chat_inference(
+        trial,
+        context={},
+        runtime=RuntimeContext(secrets={"DICE_TOKEN": SecretStr("secret-token")}),
+        base_url=None,
+        provider_label="OpenAI",
+        missing_extra="providers-openai",
+    )
+
+    assert isinstance(result, InferenceResult)
+    assert result.inference.spec_hash == "inference_trial_mcp_123"
+    assert result.inference.raw_text == "6"
+    assert result.inference.provider_request_id == "resp_123"
+    assert result.inference.token_usage is not None
+    assert result.inference.token_usage.total_tokens == 18
+    create_kwargs = responses.create.call_args.kwargs
+    assert create_kwargs["model"] == "gpt-5"
+    assert create_kwargs["input"][0]["content"][0]["text"] == "Roll 2d4+1"
+    assert create_kwargs["max_output_tokens"] == 64
+    assert create_kwargs["extra_body"] == {"reasoning": {"effort": "medium"}}
+    assert create_kwargs["tools"] == [
+        {
+            "type": "mcp",
+            "server_label": "dice",
+            "server_url": "https://dmcp-server.deno.dev/sse",
+            "allowed_tools": ["roll"],
+            "authorization": "secret-token",
+            "require_approval": "never",
+        }
+    ]
+    assert result.conversation is not None
+    assert isinstance(result.conversation.events[0], ToolCallEvent)
+    assert result.conversation.events[0].payload.tool_name == "dice:roll"
+    assert isinstance(result.conversation.events[1], ToolResultEvent)
+
+
+def test_openai_chat_inference_rejects_non_object_mcp_arguments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = SimpleNamespace(
+        id="resp_bad_args",
+        usage=SimpleNamespace(
+            prompt_tokens=11,
+            completion_tokens=7,
+            total_tokens=18,
+        ),
+        output=[
+            SimpleNamespace(
+                type="mcp_call",
+                id="mcp_1",
+                server_label="dice",
+                name="roll",
+                arguments='["2d4+1"]',
+            ),
+        ],
+        output_text="",
+    )
+    responses = MagicMock()
+    responses.create.return_value = response
+    client = SimpleNamespace(responses=responses)
+    openai_module = SimpleNamespace(OpenAI=MagicMock(return_value=client))
+    monkeypatch.setattr(
+        "themis.catalog.runtime.common.import_optional",
+        lambda name, extra: openai_module,
+    )
+
+    trial = SimpleNamespace(
+        trial_id="trial_mcp_bad_args",
+        model=ModelSpec(model_id="gpt-5", provider="openai"),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="Roll 2d4+1")]
+        ),
+        params=InferenceParamsSpec(max_tokens=64),
+        mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice",
+                server_url="https://dmcp-server.deno.dev/sse",
+                allowed_tools=["roll"],
+                require_approval="never",
+                authorization_secret_name="DICE_TOKEN",
+            )
+        ],
+    )
+
+    with pytest.raises(SpecValidationError, match="MCP tool arguments"):
+        _run_openai_chat_inference(
+            trial,
+            context={},
+            runtime=RuntimeContext(secrets={"DICE_TOKEN": SecretStr("secret-token")}),
+            base_url=None,
+            provider_label="OpenAI",
+            missing_extra="providers-openai",
+        )
+
+
+def test_coerce_usage_int_returns_none_for_invalid_strings() -> None:
+    assert _coerce_usage_int("") is None
+    assert _coerce_usage_int("unknown") is None
+
+
+def test_openai_response_input_message_preserves_falsy_scalars() -> None:
+    assert _openai_response_input_message({"role": "user", "content": 0}) == {
+        "role": "user",
+        "content": [{"type": "input_text", "text": "0"}],
+    }
+    assert _openai_response_input_message({"role": "user", "content": False}) == {
+        "role": "user",
+        "content": [{"type": "input_text", "text": "False"}],
+    }
+
+
+def test_openai_mcp_tool_payload_rejects_approval_gated_servers() -> None:
+    with pytest.raises(ThemisError, match="approval-gated"):
+        _openai_mcp_tool_payload(
+            McpServerSpec(
+                id="calendar",
+                server_label="google_calendar",
+                connector_id="connector_googlecalendar",
+                require_approval="always",
+            ),
+            RuntimeContext(),
+        )
+
+
+def test_openai_chat_inference_rejects_mcp_without_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    openai_module = SimpleNamespace(OpenAI=MagicMock())
+    monkeypatch.setattr(
+        "themis.catalog.runtime.common.import_optional",
+        lambda name, extra: openai_module,
+    )
+    trial = SimpleNamespace(
+        model=ModelSpec(model_id="gpt-5", provider="openai"),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="Hello")]
+        ),
+        params=InferenceParamsSpec(max_tokens=64),
+        mcp_servers=[
+            McpServerSpec(
+                id="calendar",
+                server_label="google_calendar",
+                connector_id="connector_googlecalendar",
+                require_approval="never",
+                authorization_secret_name="GOOGLE_TOKEN",
+            )
+        ],
+    )
+
+    with pytest.raises(ThemisError, match="GOOGLE_TOKEN"):
+        _run_openai_chat_inference(
+            trial,
+            context={},
+            runtime=RuntimeContext(),
+            base_url=None,
+            provider_label="OpenAI",
+            missing_extra="providers-openai",
+        )
 
 
 @pytest.mark.parametrize(

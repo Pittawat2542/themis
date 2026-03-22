@@ -9,6 +9,7 @@ of a simple single-turn evaluation.
 - `system` or `developer` messages matter
 - the benchmark scripts follow-up turns
 - the engine needs an explicit tool list
+- the engine needs provider-hosted remote MCP tools
 - the engine returns tool call or tool result traces
 
 Stay with the normal benchmark flow when there is one rendered prompt and no
@@ -26,6 +27,14 @@ tools.
 7. Register matching opaque handlers with `PluginRegistry.register_tool(...)`.
 8. Build the orchestrator and run the benchmark normally.
 
+For OpenAI-hosted remote MCP tools:
+
+1. Put shared MCP server definitions on `ProjectSpec.mcp_servers`.
+2. Add benchmark-local MCP server definitions on `BenchmarkSpec.mcp_servers` when needed.
+3. Use `SliceSpec.mcp_server_ids` to select the MCP servers exposed on each trial.
+4. Pass OAuth or access tokens through `RuntimeContext.secrets` when `authorization_secret_name` is set.
+5. Keep this flow separate from local `ToolSpec` handlers.
+
 ## Merge Semantics
 
 - project tools are the base
@@ -42,6 +51,7 @@ Benchmark-native engines receive:
 - `trial.prompt.messages`
 - `trial.prompt.follow_up_turns`
 - `trial.tools`
+- `trial.mcp_servers`
 - `runtime.tool_handlers`
 
 Use that boundary directly. Do not re-render benchmark prompts inside the
@@ -67,9 +77,20 @@ Point users to `examples/10_agent_eval.py` when they ask for:
 - access to `trial.tools` and `runtime.tool_handlers`
 - returned tool-call and tool-result traces
 
+Point users to `examples/14_mcp_openai.py` when they ask for:
+
+- OpenAI-hosted MCP server selection
+- `McpServerSpec`
+- `SliceSpec.mcp_server_ids`
+- `RuntimeContext.secrets` for MCP auth
+- provider-hosted remote tool traces
+
 ## Out Of Scope
 
 Do not send users to retired experiment/task APIs for this flow.
 
 Do not describe Themis as an agent runtime. It is the orchestration and
 benchmark layer around the engine.
+
+Do not describe Themis as a generic MCP client. In this codebase, MCP is
+currently an OpenAI-first provider capability for remote tools.

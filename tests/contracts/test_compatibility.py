@@ -14,15 +14,22 @@ from themis.registry.compatibility import (
     resolve_trial_plugins,
     validate_output_transform,
 )
-from themis.types.enums import DatasetSource, ResponseFormat, RunStage
+from themis.types.enums import DatasetSource, PromptRole, ResponseFormat, RunStage
 from themis.registry.plugin_registry import EngineCapabilities, PluginRegistry
-from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
+from themis.specs.experiment import (
+    InferenceParamsSpec,
+    PromptMessage,
+    PromptTemplateSpec,
+    PromptTurnSpec,
+    TrialSpec,
+)
 from themis.specs.foundational import (
     DatasetSpec,
     EvaluationSpec,
     ExtractorChainSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    McpServerSpec,
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
@@ -251,6 +258,107 @@ def test_compatibility_rejects_unsupported_response_format_and_logprobs() -> Non
         "params.response_format",
         "params.logprobs",
     ]
+
+
+def test_compatibility_rejects_mcp_for_engines_without_support() -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine(
+        "openai",
+        DummyEngine,
+        version="1.0.0",
+        plugin_api="1.0",
+        capabilities=EngineCapabilities(),
+    )
+
+    issues = check_generation_trial(
+        _make_trial().model_copy(
+            update={
+                "mcp_servers": [
+                    McpServerSpec(
+                        id="dice",
+                        server_label="dice",
+                        server_url="https://dmcp-server.deno.dev/sse",
+                        require_approval="never",
+                    )
+                ]
+            }
+        ),
+        registry,
+    )
+
+    assert [issue.path for issue in issues] == ["mcp_servers"]
+
+
+def test_compatibility_rejects_mcp_approval_required_runs() -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine(
+        "openai",
+        DummyEngine,
+        version="1.0.0",
+        plugin_api="1.0",
+        capabilities=EngineCapabilities(supports_mcp=True),
+    )
+
+    issues = check_generation_trial(
+        _make_trial().model_copy(
+            update={
+                "mcp_servers": [
+                    McpServerSpec(
+                        id="calendar",
+                        server_label="google_calendar",
+                        connector_id="connector_googlecalendar",
+                        require_approval="always",
+                    )
+                ]
+            }
+        ),
+        registry,
+    )
+
+    assert [issue.path for issue in issues] == ["mcp_servers[0].require_approval"]
+
+
+def test_compatibility_rejects_openai_mcp_with_follow_up_turns() -> None:
+    registry = PluginRegistry()
+    registry.register_inference_engine(
+        "openai",
+        DummyEngine,
+        version="1.0.0",
+        plugin_api="1.0",
+        capabilities=EngineCapabilities(supports_mcp=True),
+    )
+
+    issues = check_generation_trial(
+        _make_trial().model_copy(
+            update={
+                "prompt": PromptTemplateSpec(
+                    id="agent",
+                    messages=[],
+                    follow_up_turns=[
+                        PromptTurnSpec(
+                            messages=[
+                                PromptMessage(
+                                    role=PromptRole.USER,
+                                    content="Continue.",
+                                )
+                            ]
+                        )
+                    ],
+                ),
+                "mcp_servers": [
+                    McpServerSpec(
+                        id="dice",
+                        server_label="dice",
+                        server_url="https://dmcp-server.deno.dev/sse",
+                        require_approval="never",
+                    )
+                ],
+            }
+        ),
+        registry,
+    )
+
+    assert [issue.path for issue in issues] == ["prompt.follow_up_turns"]
 
 
 def test_compatibility_can_scope_validation_to_generation_only() -> None:

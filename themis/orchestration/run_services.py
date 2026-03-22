@@ -164,9 +164,13 @@ class RunPlanningService:
             project_tools = (
                 self.project_spec.tools if self.project_spec is not None else ()
             )
+            project_mcp_servers = (
+                self.project_spec.mcp_servers if self.project_spec is not None else ()
+            )
             normalized_benchmark = normalize_benchmark_spec(
                 source_spec,
                 project_tools=project_tools,
+                project_mcp_servers=project_mcp_servers,
             )
             return self.plan(
                 compile_benchmark(normalized_benchmark),

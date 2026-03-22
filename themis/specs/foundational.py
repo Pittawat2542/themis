@@ -56,6 +56,56 @@ class ToolSpec(SpecBase):
     )
 
 
+class McpServerSpec(SpecBase):
+    """Serializable MCP server metadata forwarded to MCP-capable engines."""
+
+    id: str = Field(..., description="Stable MCP server identifier.")
+    server_label: str = Field(
+        ..., description="Provider-facing server label used in MCP tool payloads."
+    )
+    server_description: str | None = Field(
+        default=None,
+        description="Optional human-readable description of the MCP server.",
+    )
+    server_url: str | None = Field(
+        default=None,
+        description="Remote MCP server URL for direct server integration.",
+    )
+    connector_id: str | None = Field(
+        default=None,
+        description="Provider-specific connector ID for hosted integrations.",
+    )
+    allowed_tools: list[str] = Field(
+        default_factory=list,
+        description="Optional allow-list of tool names exposed from the server.",
+    )
+    require_approval: Literal["never", "always"] = Field(
+        ...,
+        description=(
+            "Required approval mode for MCP tool calls; callers must explicitly "
+            "provide either 'never' or 'always'."
+        ),
+    )
+    authorization_secret_name: str | None = Field(
+        default=None,
+        description="Runtime secret key that resolves to the MCP auth token.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_semantic(self) -> "McpServerSpec":
+        if isinstance(self.server_url, str) and self.server_url.strip() == "":
+            object.__setattr__(self, "server_url", None)
+        if isinstance(self.connector_id, str) and self.connector_id.strip() == "":
+            object.__setattr__(self, "connector_id", None)
+        has_server_url = self.server_url is not None
+        has_connector_id = self.connector_id is not None
+        if has_server_url == has_connector_id:
+            raise ValueError(
+                "McpServerSpec requires exactly one of server_url or connector_id."
+            )
+        return self
+
+
 def _validate_unique_tool_ids(
     tools: list[ToolSpec],
     *,
@@ -64,6 +114,16 @@ def _validate_unique_tool_ids(
     tool_ids = [tool.id for tool in tools]
     if len(tool_ids) != len(set(tool_ids)):
         raise ValueError(f"{owner_label} has duplicate tool id.")
+
+
+def _validate_unique_mcp_server_ids(
+    mcp_servers: list[McpServerSpec],
+    *,
+    owner_label: str,
+) -> None:
+    server_ids = [server.id for server in mcp_servers]
+    if len(server_ids) != len(set(server_ids)):
+        raise ValueError(f"{owner_label} has duplicate MCP server id.")
 
 
 def _default_judge_params() -> InferenceParamsSpec:
@@ -307,6 +367,10 @@ class TaskSpec(SpecBase):
         default_factory=list,
         description="Explicit ordered tool IDs selected for this task.",
     )
+    mcp_server_ids: list[str] = Field(
+        default_factory=list,
+        description="Explicit ordered MCP server IDs selected for this task.",
+    )
 
     @field_validator("dataset_query", mode="before")
     @classmethod
@@ -361,4 +425,6 @@ class TaskSpec(SpecBase):
                 )
         if len(self.tool_ids) != len(set(self.tool_ids)):
             raise ValueError(f"TaskSpec '{self.task_id}' has duplicate tool id.")
+        if len(self.mcp_server_ids) != len(set(self.mcp_server_ids)):
+            raise ValueError(f"TaskSpec '{self.task_id}' has duplicate MCP server id.")
         return self

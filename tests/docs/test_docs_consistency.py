@@ -57,6 +57,7 @@ def test_readme_and_examples_index_list_all_numbered_examples() -> None:
         "11_quick_benchmark.py",
         "12_iter_and_estimate.py",
         "13_catalog_builtin_benchmark.py",
+        "14_mcp_openai.py",
     ]:
         assert example_name in readme
         assert example_name in examples_readme

@@ -12,6 +12,7 @@ Themis now documents one benchmark-first public API.
 | `DatasetQuerySpec` | Subset, filters, item pinning, and sampling hints |
 | `PromptVariantSpec` | A reusable prompt family with bootstrap messages and optional follow-up turns |
 | `ToolSpec` | A serializable tool definition passed to selected agent-capable trials |
+| `McpServerSpec` | A serializable MCP server definition passed to selected MCP-capable trials |
 | `ParseSpec` | A named parser pipeline |
 | `ScoreSpec` | A named scoring overlay, optionally tied to a parse pipeline |
 | `PluginRegistry` | Runtime lookup for engines, parsers, metrics, judges, and hooks |
@@ -31,7 +32,7 @@ Use this split when deciding where logic belongs:
 
 - project-wide runtime policy: `ProjectSpec`
 - benchmark semantics: `BenchmarkSpec`
-- agent and tool authoring: bootstrap prompt variants plus `ToolSpec` and `SliceSpec.tool_ids`
+- agent and tool authoring: bootstrap prompt variants plus `ToolSpec`, `McpServerSpec`, `SliceSpec.tool_ids`, and `SliceSpec.mcp_server_ids`
 - provider-specific execution: `InferenceEngine`
 - answer parsing: `ParseSpec` + extractor chain
 - scoring: `ScoreSpec` + metrics
@@ -58,6 +59,7 @@ from themis import (
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
+    McpServerSpec,
     ToolSpec,
     generate_config_report,
 )

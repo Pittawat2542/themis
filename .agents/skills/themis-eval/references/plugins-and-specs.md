@@ -31,8 +31,9 @@ Themis renders benchmark prompt templates before your engine runs. In normal
 benchmark-native flows, consume `trial.prompt.messages` directly instead of
 calling a prompt-render helper inside the engine.
 
-If you are building an agent-style benchmark with follow-up turns or tools,
-switch to `references/agent-evals-and-tools.md` for the full authoring flow.
+If you are building an agent-style benchmark with follow-up turns, local tools,
+or OpenAI-hosted MCP servers, switch to
+`references/agent-evals-and-tools.md` for the full authoring flow.
 
 Inference engine:
 
