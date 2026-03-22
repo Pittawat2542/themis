@@ -102,6 +102,7 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         "imo_answerbench",
         "lpfqa",
         "mmlu_pro",
+        "codeforces",
         "simpleqa_verified",
         "supergpqa",
     }

@@ -19,6 +19,7 @@ from .hmmt_nov_2025 import DEFINITION as HMMT_NOV_2025_DEFINITION
 from .imo_answerbench import DEFINITION as IMO_ANSWERBENCH_DEFINITION
 from .lpfqa import DEFINITION as LPFQA_DEFINITION
 from .mmlu_pro import DEFINITION as MMLU_PRO_DEFINITION
+from .codeforces import DEFINITION as CODEFORCES_DEFINITION
 from .simpleqa_verified import DEFINITION as SIMPLEQA_VERIFIED_DEFINITION
 from .supergpqa import DEFINITION as SUPERGPQA_DEFINITION
 
@@ -39,6 +40,7 @@ _CATALOG_BENCHMARKS: dict[str, BenchmarkDefinition] = {
         IMO_ANSWERBENCH_DEFINITION,
         LPFQA_DEFINITION,
         HLE_DEFINITION,
+        CODEFORCES_DEFINITION,
     )
 }
 

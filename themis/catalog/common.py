@@ -138,9 +138,7 @@ def build_catalog_benchmark_project(
         dataset_revision=dataset_revision,
         judge_model_id=judge_model_id,
         judge_provider=judge_provider,
-        huggingface_loader=load_huggingface_rows
-        if huggingface_loader is None
-        else huggingface_loader,
+        huggingface_loader=huggingface_loader,
     )
 
 
@@ -340,6 +338,10 @@ def summarize_math(definition, result) -> JSONDict:
 
 
 def summarize_lpfqa(definition, result) -> JSONDict:
+    return mean_summary(_primary_metric_id(definition), result)
+
+
+def summarize_codeforces(definition, result) -> JSONDict:
     return mean_summary(_primary_metric_id(definition), result)
 
 
@@ -822,6 +824,63 @@ def _summarize_hle_variant(
     )
 
 
+def build_codeforces_benchmark(
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
+) -> BenchmarkSpec:
+    prompt_variant_id = f"{definition.benchmark_id}-default"
+    return BenchmarkSpec(
+        benchmark_id=definition.benchmark_id,
+        models=[
+            ModelSpec(
+                model_id=config.model_id,
+                provider=config.provider,
+                extras=_runtime._provider_model_extras(config.provider),
+            )
+        ],
+        slices=[
+            SliceSpec(
+                slice_id=definition.benchmark_id,
+                dataset=DatasetSpec(
+                    source=DatasetSource.HUGGINGFACE,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    split=_catalog_metadata_str(definition, "split"),
+                    revision=config.dataset_revision,
+                    transforms=[
+                        RenameFieldTransform(
+                            field="prompt_text",
+                            source_field="prompt",
+                        )
+                    ],
+                ),
+                dataset_query=make_dataset_query(config),
+                prompt_variant_ids=[prompt_variant_id],
+                generation=GenerationSpec(),
+                scores=[ScoreSpec(name="execution", metrics=["codeforces_pass_rate"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id=prompt_variant_id,
+                family=definition.benchmark_id,
+                messages=[
+                    PromptMessage(role=PromptRole.USER, content="{item.prompt_text}")
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(
+            params=[
+                InferenceParamsSpec(
+                    max_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    seed=config.seed,
+                )
+            ]
+        ),
+    )
+
+
 def register_mcq(
     _definition,
     registry: PluginRegistry,
@@ -908,6 +967,17 @@ def register_hle(
             judge_provider=str(config.judge_provider),
         ),
     )
+
+
+def register_codeforces(
+    _definition,
+    registry: PluginRegistry,
+    config: BenchmarkDefinitionConfig,
+) -> None:
+    del config
+    from .benchmarks.codeforces.metric import CodeforcesExecutionMetric
+
+    registry.register_metric("codeforces_pass_rate", CodeforcesExecutionMetric)
 
 
 def render_healthbench_preview(
