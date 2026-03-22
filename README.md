@@ -39,6 +39,7 @@ Add extras only when needed:
 - `stats` for paired comparisons and richer report tooling
 - `compression` for compressed artifact storage
 - `extractors` for additional built-in parsing helpers
+- `math` for math-equivalence scoring via `math-verify`
 - `datasets` for dataset integrations
 - `providers-openai`, `providers-litellm`, `providers-vllm` for provider SDKs
 - `telemetry` for external observability callbacks
@@ -82,6 +83,17 @@ themis quick-eval benchmark \
 
 ```bash
 themis init starter-mmlu --benchmark mmlu_pro
+```
+
+Math benchmarks are available as built-ins too:
+
+```bash
+themis quick-eval benchmark \
+  --benchmark aime_2026 \
+  --model demo-model \
+  --provider demo \
+  --preview \
+  --format json
 ```
 
 Then run the shipped hello-world benchmark when you want the smallest code-first example:

@@ -13,6 +13,7 @@ Install only what your workflow needs:
 - `stats`: richer statistical comparisons and report tooling
 - `compression`: compressed artifact storage
 - `extractors`: additional built-in parsing helpers
+- `math`: math-equivalence scoring helpers for short-answer benchmarks
 - `datasets`: dataset integrations
 - `providers-openai`, `providers-litellm`, `providers-vllm`: provider SDKs
 - `telemetry`: external observability callbacks

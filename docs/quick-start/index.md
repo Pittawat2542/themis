@@ -57,6 +57,19 @@ themis quick-eval benchmark \
 themis init starter-mmlu --benchmark mmlu_pro
 ```
 
+The built-in catalog also includes short-answer math benchmarks such as
+`aime_2026`, `aime_2025`, `hmmt_feb_2025`, `hmmt_nov_2025`, `apex_2025`,
+`beyond_aime`, and `imo_answerbench`:
+
+```bash
+themis quick-eval benchmark \
+  --benchmark aime_2026 \
+  --model demo-model \
+  --provider demo \
+  --preview \
+  --format json
+```
+
 That scaffold includes:
 
 - `project.toml` for storage and execution policy
@@ -68,6 +81,15 @@ To inspect a dataset before wiring a new built-in, use:
 
 ```bash
 uv run python scripts/inspect_huggingface_dataset.py TIGER-Lab/MMLU-Pro --split test
+```
+
+You can inspect multiple datasets in one pass:
+
+```bash
+uv run python scripts/inspect_huggingface_dataset.py \
+  MathArena/aime_2026:train \
+  ByteDance-Seed/BeyondAIME:test \
+  Hwilner/imo-answerbench:train
 ```
 
 ## Go Deeper
