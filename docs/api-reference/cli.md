@@ -38,15 +38,23 @@ Benchmark mode adds:
 
 ### `themis init`
 
-Generates a catalog project with:
+Default mode generates a local-data catalog project with:
 
 - `project.toml`
 - a runnable package scaffold
 - sample local data
 - README commands for `quickcheck` and `report`
 
-Use `--benchmark <id>` to scaffold a built-in benchmark-backed starter instead
+Use `--benchmark <id>` to scaffold a builtin benchmark-backed starter instead
 of the default local-data template.
+
+Builtin benchmark mode generates:
+
+- `project.toml`
+- `.env.example` with catalog benchmark defaults
+- a runnable package scaffold
+- builtin benchmark and dataset wiring through `themis.catalog`
+- README commands for `quickcheck` and `report`
 
 ### `themis quickcheck`
 

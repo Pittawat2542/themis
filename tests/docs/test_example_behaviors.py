@@ -82,3 +82,21 @@ def test_agent_eval_example_executes_registered_tool_handler() -> None:
     assert result.inference.conversation is None
     assert result.conversation is not None
     assert result.conversation.events[2].payload.result["value"] == "42"
+
+
+def test_catalog_builtin_example_uses_fixture_loader() -> None:
+    module = _load_example_module("13_catalog_builtin_benchmark.py")
+
+    rows = module.load_fixture_rows("TIGER-Lab/MMLU-Pro", "test", None)
+
+    assert rows == [
+        {
+            "item_id": "mmlu-pro-1",
+            "question": "Which planet is known as the Red Planet?",
+            "options": ["Venus", "Mars", "Jupiter", "Mercury"],
+            "answer": "B",
+            "answer_index": 1,
+            "category": "astronomy",
+            "src": "fixture",
+        }
+    ]

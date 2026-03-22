@@ -34,6 +34,15 @@ Every numbered example in this directory uses the benchmark-first public API.
 10. `10_agent_eval.py`
    Demonstrates bootstrap prompts, scripted follow-up turns, benchmark tool overrides, slice-level tool selection, runtime tool handlers, and agent traces.
 
+11. `11_quick_benchmark.py`
+   Demonstrates `BenchmarkSpec.simple()`, preview, and `PluginRegistry.from_dict()`.
+
+12. `12_iter_and_estimate.py`
+   Demonstrates streaming iteration, estimate output, and resume invalidation checks.
+
+13. `13_catalog_builtin_benchmark.py`
+   Runs a shipped builtin benchmark through `themis.catalog` with a local fixture dataset loader.
+
 ## Run One
 
 ```bash

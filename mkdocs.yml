@@ -137,6 +137,7 @@ nav:
   - Guides:
       - Overview: guides/index.md
       - Example Catalog: guides/examples.md
+      - Builtin Benchmarks: guides/builtin-benchmarks.md
       - Build a Dataset Provider: guides/dataset-loaders.md
       - Author Parse Pipelines and Scores: guides/plugins.md
       - Author Agent Evaluations and Tools: guides/agent-evals-and-tools.md

@@ -132,9 +132,27 @@ Runnable examples live in [`examples/`](examples/):
 - `08_external_stage_handoff.py`
 - `09_experiment_evolution.py`
 - `10_agent_eval.py`
+- `11_quick_benchmark.py`
+- `12_iter_and_estimate.py`
+- `13_catalog_builtin_benchmark.py`
 
 `10_agent_eval.py` is the canonical advanced example for bootstrap prompts,
 follow-up turns, tool declaration and selection, and returned agent traces.
+
+`13_catalog_builtin_benchmark.py` is the catalog-specific example for running a
+shipped builtin benchmark through `themis.catalog.build_catalog_benchmark_project(...)`
+with a local fixture dataset loader.
+
+To discover all shipped builtin benchmark ids from Python, use:
+
+```python
+from themis.catalog import list_catalog_benchmarks
+
+print(list_catalog_benchmarks())
+```
+
+The canonical benchmark list and Python usage notes live in
+[docs/guides/builtin-benchmarks.md](docs/guides/builtin-benchmarks.md).
 
 `examples/medical_reasoning_eval` is intentionally left untouched as a handoff
 reference. It is not the recommended public authoring pattern after the

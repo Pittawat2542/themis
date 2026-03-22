@@ -32,6 +32,11 @@ def test_quick_start_promotes_cli_onboarding_and_example_follow_up() -> None:
         ".cache/themis-examples/01-hello-world-benchmark-first/themis.sqlite3"
         in quick_start
     )
+    assert "list_catalog_benchmarks()" in quick_start
+    assert (
+        "data/sample.jsonl"
+        not in quick_start.split("That builtin scaffold includes:")[1]
+    )
 
 
 def test_readme_and_examples_index_list_all_numbered_examples() -> None:
@@ -48,9 +53,28 @@ def test_readme_and_examples_index_list_all_numbered_examples() -> None:
         "07_judge_metric.py",
         "08_external_stage_handoff.py",
         "09_experiment_evolution.py",
+        "10_agent_eval.py",
+        "11_quick_benchmark.py",
+        "12_iter_and_estimate.py",
+        "13_catalog_builtin_benchmark.py",
     ]:
         assert example_name in readme
         assert example_name in examples_readme
+
+
+def test_builtin_catalog_docs_include_discovery_and_python_entrypoint() -> None:
+    readme = (PROJECT_ROOT / "README.md").read_text()
+    quick_start = (PROJECT_ROOT / "docs/quick-start/index.md").read_text()
+    benchmark_catalog = (PROJECT_ROOT / "docs/guides/builtin-benchmarks.md").read_text()
+    cli_reference = (PROJECT_ROOT / "docs/api-reference/cli.md").read_text()
+
+    assert "list_catalog_benchmarks()" in readme
+    assert "build_catalog_benchmark_project(...)" in quick_start
+    assert "list_catalog_benchmarks()" in benchmark_catalog
+    assert "build_catalog_benchmark_project(...)" in benchmark_catalog
+    assert "`mmlu_pro`" in benchmark_catalog
+    assert "builtin benchmark-backed starter" in cli_reference
+    assert "default local-data template" in cli_reference
 
 
 def test_example_catalog_marks_medical_reasoning_eval_as_non_recommended() -> None:
@@ -68,6 +92,7 @@ def test_guides_and_tutorials_use_benchmark_first_terms() -> None:
     quickcheck = (PROJECT_ROOT / "docs/guides/quickcheck.md").read_text()
 
     assert "BenchmarkSpec" in tutorials
+    assert "Builtin Benchmarks" in guides
     assert "Build a Dataset Provider" in guides
     assert "--slice qa" in quickcheck
     assert "--dimension source=synthetic" in quickcheck
@@ -85,6 +110,7 @@ def test_api_navigation_lists_benchmark_first_reference_pages() -> None:
         "api-reference/registry.md",
         "api-reference/protocols.md",
         "api-reference/cli.md",
+        "guides/builtin-benchmarks.md",
     ]:
         assert nav_entry in mkdocs
 

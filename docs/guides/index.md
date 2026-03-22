@@ -5,6 +5,7 @@ Use guides when you need one focused workflow instead of a full tutorial.
 ## Authoring
 
 - [Example Catalog](examples.md)
+- [Builtin Benchmarks](builtin-benchmarks.md)
 - [Build a Dataset Provider](dataset-loaders.md)
 - [Author Parse Pipelines and Scores](plugins.md)
 - [Author Agent Evaluations and Tools](agent-evals-and-tools.md)
