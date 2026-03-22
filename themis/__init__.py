@@ -2,12 +2,15 @@
 
 from themis._version import __version__
 from themis.benchmark import (
+    BenchmarkDefinition,
+    BenchmarkDefinitionConfig,
     BenchmarkSpec,
     DatasetQuerySpec,
     ParseSpec,
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
+    build_benchmark_definition_project,
 )
 from themis.config_report import generate_config_report
 from themis.orchestration.orchestrator import Orchestrator
@@ -31,6 +34,8 @@ __all__ = [
     "__version__",
     "Orchestrator",
     "BenchmarkResult",
+    "BenchmarkDefinition",
+    "BenchmarkDefinitionConfig",
     "BenchmarkSpec",
     "SliceSpec",
     "DatasetQuerySpec",
@@ -51,5 +56,6 @@ __all__ = [
     "ToolSpec",
     "EngineCapabilities",
     "PluginRegistry",
+    "build_benchmark_definition_project",
     "generate_config_report",
 ]

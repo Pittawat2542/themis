@@ -3,6 +3,8 @@ from __future__ import annotations
 
 EXPECTED_ROOT_EXPORTS = {
     "__version__",
+    "BenchmarkDefinition",
+    "BenchmarkDefinitionConfig",
     "BenchmarkResult",
     "BenchmarkSpec",
     "DatasetQuerySpec",
@@ -25,5 +27,6 @@ EXPECTED_ROOT_EXPORTS = {
     "StorageConfig",
     "StorageSpec",
     "ToolSpec",
+    "build_benchmark_definition_project",
     "generate_config_report",
 }

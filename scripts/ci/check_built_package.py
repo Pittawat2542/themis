@@ -12,6 +12,8 @@ from pathlib import Path
 
 EXPECTED_ROOT_EXPORTS = {
     "__version__",
+    "BenchmarkDefinition",
+    "BenchmarkDefinitionConfig",
     "Orchestrator",
     "BenchmarkResult",
     "BenchmarkSpec",
@@ -34,6 +36,7 @@ EXPECTED_ROOT_EXPORTS = {
     "PostgresBlobStorageSpec",
     "EngineCapabilities",
     "PluginRegistry",
+    "build_benchmark_definition_project",
     "generate_config_report",
 }
 
