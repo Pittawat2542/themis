@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from themis import BenchmarkDefinition
 
 from ...common import (
@@ -10,6 +12,8 @@ from ...common import (
     summarize_hle,
 )
 from .dataset import BuiltinHLEDatasetProvider
+
+_SUPPORTED_HLE_VARIANT_IDS = ("text_only", "no_tool")
 
 
 def _preview_rows(_definition: BenchmarkDefinition) -> list[dict[str, object]]:
@@ -38,3 +42,18 @@ DEFINITION = BenchmarkDefinition(
     ),
     preview_rows_loader=_preview_rows,
 )
+
+
+def supported_hle_variant_ids() -> tuple[str, ...]:
+    return _SUPPORTED_HLE_VARIANT_IDS
+
+
+def build_hle_definition(variant_ids: list[str]) -> BenchmarkDefinition:
+    return replace(
+        DEFINITION,
+        benchmark_id="hle:" + ",".join(variant_ids),
+        metadata={
+            **DEFINITION.metadata,
+            "variant_ids": list(variant_ids),
+        },
+    )

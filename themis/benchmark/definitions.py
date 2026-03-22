@@ -182,10 +182,10 @@ class BenchmarkDefinition:
             raise ValueError(
                 f"Built-in benchmark '{self.benchmark_id}' preview rows are empty."
             )
-        dataset = benchmark.slices[0].dataset
+        preview_slice = benchmark.slices[0]
         provider_instance = self.build_dataset_provider()
         if hasattr(provider_instance, "prepare_rows"):
-            prepared = provider_instance.prepare_rows(sample_rows, dataset)
+            prepared = provider_instance.prepare_rows(sample_rows, preview_slice)
             sample_rows = cast(list[BenchmarkRow], prepared.rows)
         if not sample_rows:
             raise ValueError(

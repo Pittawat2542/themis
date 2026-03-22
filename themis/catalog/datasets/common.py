@@ -26,7 +26,7 @@ type CatalogPromptMessage = dict[str, str]
 type CatalogMetadataLoader = Callable[[str, str | None], JSONDict]
 type CatalogRowLoader = Callable[[str, str, str | None], list[CatalogRow]]
 type CatalogRowNormalizer = Callable[
-    [list[CatalogRow], DatasetSpec], "CatalogNormalizedRows"
+    [list[CatalogRow], object], "CatalogNormalizedRows"
 ]
 
 
@@ -85,9 +85,11 @@ class CatalogDatasetProvider:
     def prepare_rows(
         self,
         rows: list[CatalogRow],
-        dataset: DatasetSpec,
+        dataset_or_slice: object,
     ) -> CatalogNormalizedRows:
-        return _normalize_rows_for_provider(rows, dataset, self._row_normalizer)
+        return _normalize_rows_for_provider(
+            rows, dataset_or_slice, self._row_normalizer
+        )
 
     def last_scan_stats(self) -> JSONDict:
         return dict(self._last_scan_stats)
@@ -106,7 +108,7 @@ class BuiltinDatasetProvider(CatalogDatasetProvider):
                 "Built-in benchmark dataset providers require a HuggingFace dataset_id."
             )
         rows = self.load_rows(dataset)
-        normalized = self.prepare_rows(rows, dataset)
+        normalized = self.prepare_rows(rows, slice_spec)
         filtered = _apply_query(normalized.rows, query)
         self._last_scan_stats = {
             **normalized.stats,
@@ -130,16 +132,18 @@ class BuiltinDatasetProvider(CatalogDatasetProvider):
     def normalize_loaded_rows(
         self,
         rows: list[CatalogRow],
-        dataset: DatasetSpec,
+        dataset: object,
     ) -> CatalogNormalizedRows:
         return CatalogNormalizedRows(rows=[dict(row) for row in rows])
 
     def prepare_rows(
         self,
         rows: list[CatalogRow],
-        dataset: DatasetSpec,
+        dataset_or_slice: object,
     ) -> CatalogNormalizedRows:
-        return _normalize_rows_for_provider(rows, dataset, self.normalize_loaded_rows)
+        return _normalize_rows_for_provider(
+            rows, dataset_or_slice, self.normalize_loaded_rows
+        )
 
 
 class BuiltinMCQDatasetProvider(BuiltinDatasetProvider):
@@ -155,7 +159,7 @@ class BuiltinMCQDatasetProvider(BuiltinDatasetProvider):
     def normalize_loaded_rows(
         self,
         rows: list[CatalogRow],
-        dataset: DatasetSpec,
+        dataset: object,
     ) -> CatalogNormalizedRows:
         return _normalize_mcq_rows(rows, dataset, metadata_keys=self._metadata_keys)
 
@@ -372,12 +376,13 @@ def _apply_dataset_transforms(
 
 def _normalize_rows_for_provider(
     rows: list[CatalogRow],
-    dataset: DatasetSpec,
+    dataset_or_slice: object,
     row_normalizer: CatalogRowNormalizer | None,
 ) -> CatalogNormalizedRows:
+    dataset = getattr(dataset_or_slice, "dataset", dataset_or_slice)
     assigned = _assign_missing_item_ids(rows)
     normalized = (
-        row_normalizer(assigned, dataset)
+        row_normalizer(assigned, dataset_or_slice)
         if row_normalizer is not None
         else CatalogNormalizedRows(rows=assigned)
     )

@@ -9,7 +9,11 @@ from .apex_2025 import DEFINITION as APEX_2025_DEFINITION
 from .beyond_aime import DEFINITION as BEYOND_AIME_DEFINITION
 from .encyclo_k import DEFINITION as ENCYCLO_K_DEFINITION
 from .healthbench import DEFINITION as HEALTHBENCH_DEFINITION
-from .hle import DEFINITION as HLE_DEFINITION
+from .hle import (
+    DEFINITION as HLE_DEFINITION,
+    build_hle_definition,
+    supported_hle_variant_ids,
+)
 from .hmmt_feb_2025 import DEFINITION as HMMT_FEB_2025_DEFINITION
 from .hmmt_nov_2025 import DEFINITION as HMMT_NOV_2025_DEFINITION
 from .imo_answerbench import DEFINITION as IMO_ANSWERBENCH_DEFINITION
@@ -45,6 +49,45 @@ def list_catalog_benchmarks() -> list[str]:
 
 def get_catalog_benchmark(name: str) -> BenchmarkDefinition:
     normalized = name.strip().lower().replace("-", "_")
+    if normalized == "hle":
+        supported = ", ".join(supported_hle_variant_ids())
+        raise ValueError(
+            "Built-in benchmark 'hle' requires explicit HLE variants. "
+            f"Supported variants: {supported}. "
+            "Examples: hle:text_only, hle:no_tool, hle:text_only,no_tool."
+        )
+    if normalized.startswith("hle:"):
+        raw_variant_ids = [
+            part.strip() for part in normalized.split(":", 1)[1].split(",")
+        ]
+        if not raw_variant_ids or any(not part for part in raw_variant_ids):
+            raise ValueError(
+                "Built-in benchmark 'hle' requires one or more HLE variant ids after ':'."
+            )
+        supported_variant_ids = set(supported_hle_variant_ids())
+        duplicate_variant_ids = sorted(
+            {
+                variant_id
+                for variant_id in raw_variant_ids
+                if raw_variant_ids.count(variant_id) > 1
+            }
+        )
+        if duplicate_variant_ids:
+            raise ValueError(
+                "Built-in benchmark 'hle' received duplicate HLE variant ids: "
+                + ", ".join(duplicate_variant_ids)
+            )
+        unknown_variant_ids = sorted(
+            variant_id
+            for variant_id in raw_variant_ids
+            if variant_id not in supported_variant_ids
+        )
+        if unknown_variant_ids:
+            raise ValueError(
+                "Built-in benchmark 'hle' received unknown HLE variant ids: "
+                + ", ".join(unknown_variant_ids)
+            )
+        return build_hle_definition(raw_variant_ids)
     if normalized not in _CATALOG_BENCHMARKS:
         raise ValueError(
             "Unknown built-in benchmark. Choose one of: "

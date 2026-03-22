@@ -234,37 +234,66 @@ def summarize_healthbench(_definition, result) -> JSONDict:
 
 
 def summarize_hle(_definition, result) -> JSONDict:
-    rows = iter_score_rows(result, "hle_accuracy")
-    count = len(rows)
-    accuracy = sum(row.score for row in rows) / count if count else 0.0
-    confidence_interval_half_width = (
-        1.96 * math.sqrt(accuracy * (1 - accuracy) / count) if count else 0.0
-    )
-    confidences = [
-        max(
-            0.0,
-            min(1.0, _coerce_score_float(row.details.get("confidence"), 100.0) / 100.0),
+    variant_ids = _hle_variant_ids(_definition)
+    if len(variant_ids) == 1:
+        summary = _summarize_hle_variant(
+            iter_score_rows(result, "hle_accuracy"),
+            scan_stats=_detail_mapping(
+                getattr(result, "_builtin_scan_stats", {}) or {}
+            ),
         )
-        for row in rows
-    ]
-    truths = [float(bool(row.details.get("correct", False))) for row in rows]
-    calibration_error = hle_calibration_error(
-        confidences=confidences,
-        truths=truths,
-        accuracy=accuracy,
-    )
+        return _json_dict(
+            {
+                "metric_id": "hle_accuracy",
+                **summary,
+            },
+            label="hle summary",
+        )
+    rows = iter_score_rows(result, "hle_accuracy")
+    summaries_by_trial_hash = {}
+    if hasattr(result, "iter_trial_summaries"):
+        summaries_by_trial_hash = {
+            row.trial_hash: row
+            for row in result.iter_trial_summaries()  # type: ignore[attr-defined]
+        }
+    grouped_rows: dict[str, list[ScoreRow]] = {
+        variant_id: [] for variant_id in variant_ids
+    }
+    for row in rows:
+        summary_row = summaries_by_trial_hash.get(row.trial_hash)
+        variant_id = None
+        if summary_row is not None and hasattr(summary_row, "dimensions"):
+            dimensions = getattr(summary_row, "dimensions", {}) or {}
+            if isinstance(dimensions, dict):
+                candidate = dimensions.get("hle_variant")
+                if isinstance(candidate, str):
+                    variant_id = candidate
+        if variant_id is None and hasattr(summary_row, "slice_id"):
+            slice_id = getattr(summary_row, "slice_id", None)
+            if isinstance(slice_id, str) and slice_id.startswith("hle-"):
+                variant_id = slice_id.removeprefix("hle-")
+        if variant_id is None:
+            prompt_variant_id = getattr(row, "prompt_variant_id", None)
+            if isinstance(prompt_variant_id, str) and prompt_variant_id.startswith(
+                "hle-"
+            ):
+                variant_id = prompt_variant_id.removeprefix("hle-").removesuffix(
+                    "-default"
+                )
+        if variant_id in grouped_rows:
+            grouped_rows[variant_id].append(row)
     scan_stats = _detail_mapping(getattr(result, "_builtin_scan_stats", {}) or {})
     return _json_dict(
         {
             "metric_id": "hle_accuracy",
-            "count": count,
-            "accuracy": accuracy,
-            "confidence_interval_half_width": confidence_interval_half_width,
-            "calibration_error": calibration_error,
-            "skipped_image_count": _coerce_score_int(
-                scan_stats.get("skipped_image_count"),
-                0,
-            ),
+            "variant_ids": variant_ids,
+            "variants": {
+                variant_id: _summarize_hle_variant(
+                    grouped_rows[variant_id],
+                    scan_stats=_detail_mapping(scan_stats.get(variant_id, {}) or {}),
+                )
+                for variant_id in variant_ids
+            },
         },
         label="hle summary",
     )
@@ -668,7 +697,7 @@ def build_hle_benchmark(
     definition: BenchmarkDefinition,
     config: BenchmarkDefinitionConfig,
 ) -> BenchmarkSpec:
-    prompt_variant_id = f"{definition.benchmark_id}-default"
+    variant_ids = _hle_variant_ids(definition)
     return BenchmarkSpec(
         benchmark_id=definition.benchmark_id,
         models=[
@@ -680,7 +709,7 @@ def build_hle_benchmark(
         ],
         slices=[
             SliceSpec(
-                slice_id=definition.benchmark_id,
+                slice_id=f"hle-{variant_id}",
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
                     dataset_id=_catalog_metadata_str(definition, "dataset_id"),
@@ -693,30 +722,28 @@ def build_hle_benchmark(
                         ),
                         JinjaTransform(
                             field="prompt_text",
-                            template=(
-                                "Your response should be in the following format:\n"
-                                "Explanation: your explanation for your answer choice\n"
-                                "Answer: your chosen answer\n"
-                                "Confidence: your confidence score between 0% and 100% "
-                                "for your answer\n\nQuestion:\n{question}"
-                            ),
+                            template=_hle_prompt_template(variant_id),
                         ),
                     ],
                 ),
                 dataset_query=make_dataset_query(config),
-                prompt_variant_ids=[prompt_variant_id],
+                dimensions={"hle_variant": variant_id},
+                prompt_variant_ids=[f"hle-{variant_id}-default"],
                 generation=GenerationSpec(),
                 scores=[ScoreSpec(name="judge", metrics=["hle_accuracy"])],
             )
+            for variant_id in variant_ids
         ],
         prompt_variants=[
             PromptVariantSpec(
-                id=prompt_variant_id,
-                family=definition.benchmark_id,
+                id=f"hle-{variant_id}-default",
+                family="hle",
+                variables={"hle_variant": variant_id},
                 messages=[
                     PromptMessage(role=PromptRole.USER, content="{item.prompt_text}")
                 ],
             )
+            for variant_id in variant_ids
         ],
         inference_grid=InferenceGridSpec(
             params=[
@@ -728,6 +755,70 @@ def build_hle_benchmark(
                 )
             ]
         ),
+    )
+
+
+def _hle_variant_ids(definition: BenchmarkDefinition) -> list[str]:
+    metadata = _catalog_metadata(definition)
+    value = metadata.get("variant_ids")
+    if isinstance(value, list):
+        variant_ids = [str(item) for item in value if str(item)]
+        if variant_ids:
+            return variant_ids
+    raise ValueError(
+        "Built-in benchmark 'hle' requires explicit HLE variants in the benchmark id."
+    )
+
+
+def _hle_prompt_template(variant_id: str) -> str:
+    preamble = ""
+    if variant_id == "no_tool":
+        preamble = "Do not use tools. Answer directly from the provided context.\n\n"
+    return (
+        f"{preamble}"
+        "Your response should be in the following format:\n"
+        "Explanation: your explanation for your answer choice\n"
+        "Answer: your chosen answer\n"
+        "Confidence: your confidence score between 0% and 100% "
+        "for your answer\n\nQuestion:\n{question}"
+    )
+
+
+def _summarize_hle_variant(
+    rows: list[ScoreRow],
+    *,
+    scan_stats: JSONDict,
+) -> JSONDict:
+    count = len(rows)
+    accuracy = sum(row.score for row in rows) / count if count else 0.0
+    confidence_interval_half_width = (
+        1.96 * math.sqrt(accuracy * (1 - accuracy) / count) if count else 0.0
+    )
+    confidences = [
+        max(
+            0.0,
+            min(1.0, _coerce_score_float(row.details.get("confidence"), 100.0) / 100.0),
+        )
+        for row in rows
+    ]
+    truths = [float(bool(row.details.get("correct", False))) for row in rows]
+    calibration_error = hle_calibration_error(
+        confidences=confidences,
+        truths=truths,
+        accuracy=accuracy,
+    )
+    return _json_dict(
+        {
+            "count": count,
+            "accuracy": accuracy,
+            "confidence_interval_half_width": confidence_interval_half_width,
+            "calibration_error": calibration_error,
+            "skipped_image_count": _coerce_score_int(
+                scan_stats.get("skipped_image_count"),
+                0,
+            ),
+        },
+        label="hle summary",
     )
 
 

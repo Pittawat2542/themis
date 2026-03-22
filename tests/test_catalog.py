@@ -31,7 +31,7 @@ from themis.types.json_types import JSONDict
 
 
 class _StubProjectionRepo:
-    def __init__(self, score_rows: list[ScoreRow]) -> None:
+    def __init__(self, score_rows: list[object]) -> None:
         self._score_rows = list(score_rows)
 
     def iter_candidate_scores(
@@ -54,14 +54,21 @@ class _StubProjectionRepo:
 class _StubResult:
     def __init__(
         self,
-        score_rows: list[ScoreRow],
+        score_rows: list[object],
         *,
         scan_stats: dict[str, object] | None = None,
+        trial_summaries: list[object] | None = None,
     ) -> None:
         self.projection_repo = _StubProjectionRepo(score_rows)
-        self.trial_hashes = sorted({row.trial_hash for row in score_rows})
+        self.trial_hashes = sorted(
+            {str(getattr(row, "trial_hash")) for row in score_rows}
+        )
         self.active_evaluation_hash = None
         self._builtin_scan_stats = dict(scan_stats or {})
+        self._trial_summaries = list(trial_summaries or [])
+
+    def iter_trial_summaries(self):
+        yield from self._trial_summaries
 
 
 def _row_mapping(value: object) -> dict[str, object]:
@@ -198,7 +205,7 @@ def test_math_benchmark_builders_use_expected_dataset_defaults(
 
 @pytest.mark.parametrize(
     "benchmark_id",
-    ["simpleqa_verified", "healthbench", "lpfqa", "hle"],
+    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only"],
 )
 def test_judge_backed_benchmark_builders_require_explicit_judge_config(
     benchmark_id: str,
@@ -259,7 +266,7 @@ def test_render_preview_formats_mcq_prompt_from_fixture_sample() -> None:
 
 
 def test_render_preview_formats_hle_prompt_without_template_errors() -> None:
-    definition = catalog.get_catalog_benchmark("hle")
+    definition = catalog.get_catalog_benchmark("hle:text_only")
 
     preview = definition.render_preview(
         model_id="demo-model",
@@ -272,6 +279,75 @@ def test_render_preview_formats_hle_prompt_without_template_errors() -> None:
     assert "Explanation:" in content
     assert "Answer:" in content
     assert "Confidence:" in content
+
+
+def test_get_catalog_benchmark_requires_explicit_hle_variants() -> None:
+    with pytest.raises(ValueError, match="explicit HLE variants"):
+        catalog.get_catalog_benchmark("hle")
+
+
+def test_get_catalog_benchmark_accepts_encoded_hle_variant_ids() -> None:
+    definition = catalog.get_catalog_benchmark("hle:text_only,no_tool")
+
+    assert definition.benchmark_id == "hle:text_only,no_tool"
+    assert definition.metadata["variant_ids"] == ["text_only", "no_tool"]
+
+
+def test_get_catalog_benchmark_rejects_unknown_hle_variant_ids() -> None:
+    with pytest.raises(ValueError, match="unknown HLE variant"):
+        catalog.get_catalog_benchmark("hle:missing")
+
+
+def test_get_catalog_benchmark_rejects_duplicate_hle_variant_ids() -> None:
+    with pytest.raises(ValueError, match="duplicate HLE variant"):
+        catalog.get_catalog_benchmark("hle:text_only,text_only")
+
+
+def test_hle_build_benchmark_emits_separate_slices_and_prompt_variants_per_variant() -> (
+    None
+):
+    definition = catalog.get_catalog_benchmark("hle:text_only,no_tool")
+
+    benchmark = definition.build_benchmark(
+        model_id="demo-model",
+        provider="demo",
+        judge_model_id="judge-model",
+        judge_provider="demo",
+    )
+
+    assert benchmark.benchmark_id == "hle:text_only,no_tool"
+    assert [slice_spec.slice_id for slice_spec in benchmark.slices] == [
+        "hle-text_only",
+        "hle-no_tool",
+    ]
+    assert [slice_spec.prompt_variant_ids for slice_spec in benchmark.slices] == [
+        ["hle-text_only-default"],
+        ["hle-no_tool-default"],
+    ]
+    assert [slice_spec.dimensions for slice_spec in benchmark.slices] == [
+        {"hle_variant": "text_only"},
+        {"hle_variant": "no_tool"},
+    ]
+    assert [variant.id for variant in benchmark.prompt_variants] == [
+        "hle-text_only-default",
+        "hle-no_tool-default",
+    ]
+
+
+def test_hle_preview_renders_one_entry_per_selected_variant() -> None:
+    definition = catalog.get_catalog_benchmark("hle:text_only,no_tool")
+
+    preview = definition.render_preview(
+        model_id="demo-model",
+        provider="demo",
+        judge_model_id="judge-model",
+        judge_provider="demo",
+    )
+
+    assert [entry["prompt_variant_id"] for entry in preview] == [
+        "hle-text_only-default",
+        "hle-no_tool-default",
+    ]
 
 
 def test_render_preview_formats_math_prompt_with_boxed_answer_instruction() -> None:
@@ -419,7 +495,7 @@ def test_build_catalog_registry_registers_multiple_providers() -> None:
             "themis.catalog.benchmarks.lpfqa.metric",
         ),
         (
-            "hle",
+            "hle:text_only",
             "HLEJudgeMetric",
             "themis.catalog.benchmarks.hle.metric",
         ),
@@ -482,7 +558,7 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
             "themis.catalog.benchmarks.lpfqa.dataset",
         ),
         (
-            "hle",
+            "hle:text_only",
             "BuiltinHLEDatasetProvider",
             "themis.catalog.benchmarks.hle.dataset",
         ),
@@ -538,7 +614,7 @@ def test_builtin_benchmarks_use_benchmark_specific_dataset_providers(
 
 @pytest.mark.parametrize(
     "benchmark_id",
-    ["simpleqa_verified", "healthbench", "lpfqa", "hle"],
+    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only"],
 )
 def test_specialized_dataset_providers_inline_their_own_implementation(
     benchmark_id: str,
@@ -615,7 +691,7 @@ def test_healthbench_summary_reports_mean_score_and_tag_breakdowns() -> None:
 
 
 def test_hle_summary_reports_accuracy_ci_calibration_and_skipped_images() -> None:
-    definition = catalog.get_catalog_benchmark("hle")
+    definition = catalog.get_catalog_benchmark("hle:text_only")
     rows = [
         ScoreRow(
             trial_hash="trial-1",
@@ -644,6 +720,94 @@ def test_hle_summary_reports_accuracy_ci_calibration_and_skipped_images() -> Non
     assert confidence_interval_half_width > 0.0
     assert summary["calibration_error"] == pytest.approx(0.3)
     assert summary["skipped_image_count"] == 4
+
+
+def test_hle_summary_groups_multi_variant_runs_by_variant() -> None:
+    definition = catalog.get_catalog_benchmark("hle:text_only,no_tool")
+    rows = [
+        SimpleNamespace(
+            trial_hash="trial-1",
+            candidate_id="cand-1",
+            metric_id="hle_accuracy",
+            score=1.0,
+            details={"correct": True, "confidence": 100},
+        ),
+        SimpleNamespace(
+            trial_hash="trial-2",
+            candidate_id="cand-2",
+            metric_id="hle_accuracy",
+            score=0.0,
+            details={"correct": False, "confidence": 20},
+        ),
+    ]
+
+    summary = definition.summarize_result(
+        _StubResult(
+            rows,
+            trial_summaries=[
+                SimpleNamespace(
+                    trial_hash="trial-1",
+                    slice_id="hle-text_only",
+                    dimensions={"hle_variant": "text_only"},
+                ),
+                SimpleNamespace(
+                    trial_hash="trial-2",
+                    slice_id="hle-no_tool",
+                    dimensions={"hle_variant": "no_tool"},
+                ),
+            ],
+        )
+    )
+
+    assert summary["variant_ids"] == ["text_only", "no_tool"]
+    assert summary["variants"]["text_only"]["accuracy"] == pytest.approx(1.0)
+    assert summary["variants"]["no_tool"]["accuracy"] == pytest.approx(0.0)
+
+
+def test_hle_dataset_provider_applies_text_only_variant_filtering() -> None:
+    definition = catalog.get_catalog_benchmark("hle:text_only")
+    provider = definition.build_dataset_provider()
+    slice_spec = DatasetSliceSpec(
+        benchmark_id="hle:text_only",
+        slice_id="hle-text_only",
+        dimensions={"hle_variant": "text_only"},
+        dataset=DatasetSpec(source=DatasetSource.HUGGINGFACE, dataset_id="cais/hle"),
+    )
+
+    rows = provider.prepare_rows(
+        [
+            {"id": "hle-1", "question": "Text row", "answer": "4", "image": ""},
+            {"id": "hle-2", "question": "Image row", "answer": "5", "image": "img"},
+        ],
+        slice_spec,
+    )
+
+    assert [row["item_id"] for row in rows.rows] == ["hle-1"]
+    assert rows.stats["skipped_image_count"] == 1
+    assert rows.rows[0]["metadata"] == {"hle_variant": "text_only", "text_only": "true"}
+
+
+def test_hle_dataset_provider_keeps_image_rows_for_no_tool_variant() -> None:
+    definition = catalog.get_catalog_benchmark("hle:no_tool")
+    provider = definition.build_dataset_provider()
+    slice_spec = DatasetSliceSpec(
+        benchmark_id="hle:no_tool",
+        slice_id="hle-no_tool",
+        dimensions={"hle_variant": "no_tool"},
+        dataset=DatasetSpec(source=DatasetSource.HUGGINGFACE, dataset_id="cais/hle"),
+    )
+
+    rows = provider.prepare_rows(
+        [
+            {"id": "hle-1", "question": "Text row", "answer": "4", "image": ""},
+            {"id": "hle-2", "question": "Image row", "answer": "5", "image": "img"},
+        ],
+        slice_spec,
+    )
+
+    assert [row["item_id"] for row in rows.rows] == ["hle-1", "hle-2"]
+    assert rows.stats["skipped_image_count"] == 0
+    assert rows.rows[1]["metadata"] == {"hle_variant": "no_tool"}
 
 
 def test_inspect_huggingface_dataset_uses_loader_hooks_for_schema_and_samples() -> None:
@@ -753,7 +917,10 @@ def test_math_equivalence_metric_returns_install_hint_when_optional_dependency_m
 
 def test_catalog_preview_rows_are_available_for_all_builtin_benchmarks() -> None:
     for benchmark_id in catalog.list_catalog_benchmarks():
-        definition = catalog.get_catalog_benchmark(benchmark_id)
+        resolved_benchmark_id = (
+            "hle:text_only" if benchmark_id == "hle" else benchmark_id
+        )
+        definition = catalog.get_catalog_benchmark(resolved_benchmark_id)
         assert definition.preview_rows_loader is not None
         rows = definition.preview_rows_loader(definition)
         assert rows
