@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from themis import BenchmarkDefinition
-from themis.specs.foundational import DatasetSpec
 
 from ...common import (
     build_math_benchmark,
@@ -21,7 +20,7 @@ class BuiltinIMOAnswerBenchDatasetProvider(BuiltinDatasetProvider):
     def normalize_loaded_rows(
         self,
         rows: list[dict[str, object]],
-        dataset: DatasetSpec,
+        dataset: object,
     ) -> CatalogNormalizedRows:
         return _normalize_imo_answerbench_rows(rows, dataset)
 

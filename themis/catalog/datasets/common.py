@@ -380,6 +380,8 @@ def _normalize_rows_for_provider(
     row_normalizer: CatalogRowNormalizer | None,
 ) -> CatalogNormalizedRows:
     dataset = getattr(dataset_or_slice, "dataset", dataset_or_slice)
+    if not isinstance(dataset, DatasetSpec):
+        raise ValueError("Catalog dataset normalization requires a DatasetSpec.")
     assigned = _assign_missing_item_ids(rows)
     normalized = (
         row_normalizer(assigned, dataset_or_slice)
@@ -423,7 +425,7 @@ def _extract_lpfqa_reference_answer(text: str) -> str:
 
 def _normalize_mcq_rows(
     rows: list[CatalogRow],
-    dataset: DatasetSpec,
+    dataset: object,
     *,
     metadata_keys: list[str],
 ) -> CatalogNormalizedRows:
@@ -439,7 +441,7 @@ def _normalize_mcq_rows(
 
 def _normalize_simpleqa_rows(
     rows: list[CatalogRow],
-    dataset: DatasetSpec,
+    dataset: object,
 ) -> CatalogNormalizedRows:
     del dataset
     normalized: list[CatalogRow] = []
@@ -457,7 +459,7 @@ def _normalize_simpleqa_rows(
 
 def _normalize_healthbench_rows(
     rows: list[CatalogRow],
-    dataset: DatasetSpec,
+    dataset: object,
 ) -> CatalogNormalizedRows:
     del dataset
     normalized: list[CatalogRow] = []
@@ -483,7 +485,7 @@ def _normalize_healthbench_rows(
 
 def _normalize_lpfqa_rows(
     rows: list[CatalogRow],
-    dataset: DatasetSpec,
+    dataset: object,
 ) -> CatalogNormalizedRows:
     del dataset
     normalized: list[CatalogRow] = []
@@ -527,7 +529,7 @@ def _normalize_hle_rows(
 
 def _normalize_math_short_answer_rows(
     rows: list[CatalogRow],
-    dataset: DatasetSpec,
+    dataset: object,
 ) -> CatalogNormalizedRows:
     del dataset
     normalized: list[CatalogRow] = []
@@ -546,7 +548,7 @@ def _normalize_math_short_answer_rows(
 
 def _normalize_imo_answerbench_rows(
     rows: list[CatalogRow],
-    dataset: DatasetSpec,
+    dataset: object,
 ) -> CatalogNormalizedRows:
     del dataset
     normalized: list[CatalogRow] = []

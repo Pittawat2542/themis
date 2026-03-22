@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from themis.specs.foundational import DatasetSpec
-
 from ...datasets.common import (
     BuiltinDatasetProvider,
     CatalogNormalizedRows,
@@ -19,6 +17,6 @@ class BuiltinSimpleQAVerifiedDatasetProvider(BuiltinDatasetProvider):
     def normalize_loaded_rows(
         self,
         rows: list[dict[str, object]],
-        dataset: DatasetSpec,
+        dataset: object,
     ) -> CatalogNormalizedRows:
         return _normalize_simpleqa_rows(rows, dataset)
