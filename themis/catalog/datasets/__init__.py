@@ -13,15 +13,23 @@ from .encyclo_k import BuiltinEncycloKDatasetProvider
 from .healthbench import BuiltinHealthBenchDatasetProvider
 from .hle import BuiltinHLEDatasetProvider
 from .lpfqa import BuiltinLPFQADatasetProvider
+from .math import (
+    BuiltinBeyondAIMEDatasetProvider,
+    BuiltinIMOAnswerBenchDatasetProvider,
+    BuiltinMathArenaDatasetProvider,
+)
 from .mmlu_pro import BuiltinMMLUProDatasetProvider
 from .simpleqa_verified import BuiltinSimpleQAVerifiedDatasetProvider
 from .supergpqa import BuiltinSuperGPQADatasetProvider
 
 __all__ = [
     "BuiltinEncycloKDatasetProvider",
+    "BuiltinBeyondAIMEDatasetProvider",
     "BuiltinHealthBenchDatasetProvider",
     "BuiltinHLEDatasetProvider",
+    "BuiltinIMOAnswerBenchDatasetProvider",
     "BuiltinLPFQADatasetProvider",
+    "BuiltinMathArenaDatasetProvider",
     "BuiltinMMLUProDatasetProvider",
     "BuiltinSimpleQAVerifiedDatasetProvider",
     "BuiltinSuperGPQADatasetProvider",

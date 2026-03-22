@@ -1,0 +1,15 @@
+{
+  "dataset_id": "MathArena/aime_2025",
+  "split": "train",
+  "gated": false,
+  "modalities": ["text"],
+  "samples": [
+    {
+      "problem_idx": 2,
+      "problem": "Compute 3 + 3.",
+      "answer": "6",
+      "problem_type": ["Algebra"],
+      "source": "fixture"
+    }
+  ]
+}

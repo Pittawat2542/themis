@@ -71,6 +71,9 @@ datasets = [
 extractors = [
     "jsonschema>=4.0.0",
 ]
+math = [
+    "math-verify[antlr4_13_2]>=0.7.0",
+]
 providers-openai = [
     "openai>=1.0.0",
 ]
@@ -99,7 +102,7 @@ storage-postgres = [
     "psycopg[binary]>=3.2.0",
 ]
 all = [
-    "themis-eval[compression,datasets,docs,extractors,providers-openai,providers-litellm,providers-vllm,stats,telemetry,storage-postgres]",
+    "themis-eval[compression,datasets,docs,extractors,math,providers-openai,providers-litellm,providers-vllm,stats,telemetry,storage-postgres]",
 ]
 
 [tool.pytest.ini_options]

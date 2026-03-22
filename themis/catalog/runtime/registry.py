@@ -12,6 +12,7 @@ from .engines.common import DemoEngine, OpenAIChatEngine, OpenAICompatibleChatEn
 from .metrics.common import (
     ChoiceAccuracyMetric,
     ExactMatchMetric,
+    MathEquivalenceMetric,
     NormalizedExactMatchMetric,
     NumericExactMatchMetric,
 )
@@ -22,6 +23,7 @@ _SHARED_METRIC_FACTORIES: dict[str, type[Metric]] = {
     "normalized_exact_match": cast(type[Metric], NormalizedExactMatchMetric),
     "choice_accuracy": cast(type[Metric], ChoiceAccuracyMetric),
     "numeric_exact_match": cast(type[Metric], NumericExactMatchMetric),
+    "math_equivalence": cast(type[Metric], MathEquivalenceMetric),
 }
 
 _ENGINE_REGISTRATIONS: dict[str, tuple[type[InferenceEngine], EngineCapabilities]] = {

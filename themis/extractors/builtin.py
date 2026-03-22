@@ -42,10 +42,48 @@ _JSON_FENCE_PATTERN = re.compile(
     r"```(?:json)?\s*(?P<payload>.+?)\s*```",
     re.IGNORECASE | re.DOTALL,
 )
+_ANSWER_LINE_PATTERN = re.compile(
+    r"(?im)^\s*answer\s*:\s*(?P<value>.+?)\s*$",
+)
 
 
 def _last_boxed_text(text: str) -> str | None:
-    matches = _BOXED_PATTERN.findall(text)
+    matches: list[str] = []
+    index = 0
+    lowered = text.casefold()
+    while True:
+        start = lowered.find("\\boxed", index)
+        if start < 0:
+            break
+        cursor = start + len("\\boxed")
+        while cursor < len(text) and text[cursor].isspace():
+            cursor += 1
+        if cursor >= len(text) or text[cursor] != "{":
+            index = cursor
+            continue
+        depth = 0
+        content_start = cursor + 1
+        for cursor in range(cursor, len(text)):
+            char = text[cursor]
+            if char == "{":
+                depth += 1
+                continue
+            if char != "}":
+                continue
+            depth -= 1
+            if depth == 0:
+                matches.append(text[content_start:cursor].strip())
+                index = cursor + 1
+                break
+        else:
+            break
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def _last_answer_line_text(text: str) -> str | None:
+    matches = _ANSWER_LINE_PATTERN.findall(text)
     if not matches:
         return None
     return matches[-1].strip()
@@ -299,6 +337,23 @@ class NormalizedTextExtractor:
         cfg = dict(config or {})
         source = _last_boxed_text(_raw_text(candidate)) or _raw_text(candidate)
         return _success("normalized_text", candidate, cfg, _normalize_text(source))
+
+
+class MathAnswerExtractor:
+    """Extract a math final answer from boxed text, answer lines, or raw text."""
+
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, JSONValueType] | None = None,
+    ) -> ExtractionRecord:
+        """Extract the most likely final-answer span for short-answer math tasks."""
+        del trial
+        cfg = dict(config or {})
+        text = _raw_text(candidate)
+        parsed = _last_boxed_text(text) or _last_answer_line_text(text) or text.strip()
+        return _success("math_answer", candidate, cfg, parsed)
 
 
 class ChoiceLetterExtractor:

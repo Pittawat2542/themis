@@ -67,3 +67,19 @@ def test_init_generates_builtin_benchmark_scaffold(tmp_path: Path) -> None:
     assert "get_catalog_benchmark" in dataset_module
     assert "THEMIS_CATALOG_BENCHMARK" in (project_root / ".env.example").read_text()
     assert "themis report" in readme
+
+
+def test_init_generates_math_builtin_benchmark_scaffold(tmp_path: Path) -> None:
+    project_root = tmp_path / "starter_eval"
+
+    assert main(["init", str(project_root), "--benchmark", "aime_2026"]) == 0
+
+    benchmark_module = (
+        project_root / "starter_eval" / "benchmarks" / "default.py"
+    ).read_text()
+    dataset_module = (
+        project_root / "starter_eval" / "datasets" / "builtin.py"
+    ).read_text()
+
+    assert "aime_2026" in benchmark_module
+    assert "get_catalog_benchmark" in dataset_module

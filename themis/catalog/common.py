@@ -467,6 +467,10 @@ def summarize_mcq(definition, result) -> JSONDict:
     return mean_summary(definition.metric_id, result)
 
 
+def summarize_math(definition, result) -> JSONDict:
+    return mean_summary(definition.metric_id, result)
+
+
 def summarize_lpfqa(definition, result) -> JSONDict:
     return mean_summary(definition.metric_id, result)
 
@@ -500,6 +504,28 @@ def mcq_dataset_spec(
                     "Return the best option letter only."
                 ),
             ),
+        ],
+    )
+
+
+def math_dataset_spec(
+    definition: CatalogBenchmarkDefinition,
+    config: CatalogBenchmarkRuntimeConfig,
+) -> DatasetSpec:
+    return DatasetSpec(
+        source=DatasetSource.HUGGINGFACE,
+        dataset_id=definition.dataset_id,
+        split=definition.split,
+        revision=config.dataset_revision,
+        transforms=[
+            JinjaTransform(
+                field="prompt_text",
+                template=(
+                    "Solve the following math problem. "
+                    "Return only the final answer in \\boxed{{...}}.\n\n"
+                    "Problem:\n{problem}"
+                ),
+            )
         ],
     )
 
@@ -550,6 +576,64 @@ def build_mcq_benchmark(
                         name="default",
                         parse="parsed",
                         metrics=["choice_accuracy"],
+                    )
+                ],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id=prompt_variant_id,
+                family=definition.benchmark_id,
+                messages=[
+                    PromptMessage(role=PromptRole.USER, content="{item.prompt_text}")
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(
+            params=[
+                InferenceParamsSpec(
+                    max_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    seed=config.seed,
+                )
+            ]
+        ),
+    )
+
+
+def build_math_benchmark(
+    definition: CatalogBenchmarkDefinition,
+    config: CatalogBenchmarkRuntimeConfig,
+) -> BenchmarkSpec:
+    prompt_variant_id = f"{definition.benchmark_id}-default"
+    return BenchmarkSpec(
+        benchmark_id=definition.benchmark_id,
+        models=[
+            ModelSpec(
+                model_id=config.model_id,
+                provider=config.provider,
+                extras=_runtime._provider_model_extras(config.provider),
+            )
+        ],
+        slices=[
+            SliceSpec(
+                slice_id=definition.benchmark_id,
+                dataset=math_dataset_spec(definition, config),
+                dataset_query=make_dataset_query(config),
+                prompt_variant_ids=[prompt_variant_id],
+                generation=GenerationSpec(),
+                parses=[
+                    ParseSpec(
+                        name="parsed",
+                        extractors=[ExtractorRefSpec(id="math_answer")],
+                    )
+                ],
+                scores=[
+                    ScoreSpec(
+                        name="default",
+                        parse="parsed",
+                        metrics=["math_equivalence"],
                     )
                 ],
             )
@@ -816,6 +900,16 @@ def register_mcq(
     del config
     if not registry.has_metric("choice_accuracy"):
         registry.register_metric("choice_accuracy", _runtime.ChoiceAccuracyMetric)
+
+
+def register_math(
+    _definition,
+    registry: PluginRegistry,
+    config: CatalogBenchmarkRuntimeConfig,
+) -> None:
+    del config
+    if not registry.has_metric("math_equivalence"):
+        registry.register_metric("math_equivalence", _runtime.MathEquivalenceMetric)
 
 
 def register_simpleqa(

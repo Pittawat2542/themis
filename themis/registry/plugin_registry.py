@@ -383,6 +383,7 @@ class PluginRegistry:
             EmbeddedJsonExtractor,
             FirstNumberExtractor,
             JsonSchemaExtractor,
+            MathAnswerExtractor,
             NormalizedTextExtractor,
             RegexExtractor,
         )
@@ -408,6 +409,12 @@ class PluginRegistry:
         self.register_extractor(
             "normalized_text",
             NormalizedTextExtractor,
+            version="1.0.0",
+            plugin_api="1.0",
+        )
+        self.register_extractor(
+            "math_answer",
+            MathAnswerExtractor,
             version="1.0.0",
             plugin_api="1.0",
         )

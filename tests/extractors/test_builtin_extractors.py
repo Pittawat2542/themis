@@ -125,6 +125,7 @@ def test_registry_ships_builtin_extractors():
     assert registry.has_extractor("choice_letter")
     assert registry.has_extractor("boxed_text")
     assert registry.has_extractor("normalized_text")
+    assert registry.has_extractor("math_answer")
 
 
 def test_regex_extractor_parses_configured_capture_group():
@@ -227,6 +228,42 @@ def test_normalized_text_extractor_cleans_whitespace_and_punctuation():
 
     assert extraction.success is True
     assert extraction.parsed_answer == "the answer"
+
+
+def test_math_answer_extractor_prefers_last_boxed_answer() -> None:
+    extractor = PluginRegistry().get_extractor("math_answer")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate("scratch \\boxed{1} but final answer is \\boxed{\\frac{3}{2}}"),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == "\\frac{3}{2}"
+
+
+def test_math_answer_extractor_falls_back_to_answer_line() -> None:
+    extractor = PluginRegistry().get_extractor("math_answer")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate("Reasoning here.\nAnswer: 17\nConfidence: 90%"),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == "17"
+
+
+def test_math_answer_extractor_falls_back_to_trimmed_raw_text() -> None:
+    extractor = PluginRegistry().get_extractor("math_answer")
+    extraction = extractor.extract(
+        _trial(),
+        _candidate("   x^2 + 1   "),
+        {},
+    )
+
+    assert extraction.success is True
+    assert extraction.parsed_answer == "x^2 + 1"
 
 
 def test_json_schema_extractor_returns_install_hint_when_optional_dependency_is_missing(

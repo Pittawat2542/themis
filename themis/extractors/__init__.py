@@ -5,6 +5,7 @@ from themis.extractors.builtin import (
     ChoiceLetterExtractor,
     EmbeddedJsonExtractor,
     FirstNumberExtractor,
+    MathAnswerExtractor,
     NormalizedTextExtractor,
     JsonSchemaExtractor,
     RegexExtractor,
@@ -18,6 +19,7 @@ __all__ = [
     "FirstNumberExtractor",
     "ChoiceLetterExtractor",
     "BoxedTextExtractor",
+    "MathAnswerExtractor",
     "NormalizedTextExtractor",
     "extract_embedded_json_payload",
 ]

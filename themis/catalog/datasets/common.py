@@ -288,6 +288,7 @@ def inspect_huggingface_dataset(
             "fields": _infer_field_types(rows),
             "row_count": len(rows),
             "samples": _json_rows(rows[:max_samples], label="catalog dataset samples"),
+            **_suggest_dataset_wiring(rows),
         },
         label="catalog dataset inspection",
     )
@@ -389,7 +390,10 @@ def _metadata_dict(payload: CatalogRow, keys: list[str]) -> dict[str, str]:
     for key in keys:
         value = payload.get(key)
         if value is not None:
-            metadata[key] = str(value)
+            if isinstance(value, list):
+                metadata[key] = ", ".join(str(item) for item in value)
+            else:
+                metadata[key] = str(value)
     return metadata
 
 
@@ -514,6 +518,51 @@ def _normalize_hle_rows(
         rows=normalized,
         stats={"skipped_image_count": skipped},
     )
+
+
+def _normalize_math_short_answer_rows(
+    rows: list[CatalogRow],
+    dataset: DatasetSpec,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        payload["item_id"] = str(payload.get("problem_idx", payload.get("item_id", "")))
+        payload["problem"] = str(payload.get("problem", ""))
+        payload["answer"] = str(payload.get("answer", "")).strip()
+        payload["metadata"] = _metadata_dict(
+            payload,
+            ["problem_idx", "problem_type", "source"],
+        )
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
+def _normalize_imo_answerbench_rows(
+    rows: list[CatalogRow],
+    dataset: DatasetSpec,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        payload["item_id"] = str(payload.get("Problem ID", payload.get("item_id", "")))
+        payload["problem"] = str(payload.get("Problem", payload.get("problem", "")))
+        payload["answer"] = str(
+            payload.get("Short Answer", payload.get("answer", ""))
+        ).strip()
+        metadata: dict[str, str] = {}
+        for source_key, target_key in (
+            ("Category", "category"),
+            ("Subcategory", "subcategory"),
+            ("Source", "source"),
+        ):
+            if payload.get(source_key) is not None:
+                metadata[target_key] = str(payload[source_key])
+        payload["metadata"] = metadata
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
 
 
 def _prompt_messages_from_payload(payload: CatalogRow) -> list[CatalogPromptMessage]:
@@ -658,6 +707,66 @@ def _infer_field_types(rows: list[CatalogRow]) -> JSONDict:
                 continue
             field_types[key] = type(value).__name__
     return validate_json_dict(field_types, label="catalog dataset fields")
+
+
+def _suggest_dataset_wiring(rows: list[CatalogRow]) -> JSONDict:
+    if not rows:
+        return validate_json_dict(
+            {
+                "suggested_prompt_field": None,
+                "suggested_answer_field": None,
+                "suggested_item_id_field": None,
+                "suggested_metadata_keys": [],
+            },
+            label="catalog dataset suggestions",
+        )
+    row = rows[0]
+    field_names = {str(key) for key in row}
+    prompt_field = _first_present_field(
+        field_names,
+        ["problem", "question", "prompt", "Problem"],
+    )
+    answer_field = _first_present_field(
+        field_names,
+        ["answer", "expected", "Short Answer", "answer_letter"],
+    )
+    item_id_field = _first_present_field(
+        field_names,
+        ["problem_idx", "Problem ID", "item_id", "id", "question_id", "prompt_id"],
+    )
+    ignored = {
+        prompt_field,
+        answer_field,
+        item_id_field,
+        "item_id",
+        "__index_level_0__",
+    }
+    metadata_keys: list[str] = []
+    for key, value in row.items():
+        normalized_key = str(key)
+        if normalized_key in ignored or value is None:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            metadata_keys.append(normalized_key)
+            continue
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            metadata_keys.append(normalized_key)
+    return validate_json_dict(
+        {
+            "suggested_prompt_field": prompt_field,
+            "suggested_answer_field": answer_field,
+            "suggested_item_id_field": item_id_field,
+            "suggested_metadata_keys": metadata_keys,
+        },
+        label="catalog dataset suggestions",
+    )
+
+
+def _first_present_field(field_names: set[str], candidates: list[str]) -> str | None:
+    for candidate in candidates:
+        if candidate in field_names:
+            return candidate
+    return None
 
 
 def _json_rows(rows: list[CatalogRow], *, label: str) -> list[JSONDict]:

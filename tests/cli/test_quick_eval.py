@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from themis.errors import ThemisError
 from themis.cli.main import main
 from themis.types.enums import ErrorCode
@@ -321,3 +323,84 @@ def test_quick_eval_benchmark_requires_explicit_judge_config(
     )
 
     assert "judge" in capsys.readouterr().err.lower()
+
+
+def test_quick_eval_openai_compatible_uses_env_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from themis.cli import quick_eval as quick_eval_cli
+
+    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "http://127.0.0.1:1234/v1")
+
+    extras = quick_eval_cli._provider_model_extras("openai_compatible")
+
+    assert extras["base_url"] == "http://127.0.0.1:1234/v1"
+
+
+def test_quick_eval_math_benchmark_preview_uses_boxed_answer_prompt(capsys) -> None:
+    assert (
+        main(
+            [
+                "quick-eval",
+                "benchmark",
+                "--benchmark",
+                "aime_2026",
+                "--model",
+                "demo-model",
+                "--provider",
+                "demo",
+                "--preview",
+                "--format",
+                "json",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["mode"] == "benchmark"
+    assert payload["benchmark"] == "aime_2026"
+    assert "\\boxed{" in payload["preview"][0]["messages"][0]["content"]
+
+
+def test_quick_eval_math_benchmark_estimate_uses_builtin_dataset_loader(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    import themis.catalog as catalog_module
+
+    monkeypatch.setattr(
+        catalog_module,
+        "load_huggingface_rows",
+        lambda dataset_id, split, revision: [
+            {"problem_idx": 1, "problem": "2 + 2", "answer": "4"},
+            {"problem_idx": 2, "problem": "3 + 3", "answer": "6"},
+            {"problem_idx": 3, "problem": "4 + 4", "answer": "8"},
+        ],
+    )
+
+    assert (
+        main(
+            [
+                "quick-eval",
+                "benchmark",
+                "--benchmark",
+                "aime_2026",
+                "--model",
+                "demo-model",
+                "--provider",
+                "demo",
+                "--subset",
+                "2",
+                "--estimate-only",
+                "--format",
+                "json",
+                "--storage-root",
+                str(tmp_path / "benchmark-estimate-math"),
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["benchmark"] == "aime_2026"
+    assert payload["estimate"]["trial_count"] == 2

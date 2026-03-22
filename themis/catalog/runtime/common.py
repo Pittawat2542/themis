@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from time import perf_counter
 from typing import Literal, cast
@@ -198,7 +199,10 @@ def _provider_model_extras(provider: str) -> JSONDict:
     normalized = _normalize_provider_name(provider)
     if normalized == "openai_compatible":
         return {
-            "base_url": "http://127.0.0.1:8000/v1",
+            "base_url": os.getenv(
+                "OPENAI_COMPAT_BASE_URL",
+                "http://127.0.0.1:8000/v1",
+            ),
             "timeout_seconds": 60.0,
         }
     return {}

@@ -3,6 +3,7 @@
 from .common import (
     ChoiceAccuracyMetric,
     ExactMatchMetric,
+    MathEquivalenceMetric,
     NormalizedExactMatchMetric,
     NumericExactMatchMetric,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "HealthBenchRubricMetric",
     "HLEJudgeMetric",
     "LPFQAJudgeMetric",
+    "MathEquivalenceMetric",
     "NormalizedExactMatchMetric",
     "NumericExactMatchMetric",
     "SimpleQAVerifiedJudgeMetric",

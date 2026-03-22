@@ -16,7 +16,11 @@ def _parse_args() -> argparse.Namespace:
             "Inspect a Hugging Face dataset for Themis catalog benchmark wiring."
         )
     )
-    parser.add_argument("dataset_id", help="Hugging Face dataset repo id.")
+    parser.add_argument(
+        "dataset_specs",
+        nargs="+",
+        help="One or more dataset repo ids, optionally as dataset_id:split.",
+    )
     parser.add_argument(
         "--split",
         default="test",
@@ -43,13 +47,19 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
-    summary = inspect_huggingface_dataset(
-        args.dataset_id,
-        split=args.split,
-        revision=args.revision,
-        max_samples=args.samples,
-    )
-    rendered = json.dumps(summary, indent=2, sort_keys=True)
+    summaries: list[dict[str, object]] = []
+    for dataset_spec in args.dataset_specs:
+        dataset_id, split = _parse_dataset_spec(dataset_spec, default_split=args.split)
+        summaries.append(
+            inspect_huggingface_dataset(
+                dataset_id,
+                split=split,
+                revision=args.revision,
+                max_samples=args.samples,
+            )
+        )
+    payload: object = summaries[0] if len(summaries) == 1 else summaries
+    rendered = json.dumps(payload, indent=2, sort_keys=True)
     print(rendered)
 
     if args.save:
@@ -57,6 +67,17 @@ def main() -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(rendered + "\n")
     return 0
+
+
+def _parse_dataset_spec(spec: str, *, default_split: str) -> tuple[str, str]:
+    if ":" not in spec:
+        return spec, default_split
+    dataset_id, split = spec.rsplit(":", maxsplit=1)
+    if not dataset_id or not split:
+        raise ValueError(
+            "Dataset specs must use dataset_id or dataset_id:split format."
+        )
+    return dataset_id, split
 
 
 if __name__ == "__main__":

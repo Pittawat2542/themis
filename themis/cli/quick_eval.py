@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import re
 from typing import Annotated, Any, Literal
@@ -607,7 +608,10 @@ def _build_inline_rows(
 def _provider_model_extras(provider: str) -> JSONDict:
     if provider == "openai_compatible":
         return {
-            "base_url": "http://127.0.0.1:8000/v1",
+            "base_url": os.getenv(
+                "OPENAI_COMPAT_BASE_URL",
+                "http://127.0.0.1:8000/v1",
+            ),
             "timeout_seconds": 60.0,
         }
     return {}

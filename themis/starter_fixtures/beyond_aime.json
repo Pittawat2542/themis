@@ -1,0 +1,14 @@
+{
+  "dataset_id": "ByteDance-Seed/BeyondAIME",
+  "split": "test",
+  "gated": false,
+  "modalities": ["text"],
+  "samples": [
+    {
+      "item_id": "beyond-aime-1",
+      "problem": "What is 7 times 6?",
+      "answer": "42",
+      "source": "fixture"
+    }
+  ]
+}

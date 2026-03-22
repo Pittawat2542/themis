@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 import inspect
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -11,7 +12,13 @@ import themis.catalog as catalog
 from themis import DatasetQuerySpec
 from themis.benchmark.specs import DatasetSliceSpec
 from themis.catalog.datasets import common as dataset_common
-from themis.catalog.datasets.common import _normalize_healthbench_rows
+from themis.catalog.datasets.common import (
+    _normalize_healthbench_rows,
+    _normalize_imo_answerbench_rows,
+    _normalize_math_short_answer_rows,
+)
+from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
+from themis.errors import ThemisError
 from themis.catalog.runtime.common import _build_judge_spec
 from themis.specs.foundational import (
     DatasetSpec,
@@ -19,7 +26,7 @@ from themis.specs.foundational import (
     PythonTransform,
     RenameFieldTransform,
 )
-from themis.types.enums import DatasetSource
+from themis.types.enums import DatasetSource, ErrorCode
 from themis.types.events import ScoreRow
 from themis.types.json_types import JSONDict
 
@@ -77,9 +84,16 @@ def _first_preview_message(preview: Sequence[JSONDict]) -> dict[str, object]:
 
 def test_public_catalog_lists_requested_benchmarks() -> None:
     assert set(catalog.list_catalog_benchmarks()) == {
+        "aime_2025",
+        "aime_2026",
+        "apex_2025",
+        "beyond_aime",
         "encyclo_k",
         "healthbench",
         "hle",
+        "hmmt_feb_2025",
+        "hmmt_nov_2025",
+        "imo_answerbench",
         "lpfqa",
         "mmlu_pro",
         "simpleqa_verified",
@@ -96,6 +110,20 @@ def test_builtin_runtime_defaults_use_8192_generator_tokens() -> None:
     )
 
     assert config.max_tokens == 8192
+
+
+def test_openai_compatible_benchmarks_use_env_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "http://127.0.0.1:1234/v1")
+    definition = catalog.get_catalog_benchmark("aime_2026")
+
+    benchmark = definition.build_benchmark(
+        model_id="demo-model",
+        provider="openai_compatible",
+    )
+
+    assert benchmark.models[0].extras["base_url"] == "http://127.0.0.1:1234/v1"
 
 
 def test_builtin_judge_spec_defaults_use_8192_tokens() -> None:
@@ -129,6 +157,34 @@ def test_mcq_benchmark_builders_use_expected_dataset_defaults(
     assert benchmark.slices[0].dataset.split == split
     assert benchmark.slices[0].parses[0].extractors[0].id == "choice_letter"
     assert benchmark.slices[0].scores[0].metrics == ["choice_accuracy"]
+
+
+@pytest.mark.parametrize(
+    ("benchmark_id", "dataset_id", "split"),
+    [
+        ("aime_2026", "MathArena/aime_2026", "train"),
+        ("aime_2025", "MathArena/aime_2025", "train"),
+        ("hmmt_feb_2025", "MathArena/hmmt_feb_2025", "train"),
+        ("hmmt_nov_2025", "MathArena/hmmt_nov_2025", "train"),
+        ("apex_2025", "MathArena/apex_2025", "train"),
+        ("beyond_aime", "ByteDance-Seed/BeyondAIME", "test"),
+        ("imo_answerbench", "Hwilner/imo-answerbench", "train"),
+    ],
+)
+def test_math_benchmark_builders_use_expected_dataset_defaults(
+    benchmark_id: str,
+    dataset_id: str,
+    split: str,
+) -> None:
+    definition = catalog.get_catalog_benchmark(benchmark_id)
+
+    benchmark = definition.build_benchmark(model_id="demo-model", provider="demo")
+
+    assert benchmark.benchmark_id == benchmark_id
+    assert benchmark.slices[0].dataset.dataset_id == dataset_id
+    assert benchmark.slices[0].dataset.split == split
+    assert benchmark.slices[0].parses[0].extractors[0].id == "math_answer"
+    assert benchmark.slices[0].scores[0].metrics == ["math_equivalence"]
 
 
 @pytest.mark.parametrize(
@@ -209,6 +265,16 @@ def test_render_preview_formats_hle_prompt_without_template_errors() -> None:
     assert "Confidence:" in content
 
 
+def test_render_preview_formats_math_prompt_with_boxed_answer_instruction() -> None:
+    definition = catalog.get_catalog_benchmark("aime_2026")
+
+    preview = definition.render_preview(model_id="demo-model", provider="demo")
+
+    content = str(_first_preview_message(preview)["content"])
+    assert "Problem:" in content
+    assert "\\boxed{" in content
+
+
 def test_starter_dataset_provider_applies_supported_dataset_transforms() -> None:
     provider = catalog.CatalogDatasetProvider(
         memory_rows=[{"question": "2 + 2", "answer": "4"}]
@@ -260,12 +326,67 @@ def test_starter_dataset_provider_rejects_python_dataset_transforms() -> None:
         list(provider.scan(slice_spec, DatasetQuerySpec()))
 
 
+def test_math_short_answer_row_normalizer_maps_matharena_fields() -> None:
+    normalized = _normalize_math_short_answer_rows(
+        [
+            {
+                "problem_idx": 4,
+                "problem": "Find x.",
+                "answer": 17,
+                "problem_type": ["Algebra"],
+                "source": "fixture",
+            }
+        ],
+        DatasetSpec(source=DatasetSource.HUGGINGFACE, dataset_id="MathArena/aime_2026"),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    metadata = _row_mapping(row["metadata"])
+
+    assert row["item_id"] == "4"
+    assert row["problem"] == "Find x."
+    assert row["answer"] == "17"
+    assert metadata["problem_idx"] == "4"
+    assert metadata["problem_type"] == "Algebra"
+    assert metadata["source"] == "fixture"
+
+
+def test_math_short_answer_row_normalizer_maps_imo_answerbench_fields() -> None:
+    normalized = _normalize_imo_answerbench_rows(
+        [
+            {
+                "Problem ID": "imo-1",
+                "Problem": "Prove something.",
+                "Short Answer": "\\frac{3}{2}",
+                "Category": "Geometry",
+                "Subcategory": "3d_geometry",
+                "Source": "Sharygin 2008",
+            }
+        ],
+        DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="Hwilner/imo-answerbench",
+        ),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    metadata = _row_mapping(row["metadata"])
+
+    assert row["item_id"] == "imo-1"
+    assert row["problem"] == "Prove something."
+    assert row["answer"] == "\\frac{3}{2}"
+    assert metadata["category"] == "Geometry"
+    assert metadata["subcategory"] == "3d_geometry"
+    assert metadata["source"] == "Sharygin 2008"
+
+
 def test_build_catalog_registry_registers_multiple_providers() -> None:
     registry = catalog.build_catalog_registry(["demo", "openai"])
 
     assert registry.has_inference_engine("demo")
     assert registry.has_inference_engine("openai")
     assert registry.has_metric("choice_accuracy")
+    assert registry.has_metric("math_equivalence")
     assert inspect.isclass(registry.get_metric_registration("choice_accuracy").factory)
     assert inspect.isclass(registry.get_inference_engine_registration("demo").factory)
 
@@ -354,6 +475,41 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
             "hle",
             "BuiltinHLEDatasetProvider",
             "themis.catalog.datasets.hle",
+        ),
+        (
+            "aime_2026",
+            "BuiltinMathArenaDatasetProvider",
+            "themis.catalog.datasets.math",
+        ),
+        (
+            "aime_2025",
+            "BuiltinMathArenaDatasetProvider",
+            "themis.catalog.datasets.math",
+        ),
+        (
+            "hmmt_feb_2025",
+            "BuiltinMathArenaDatasetProvider",
+            "themis.catalog.datasets.math",
+        ),
+        (
+            "hmmt_nov_2025",
+            "BuiltinMathArenaDatasetProvider",
+            "themis.catalog.datasets.math",
+        ),
+        (
+            "apex_2025",
+            "BuiltinMathArenaDatasetProvider",
+            "themis.catalog.datasets.math",
+        ),
+        (
+            "beyond_aime",
+            "BuiltinBeyondAIMEDatasetProvider",
+            "themis.catalog.datasets.math",
+        ),
+        (
+            "imo_answerbench",
+            "BuiltinIMOAnswerBenchDatasetProvider",
+            "themis.catalog.datasets.math",
         ),
     ],
 )
@@ -505,6 +661,84 @@ def test_inspect_huggingface_dataset_uses_loader_hooks_for_schema_and_samples() 
     assert fields["question"] == "str"
     assert isinstance(samples, list)
     assert len(samples) == 2
+    assert summary["suggested_prompt_field"] == "question"
+    assert summary["suggested_answer_field"] == "answer"
+    assert summary["suggested_item_id_field"] is None
+    assert summary["suggested_metadata_keys"] == []
+
+
+def test_inspect_huggingface_dataset_emits_math_wiring_hints() -> None:
+    summary = catalog.inspect_huggingface_dataset(
+        "MathArena/aime_2026",
+        split="train",
+        metadata_loader=lambda dataset_id, revision: {
+            "dataset_id": dataset_id,
+            "gated": False,
+            "splits": ["train"],
+            "modalities": ["text"],
+        },
+        row_loader=lambda dataset_id, split, revision: [
+            {
+                "problem_idx": 1,
+                "problem": "Find x.",
+                "answer": "42",
+                "problem_type": ["Algebra"],
+            }
+        ],
+    )
+
+    assert summary["suggested_prompt_field"] == "problem"
+    assert summary["suggested_answer_field"] == "answer"
+    assert summary["suggested_item_id_field"] == "problem_idx"
+    assert summary["suggested_metadata_keys"] == ["problem_type"]
+
+
+def test_math_equivalence_metric_scores_equivalent_answers(monkeypatch) -> None:
+    metric = MathEquivalenceMetric()
+
+    fake_math_verify = SimpleNamespace(
+        parse=lambda value: f"parsed:{value}",
+        verify=lambda gold, answer: gold == "parsed:0.5" and answer == "parsed:1/2",
+    )
+    monkeypatch.setattr(
+        "themis.catalog.runtime.metrics.common.import_optional",
+        lambda module_name, *, extra: fake_math_verify,
+    )
+    candidate = SimpleNamespace(
+        best_extraction=lambda: SimpleNamespace(success=True, parsed_answer="1/2")
+    )
+
+    score = metric.score(None, candidate, {"expected": "0.5"})
+
+    assert score.metric_id == "math_equivalence"
+    assert score.value == 1.0
+    assert score.details["candidate_answer"] == "1/2"
+    assert score.details["gold_answer"] == "0.5"
+
+
+def test_math_equivalence_metric_returns_install_hint_when_optional_dependency_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    metric = MathEquivalenceMetric()
+
+    def _raise_missing_optional(module_name: str, *, extra: str):
+        raise ThemisError(
+            code=ErrorCode.MISSING_OPTIONAL_DEPENDENCY,
+            message=f'Install it with `uv add "themis-eval[{extra}]"`.',
+        )
+
+    monkeypatch.setattr(
+        "themis.catalog.runtime.metrics.common.import_optional",
+        _raise_missing_optional,
+    )
+    candidate = SimpleNamespace(
+        best_extraction=lambda: SimpleNamespace(success=True, parsed_answer="1/2")
+    )
+
+    score = metric.score(None, candidate, {"expected": "0.5"})
+
+    assert score.value == 0.0
+    assert score.error == 'Install it with `uv add "themis-eval[math]"`.'
 
 
 def test_catalog_fixtures_are_available_for_all_builtin_benchmarks() -> None:
