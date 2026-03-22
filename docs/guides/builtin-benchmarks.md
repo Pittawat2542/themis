@@ -33,8 +33,13 @@ Current builtin benchmarks:
 | `imo_answerbench` | Short-answer math | `math_equivalence` | No | `Hwilner/imo-answerbench` | `train` |
 | `lpfqa` | Judge-backed free-form QA | `lpfqa_score` | Yes | `m-a-p/LPFQA` | `train` |
 | `mmlu_pro` | Multiple choice | `choice_accuracy` | No | `TIGER-Lab/MMLU-Pro` | `test` |
+| `codeforces` | Code generation with sandboxed execution | `codeforces_pass_rate` | No | `open-r1/codeforces` (`verifiable-prompts`) | `test` |
 | `simpleqa_verified` | Judge-backed short answer | `simpleqa_verified_score` | Yes | `google/simpleqa-verified` | `eval` |
 | `supergpqa` | Multiple choice | `choice_accuracy` | No | `m-a-p/SuperGPQA` | `train` |
+
+For sandbox setup, backend selection, runtime environment variables, and
+current execution limitations for code-generation benchmarks, see
+[Run Code Benchmarks](code-benchmarks.md).
 
 Use `get_catalog_benchmark(...)` when you want to inspect or render one
 definition directly:
