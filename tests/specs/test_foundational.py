@@ -110,10 +110,12 @@ def test_mcp_server_spec_normalizes_blank_connection_targets() -> None:
 
 def test_mcp_server_spec_requires_explicit_require_approval() -> None:
     with pytest.raises(ValidationError, match="require_approval"):
-        McpServerSpec(
-            id="dice",
-            server_label="dice",
-            server_url="https://dmcp-server.deno.dev/sse",
+        McpServerSpec.model_validate(
+            {
+                "id": "dice",
+                "server_label": "dice",
+                "server_url": "https://dmcp-server.deno.dev/sse",
+            }
         )
 
 

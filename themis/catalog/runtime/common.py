@@ -621,15 +621,25 @@ def _response_token_usage(response: object) -> TokenUsage | None:
         and reasoning_tokens is None
     ):
         return None
-    prompt_value = int(prompt_tokens or 0)
-    completion_value = int(completion_tokens or 0)
-    total_value = int(total_tokens or (prompt_value + completion_value))
+    prompt_value = _coerce_usage_int(prompt_tokens) or 0
+    completion_value = _coerce_usage_int(completion_tokens) or 0
+    total_value = _coerce_usage_int(total_tokens) or (prompt_value + completion_value)
     return TokenUsage(
         prompt_tokens=prompt_value,
         completion_tokens=completion_value,
         total_tokens=total_value,
-        reasoning_tokens=(None if reasoning_tokens is None else int(reasoning_tokens)),
+        reasoning_tokens=_coerce_usage_int(reasoning_tokens),
     )
+
+
+def _coerce_usage_int(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, str)):
+        return int(value)
+    return None
 
 
 def _response_mcp_tool_name(item: object) -> str:
