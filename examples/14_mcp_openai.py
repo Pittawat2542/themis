@@ -5,7 +5,6 @@ from pathlib import Path
 
 from themis import (
     BenchmarkSpec,
-    DatasetQuerySpec,
     ExecutionPolicySpec,
     InferenceGridSpec,
     InferenceParamsSpec,
@@ -66,7 +65,6 @@ def main() -> None:
             SliceSpec(
                 slice_id="dice-roll",
                 dataset=DatasetSpec(source=DatasetSource.MEMORY),
-                dataset_query=DatasetQuerySpec.subset(1, seed=23),
                 prompt_variant_ids=["mcp-default"],
                 generation=GenerationSpec(),
                 mcp_server_ids=["dice"],

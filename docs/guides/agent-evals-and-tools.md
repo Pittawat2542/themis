@@ -122,7 +122,7 @@ Use `McpServerSpec` when the provider can expose remote MCP tools directly to
 the model. This is separate from local `ToolSpec` handlers.
 
 - `ProjectSpec.mcp_servers` defines reusable base MCP servers
-- `BenchmarkSpec.mcp_servers` adds or overrides benchmark-local MCP servers by `id`
+- `BenchmarkSpec.mcp_servers` adds benchmark-local MCP server entries and only overrides `ProjectSpec.mcp_servers` when a server with the same `id` is declared; keep `ProjectSpec.mcp_servers` as the reusable base definition, and use `SliceSpec.mcp_server_ids` to select which MCP servers are exposed on each trial
 - `SliceSpec.mcp_server_ids` selects the exact MCP servers exposed on each trial
 
 ```python
