@@ -27,7 +27,7 @@ Current builtin benchmarks:
 | `beyond_aime` | Short-answer math | `math_equivalence` | No | `ByteDance-Seed/BeyondAIME` | `test` |
 | `encyclo_k` | Multiple choice | `choice_accuracy` | No | `m-a-p/Encyclo-K` | `test` |
 | `healthbench` | Rubric-scored response | `healthbench_score` | Yes | `openai/healthbench` | `test` |
-| `hle` | Judge-backed QA | `hle_accuracy` | Yes | `cais/hle` | `test` |
+| `hle:<variant>[,<variant>...]` | Judge-backed QA | `hle_accuracy` | Yes | `cais/hle` | `test` |
 | `hmmt_feb_2025` | Short-answer math | `math_equivalence` | No | `MathArena/hmmt_feb_2025` | `train` |
 | `hmmt_nov_2025` | Short-answer math | `math_equivalence` | No | `MathArena/hmmt_nov_2025` | `train` |
 | `imo_answerbench` | Short-answer math | `math_equivalence` | No | `Hwilner/imo-answerbench` | `train` |
@@ -46,6 +46,12 @@ definition = get_catalog_benchmark("mmlu_pro")
 preview = definition.render_preview(model_id="demo-model", provider="demo")
 print(preview[0]["messages"][0]["content"])
 ```
+
+HLE requires explicit variants in the benchmark id. Example ids:
+
+- `hle:text_only`
+- `hle:no_tool`
+- `hle:text_only,no_tool`
 
 Use `build_catalog_benchmark_project(...)` when you want the full runnable
 Python path for a builtin benchmark:
