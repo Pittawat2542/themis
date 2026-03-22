@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePath
 import re
 from typing import Annotated, Any, Literal
 
@@ -365,7 +365,7 @@ def _run_quick_eval(
             "provider": config.provider,
             "metric": config.metric,
             "prompt": config.prompt,
-            "storage_root": str(config.storage_root),
+            "storage_root": _format_display_path(config.storage_root),
         }
         if config.preview:
             preview = benchmark.preview(sample_rows[0])
@@ -382,7 +382,9 @@ def _run_quick_eval(
             group_by=["model_id", "slice_id", "metric_id", "prompt_variant_id"]
         )
         payload["rows"] = rows
-        payload["sqlite_db"] = str(config.storage_root / "themis.sqlite3")
+        payload["sqlite_db"] = _format_display_path(
+            config.storage_root / "themis.sqlite3"
+        )
         _emit_quick_eval_output(payload, format=config.format)
         return 0
     except Exception as exc:
@@ -425,7 +427,7 @@ def _run_builtin_benchmark(
             "model": config.model,
             "provider": config.provider,
             "metric": definition.primary_metric_id,
-            "storage_root": str(config.storage_root),
+            "storage_root": _format_display_path(config.storage_root),
         }
         if config.preview:
             payload["preview"] = definition.render_preview(
@@ -454,7 +456,9 @@ def _run_builtin_benchmark(
             group_by=["model_id", "slice_id", "metric_id", "prompt_variant_id"]
         )
         payload["summary"] = definition.summarize_result(result)
-        payload["sqlite_db"] = str(config.storage_root / "themis.sqlite3")
+        payload["sqlite_db"] = _format_display_path(
+            config.storage_root / "themis.sqlite3"
+        )
         _emit_quick_eval_output(payload, format=config.format)
         return 0
     except Exception as exc:
@@ -702,6 +706,10 @@ def _emit_quick_eval_error(exc: Exception) -> int:
 
 def _normalize_provider_name(provider: str) -> str:
     return provider.replace("-", "_")
+
+
+def _format_display_path(path: PurePath) -> str:
+    return path.as_posix()
 
 
 def _slugify(value: str) -> str:

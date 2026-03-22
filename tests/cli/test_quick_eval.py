@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
 from themis.errors import ThemisError
+from themis.cli import quick_eval as quick_eval_cli
 from themis.cli.main import main
 from themis.types.enums import ErrorCode
+
+
+def test_format_display_path_normalizes_windows_separators() -> None:
+    assert (
+        quick_eval_cli._format_display_path(
+            PureWindowsPath(r".cache\themis\quick-eval\inline-demo-model-exact-match")
+        )
+        == ".cache/themis/quick-eval/inline-demo-model-exact-match"
+    )
 
 
 def test_quick_eval_inline_preview_renders_default_prompt(
@@ -41,7 +51,7 @@ def test_quick_eval_inline_preview_renders_default_prompt(
     payload = json.loads(capsys.readouterr().out)
     assert payload["mode"] == "inline"
     assert payload["preview"][0]["messages"][0]["content"] == "2 + 2"
-    assert payload["storage_root"] == str(storage_root)
+    assert payload["storage_root"] == storage_root.as_posix()
 
 
 def test_quick_eval_file_run_emits_json_results(tmp_path: Path, capsys) -> None:
@@ -77,7 +87,7 @@ def test_quick_eval_file_run_emits_json_results(tmp_path: Path, capsys) -> None:
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["mode"] == "file"
-    assert payload["sqlite_db"] == str(storage_root / "themis.sqlite3")
+    assert payload["sqlite_db"] == (storage_root / "themis.sqlite3").as_posix()
     assert payload["rows"][0]["metric_id"] == "exact_match"
     assert payload["rows"][0]["mean"] == 1.0
     assert payload["rows"][0]["count"] == 2
