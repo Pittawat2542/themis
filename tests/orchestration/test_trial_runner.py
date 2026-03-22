@@ -1068,6 +1068,7 @@ def test_trial_runner_persists_rendered_follow_up_turns_in_prompt_payload(trial_
             {"messages": [{"role": "user", "content": "Continue with 42."}]}
         ],
         "tools": [],
+        "mcp_servers": [],
     }
 
 

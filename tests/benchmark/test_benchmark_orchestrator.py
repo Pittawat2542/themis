@@ -13,6 +13,7 @@ from themis import (
     ExecutionPolicySpec,
     InferenceGridSpec,
     InferenceParamsSpec,
+    McpServerSpec,
     ModelSpec,
     Orchestrator,
     PluginRegistry,
@@ -29,6 +30,7 @@ from themis.contracts.protocols import InferenceResult
 from themis.contracts.protocols import RenderedPrompt
 from themis.orchestration.run_manifest import RunHandle
 from themis.records import InferenceRecord, MetricScore
+from themis.registry.plugin_registry import EngineCapabilities
 from themis.specs.experiment import RuntimeContext
 from themis.specs.foundational import DatasetSpec, GenerationSpec
 from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
@@ -537,6 +539,131 @@ def test_pre_inference_hook_can_mutate_tools_without_losing_follow_up_turns(
     assert seen["engine_tool_ids"] == ["search"]
     assert seen["engine_follow_up_turns"] == 1
     assert seen["engine_tool_handler_keys"] == ["search"]
+
+
+def test_pre_inference_hook_can_mutate_mcp_servers_without_losing_tools(
+    tmp_path: Path,
+) -> None:
+    seen: dict[str, object] = {}
+
+    class FilteringHook:
+        def pre_inference(self, trial, prompt: RenderedPrompt) -> RenderedPrompt:
+            del trial
+            seen["hook_mcp_server_ids"] = [server.id for server in prompt.mcp_servers]
+            seen["hook_tool_ids"] = [tool.id for tool in prompt.tools]
+            return prompt.model_copy(
+                update={
+                    "mcp_servers": [
+                        server for server in prompt.mcp_servers if server.id == "dice"
+                    ]
+                }
+            )
+
+        def post_inference(self, trial, result):
+            return result
+
+        def pre_extraction(self, trial, candidate):
+            return candidate
+
+        def post_extraction(self, trial, candidate):
+            return candidate
+
+        def pre_eval(self, trial, candidate):
+            return candidate
+
+        def post_eval(self, trial, candidate):
+            return candidate
+
+    class McpAwareEngine:
+        def infer(self, trial, context, runtime):
+            del context, runtime
+            seen["engine_mcp_server_ids"] = [server.id for server in trial.mcp_servers]
+            seen["engine_tool_ids"] = [tool.id for tool in trial.tools]
+            return InferenceResult(
+                inference=InferenceRecord(spec_hash="inf_mcp_hook", raw_text="4")
+            )
+
+    class RenderingMetric:
+        def score(self, trial, candidate, context):
+            del trial, candidate, context
+            return MetricScore(metric_id="exact_match", value=1.0)
+
+    project = _build_project(tmp_path).model_copy(
+        update={
+            "tools": [
+                ToolSpec(
+                    id="search",
+                    description="Project search",
+                    input_schema={"type": "object"},
+                )
+            ],
+            "mcp_servers": [
+                McpServerSpec(
+                    id="dice",
+                    server_label="dice",
+                    server_url="https://dmcp-server.deno.dev/sse",
+                )
+            ],
+        }
+    )
+    registry = PluginRegistry()
+    registry.register_inference_engine(
+        "openai",
+        McpAwareEngine(),
+        capabilities=EngineCapabilities(supports_mcp=True),
+    )
+    registry.register_metric("exact_match", RenderingMetric())
+    registry.register_hook("filtering", FilteringHook())
+    registry.register_tool("search", object())
+
+    orchestrator = Orchestrator.from_project_spec(
+        project,
+        registry=registry,
+        dataset_provider=DemoDatasetProvider(),
+    )
+    benchmark = BenchmarkSpec(
+        benchmark_id="tool-hook-benchmark",
+        models=[ModelSpec(model_id="demo-model", provider="openai")],
+        slices=[
+            SliceSpec(
+                slice_id="qa",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                dataset_query=DatasetQuerySpec.subset(1, seed=7),
+                prompt_variant_ids=["qa-default"],
+                generation=GenerationSpec(),
+                tool_ids=["search"],
+                mcp_server_ids=["dice", "calendar"],
+                scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="qa-default",
+                family="qa",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER, content="Solve: {item.question}"
+                    )
+                ],
+            )
+        ],
+        mcp_servers=[
+            McpServerSpec(
+                id="calendar",
+                server_label="google_calendar",
+                connector_id="connector_googlecalendar",
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=16)]),
+    )
+
+    result = orchestrator.run_benchmark(benchmark)
+
+    assert isinstance(result, BenchmarkResult)
+    assert seen["hook_mcp_server_ids"] == ["dice", "calendar"]
+    assert seen["hook_tool_ids"] == ["search"]
+    assert seen["engine_mcp_server_ids"] == ["dice"]
+    assert seen["engine_tool_ids"] == ["search"]
 
 
 def _build_project(tmp_path: Path) -> ProjectSpec:

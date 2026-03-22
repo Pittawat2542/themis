@@ -73,6 +73,7 @@ class ResolvedPipelineHooks:
             messages=list(trial.prompt.messages),
             follow_up_turns=list(trial.prompt.follow_up_turns),
             tools=list(trial.tools),
+            mcp_servers=list(trial.mcp_servers),
         )
         for hook in self.pre_inference:
             prompt = hook(trial, prompt)
@@ -86,6 +87,7 @@ class ResolvedPipelineHooks:
                     follow_up_turns=prompt.follow_up_turns,
                 ),
                 "tools": prompt.tools,
+                "mcp_servers": prompt.mcp_servers,
             }
         )
 

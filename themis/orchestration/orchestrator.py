@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from themis.benchmark.compiler import (
     compile_benchmark,
+    merge_mcp_server_specs,
     merge_tool_specs,
     normalize_benchmark_spec,
 )
@@ -716,10 +717,14 @@ class Orchestrator:
         source_spec: ExperimentSpec | BenchmarkSpec,
     ) -> _NormalizedSourceSpec:
         project_tools = self.project_spec.tools if self.project_spec is not None else []
+        project_mcp_servers = (
+            self.project_spec.mcp_servers if self.project_spec is not None else []
+        )
         if isinstance(source_spec, BenchmarkSpec):
             merged_benchmark = normalize_benchmark_spec(
                 source_spec,
                 project_tools=project_tools,
+                project_mcp_servers=project_mcp_servers,
             )
             return _NormalizedSourceSpec(
                 source_kind="benchmark",
@@ -728,7 +733,12 @@ class Orchestrator:
                 benchmark_spec=merged_benchmark,
             )
         merged_experiment = source_spec.model_copy(
-            update={"tools": merge_tool_specs(project_tools, list(source_spec.tools))}
+            update={
+                "tools": merge_tool_specs(project_tools, list(source_spec.tools)),
+                "mcp_servers": merge_mcp_server_specs(
+                    project_mcp_servers, list(source_spec.mcp_servers)
+                ),
+            }
         )
         return _NormalizedSourceSpec(
             source_kind="experiment",

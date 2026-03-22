@@ -28,7 +28,7 @@ from themis.specs.experiment import (
     StorageSpec,
 )
 from themis.registry.plugin_registry import EngineCapabilities, PluginRegistry
-from themis.specs.foundational import ModelSpec, ToolSpec
+from themis.specs.foundational import McpServerSpec, ModelSpec, ToolSpec
 
 __all__ = [
     "__version__",
@@ -52,6 +52,7 @@ __all__ = [
     "PromptMessage",
     "PromptTurnSpec",
     "InferenceParamsSpec",
+    "McpServerSpec",
     "ModelSpec",
     "ToolSpec",
     "EngineCapabilities",

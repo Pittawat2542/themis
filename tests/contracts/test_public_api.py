@@ -26,6 +26,7 @@ def test_specs_namespace_exposes_public_benchmark_models() -> None:
         "ParseSpec",
         "ScoreSpec",
         "ToolSpec",
+        "McpServerSpec",
         "DatasetSpec",
         "GenerationSpec",
         "JudgeInferenceSpec",

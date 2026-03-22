@@ -33,7 +33,7 @@ _ENGINE_REGISTRATIONS: dict[str, tuple[type[InferenceEngine], EngineCapabilities
     ),
     "openai": (
         cast(type[InferenceEngine], OpenAIChatEngine),
-        EngineCapabilities(supports_seed=True),
+        EngineCapabilities(supports_seed=True, supports_mcp=True),
     ),
     "openai_compatible": (
         cast(type[InferenceEngine], OpenAICompatibleChatEngine),

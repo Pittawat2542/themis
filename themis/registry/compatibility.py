@@ -163,6 +163,46 @@ def check_generation_trial(trial: TrialSpec, registry: PluginRegistry) -> list[I
             )
         )
 
+    if trial.mcp_servers and not engine_registration.capabilities.supports_mcp:
+        issues.append(
+            Issue(
+                code=ErrorCode.PLUGIN_INCOMPATIBLE.value,
+                path="mcp_servers",
+                message=(
+                    f"Provider '{trial.model.provider}' does not support MCP servers."
+                ),
+                suggestion="Remove MCP servers or switch to an MCP-capable provider.",
+            )
+        )
+
+    for index, server in enumerate(trial.mcp_servers):
+        if server.require_approval != "never":
+            issues.append(
+                Issue(
+                    code=ErrorCode.PLUGIN_INCOMPATIBLE.value,
+                    path=f"mcp_servers[{index}].require_approval",
+                    message=(
+                        "MCP servers that require approval are not supported for "
+                        "non-interactive evaluation runs."
+                    ),
+                    suggestion="Set require_approval='never' for evaluation runs.",
+                )
+            )
+
+    if (
+        trial.model.provider == "openai"
+        and trial.mcp_servers
+        and trial.prompt.follow_up_turns
+    ):
+        issues.append(
+            Issue(
+                code=ErrorCode.PLUGIN_INCOMPATIBLE.value,
+                path="prompt.follow_up_turns",
+                message=("OpenAI MCP runs do not support scripted follow-up turns."),
+                suggestion="Remove follow-up turns or disable MCP for this run.",
+            )
+        )
+
     estimator = engine_registration.prompt_token_estimator
     max_context_tokens = engine_registration.capabilities.max_context_tokens
     if estimator is not None and max_context_tokens is not None:
