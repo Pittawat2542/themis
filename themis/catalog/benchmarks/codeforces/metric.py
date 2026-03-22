@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import base64
 from dataclasses import dataclass
 import json
@@ -10,6 +11,7 @@ from typing import Protocol
 from urllib import request
 
 from themis.records import MetricScore
+from themis.types.json_validation import validate_json_dict
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,9 +191,28 @@ class SandboxFusionExecutor:
         )
 
 
-class CodeforcesExecutionMetric:
-    def __init__(self, executor: SandboxExecutor | None = None) -> None:
+class CodeExecutionMetric:
+    def __init__(
+        self,
+        *,
+        metric_id: str,
+        benchmark_name: str,
+        supported_languages: set[str],
+        supported_modes: set[str],
+        executor: SandboxExecutor | None = None,
+        checker_support_files: dict[str, str] | None = None,
+    ) -> None:
+        self._metric_id = metric_id
+        self._benchmark_name = benchmark_name
+        self._supported_languages = {
+            value.strip().lower() for value in supported_languages
+        }
+        self._supported_modes = {value.strip().lower() for value in supported_modes}
         self._executor = executor or _default_executor()
+        self._checker_support_files = {
+            str(name): str(content)
+            for name, content in (checker_support_files or {}).items()
+        }
 
     def score(self, trial, candidate, context):
         del trial
@@ -200,42 +221,96 @@ class CodeforcesExecutionMetric:
         if inference is not None and getattr(inference, "raw_text", None) is not None:
             code = str(inference.raw_text)
         language = str(context.get("language", "")).strip().lower()
-        input_mode = str(context.get("input_mode", "")).strip().lower()
+        execution_mode = (
+            str(context.get("execution_mode", context.get("input_mode", "")))
+            .strip()
+            .lower()
+        )
         tests = _normalize_tests(context.get("official_tests"))
         checker = _normalize_checker(context.get("generated_checker"))
+        checker_language = (
+            str(
+                context.get("checker_language", "python" if checker is not None else "")
+            )
+            .strip()
+            .lower()
+        )
+        checker_support_files = self._resolve_checker_support_files(context)
+        function_name = str(context.get("function_name", "")).strip() or None
         timeout_seconds = _coerce_float(context.get("time_limit"))
         memory_limit_mb = _coerce_float(context.get("memory_limit"))
         details: dict[str, object] = {
             "language": language,
-            "input_mode": input_mode,
+            "input_mode": execution_mode,
             "total_tests": len(tests),
             "passed_tests": 0,
             "used_checker": bool(checker),
         }
-        if input_mode != "stdio":
+        if execution_mode not in self._supported_modes:
             raise ValueError(
-                "codeforces only supports stdio rows during execution; "
-                f"got input_mode='{input_mode or '<missing>'}'."
+                f"{self._benchmark_name} only supports execution mode(s) "
+                f"{sorted(self._supported_modes)}; got "
+                f"input_mode='{execution_mode or '<missing>'}'."
             )
-        if language not in {"python", "cpp", "cplusplus"}:
+        if language not in self._supported_languages:
+            supported = "', '".join(sorted(self._supported_languages))
             raise ValueError(
-                "codeforces requires a supported language "
-                f"('python', 'cpp', or 'cplusplus'); got "
+                f"{self._benchmark_name} requires a supported language "
+                f"('{supported}'); got "
                 f"'{language or '<missing>'}'."
             )
         if not code.strip():
             details["error"] = "empty_candidate"
             return MetricScore(
-                metric_id="codeforces_pass_rate",
+                metric_id=self._metric_id,
                 value=0.0,
                 details=details,
                 error="Candidate output did not contain runnable code.",
             )
         if not tests:
             raise ValueError(
-                "codeforces requires official_tests for execution scoring."
+                f"{self._benchmark_name} requires official_tests for execution scoring."
             )
 
+        if execution_mode == "function":
+            if function_name is None:
+                raise ValueError(
+                    f"{self._benchmark_name} requires function_name for function-mode execution."
+                )
+            return self._score_function_mode(
+                code=code,
+                function_name=function_name,
+                tests=tests,
+                timeout_seconds=timeout_seconds,
+                memory_limit_mb=memory_limit_mb,
+                details=details,
+            )
+
+        return self._score_stdio_mode(
+            code=code,
+            language=language,
+            tests=tests,
+            checker=checker,
+            checker_language=checker_language,
+            checker_support_files=checker_support_files,
+            timeout_seconds=timeout_seconds,
+            memory_limit_mb=memory_limit_mb,
+            details=details,
+        )
+
+    def _score_stdio_mode(
+        self,
+        *,
+        code: str,
+        language: str,
+        tests: list[dict[str, str]],
+        checker: str | None,
+        checker_language: str,
+        checker_support_files: dict[str, str],
+        timeout_seconds: float | None,
+        memory_limit_mb: float | None,
+        details: dict[str, object],
+    ) -> MetricScore:
         passed = 0
         failures: list[dict[str, object]] = []
         for index, test_case in enumerate(tests, start=1):
@@ -256,20 +331,25 @@ class CodeforcesExecutionMetric:
                 )
                 continue
             if checker is not None:
+                checker_files = {
+                    _checker_filename(checker_language): checker,
+                    **checker_support_files,
+                    "input.txt": test_case["input"],
+                    "correct_output.txt": test_case["output"],
+                    "solution_output.txt": execution.stdout,
+                }
                 checker_result = self._executor.execute(
                     code=checker,
-                    language="python",
-                    files={
-                        "checker.py": checker,
-                        "input.txt": test_case["input"],
-                        "correct_output.txt": test_case["output"],
-                        "solution_output.txt": execution.stdout,
-                    },
+                    language=checker_language or "python",
+                    files=checker_files,
                     args=["input.txt", "correct_output.txt", "solution_output.txt"],
                     timeout_seconds=timeout_seconds,
                     memory_limit_mb=memory_limit_mb,
                 )
-                if checker_result.ok and _checker_passed(checker_result.stdout):
+                if _checker_succeeded(
+                    checker_result,
+                    checker_language=checker_language or "python",
+                ):
                     passed += 1
                     continue
                 failures.append(
@@ -299,10 +379,86 @@ class CodeforcesExecutionMetric:
         if failures:
             details["failures"] = failures[:3]
         return MetricScore(
-            metric_id="codeforces_pass_rate",
+            metric_id=self._metric_id,
             value=passed / total_tests if total_tests else 0.0,
-            details=details,
+            details=validate_json_dict(details, label="code execution score details"),
             error=None if passed == total_tests else "One or more tests failed.",
+        )
+
+    def _score_function_mode(
+        self,
+        *,
+        code: str,
+        function_name: str,
+        tests: list[dict[str, str]],
+        timeout_seconds: float | None,
+        memory_limit_mb: float | None,
+        details: dict[str, object],
+    ) -> MetricScore:
+        harness = _build_python_function_harness(code=code, function_name=function_name)
+        passed = 0
+        failures: list[dict[str, object]] = []
+        for index, test_case in enumerate(tests, start=1):
+            execution = self._executor.execute(
+                code=harness,
+                language="python",
+                stdin=test_case["input"],
+                timeout_seconds=timeout_seconds,
+                memory_limit_mb=memory_limit_mb,
+            )
+            if not execution.ok:
+                failures.append(
+                    {
+                        "test_index": index,
+                        "reason": "execution_failed",
+                        "message": execution.message or execution.stderr,
+                    }
+                )
+                continue
+            if _functional_output_matches(execution.stdout, test_case["output"]):
+                passed += 1
+                continue
+            failures.append(
+                {
+                    "test_index": index,
+                    "reason": "wrong_answer",
+                    "expected": test_case["output"],
+                    "actual": execution.stdout,
+                }
+            )
+
+        total_tests = len(tests)
+        details["passed_tests"] = passed
+        if failures:
+            details["failures"] = failures[:3]
+        return MetricScore(
+            metric_id=self._metric_id,
+            value=passed / total_tests if total_tests else 0.0,
+            details=validate_json_dict(details, label="code execution score details"),
+            error=None if passed == total_tests else "One or more tests failed.",
+        )
+
+    def _resolve_checker_support_files(
+        self,
+        context: dict[str, object],
+    ) -> dict[str, str]:
+        resolved = dict(self._checker_support_files)
+        custom_support_files = context.get("checker_support_files")
+        if isinstance(custom_support_files, dict):
+            for name, content in custom_support_files.items():
+                if isinstance(name, str):
+                    resolved[name] = str(content)
+        return resolved
+
+
+class CodeforcesExecutionMetric(CodeExecutionMetric):
+    def __init__(self, executor: SandboxExecutor | None = None) -> None:
+        super().__init__(
+            metric_id="codeforces_pass_rate",
+            benchmark_name="codeforces",
+            supported_languages={"python", "cpp", "cplusplus"},
+            supported_modes={"stdio"},
+            executor=executor,
         )
 
 
@@ -359,7 +515,11 @@ def _normalize_tests(value: object) -> list[dict[str, str]]:
         raw_input = entry.get("input")
         raw_output = entry.get("output")
         if isinstance(raw_input, str) and isinstance(raw_output, str):
-            tests.append({"input": raw_input, "output": raw_output})
+            payload = {"input": raw_input, "output": raw_output}
+            raw_testtype = entry.get("testtype")
+            if isinstance(raw_testtype, str) and raw_testtype.strip():
+                payload["testtype"] = raw_testtype.strip().lower()
+            tests.append(payload)
     return tests
 
 
@@ -381,6 +541,71 @@ def _checker_passed(stdout: str) -> bool:
         return float(candidate) > 0.0
     except ValueError:
         return candidate.lower() in {"ok", "pass", "passed", "true"}
+
+
+def _checker_succeeded(
+    result: SandboxExecutionResult,
+    *,
+    checker_language: str,
+) -> bool:
+    if not result.ok:
+        return False
+    normalized_language = checker_language.strip().lower()
+    if normalized_language in {"cpp", "cplusplus", "c++"}:
+        return True
+    if not result.stdout.strip():
+        return True
+    return _checker_passed(result.stdout)
+
+
+def _checker_filename(language: str) -> str:
+    normalized = language.strip().lower()
+    if normalized == "python":
+        return "checker.py"
+    return "checker.cpp"
+
+
+def _functional_output_matches(actual: str, expected: str) -> bool:
+    actual_value = _parse_python_literal_or_text(_normalize_output(actual))
+    expected_value = _parse_python_literal_or_text(_normalize_output(expected))
+    return actual_value == expected_value
+
+
+def _parse_python_literal_or_text(value: str) -> object:
+    if not value:
+        return ""
+    try:
+        return ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        return value
+
+
+def _build_python_function_harness(*, code: str, function_name: str) -> str:
+    return (
+        "import ast\n"
+        "import sys\n"
+        "from typing import *\n\n"
+        f"{code}\n\n"
+        "raw_input = sys.stdin.read().strip('\\n')\n"
+        "arg_lines = [] if raw_input == '' else raw_input.split('\\n')\n"
+        "args = []\n"
+        "for line in arg_lines:\n"
+        "    try:\n"
+        "        args.append(ast.literal_eval(line))\n"
+        "    except Exception:\n"
+        "        args.append(line)\n"
+        f"func_name = {function_name!r}\n"
+        "target = None\n"
+        "solution_cls = globals().get('Solution')\n"
+        "if isinstance(solution_cls, type) and hasattr(solution_cls, func_name):\n"
+        "    target = getattr(solution_cls(), func_name)\n"
+        "elif func_name in globals() and callable(globals()[func_name]):\n"
+        "    target = globals()[func_name]\n"
+        "if target is None:\n"
+        "    raise RuntimeError(f'Missing callable {func_name!r} in candidate code.')\n"
+        "result = target(*args)\n"
+        "print(repr(result))\n"
+    )
 
 
 def _coerce_float(value: object) -> float | None:

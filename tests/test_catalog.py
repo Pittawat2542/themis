@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import inspect
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -31,7 +31,7 @@ from themis.types.json_types import JSONDict
 
 
 class _StubProjectionRepo:
-    def __init__(self, score_rows: list[object]) -> None:
+    def __init__(self, score_rows: Sequence[Any]) -> None:
         self._score_rows = list(score_rows)
 
     def iter_candidate_scores(
@@ -54,10 +54,10 @@ class _StubProjectionRepo:
 class _StubResult:
     def __init__(
         self,
-        score_rows: list[object],
+        score_rows: Sequence[Any],
         *,
-        scan_stats: dict[str, object] | None = None,
-        trial_summaries: list[object] | None = None,
+        scan_stats: JSONDict | None = None,
+        trial_summaries: Sequence[Any] | None = None,
     ) -> None:
         self.projection_repo = _StubProjectionRepo(score_rows)
         self.trial_hashes = sorted(
@@ -92,17 +92,19 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
     assert set(catalog.list_catalog_benchmarks()) == {
         "aime_2025",
         "aime_2026",
+        "aethercode",
         "apex_2025",
         "beyond_aime",
+        "codeforces",
         "encyclo_k",
         "healthbench",
         "hle",
         "hmmt_feb_2025",
         "hmmt_nov_2025",
         "imo_answerbench",
+        "livecodebench",
         "lpfqa",
         "mmlu_pro",
-        "codeforces",
         "simpleqa_verified",
         "supergpqa",
     }
@@ -761,13 +763,14 @@ def test_hle_summary_groups_multi_variant_runs_by_variant() -> None:
     )
 
     assert summary["variant_ids"] == ["text_only", "no_tool"]
-    assert summary["variants"]["text_only"]["accuracy"] == pytest.approx(1.0)
-    assert summary["variants"]["no_tool"]["accuracy"] == pytest.approx(0.0)
+    variants = _json_mapping(summary["variants"])
+    assert _json_mapping(variants["text_only"])["accuracy"] == pytest.approx(1.0)
+    assert _json_mapping(variants["no_tool"])["accuracy"] == pytest.approx(0.0)
 
 
 def test_hle_dataset_provider_applies_text_only_variant_filtering() -> None:
     definition = catalog.get_catalog_benchmark("hle:text_only")
-    provider = definition.build_dataset_provider()
+    provider = cast(Any, definition.build_dataset_provider())
     slice_spec = DatasetSliceSpec(
         benchmark_id="hle:text_only",
         slice_id="hle-text_only",
@@ -790,7 +793,7 @@ def test_hle_dataset_provider_applies_text_only_variant_filtering() -> None:
 
 def test_hle_dataset_provider_keeps_image_rows_for_no_tool_variant() -> None:
     definition = catalog.get_catalog_benchmark("hle:no_tool")
-    provider = definition.build_dataset_provider()
+    provider = cast(Any, definition.build_dataset_provider())
     slice_spec = DatasetSliceSpec(
         benchmark_id="hle:no_tool",
         slice_id="hle-no_tool",

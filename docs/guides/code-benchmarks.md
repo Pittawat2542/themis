@@ -3,8 +3,21 @@
 Use this guide when a benchmark scores generated code by executing it against
 test cases inside a sandbox.
 
-The built-in example today is `codeforces`, which evaluates generated
-Python or C++ solutions from `open-r1/codeforces` against per-problem tests.
+The built-in code benchmarks today are:
+
+- `codeforces`
+- `aethercode`
+- `livecodebench`
+
+They all share the same local sandbox backends and execution runtime.
+
+## Benchmark Matrix
+
+| Benchmark | Dataset | Default slice | Default language | Execution modes |
+| --- | --- | --- | --- | --- |
+| `codeforces` | `open-r1/codeforces` | `verifiable-prompts` on `test` | Python or C++ (dataset-native) | `stdio` |
+| `aethercode` | `m-a-p/AetherCode` | `v1_2024` on `test` | C++17 | `stdio` with C++ special judges |
+| `livecodebench` | `livecodebench/code_generation_lite` | `release_v6` on `test` | Python 3 | `stdio` and function-call |
 
 ## What A Code Benchmark Needs
 
@@ -13,7 +26,7 @@ requirement:
 
 - a sandbox that can compile or run untrusted generated code
 
-For `codeforces`, Themis currently supports two local backends:
+For all built-in code benchmarks, Themis currently supports two local backends:
 
 - `piston`
 - `sandbox_fusion`
@@ -29,6 +42,10 @@ or:
 ```bash
 export THEMIS_CODEFORCES_SANDBOX=sandbox_fusion
 ```
+
+The environment variable names still use the historical `CODEFORCES` prefix for
+backward compatibility, but they now apply to `codeforces`, `aethercode`, and
+`livecodebench`.
 
 ## Backend Configuration
 
@@ -72,9 +89,9 @@ Override it with:
 export THEMIS_CODEFORCES_SANDBOX_FUSION_URL=http://localhost:8080
 ```
 
-Sandbox Fusion is also supported for `codeforces`. Themis sends stdin
-directly, base64-encodes staged files, and wraps checker execution so Python
-checkers still receive:
+Sandbox Fusion is also supported for all built-in code benchmarks. Themis sends
+stdin directly, base64-encodes staged files, and wraps checker execution so
+Python checkers still receive:
 
 ```text
 checker.py input.txt correct_output.txt solution_output.txt
@@ -82,10 +99,12 @@ checker.py input.txt correct_output.txt solution_output.txt
 
 semantics.
 
-## Current `codeforces` Behavior
+## Current Benchmark Behavior
 
-The built-in `codeforces` benchmark uses the
-`open-r1/codeforces` `verifiable-prompts` subset on the `test` split.
+### `codeforces`
+
+The built-in `codeforces` benchmark uses
+`open-r1/codeforces` `verifiable-prompts` on the `test` split.
 
 The dataset provider currently keeps only rows that are:
 
@@ -101,6 +120,31 @@ That means the current implementation intentionally skips:
 
 This keeps the benchmark behavior aligned with the currently supported sandbox
 contracts.
+
+### `aethercode`
+
+The built-in `aethercode` benchmark uses `m-a-p/AetherCode` subset `v1_2024`
+on the `test` split.
+
+- prompts ask for C++17 solutions
+- the provider keeps only rows with published test cases
+- C++ `testlib` special judges are staged automatically when a row includes a
+  checker
+
+The upstream `v1_2025` private set intentionally omits test cases, so the
+shipped builtin benchmark pins the public `v1_2024` subset.
+
+### `livecodebench`
+
+The built-in `livecodebench` benchmark uses
+`livecodebench/code_generation_lite` `release_v6` on the `test` split.
+
+- prompts ask for Python 3 solutions
+- `stdio` rows execute generated programs against decoded private tests
+- function-style rows execute generated Python callables against decoded private
+  tests
+- the loader reads the raw `test*.jsonl` release files directly because the
+  dataset repository ships a custom loading script
 
 ## Minimal CLI Flow
 
@@ -121,7 +165,7 @@ For a real run, use a provider-backed model and set the sandbox backend first:
 export THEMIS_CODEFORCES_SANDBOX=piston
 
 themis quick-eval benchmark \
-  --benchmark codeforces \
+  --benchmark livecodebench \
   --model your-model \
   --provider openai_compatible \
   --format json
@@ -192,11 +236,13 @@ print(definition.summarize_result(result))
 
 - If Piston responds but `/api/v2/runtimes` is empty, benchmark execution will
   fail until a matching runtime is installed.
-- `codeforces` currently supports `python`, `cpp`, and `cplusplus`
-  labels from the dataset path.
+- `codeforces` currently supports `python`, `cpp`, and `cplusplus` labels from
+  the dataset path.
+- `aethercode` currently targets C++ and ships `testlib.h` for upstream special
+  judges.
+- `livecodebench` currently targets Python and decodes private test payloads
+  from the raw benchmark files.
 - Checker-based problems are supported on both backends.
-- Generated additional tests from the Hugging Face dataset are not yet loaded;
-  the current builtin benchmark uses official tests only.
 
 For the catalog entry point and benchmark list, see
 [Builtin Benchmarks](builtin-benchmarks.md).

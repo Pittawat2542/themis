@@ -5,6 +5,7 @@ from __future__ import annotations
 from themis import BenchmarkDefinition
 from .aime_2025 import DEFINITION as AIME_2025_DEFINITION
 from .aime_2026 import DEFINITION as AIME_2026_DEFINITION
+from .aethercode import DEFINITION as AETHERCODE_DEFINITION
 from .apex_2025 import DEFINITION as APEX_2025_DEFINITION
 from .beyond_aime import DEFINITION as BEYOND_AIME_DEFINITION
 from .encyclo_k import DEFINITION as ENCYCLO_K_DEFINITION
@@ -18,6 +19,7 @@ from .hmmt_feb_2025 import DEFINITION as HMMT_FEB_2025_DEFINITION
 from .hmmt_nov_2025 import DEFINITION as HMMT_NOV_2025_DEFINITION
 from .imo_answerbench import DEFINITION as IMO_ANSWERBENCH_DEFINITION
 from .lpfqa import DEFINITION as LPFQA_DEFINITION
+from .livecodebench import DEFINITION as LIVECODEBENCH_DEFINITION
 from .mmlu_pro import DEFINITION as MMLU_PRO_DEFINITION
 from .codeforces import DEFINITION as CODEFORCES_DEFINITION
 from .simpleqa_verified import DEFINITION as SIMPLEQA_VERIFIED_DEFINITION
@@ -28,6 +30,7 @@ _CATALOG_BENCHMARKS: dict[str, BenchmarkDefinition] = {
     for definition in (
         AIME_2025_DEFINITION,
         AIME_2026_DEFINITION,
+        AETHERCODE_DEFINITION,
         APEX_2025_DEFINITION,
         BEYOND_AIME_DEFINITION,
         MMLU_PRO_DEFINITION,
@@ -41,6 +44,7 @@ _CATALOG_BENCHMARKS: dict[str, BenchmarkDefinition] = {
         LPFQA_DEFINITION,
         HLE_DEFINITION,
         CODEFORCES_DEFINITION,
+        LIVECODEBENCH_DEFINITION,
     )
 }
 

@@ -23,6 +23,7 @@ Current builtin benchmarks:
 | --- | --- | --- | --- | --- | --- |
 | `aime_2025` | Short-answer math | `math_equivalence` | No | `MathArena/aime_2025` | `train` |
 | `aime_2026` | Short-answer math | `math_equivalence` | No | `MathArena/aime_2026` | `train` |
+| `aethercode` | Code generation with sandboxed execution | `aethercode_pass_rate` | No | `m-a-p/AetherCode` (`v1_2024`) | `test` |
 | `apex_2025` | Short-answer math | `math_equivalence` | No | `MathArena/apex_2025` | `train` |
 | `beyond_aime` | Short-answer math | `math_equivalence` | No | `ByteDance-Seed/BeyondAIME` | `test` |
 | `encyclo_k` | Multiple choice | `choice_accuracy` | No | `m-a-p/Encyclo-K` | `test` |
@@ -31,6 +32,7 @@ Current builtin benchmarks:
 | `hmmt_feb_2025` | Short-answer math | `math_equivalence` | No | `MathArena/hmmt_feb_2025` | `train` |
 | `hmmt_nov_2025` | Short-answer math | `math_equivalence` | No | `MathArena/hmmt_nov_2025` | `train` |
 | `imo_answerbench` | Short-answer math | `math_equivalence` | No | `Hwilner/imo-answerbench` | `train` |
+| `livecodebench` | Code generation with sandboxed execution | `livecodebench_pass_rate` | No | `livecodebench/code_generation_lite` (`release_v6`) | `test` |
 | `lpfqa` | Judge-backed free-form QA | `lpfqa_score` | Yes | `m-a-p/LPFQA` | `train` |
 | `mmlu_pro` | Multiple choice | `choice_accuracy` | No | `TIGER-Lab/MMLU-Pro` | `test` |
 | `codeforces` | Code generation with sandboxed execution | `codeforces_pass_rate` | No | `open-r1/codeforces` (`verifiable-prompts`) | `test` |

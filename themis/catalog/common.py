@@ -31,6 +31,7 @@ from themis.specs.foundational import (
     GenerationSpec,
     JinjaTransform,
     RenameFieldTransform,
+    TransformSpec,
 )
 from themis.types.enums import DatasetSource, PromptRole
 from themis.types.events import ScoreRow
@@ -342,6 +343,14 @@ def summarize_lpfqa(definition, result) -> JSONDict:
 
 
 def summarize_codeforces(definition, result) -> JSONDict:
+    return mean_summary(_primary_metric_id(definition), result)
+
+
+def summarize_aethercode(definition, result) -> JSONDict:
+    return mean_summary(_primary_metric_id(definition), result)
+
+
+def summarize_livecodebench(definition, result) -> JSONDict:
     return mean_summary(_primary_metric_id(definition), result)
 
 
@@ -828,7 +837,54 @@ def build_codeforces_benchmark(
     definition: BenchmarkDefinition,
     config: BenchmarkDefinitionConfig,
 ) -> BenchmarkSpec:
+    return _build_code_generation_benchmark(
+        definition,
+        config,
+        prompt_source_field="prompt",
+        metric_id="codeforces_pass_rate",
+    )
+
+
+def build_aethercode_benchmark(
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
+) -> BenchmarkSpec:
+    return _build_code_generation_benchmark(
+        definition,
+        config,
+        prompt_source_field=None,
+        metric_id="aethercode_pass_rate",
+    )
+
+
+def build_livecodebench_benchmark(
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
+) -> BenchmarkSpec:
+    return _build_code_generation_benchmark(
+        definition,
+        config,
+        prompt_source_field=None,
+        metric_id="livecodebench_pass_rate",
+    )
+
+
+def _build_code_generation_benchmark(
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
+    *,
+    prompt_source_field: str | None,
+    metric_id: str,
+) -> BenchmarkSpec:
     prompt_variant_id = f"{definition.benchmark_id}-default"
+    transforms: list[TransformSpec] = []
+    if prompt_source_field is not None:
+        transforms.append(
+            RenameFieldTransform(
+                field="prompt_text",
+                source_field=prompt_source_field,
+            )
+        )
     return BenchmarkSpec(
         benchmark_id=definition.benchmark_id,
         models=[
@@ -846,17 +902,12 @@ def build_codeforces_benchmark(
                     dataset_id=_catalog_metadata_str(definition, "dataset_id"),
                     split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
-                    transforms=[
-                        RenameFieldTransform(
-                            field="prompt_text",
-                            source_field="prompt",
-                        )
-                    ],
+                    transforms=transforms,
                 ),
                 dataset_query=make_dataset_query(config),
                 prompt_variant_ids=[prompt_variant_id],
                 generation=GenerationSpec(),
-                scores=[ScoreSpec(name="execution", metrics=["codeforces_pass_rate"])],
+                scores=[ScoreSpec(name="execution", metrics=[metric_id])],
             )
         ],
         prompt_variants=[
@@ -977,7 +1028,51 @@ def register_codeforces(
     del config
     from .benchmarks.codeforces.metric import CodeforcesExecutionMetric
 
-    registry.register_metric("codeforces_pass_rate", CodeforcesExecutionMetric)
+    _register_code_execution_metric(
+        registry,
+        metric_id="codeforces_pass_rate",
+        metric_factory=CodeforcesExecutionMetric,
+    )
+
+
+def register_aethercode(
+    _definition,
+    registry: PluginRegistry,
+    config: BenchmarkDefinitionConfig,
+) -> None:
+    del config
+    from .benchmarks.aethercode.metric import AetherCodeExecutionMetric
+
+    _register_code_execution_metric(
+        registry,
+        metric_id="aethercode_pass_rate",
+        metric_factory=AetherCodeExecutionMetric,
+    )
+
+
+def register_livecodebench(
+    _definition,
+    registry: PluginRegistry,
+    config: BenchmarkDefinitionConfig,
+) -> None:
+    del config
+    from .benchmarks.livecodebench.metric import LiveCodeBenchExecutionMetric
+
+    _register_code_execution_metric(
+        registry,
+        metric_id="livecodebench_pass_rate",
+        metric_factory=LiveCodeBenchExecutionMetric,
+    )
+
+
+def _register_code_execution_metric(
+    registry: PluginRegistry,
+    *,
+    metric_id: str,
+    metric_factory: type,
+) -> None:
+    if not registry.has_metric(metric_id):
+        registry.register_metric(metric_id, metric_factory)
 
 
 def render_healthbench_preview(
@@ -1002,10 +1097,13 @@ def _json_dict(value: object, *, label: str) -> JSONDict:
     return validate_json_dict(value, label=label)
 
 
-def _detail_mapping(value: object) -> dict[str, object]:
+def _detail_mapping(value: object) -> JSONDict:
     if not isinstance(value, dict):
         return {}
-    return {str(key): item for key, item in value.items()}
+    return validate_json_dict(
+        {str(key): item for key, item in value.items()},
+        label="detail mapping",
+    )
 
 
 def _detail_str_list(value: object) -> list[str]:
