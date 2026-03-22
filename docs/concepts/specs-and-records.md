@@ -10,6 +10,7 @@
 | `DatasetQuerySpec` | Subset, item IDs, metadata filters, and sampling hints |
 | `PromptVariantSpec` | Prompt family plus bootstrap messages and optional follow-up turns |
 | `ToolSpec` | Serializable tool definition selected onto agent-capable trials |
+| `McpServerSpec` | Serializable MCP server definition selected onto MCP-capable trials |
 | `ParseSpec` | Named parser pipeline |
 | `ScoreSpec` | Named scoring overlay |
 
@@ -82,7 +83,7 @@ These two types are related but distinct:
 
 - **`SliceSpec`** is the authoring spec inside `BenchmarkSpec`.  It owns the
   full pipeline: dataset identity, query controls, prompt variant selection,
-  tool selection, parse pipelines, and score passes.
+  tool selection, MCP server selection, parse pipelines, and score passes.
 
 - **`DatasetSliceSpec`** is what `DatasetProvider.scan()` receives.  It is a
   narrower read-only view carrying only the fields needed for a provider to

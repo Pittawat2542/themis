@@ -116,6 +116,56 @@ The merge model is:
 - benchmark tools override same-id project tools
 - slice selection is explicit; if `tool_ids` is empty, no tools are exposed
 
+## MCP Servers for Remote Tools
+
+Use `McpServerSpec` when the provider can expose remote MCP tools directly to
+the model. This is separate from local `ToolSpec` handlers.
+
+- `ProjectSpec.mcp_servers` defines reusable base MCP servers
+- `BenchmarkSpec.mcp_servers` adds or overrides benchmark-local MCP servers by `id`
+- `SliceSpec.mcp_server_ids` selects the exact MCP servers exposed on each trial
+
+```python
+project = ProjectSpec(
+    ...,
+    mcp_servers=[
+        McpServerSpec(
+            id="dice",
+            server_label="dice",
+            server_url="https://dmcp-server.deno.dev/sse",
+        )
+    ],
+)
+
+benchmark = BenchmarkSpec(
+    ...,
+    slices=[
+        SliceSpec(
+            ...,
+            mcp_server_ids=["dice"],
+        )
+    ],
+)
+```
+
+Current scope:
+
+- OpenAI provider only
+- remote MCP tools/connectors only
+- non-interactive runs only
+- no generic MCP resource browsing layer in Themis
+
+If an MCP server needs an OAuth or access token, set
+`authorization_secret_name` on the `McpServerSpec` and pass the actual token
+through `RuntimeContext.secrets` at execution time:
+
+```python
+runtime = RuntimeContext(
+    secrets={"GOOGLE_CALENDAR_TOKEN": "...oauth token..."},
+)
+result = orchestrator.run_benchmark(benchmark, runtime=runtime)
+```
+
 ## What The Engine Receives
 
 At inference time, benchmark-native engines receive:
@@ -123,6 +173,7 @@ At inference time, benchmark-native engines receive:
 - `trial.prompt.messages`: rendered bootstrap messages
 - `trial.prompt.follow_up_turns`: rendered scripted continuation
 - `trial.tools`: selected serializable tool specs for that trial
+- `trial.mcp_servers`: selected serializable MCP server specs for that trial
 - `runtime.tool_handlers`: matching opaque runtime handlers keyed by tool id
 
 ```python
@@ -134,8 +185,9 @@ class MyAgentEngine:
             for turn in trial.prompt.follow_up_turns
         ]
         tools = [tool.model_dump(mode="json") for tool in trial.tools]
+        mcp_servers = [server.model_dump(mode="json") for server in trial.mcp_servers]
         handlers = runtime.tool_handlers
-        del bootstrap, follow_up_turns, tools, handlers, context
+        del bootstrap, follow_up_turns, tools, mcp_servers, handlers, context
         ...
 ```
 
@@ -155,8 +207,16 @@ For direct compiler/planner usage outside `Orchestrator`, pass project tools
 explicitly so benchmark-local overrides use the same merge rules:
 
 ```python
-experiment = compile_benchmark(benchmark, project_tools=project.tools)
-planned_trials = planner.plan_benchmark(benchmark, project_tools=project.tools)
+experiment = compile_benchmark(
+    benchmark,
+    project_tools=project.tools,
+    project_mcp_servers=project.mcp_servers,
+)
+planned_trials = planner.plan_benchmark(
+    benchmark,
+    project_tools=project.tools,
+    project_mcp_servers=project.mcp_servers,
+)
 ```
 
 ## What Themis Does Not Do
@@ -170,6 +230,7 @@ Themis does not:
 - execute tool calls on behalf of the engine
 - define a standard tool invocation protocol
 - attach tools to prompt variants
+- implement a generic MCP resource browser or context picker
 
 The engine still owns:
 
@@ -188,3 +249,6 @@ The engine still owns:
 - slice-level tool selection
 - engine access to `trial.tools` and `runtime.tool_handlers`
 - returned tool-call and tool-result conversation events
+
+`examples/14_mcp_openai.py` is the MCP-specific example for provider-hosted
+remote tools via OpenAI Responses. It does not use local runtime tool handlers.

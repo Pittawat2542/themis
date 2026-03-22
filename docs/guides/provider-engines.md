@@ -17,6 +17,7 @@ class MyEngine:
             for turn in trial.prompt.follow_up_turns
         ]
         tools = [tool.model_dump(mode="json") for tool in trial.tools]
+        mcp_servers = [server.model_dump(mode="json") for server in trial.mcp_servers]
         tool_handlers = runtime.tool_handlers
         seed = trial.params.seed
         ...
@@ -35,6 +36,7 @@ truncate before forwarding, for example with `trial.params.seed & 0xFFFFFFFF`.
 - `trial.prompt.messages` contains the rendered bootstrap message sequence
 - `trial.prompt.follow_up_turns` contains rendered scripted follow-up turns, when configured
 - `trial.tools` contains the selected serializable tool specs for the trial
+- `trial.mcp_servers` contains the selected serializable MCP server specs for the trial
 - `runtime.tool_handlers` contains the matching opaque runtime handlers registered for those tool IDs
 - `trial.prompt.id`, `trial.prompt.family`, and `trial.prompt.variables` stay available for routing and logging
 - `trial.task.dimensions`, `trial.task.slice_id`, and `trial.task.benchmark_id` stay available for request metadata and reporting
@@ -47,6 +49,12 @@ Themis validates selected tool coverage before `infer(...)` runs. If a trial
 selects a tool and no matching handler is available from the registry or
 `RuntimeContext.tool_handlers`, execution fails before the engine is called.
 
+For MCP-capable providers, Themis also validates the selected `trial.mcp_servers`
+before inference. The OpenAI catalog engine uses these to build Responses API
+`{"type": "mcp"}` tool payloads. This is provider-hosted remote tool access,
+not the same mechanism as local `ToolSpec` handlers, and it does not implement
+generic MCP resource browsing in Themis itself.
+
 ## Declaring Tools
 
 - Put reusable tool specs on `ProjectSpec.tools`
@@ -54,3 +62,11 @@ selects a tool and no matching handler is available from the registry or
 - Select the tools each slice should expose with `SliceSpec.tool_ids`
 - Code-first experiments use `ExperimentSpec.tools` and `TaskSpec.tool_ids` with the same merge rules
 - When compiling or planning a benchmark directly, pass `project_tools=` so those merge rules match `Orchestrator`
+
+## Declaring MCP Servers
+
+- Put reusable MCP server specs on `ProjectSpec.mcp_servers`
+- Override or add benchmark-local MCP servers on `BenchmarkSpec.mcp_servers`
+- Select the MCP servers each slice should expose with `SliceSpec.mcp_server_ids`
+- Code-first experiments use `ExperimentSpec.mcp_servers` and `TaskSpec.mcp_server_ids` with the same merge rules
+- When compiling or planning a benchmark directly, pass `project_mcp_servers=` so those merge rules match `Orchestrator`

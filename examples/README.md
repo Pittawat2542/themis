@@ -43,6 +43,9 @@ Every numbered example in this directory uses the benchmark-first public API.
 13. `13_catalog_builtin_benchmark.py`
    Runs a shipped builtin benchmark through `themis.catalog` with a local fixture dataset loader.
 
+14. `14_mcp_openai.py`
+   Demonstrates the OpenAI Responses MCP path with a remote MCP server and no local runtime tool handlers.
+
 ## Run One
 
 ```bash

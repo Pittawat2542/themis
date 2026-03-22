@@ -40,6 +40,8 @@
 
 ::: themis.specs.foundational.ToolSpec
 
+::: themis.specs.foundational.McpServerSpec
+
 ::: themis.specs.foundational.DatasetSpec
 
 ::: themis.specs.foundational.GenerationSpec

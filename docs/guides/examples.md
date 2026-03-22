@@ -21,6 +21,7 @@ deterministic and order-based rather than random.
 | `11_quick_benchmark.py` | `BenchmarkSpec.simple()`, `BenchmarkSpec.preview()`, and `PluginRegistry.from_dict()` |
 | `12_iter_and_estimate.py` | `run_benchmark_iter()` streaming, `estimate()` trial matrix, and `RunDiff.has_invalidated_resume_work` |
 | `13_catalog_builtin_benchmark.py` | `themis.catalog.list_catalog_benchmarks()` and `build_catalog_benchmark_project(...)` with a local fixture dataset loader |
+| `14_mcp_openai.py` | OpenAI Responses MCP server selection, runtime secrets, and remote tool traces |
 
 ## Intentionally Untouched
 

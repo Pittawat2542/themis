@@ -24,6 +24,7 @@ Themis now documents and supports one public authoring flow:
 - Query-aware dataset providers for subset, filter, and pushdown sampling
 - Explicit prompt variants and parse pipelines instead of payload hacks
 - Bootstrap prompt sequences, scripted follow-up turns, and first-class tool passing for agent-capable engines
+- OpenAI-hosted MCP server support for remote tools during evaluation runs
 - Projection-backed results with `slice_id`, `prompt_variant_id`, and semantic dimensions
 - Local-first storage and deterministic reuse of completed work
 - Seed-aware planning and per-candidate deterministic execution defaults
@@ -135,6 +136,7 @@ Runnable examples live in [`examples/`](examples/):
 - `11_quick_benchmark.py`
 - `12_iter_and_estimate.py`
 - `13_catalog_builtin_benchmark.py`
+- `14_mcp_openai.py`
 
 `10_agent_eval.py` is the canonical advanced example for bootstrap prompts,
 follow-up turns, tool declaration and selection, and returned agent traces.
@@ -142,6 +144,9 @@ follow-up turns, tool declaration and selection, and returned agent traces.
 `13_catalog_builtin_benchmark.py` is the catalog-specific example for running a
 shipped builtin benchmark through `themis.catalog.build_catalog_benchmark_project(...)`
 with a local fixture dataset loader.
+
+`14_mcp_openai.py` shows the OpenAI-first MCP path for exposing a remote MCP
+server to a benchmark run without using local `ToolSpec` handlers.
 
 To discover all shipped builtin benchmark ids from Python, use:
 

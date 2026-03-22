@@ -156,7 +156,9 @@ result = orchestrator.run_benchmark(
 ## Move To The Agent Pattern Only When Needed
 
 If the user needs bootstrap `system` or `developer` messages, scripted
-follow-up turns, or first-class tool passing, keep the same benchmark-first
-flow and then switch to `references/agent-evals-and-tools.md`.
+follow-up turns, first-class local tool passing, or OpenAI-hosted MCP server
+selection, keep the same benchmark-first flow and then switch to
+`references/agent-evals-and-tools.md`.
 
-The canonical advanced example is `examples/10_agent_eval.py`.
+The canonical advanced examples are `examples/10_agent_eval.py` for local tools
+and `examples/14_mcp_openai.py` for OpenAI-hosted MCP servers.
