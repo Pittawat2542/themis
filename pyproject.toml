@@ -48,7 +48,6 @@ include = [
     "py.typed",
     "*.pyi",
     "records/*.pyi",
-    "starter_fixtures/*.json",
     "stats/*.pyi",
     "types/*.pyi",
 ]

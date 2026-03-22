@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 import inspect
 from types import SimpleNamespace
 from typing import cast
@@ -9,7 +8,7 @@ from typing import cast
 import pytest
 
 import themis.catalog as catalog
-from themis import DatasetQuerySpec
+from themis import BenchmarkDefinition, DatasetQuerySpec
 from themis.benchmark.specs import DatasetSliceSpec
 from themis.catalog.datasets import common as dataset_common
 from themis.catalog.datasets.common import (
@@ -110,6 +109,16 @@ def test_builtin_runtime_defaults_use_8192_generator_tokens() -> None:
     )
 
     assert config.max_tokens == 8192
+
+
+def test_catalog_definitions_use_generic_benchmark_definition_and_metadata() -> None:
+    definition = catalog.get_catalog_benchmark("mmlu_pro")
+
+    assert isinstance(definition, BenchmarkDefinition)
+    assert definition.family == "catalog"
+    assert definition.primary_metric_id == "choice_accuracy"
+    assert definition.metadata["dataset_id"] == "TIGER-Lab/MMLU-Pro"
+    assert definition.metadata["split"] == "test"
 
 
 def test_openai_compatible_benchmarks_use_env_base_url(
@@ -397,22 +406,22 @@ def test_build_catalog_registry_registers_multiple_providers() -> None:
         (
             "simpleqa_verified",
             "SimpleQAVerifiedJudgeMetric",
-            "themis.catalog.runtime.metrics.simpleqa_verified",
+            "themis.catalog.benchmarks.simpleqa_verified.metric",
         ),
         (
             "healthbench",
             "HealthBenchRubricMetric",
-            "themis.catalog.runtime.metrics.healthbench",
+            "themis.catalog.benchmarks.healthbench.metric",
         ),
         (
             "lpfqa",
             "LPFQAJudgeMetric",
-            "themis.catalog.runtime.metrics.lpfqa",
+            "themis.catalog.benchmarks.lpfqa.metric",
         ),
         (
             "hle",
             "HLEJudgeMetric",
-            "themis.catalog.runtime.metrics.hle",
+            "themis.catalog.benchmarks.hle.metric",
         ),
     ],
 )
@@ -430,8 +439,9 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
         judge_provider="demo",
     )
 
-    registration = registry.get_metric_registration(definition.metric_id)
-    metric = registry.get_metric(definition.metric_id)
+    assert definition.primary_metric_id is not None
+    registration = registry.get_metric_registration(definition.primary_metric_id)
+    metric = registry.get_metric(definition.primary_metric_id)
 
     assert callable(registration.factory)
     assert type(metric).__name__ == metric_type
@@ -444,72 +454,72 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
         (
             "mmlu_pro",
             "BuiltinMMLUProDatasetProvider",
-            "themis.catalog.datasets.mmlu_pro",
+            "themis.catalog.benchmarks.mmlu_pro",
         ),
         (
             "supergpqa",
             "BuiltinSuperGPQADatasetProvider",
-            "themis.catalog.datasets.supergpqa",
+            "themis.catalog.benchmarks.supergpqa",
         ),
         (
             "encyclo_k",
             "BuiltinEncycloKDatasetProvider",
-            "themis.catalog.datasets.encyclo_k",
+            "themis.catalog.benchmarks.encyclo_k",
         ),
         (
             "simpleqa_verified",
             "BuiltinSimpleQAVerifiedDatasetProvider",
-            "themis.catalog.datasets.simpleqa_verified",
+            "themis.catalog.benchmarks.simpleqa_verified.dataset",
         ),
         (
             "healthbench",
             "BuiltinHealthBenchDatasetProvider",
-            "themis.catalog.datasets.healthbench",
+            "themis.catalog.benchmarks.healthbench.dataset",
         ),
         (
             "lpfqa",
             "BuiltinLPFQADatasetProvider",
-            "themis.catalog.datasets.lpfqa",
+            "themis.catalog.benchmarks.lpfqa.dataset",
         ),
         (
             "hle",
             "BuiltinHLEDatasetProvider",
-            "themis.catalog.datasets.hle",
+            "themis.catalog.benchmarks.hle.dataset",
         ),
         (
             "aime_2026",
             "BuiltinMathArenaDatasetProvider",
-            "themis.catalog.datasets.math",
+            "themis.catalog.benchmarks.aime_2026",
         ),
         (
             "aime_2025",
             "BuiltinMathArenaDatasetProvider",
-            "themis.catalog.datasets.math",
+            "themis.catalog.benchmarks.aime_2025",
         ),
         (
             "hmmt_feb_2025",
             "BuiltinMathArenaDatasetProvider",
-            "themis.catalog.datasets.math",
+            "themis.catalog.benchmarks.hmmt_feb_2025",
         ),
         (
             "hmmt_nov_2025",
             "BuiltinMathArenaDatasetProvider",
-            "themis.catalog.datasets.math",
+            "themis.catalog.benchmarks.hmmt_nov_2025",
         ),
         (
             "apex_2025",
             "BuiltinMathArenaDatasetProvider",
-            "themis.catalog.datasets.math",
+            "themis.catalog.benchmarks.apex_2025",
         ),
         (
             "beyond_aime",
             "BuiltinBeyondAIMEDatasetProvider",
-            "themis.catalog.datasets.math",
+            "themis.catalog.benchmarks.beyond_aime",
         ),
         (
             "imo_answerbench",
             "BuiltinIMOAnswerBenchDatasetProvider",
-            "themis.catalog.datasets.math",
+            "themis.catalog.benchmarks.imo_answerbench",
         ),
     ],
 )
@@ -741,11 +751,13 @@ def test_math_equivalence_metric_returns_install_hint_when_optional_dependency_m
     assert score.error == 'Install it with `uv add "themis-eval[math]"`.'
 
 
-def test_catalog_fixtures_are_available_for_all_builtin_benchmarks() -> None:
-    fixture_root = Path(catalog.__file__).resolve().parent.parent / "starter_fixtures"
-
+def test_catalog_preview_rows_are_available_for_all_builtin_benchmarks() -> None:
     for benchmark_id in catalog.list_catalog_benchmarks():
-        assert (fixture_root / f"{benchmark_id}.json").exists()
+        definition = catalog.get_catalog_benchmark(benchmark_id)
+        assert definition.preview_rows_loader is not None
+        rows = definition.preview_rows_loader(definition)
+        assert rows
+        assert isinstance(rows[0], dict)
 
 
 def test_load_huggingface_rows_disables_image_decoding_for_iteration(

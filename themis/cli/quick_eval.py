@@ -424,7 +424,7 @@ def _run_builtin_benchmark(
             "benchmark": definition.benchmark_id,
             "model": config.model,
             "provider": config.provider,
-            "metric": definition.metric_id,
+            "metric": definition.primary_metric_id,
             "storage_root": str(config.storage_root),
         }
         if config.preview:

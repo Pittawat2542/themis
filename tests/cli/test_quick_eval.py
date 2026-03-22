@@ -216,7 +216,7 @@ def test_quick_eval_benchmark_defaults_to_8192_max_tokens(
 
     class _StubDefinition:
         benchmark_id = "mmlu_pro"
-        metric_id = "choice_accuracy"
+        primary_metric_id = "choice_accuracy"
 
         def render_preview(self, **kwargs):
             del kwargs

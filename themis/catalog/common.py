@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from functools import partial
-from importlib import resources
-import json
 import math
 from pathlib import Path
 
 from themis import (
     BenchmarkSpec,
+    BenchmarkDefinition,
+    BenchmarkDefinitionConfig,
     DatasetQuerySpec,
-    ExecutionPolicySpec,
     InferenceGridSpec,
     InferenceParamsSpec,
     ModelSpec,
@@ -24,8 +22,9 @@ from themis import (
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
-    SqliteBlobStorageSpec,
+    build_benchmark_definition_project,
 )
+from themis.contracts.protocols import DatasetProvider
 from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
@@ -33,182 +32,17 @@ from themis.specs.foundational import (
     JinjaTransform,
     RenameFieldTransform,
 )
-from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
+from themis.types.enums import DatasetSource, PromptRole
 from themis.types.events import ScoreRow
 from themis.types.json_types import JSONDict
 from themis.types.json_validation import validate_json_dict
 
 from . import datasets as _datasets
 from . import runtime as _runtime
-from .datasets import CatalogDatasetProvider
 
 _MCQ_CHOICES = list("ABCDEFGHIJ")
 
 type CatalogRow = dict[str, object]
-
-BenchmarkBuilder = Callable[
-    ["CatalogBenchmarkDefinition", "CatalogBenchmarkRuntimeConfig"],
-    BenchmarkSpec,
-]
-BenchmarkRegistrar = Callable[
-    ["CatalogBenchmarkDefinition", PluginRegistry, "CatalogBenchmarkRuntimeConfig"],
-    None,
-]
-BenchmarkSummarizer = Callable[["CatalogBenchmarkDefinition", object], JSONDict]
-DatasetProviderFactory = Callable[..., CatalogDatasetProvider]
-PreviewRenderer = Callable[
-    ["CatalogBenchmarkDefinition", "CatalogBenchmarkRuntimeConfig", dict[str, object]],
-    list[JSONDict],
-]
-
-
-@dataclass(frozen=True, slots=True)
-class CatalogBenchmarkRuntimeConfig:
-    model_id: str
-    provider: str
-    max_tokens: int = 8192
-    temperature: float = 0.0
-    top_p: float | None = None
-    seed: int | None = None
-    dataset_revision: str | None = None
-    subset: int | None = None
-    judge_model_id: str | None = None
-    judge_provider: str | None = None
-
-
-@dataclass(slots=True)
-class CatalogBenchmarkDefinition:
-    benchmark_id: str
-    dataset_id: str
-    split: str
-    metric_id: str
-    requires_judge: bool
-    builder: BenchmarkBuilder
-    registrar: BenchmarkRegistrar
-    summarizer: BenchmarkSummarizer
-    dataset_provider_factory: DatasetProviderFactory | None = None
-    preview_renderer: PreviewRenderer | None = None
-
-    def build_runtime_config(
-        self,
-        *,
-        model_id: str,
-        provider: str,
-        max_tokens: int = 8192,
-        temperature: float = 0.0,
-        top_p: float | None = None,
-        seed: int | None = None,
-        dataset_revision: str | None = None,
-        subset: int | None = None,
-        judge_model_id: str | None = None,
-        judge_provider: str | None = None,
-    ) -> CatalogBenchmarkRuntimeConfig:
-        if self.requires_judge and (not judge_model_id or not judge_provider):
-            raise ValueError(
-                f"Built-in benchmark '{self.benchmark_id}' requires explicit "
-                "judge_model_id and judge_provider."
-            )
-        return CatalogBenchmarkRuntimeConfig(
-            model_id=model_id,
-            provider=_runtime._normalize_provider_name(provider),
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            seed=seed,
-            dataset_revision=dataset_revision,
-            subset=subset,
-            judge_model_id=judge_model_id,
-            judge_provider=(
-                _runtime._normalize_provider_name(judge_provider)
-                if judge_provider is not None
-                else None
-            ),
-        )
-
-    def build_benchmark(
-        self,
-        *,
-        model_id: str,
-        provider: str,
-        max_tokens: int = 8192,
-        temperature: float = 0.0,
-        top_p: float | None = None,
-        seed: int | None = None,
-        dataset_revision: str | None = None,
-        subset: int | None = None,
-        judge_model_id: str | None = None,
-        judge_provider: str | None = None,
-    ) -> BenchmarkSpec:
-        config = self.build_runtime_config(
-            model_id=model_id,
-            provider=provider,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            seed=seed,
-            dataset_revision=dataset_revision,
-            subset=subset,
-            judge_model_id=judge_model_id,
-            judge_provider=judge_provider,
-        )
-        return self.builder(self, config)
-
-    def register_required_components(
-        self,
-        registry: PluginRegistry,
-        *,
-        judge_model_id: str | None = None,
-        judge_provider: str | None = None,
-    ) -> None:
-        config = self.build_runtime_config(
-            model_id="preview-model",
-            provider="demo",
-            judge_model_id=judge_model_id,
-            judge_provider=judge_provider,
-        )
-        self.registrar(self, registry, config)
-
-    def build_dataset_provider(
-        self,
-        *,
-        huggingface_loader=None,
-    ) -> CatalogDatasetProvider:
-        if self.dataset_provider_factory is None:
-            raise ValueError(
-                f"Built-in benchmark '{self.benchmark_id}' does not define a dataset provider."
-            )
-        return self.dataset_provider_factory(
-            self, huggingface_loader=huggingface_loader
-        )
-
-    def render_preview(
-        self,
-        *,
-        model_id: str = "preview-model",
-        provider: str = "demo",
-        judge_model_id: str | None = None,
-        judge_provider: str | None = None,
-    ) -> list[JSONDict]:
-        config = self.build_runtime_config(
-            model_id=model_id,
-            provider=provider,
-            judge_model_id=judge_model_id,
-            judge_provider=judge_provider,
-        )
-        fixture = load_fixture(self.benchmark_id)
-        benchmark = self.builder(self, config)
-        dataset = benchmark.slices[0].dataset
-        provider_instance = self.build_dataset_provider()
-        sample_rows = provider_instance.prepare_rows(
-            _fixture_samples(fixture), dataset
-        ).rows
-        sample = sample_rows[0]
-        if self.preview_renderer is not None:
-            return self.preview_renderer(self, config, sample)
-        return benchmark.preview(sample)
-
-    def summarize_result(self, result) -> JSONDict:
-        return self.summarizer(self, result)
 
 
 def load_local_rows(path: Path) -> list[dict[str, object]]:
@@ -242,13 +76,37 @@ def inspect_huggingface_dataset(
     )
 
 
+def _catalog_metadata(definition: BenchmarkDefinition) -> JSONDict:
+    return validate_json_dict(
+        definition.metadata,
+        label=f"{definition.family} benchmark metadata",
+    )
+
+
+def _catalog_metadata_str(definition: BenchmarkDefinition, key: str) -> str:
+    value = _catalog_metadata(definition).get(key)
+    if isinstance(value, str) and value:
+        return value
+    raise ValueError(
+        f"Built-in benchmark '{definition.benchmark_id}' metadata must define '{key}'."
+    )
+
+
+def _primary_metric_id(definition: BenchmarkDefinition) -> str:
+    if definition.primary_metric_id:
+        return definition.primary_metric_id
+    raise ValueError(
+        f"Built-in benchmark '{definition.benchmark_id}' does not define a primary metric."
+    )
+
+
 def build_catalog_benchmark_project(
     *,
     benchmark_id: str,
     model_id: str,
     provider: str,
     storage_root: Path,
-    get_catalog_benchmark: Callable[[str], CatalogBenchmarkDefinition],
+    get_catalog_benchmark: Callable[[str], BenchmarkDefinition],
     max_tokens: int = 8192,
     temperature: float = 0.0,
     top_p: float | None = None,
@@ -262,13 +120,16 @@ def build_catalog_benchmark_project(
     ProjectSpec,
     BenchmarkSpec,
     PluginRegistry,
-    CatalogDatasetProvider,
-    CatalogBenchmarkDefinition,
+    DatasetProvider,
+    BenchmarkDefinition,
 ]:
     definition = get_catalog_benchmark(benchmark_id)
-    benchmark = definition.build_benchmark(
+    return build_benchmark_definition_project(
+        definition=definition,
         model_id=model_id,
         provider=provider,
+        storage_root=storage_root,
+        build_registry=_runtime.build_catalog_registry,
         max_tokens=max_tokens,
         temperature=temperature,
         top_p=top_p,
@@ -277,32 +138,10 @@ def build_catalog_benchmark_project(
         dataset_revision=dataset_revision,
         judge_model_id=judge_model_id,
         judge_provider=judge_provider,
-    )
-    providers = [provider]
-    if judge_provider is not None:
-        providers.append(judge_provider)
-    registry = _runtime.build_catalog_registry(providers)
-    definition.register_required_components(
-        registry,
-        judge_model_id=judge_model_id,
-        judge_provider=judge_provider,
-    )
-    project = ProjectSpec(
-        project_name=f"quick-eval-{benchmark_id}",
-        researcher_id="themis-cli",
-        global_seed=seed or 7,
-        storage=SqliteBlobStorageSpec(
-            root_dir=str(storage_root),
-            compression=CompressionCodec.NONE,
-        ),
-        execution_policy=ExecutionPolicySpec(),
-    )
-    provider_instance = definition.build_dataset_provider(
         huggingface_loader=load_huggingface_rows
         if huggingface_loader is None
-        else huggingface_loader
+        else huggingface_loader,
     )
-    return project, benchmark, registry, provider_instance, definition
 
 
 def iter_score_rows(result, metric_id: str) -> list[ScoreRow]:
@@ -464,33 +303,33 @@ def hle_calibration_error(
 
 
 def summarize_mcq(definition, result) -> JSONDict:
-    return mean_summary(definition.metric_id, result)
+    return mean_summary(_primary_metric_id(definition), result)
 
 
 def summarize_math(definition, result) -> JSONDict:
-    return mean_summary(definition.metric_id, result)
+    return mean_summary(_primary_metric_id(definition), result)
 
 
 def summarize_lpfqa(definition, result) -> JSONDict:
-    return mean_summary(definition.metric_id, result)
+    return mean_summary(_primary_metric_id(definition), result)
 
 
-def make_dataset_query(config: CatalogBenchmarkRuntimeConfig) -> DatasetQuerySpec:
+def make_dataset_query(config: BenchmarkDefinitionConfig) -> DatasetQuerySpec:
     if config.subset is None:
         return DatasetQuerySpec()
     return DatasetQuerySpec.subset(config.subset, seed=config.seed)
 
 
 def mcq_dataset_spec(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
     *,
     expected_source_field: str,
 ) -> DatasetSpec:
     return DatasetSpec(
         source=DatasetSource.HUGGINGFACE,
-        dataset_id=definition.dataset_id,
-        split=definition.split,
+        dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+        split=_catalog_metadata_str(definition, "split"),
         revision=config.dataset_revision,
         transforms=[
             RenameFieldTransform(
@@ -509,13 +348,13 @@ def mcq_dataset_spec(
 
 
 def math_dataset_spec(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
 ) -> DatasetSpec:
     return DatasetSpec(
         source=DatasetSource.HUGGINGFACE,
-        dataset_id=definition.dataset_id,
-        split=definition.split,
+        dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+        split=_catalog_metadata_str(definition, "split"),
         revision=config.dataset_revision,
         transforms=[
             JinjaTransform(
@@ -531,8 +370,8 @@ def math_dataset_spec(
 
 
 def build_mcq_benchmark(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
     *,
     expected_source_field: str,
 ) -> BenchmarkSpec:
@@ -603,8 +442,8 @@ def build_mcq_benchmark(
 
 
 def build_math_benchmark(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
 ) -> BenchmarkSpec:
     prompt_variant_id = f"{definition.benchmark_id}-default"
     return BenchmarkSpec(
@@ -661,8 +500,8 @@ def build_math_benchmark(
 
 
 def build_simpleqa_benchmark(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
 ) -> BenchmarkSpec:
     prompt_variant_id = f"{definition.benchmark_id}-default"
     return BenchmarkSpec(
@@ -679,8 +518,8 @@ def build_simpleqa_benchmark(
                 slice_id=definition.benchmark_id,
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
-                    dataset_id=definition.dataset_id,
-                    split=definition.split,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                     transforms=[
                         RenameFieldTransform(
@@ -718,8 +557,8 @@ def build_simpleqa_benchmark(
 
 
 def build_healthbench_benchmark(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
 ) -> BenchmarkSpec:
     prompt_variant_id = f"{definition.benchmark_id}-default"
     return BenchmarkSpec(
@@ -736,8 +575,8 @@ def build_healthbench_benchmark(
                 slice_id=definition.benchmark_id,
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
-                    dataset_id=definition.dataset_id,
-                    split=definition.split,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                 ),
                 dataset_query=make_dataset_query(config),
@@ -769,8 +608,8 @@ def build_healthbench_benchmark(
 
 
 def build_lpfqa_benchmark(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
 ) -> BenchmarkSpec:
     prompt_variant_id = f"{definition.benchmark_id}-default"
     return BenchmarkSpec(
@@ -787,8 +626,8 @@ def build_lpfqa_benchmark(
                 slice_id=definition.benchmark_id,
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
-                    dataset_id=definition.dataset_id,
-                    split=definition.split,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                     transforms=[
                         RenameFieldTransform(
@@ -826,8 +665,8 @@ def build_lpfqa_benchmark(
 
 
 def build_hle_benchmark(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
 ) -> BenchmarkSpec:
     prompt_variant_id = f"{definition.benchmark_id}-default"
     return BenchmarkSpec(
@@ -844,8 +683,8 @@ def build_hle_benchmark(
                 slice_id=definition.benchmark_id,
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
-                    dataset_id=definition.dataset_id,
-                    split=definition.split,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                     transforms=[
                         RenameFieldTransform(
@@ -895,7 +734,7 @@ def build_hle_benchmark(
 def register_mcq(
     _definition,
     registry: PluginRegistry,
-    config: CatalogBenchmarkRuntimeConfig,
+    config: BenchmarkDefinitionConfig,
 ) -> None:
     del config
     if not registry.has_metric("choice_accuracy"):
@@ -905,7 +744,7 @@ def register_mcq(
 def register_math(
     _definition,
     registry: PluginRegistry,
-    config: CatalogBenchmarkRuntimeConfig,
+    config: BenchmarkDefinitionConfig,
 ) -> None:
     del config
     if not registry.has_metric("math_equivalence"):
@@ -915,12 +754,14 @@ def register_math(
 def register_simpleqa(
     _definition,
     registry: PluginRegistry,
-    config: CatalogBenchmarkRuntimeConfig,
+    config: BenchmarkDefinitionConfig,
 ) -> None:
+    from .benchmarks.simpleqa_verified.metric import SimpleQAVerifiedJudgeMetric
+
     registry.register_metric(
         "simpleqa_verified_score",
         partial(
-            _runtime.SimpleQAVerifiedJudgeMetric,
+            SimpleQAVerifiedJudgeMetric,
             judge_model_id=str(config.judge_model_id),
             judge_provider=str(config.judge_provider),
         ),
@@ -930,12 +771,14 @@ def register_simpleqa(
 def register_healthbench(
     _definition,
     registry: PluginRegistry,
-    config: CatalogBenchmarkRuntimeConfig,
+    config: BenchmarkDefinitionConfig,
 ) -> None:
+    from .benchmarks.healthbench.metric import HealthBenchRubricMetric
+
     registry.register_metric(
         "healthbench_score",
         partial(
-            _runtime.HealthBenchRubricMetric,
+            HealthBenchRubricMetric,
             judge_model_id=str(config.judge_model_id),
             judge_provider=str(config.judge_provider),
         ),
@@ -945,12 +788,14 @@ def register_healthbench(
 def register_lpfqa(
     _definition,
     registry: PluginRegistry,
-    config: CatalogBenchmarkRuntimeConfig,
+    config: BenchmarkDefinitionConfig,
 ) -> None:
+    from .benchmarks.lpfqa.metric import LPFQAJudgeMetric
+
     registry.register_metric(
         "lpfqa_score",
         partial(
-            _runtime.LPFQAJudgeMetric,
+            LPFQAJudgeMetric,
             judge_model_id=str(config.judge_model_id),
             judge_provider=str(config.judge_provider),
         ),
@@ -960,12 +805,14 @@ def register_lpfqa(
 def register_hle(
     _definition,
     registry: PluginRegistry,
-    config: CatalogBenchmarkRuntimeConfig,
+    config: BenchmarkDefinitionConfig,
 ) -> None:
+    from .benchmarks.hle.metric import HLEJudgeMetric
+
     registry.register_metric(
         "hle_accuracy",
         partial(
-            _runtime.HLEJudgeMetric,
+            HLEJudgeMetric,
             judge_model_id=str(config.judge_model_id),
             judge_provider=str(config.judge_provider),
         ),
@@ -973,8 +820,8 @@ def register_hle(
 
 
 def render_healthbench_preview(
-    definition: CatalogBenchmarkDefinition,
-    config: CatalogBenchmarkRuntimeConfig,
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
     sample: dict[str, object],
 ) -> list[JSONDict]:
     del definition, config
@@ -990,29 +837,8 @@ def render_healthbench_preview(
     ]
 
 
-def load_fixture(benchmark_id: str) -> JSONDict:
-    with (
-        resources.files("themis")
-        .joinpath("starter_fixtures", f"{benchmark_id}.json")
-        .open("r", encoding="utf-8") as fh
-    ):
-        return _json_dict(json.load(fh), label=f"catalog fixture {benchmark_id}")
-
-
 def _json_dict(value: object, *, label: str) -> JSONDict:
     return validate_json_dict(value, label=label)
-
-
-def _fixture_samples(fixture: JSONDict) -> list[CatalogRow]:
-    samples = fixture.get("samples", [])
-    if not isinstance(samples, list):
-        raise ValueError("Catalog fixtures must define a list of sample rows.")
-    rows: list[CatalogRow] = []
-    for sample in samples:
-        if not isinstance(sample, dict):
-            raise ValueError("Catalog fixture samples must be JSON objects.")
-        rows.append({str(key): value for key, value in sample.items()})
-    return rows
 
 
 def _detail_mapping(value: object) -> dict[str, object]:
