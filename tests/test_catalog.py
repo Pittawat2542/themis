@@ -26,9 +26,10 @@ from themis.catalog.datasets.common import (
     _normalize_superchem_rows,
 )
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
-from themis.errors import ThemisError
+from themis.errors import SpecValidationError, ThemisError
 from themis.catalog.runtime.common import (
     _build_judge_spec,
+    _coerce_usage_int,
     _openai_mcp_tool_payload,
     _openai_response_input_message,
     _run_openai_chat_inference,
@@ -309,6 +310,71 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
     assert isinstance(result.conversation.events[0], ToolCallEvent)
     assert result.conversation.events[0].payload.tool_name == "dice:roll"
     assert isinstance(result.conversation.events[1], ToolResultEvent)
+
+
+def test_openai_chat_inference_rejects_non_object_mcp_arguments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = SimpleNamespace(
+        id="resp_bad_args",
+        usage=SimpleNamespace(
+            prompt_tokens=11,
+            completion_tokens=7,
+            total_tokens=18,
+        ),
+        output=[
+            SimpleNamespace(
+                type="mcp_call",
+                id="mcp_1",
+                server_label="dice",
+                name="roll",
+                arguments='["2d4+1"]',
+            ),
+        ],
+        output_text="",
+    )
+    responses = MagicMock()
+    responses.create.return_value = response
+    client = SimpleNamespace(responses=responses)
+    openai_module = SimpleNamespace(OpenAI=MagicMock(return_value=client))
+    monkeypatch.setattr(
+        "themis.catalog.runtime.common.import_optional",
+        lambda name, extra: openai_module,
+    )
+
+    trial = SimpleNamespace(
+        trial_id="trial_mcp_bad_args",
+        model=ModelSpec(model_id="gpt-5", provider="openai"),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="Roll 2d4+1")]
+        ),
+        params=InferenceParamsSpec(max_tokens=64),
+        mcp_servers=[
+            McpServerSpec(
+                id="dice",
+                server_label="dice",
+                server_url="https://dmcp-server.deno.dev/sse",
+                allowed_tools=["roll"],
+                require_approval="never",
+                authorization_secret_name="DICE_TOKEN",
+            )
+        ],
+    )
+
+    with pytest.raises(SpecValidationError, match="MCP tool arguments"):
+        _run_openai_chat_inference(
+            trial,
+            context={},
+            runtime=RuntimeContext(secrets={"DICE_TOKEN": SecretStr("secret-token")}),
+            base_url=None,
+            provider_label="OpenAI",
+            missing_extra="providers-openai",
+        )
+
+
+def test_coerce_usage_int_returns_none_for_invalid_strings() -> None:
+    assert _coerce_usage_int("") is None
+    assert _coerce_usage_int("unknown") is None
 
 
 def test_openai_response_input_message_preserves_falsy_scalars() -> None:

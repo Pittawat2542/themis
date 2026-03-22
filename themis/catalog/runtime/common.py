@@ -638,7 +638,10 @@ def _coerce_usage_int(value: object) -> int | None:
     if isinstance(value, bool):
         return int(value)
     if isinstance(value, (int, str)):
-        return int(value)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
     return None
 
 
@@ -672,17 +675,14 @@ def _response_conversation(response: object, *, final_text: str) -> Conversation
                 or _response_item_attr(item, "id")
                 or f"mcp-call-{event_index}"
             )
+            parsed_arguments = _maybe_json_loads(_response_item_attr(item, "arguments"))
             events.append(
                 ToolCallEvent(
                     role=PromptRole.ASSISTANT,
                     payload=ToolCallPayload(
                         tool_name=_response_mcp_tool_name(item),
                         tool_arguments=validate_json_dict(
-                            _coerce_json_dict(
-                                _maybe_json_loads(
-                                    _response_item_attr(item, "arguments")
-                                )
-                            ),
+                            parsed_arguments,
                             label="MCP tool arguments",
                         ),
                         call_id=call_id,
