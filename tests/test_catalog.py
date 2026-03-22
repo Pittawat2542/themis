@@ -27,8 +27,12 @@ from themis.catalog.datasets.common import (
 )
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
 from themis.errors import ThemisError
-from themis.catalog.runtime.common import _build_judge_spec
-from themis.catalog.runtime.common import _run_openai_chat_inference
+from themis.catalog.runtime.common import (
+    _build_judge_spec,
+    _openai_mcp_tool_payload,
+    _openai_response_input_message,
+    _run_openai_chat_inference,
+)
 from themis.contracts.protocols import InferenceResult
 from themis.specs.experiment import (
     InferenceParamsSpec,
@@ -242,11 +246,18 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
     )
 
     trial = SimpleNamespace(
+        trial_id="trial_mcp_123",
         model=ModelSpec(model_id="gpt-5", provider="openai"),
         prompt=PromptTemplateSpec(
             messages=[PromptMessage(role=PromptRole.USER, content="Roll 2d4+1")]
         ),
-        params=InferenceParamsSpec(max_tokens=64, temperature=0.1, top_p=0.9, seed=7),
+        params=InferenceParamsSpec(
+            max_tokens=64,
+            temperature=0.1,
+            top_p=0.9,
+            seed=7,
+            extras={"reasoning": {"effort": "medium"}},
+        ),
         mcp_servers=[
             McpServerSpec(
                 id="dice",
@@ -268,12 +279,14 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
     )
 
     assert isinstance(result, InferenceResult)
+    assert result.inference.spec_hash == "inference_trial_mcp_123"
     assert result.inference.raw_text == "6"
     assert result.inference.provider_request_id == "resp_123"
     create_kwargs = responses.create.call_args.kwargs
     assert create_kwargs["model"] == "gpt-5"
     assert create_kwargs["input"][0]["content"][0]["text"] == "Roll 2d4+1"
     assert create_kwargs["max_output_tokens"] == 64
+    assert create_kwargs["extra_body"] == {"reasoning": {"effort": "medium"}}
     assert create_kwargs["tools"] == [
         {
             "type": "mcp",
@@ -288,6 +301,30 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
     assert isinstance(result.conversation.events[0], ToolCallEvent)
     assert result.conversation.events[0].payload.tool_name == "dice:roll"
     assert isinstance(result.conversation.events[1], ToolResultEvent)
+
+
+def test_openai_response_input_message_preserves_falsy_scalars() -> None:
+    assert _openai_response_input_message({"role": "user", "content": 0}) == {
+        "role": "user",
+        "content": [{"type": "input_text", "text": "0"}],
+    }
+    assert _openai_response_input_message({"role": "user", "content": False}) == {
+        "role": "user",
+        "content": [{"type": "input_text", "text": "False"}],
+    }
+
+
+def test_openai_mcp_tool_payload_rejects_approval_gated_servers() -> None:
+    with pytest.raises(ThemisError, match="approval-gated"):
+        _openai_mcp_tool_payload(
+            McpServerSpec(
+                id="calendar",
+                server_label="google_calendar",
+                connector_id="connector_googlecalendar",
+                require_approval="always",
+            ),
+            RuntimeContext(),
+        )
 
 
 def test_openai_chat_inference_rejects_mcp_without_secret(

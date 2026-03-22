@@ -90,6 +90,10 @@ class McpServerSpec(SpecBase):
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> "McpServerSpec":
+        if isinstance(self.server_url, str) and self.server_url.strip() == "":
+            object.__setattr__(self, "server_url", None)
+        if isinstance(self.connector_id, str) and self.connector_id.strip() == "":
+            object.__setattr__(self, "connector_id", None)
         has_server_url = self.server_url is not None
         has_connector_id = self.connector_id is not None
         if has_server_url == has_connector_id:

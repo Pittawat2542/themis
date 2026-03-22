@@ -73,6 +73,36 @@ def test_mcp_server_spec_requires_exactly_one_connection_target():
         )
 
 
+def test_mcp_server_spec_normalizes_blank_connection_targets() -> None:
+    by_connector = McpServerSpec(
+        id="calendar",
+        server_label="google_calendar",
+        server_url="   ",
+        connector_id="connector_googlecalendar",
+    )
+    assert by_connector.server_url is None
+    assert by_connector.connector_id == "connector_googlecalendar"
+
+    by_url = McpServerSpec(
+        id="dice",
+        server_label="dice",
+        server_url="https://dmcp-server.deno.dev/sse",
+        connector_id="  ",
+    )
+    assert by_url.server_url == "https://dmcp-server.deno.dev/sse"
+    assert by_url.connector_id is None
+
+    with pytest.raises(
+        ValidationError, match="requires exactly one of server_url or connector_id"
+    ):
+        McpServerSpec(
+            id="bad",
+            server_label="bad",
+            server_url=" ",
+            connector_id="\t",
+        )
+
+
 def test_dataset_spec():
     spec = DatasetSpec(
         source="huggingface", dataset_id="gsm8k", split="test", revision="main"

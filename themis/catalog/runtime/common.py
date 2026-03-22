@@ -233,6 +233,11 @@ def _run_openai_responses_mcp_inference(
         request_kwargs["top_p"] = trial.params.top_p
     if trial.params.seed is not None:
         request_kwargs["seed"] = trial.params.seed & 0xFFFFFFFF
+    for key, value in trial.params.extras.items():
+        extra_body = cast(
+            dict[str, object], request_kwargs.setdefault("extra_body", {})
+        )
+        extra_body[key] = value
 
     start = perf_counter()
     try:
@@ -267,7 +272,10 @@ def _run_openai_responses_mcp_inference(
     conversation = _response_conversation(response, final_text=output_text)
     return InferenceResult(
         inference=InferenceRecord(
-            spec_hash=f"inference_{_context_item_id(context)}",
+            spec_hash=(
+                "inference_"
+                f"{getattr(trial, 'trial_id', getattr(trial, 'item_id', _context_item_id(context)))}"
+            ),
             raw_text=output_text,
             latency_ms=latency_ms,
             provider_request_id=getattr(response, "id", None),
@@ -444,7 +452,9 @@ def _openai_response_input_message(message: dict[str, object]) -> dict[str, obje
     if not isinstance(content, list):
         return {
             "role": message.get("role"),
-            "content": [{"type": "input_text", "text": str(content or "")}],
+            "content": [
+                {"type": "input_text", "text": "" if content is None else str(content)}
+            ],
         }
     converted_parts: list[dict[str, object]] = []
     for part in content:
@@ -512,6 +522,14 @@ def _coerce_json_dict(value: object) -> dict[str, object]:
 
 
 def _openai_mcp_tool_payload(server, runtime) -> dict[str, object]:
+    if server.require_approval == "always":
+        raise SpecValidationError(
+            code=ErrorCode.PLUGIN_INCOMPATIBLE,
+            message=(
+                "OpenAI MCP integration does not support approval-gated MCP "
+                f"servers: {server.id}."
+            ),
+        )
     payload: dict[str, object] = {
         "type": "mcp",
         "server_label": server.server_label,
