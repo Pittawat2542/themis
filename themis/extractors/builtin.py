@@ -38,10 +38,52 @@ def _raw_text(candidate: CandidateRecord) -> str:
 
 
 _BOXED_PATTERN = re.compile(r"\\boxed\s*\{([^{}]+)\}", re.IGNORECASE | re.DOTALL)
+_JSON_FENCE_PATTERN = re.compile(
+    r"```(?:json)?\s*(?P<payload>.+?)\s*```",
+    re.IGNORECASE | re.DOTALL,
+)
+_ANSWER_LINE_PATTERN = re.compile(
+    r"(?im)^\s*answer\s*:\s*(?P<value>.+?)\s*$",
+)
 
 
 def _last_boxed_text(text: str) -> str | None:
-    matches = _BOXED_PATTERN.findall(text)
+    matches: list[str] = []
+    index = 0
+    lowered = text.casefold()
+    while True:
+        start = lowered.find("\\boxed", index)
+        if start < 0:
+            break
+        cursor = start + len("\\boxed")
+        while cursor < len(text) and text[cursor].isspace():
+            cursor += 1
+        if cursor >= len(text) or text[cursor] != "{":
+            index = cursor
+            continue
+        depth = 0
+        content_start = cursor + 1
+        for cursor in range(cursor, len(text)):
+            char = text[cursor]
+            if char == "{":
+                depth += 1
+                continue
+            if char != "}":
+                continue
+            depth -= 1
+            if depth == 0:
+                matches.append(text[content_start:cursor].strip())
+                index = cursor + 1
+                break
+        else:
+            break
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def _last_answer_line_text(text: str) -> str | None:
+    matches = _ANSWER_LINE_PATTERN.findall(text)
     if not matches:
         return None
     return matches[-1].strip()
@@ -51,6 +93,38 @@ def _normalize_text(text: str) -> str:
     cleaned = text.strip().casefold()
     cleaned = cleaned.strip(string.punctuation + " ")
     return " ".join(cleaned.split())
+
+
+def extract_embedded_json_payload(text: str) -> JSONValueType:
+    """Extract a JSON object/array embedded inside mixed model output."""
+
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("No JSON payload found in the inference output.")
+
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+
+    for match in _JSON_FENCE_PATTERN.finditer(text):
+        payload = match.group("payload").strip()
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char not in "[{":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        return payload
+
+    raise ValueError("No JSON payload found in the inference output.")
 
 
 def _success(
@@ -179,6 +253,25 @@ class JsonSchemaExtractor:
         return _success("json_schema", candidate, cfg, parsed)
 
 
+class EmbeddedJsonExtractor:
+    """Extract a JSON payload from fenced or mixed-text model output."""
+
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, JSONValueType] | None = None,
+    ) -> ExtractionRecord:
+        """Extract a JSON payload embedded inside the candidate output."""
+        del trial
+        cfg = dict(config or {})
+        try:
+            parsed = extract_embedded_json_payload(_raw_text(candidate))
+        except ValueError as exc:
+            return _failure("embedded_json", candidate, cfg, str(exc))
+        return _success("embedded_json", candidate, cfg, parsed)
+
+
 class FirstNumberExtractor:
     """Extract the first integer or floating-point token from raw text."""
 
@@ -244,6 +337,23 @@ class NormalizedTextExtractor:
         cfg = dict(config or {})
         source = _last_boxed_text(_raw_text(candidate)) or _raw_text(candidate)
         return _success("normalized_text", candidate, cfg, _normalize_text(source))
+
+
+class MathAnswerExtractor:
+    """Extract a math final answer from boxed text, answer lines, or raw text."""
+
+    def extract(
+        self,
+        trial: TrialSpec,
+        candidate: CandidateRecord,
+        config: Mapping[str, JSONValueType] | None = None,
+    ) -> ExtractionRecord:
+        """Extract the most likely final-answer span for short-answer math tasks."""
+        del trial
+        cfg = dict(config or {})
+        text = _raw_text(candidate)
+        parsed = _last_boxed_text(text) or _last_answer_line_text(text) or text.strip()
+        return _success("math_answer", candidate, cfg, parsed)
 
 
 class ChoiceLetterExtractor:

@@ -380,8 +380,10 @@ class PluginRegistry:
         from themis.extractors.builtin import (
             BoxedTextExtractor,
             ChoiceLetterExtractor,
+            EmbeddedJsonExtractor,
             FirstNumberExtractor,
             JsonSchemaExtractor,
+            MathAnswerExtractor,
             NormalizedTextExtractor,
             RegexExtractor,
         )
@@ -391,6 +393,9 @@ class PluginRegistry:
         )
         self.register_extractor(
             "json_schema", JsonSchemaExtractor, version="1.0.0", plugin_api="1.0"
+        )
+        self.register_extractor(
+            "embedded_json", EmbeddedJsonExtractor, version="1.0.0", plugin_api="1.0"
         )
         self.register_extractor(
             "first_number", FirstNumberExtractor, version="1.0.0", plugin_api="1.0"
@@ -404,6 +409,12 @@ class PluginRegistry:
         self.register_extractor(
             "normalized_text",
             NormalizedTextExtractor,
+            version="1.0.0",
+            plugin_api="1.0",
+        )
+        self.register_extractor(
+            "math_answer",
+            MathAnswerExtractor,
             version="1.0.0",
             plugin_api="1.0",
         )

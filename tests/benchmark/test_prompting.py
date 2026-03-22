@@ -76,3 +76,35 @@ def test_render_follow_up_turns_uses_benchmark_namespaces() -> None:
             ]
         }
     ]
+
+
+def test_render_prompt_messages_renders_multimodal_content_parts() -> None:
+    rendered = render_prompt_messages(
+        [
+            PromptMessage.model_validate(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Question: {item.question}"},
+                        {"type": "image_url", "image_url": "{item.image_url}"},
+                    ],
+                }
+            )
+        ],
+        {
+            "item": {
+                "question": "What is shown?",
+                "image_url": "https://example.com/diagram.png",
+            }
+        },
+    )
+
+    assert rendered == [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Question: What is shown?"},
+                {"type": "image_url", "image_url": "https://example.com/diagram.png"},
+            ],
+        }
+    ]

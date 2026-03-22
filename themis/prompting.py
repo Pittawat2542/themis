@@ -52,15 +52,41 @@ def _build_context_mapping(
 
 
 def _rendered_content(
-    template: str,
+    template: object,
     context: dict[str, object],
     mapping: _SafeNamespace,
     *,
     strict: bool,
-) -> str:
-    if strict:
-        return template.format_map(context)
-    return template.format_map(mapping)
+) -> object:
+    if isinstance(template, str):
+        if strict:
+            return template.format_map(context)
+        return template.format_map(mapping)
+    if isinstance(template, list):
+        rendered_parts: list[dict[str, object]] = []
+        for part in template:
+            rendered_part = dict(part.model_dump(mode="json"))
+            if rendered_part.get("type") == "text" and isinstance(
+                rendered_part.get("text"), str
+            ):
+                rendered_part["text"] = _rendered_content(
+                    rendered_part["text"],
+                    context,
+                    mapping,
+                    strict=strict,
+                )
+            if rendered_part.get("type") == "image_url" and isinstance(
+                rendered_part.get("image_url"), str
+            ):
+                rendered_part["image_url"] = _rendered_content(
+                    rendered_part["image_url"],
+                    context,
+                    mapping,
+                    strict=strict,
+                )
+            rendered_parts.append(rendered_part)
+        return rendered_parts
+    return template
 
 
 def render_prompt_messages(
@@ -68,11 +94,11 @@ def render_prompt_messages(
     namespaces: Mapping[str, object],
     *,
     strict: bool = False,
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
     """Render prompt messages against benchmark-native namespaces."""
 
     context, mapping = _build_context_mapping(namespaces)
-    rendered: list[dict[str, str]] = []
+    rendered: list[dict[str, object]] = []
     for message in messages:
         content = _rendered_content(
             message.content,
@@ -89,11 +115,11 @@ def render_follow_up_turns(
     namespaces: Mapping[str, object],
     *,
     strict: bool = False,
-) -> list[dict[str, list[dict[str, str]]]]:
+) -> list[dict[str, list[dict[str, object]]]]:
     """Render scripted follow-up turns against benchmark-native namespaces."""
 
     context, mapping = _build_context_mapping(namespaces)
-    rendered_turns: list[dict[str, list[dict[str, str]]]] = []
+    rendered_turns: list[dict[str, list[dict[str, object]]]] = []
     for turn in turns:
         rendered_turns.append(
             {

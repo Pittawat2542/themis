@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
+from typing import cast
+
 import pytest
 
 from themis.benchmark.compiler import compile_benchmark
@@ -17,6 +21,7 @@ from themis.specs.experiment import (
     InferenceParamsSpec,
     ProjectSpec,
     PromptTemplateSpec,
+    PromptMessage,
     SqliteBlobStorageSpec,
     TrialSpec,
 )
@@ -27,19 +32,27 @@ from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.migrate import migrate_sqlite_store
 from themis.storage.observability import SqliteObservabilityStore
 from themis.storage.run_manifest_repo import RunManifestRepository
+from themis.storage._protocols import StorageConnectionManager
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.types.enums import RecordStatus, DatasetSource, RunStage
+from themis.types.enums import PromptRole
 from themis.types.events import TrialEvent, TimelineStage
 
 
-def test_migrate_sqlite_store_rebuilds_projections_and_copies_links(tmp_path):
+def test_migrate_sqlite_store_rebuilds_projections_and_copies_links(
+    tmp_path: Path,
+) -> None:
     source_root = tmp_path / "source"
     source_root.mkdir()
     source_manager = DatabaseManager(f"sqlite:///{source_root / 'themis.sqlite3'}")
     source_manager.initialize()
-    event_repo = SqliteEventRepository(source_manager)
-    observability_store = SqliteObservabilityStore(source_manager)
-    source_blob_store = ArtifactStore(source_root / "artifacts", manager=source_manager)
+    storage_manager = cast(StorageConnectionManager, source_manager)
+    event_repo = SqliteEventRepository(storage_manager)
+    observability_store = SqliteObservabilityStore(storage_manager)
+    source_blob_store = ArtifactStore(
+        source_root / "artifacts",
+        manager=storage_manager,
+    )
 
     blob_ref = source_blob_store.put_blob(b'{"payload":"copied"}', "application/json")
     trial = TrialSpec(
@@ -56,84 +69,100 @@ def test_migrate_sqlite_store_rebuilds_projections_and_copies_links(tmp_path):
     )
     event_repo.save_spec(trial)
     for event in [
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=1,
-            event_id="evt_1",
-            event_type="item_loaded",
-            stage=TimelineStage.ITEM_LOAD,
-            metadata={"item_id": trial.item_id, "dataset_source": "memory"},
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 1,
+                "event_id": "evt_1",
+                "event_type": "item_loaded",
+                "stage": TimelineStage.ITEM_LOAD,
+                "metadata": {"item_id": trial.item_id, "dataset_source": "memory"},
+            }
         ),
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=2,
-            event_id="evt_2",
-            event_type="prompt_rendered",
-            stage=TimelineStage.PROMPT_RENDER,
-            metadata={"prompt_template_id": "baseline"},
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 2,
+                "event_id": "evt_2",
+                "event_type": "prompt_rendered",
+                "stage": TimelineStage.PROMPT_RENDER,
+                "metadata": {"prompt_template_id": "baseline"},
+            }
         ),
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=3,
-            event_id="evt_3",
-            event_type="candidate_started",
-            candidate_id="candidate_1",
-            payload={"sample_index": 0},
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 3,
+                "event_id": "evt_3",
+                "event_type": "candidate_started",
+                "candidate_id": "candidate_1",
+                "payload": {"sample_index": 0},
+            }
         ),
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=4,
-            event_id="evt_4",
-            event_type="inference_completed",
-            candidate_id="candidate_1",
-            stage=TimelineStage.INFERENCE,
-            metadata={"provider": "fake", "model_id": "test"},
-            payload={"spec_hash": "inf_hash", "raw_text": "42"},
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 4,
+                "event_id": "evt_4",
+                "event_type": "inference_completed",
+                "candidate_id": "candidate_1",
+                "stage": TimelineStage.INFERENCE,
+                "metadata": {"provider": "fake", "model_id": "test"},
+                "payload": {"spec_hash": "inf_hash", "raw_text": "42"},
+            }
         ),
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=5,
-            event_id="evt_5",
-            event_type="evaluation_completed",
-            candidate_id="candidate_1",
-            stage="evaluation",
-            metadata={
-                "metric_id": "exact_match",
-                "score": 1.0,
-                "transform_hash": None,
-                "evaluation_hash": "eval_1",
-            },
-            payload={
-                "spec_hash": "candidate_1",
-                "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
-            },
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 5,
+                "event_id": "evt_5",
+                "event_type": "evaluation_completed",
+                "candidate_id": "candidate_1",
+                "stage": "evaluation",
+                "metadata": {
+                    "metric_id": "exact_match",
+                    "score": 1.0,
+                    "transform_hash": None,
+                    "evaluation_hash": "eval_1",
+                },
+                "payload": {
+                    "spec_hash": "candidate_1",
+                    "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
+                },
+            }
         ),
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=6,
-            event_id="evt_6",
-            event_type="candidate_completed",
-            candidate_id="candidate_1",
-            payload={"status": "ok"},
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 6,
+                "event_id": "evt_6",
+                "event_type": "candidate_completed",
+                "candidate_id": "candidate_1",
+                "payload": {"status": "ok"},
+            }
         ),
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=7,
-            event_id="evt_7",
-            event_type="projection_completed",
-            stage=TimelineStage.PROJECTION,
-            metadata={
-                "transform_hash": None,
-                "evaluation_hash": "eval_1",
-                "projection_version": "v1",
-            },
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 7,
+                "event_id": "evt_7",
+                "event_type": "projection_completed",
+                "stage": TimelineStage.PROJECTION,
+                "metadata": {
+                    "transform_hash": None,
+                    "evaluation_hash": "eval_1",
+                    "projection_version": "v1",
+                },
+            }
         ),
-        TrialEvent(
-            trial_hash=trial.spec_hash,
-            event_seq=8,
-            event_id="evt_8",
-            event_type="trial_completed",
-            payload={"status": "ok"},
+        TrialEvent.model_validate(
+            {
+                "trial_hash": trial.spec_hash,
+                "event_seq": 8,
+                "event_id": "evt_8",
+                "event_type": "trial_completed",
+                "payload": {"status": "ok"},
+            }
         ),
     ]:
         event_repo.append_event(event)
@@ -164,7 +193,9 @@ def test_migrate_sqlite_store_rebuilds_projections_and_copies_links(tmp_path):
     )
     assert record is not None
     assert record.status == RecordStatus.OK
-    assert record.candidates[0].evaluation.aggregate_scores["exact_match"] == 1.0
+    evaluation = record.candidates[0].evaluation
+    assert evaluation is not None
+    assert evaluation.aggregate_scores["exact_match"] == 1.0
 
     snapshot = destination_bundle.observability_store.get_snapshot(
         trial.spec_hash,
@@ -178,7 +209,9 @@ def test_migrate_sqlite_store_rebuilds_projections_and_copies_links(tmp_path):
     assert destination_bundle.blob_store.exists(blob_ref)
 
 
-def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(tmp_path):
+def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(
+    tmp_path: Path,
+) -> None:
     source_root = tmp_path / "source_manifests"
     source_root.mkdir()
     source_manager = DatabaseManager(f"sqlite:///{source_root / 'themis.sqlite3'}")
@@ -217,17 +250,17 @@ def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(tmp_path
                 trial_hash="trial_hash_1",
                 candidate_index=0,
                 candidate_id="candidate_1",
-                started_at="2026-03-15T10:00:00+00:00",
+                started_at=datetime.fromisoformat("2026-03-15T10:00:00+00:00"),
             ),
             StageWorkItem(
                 work_item_id="work_done",
-                stage="evaluation",
+                stage=RunStage.EVALUATION,
                 status=WorkItemStatus.COMPLETED,
                 trial_hash="trial_hash_1",
                 candidate_index=0,
                 candidate_id="candidate_1",
                 evaluation_hash="eval_1",
-                ended_at="2026-03-15T10:01:00+00:00",
+                ended_at=datetime.fromisoformat("2026-03-15T10:01:00+00:00"),
                 last_error_code="metric_failure",
                 last_error_message="judge timeout",
             ),
@@ -260,8 +293,8 @@ def test_migrate_sqlite_store_copies_run_manifests_and_stage_work_items(tmp_path
 
 
 def test_migrate_sqlite_store_reads_legacy_source_schema_without_mutating_it(
-    tmp_path,
-):
+    tmp_path: Path,
+) -> None:
     source_root = tmp_path / "source_legacy_columns"
     source_root.mkdir()
     source_manager = DatabaseManager(f"sqlite:///{source_root / 'themis.sqlite3'}")
@@ -280,7 +313,12 @@ def test_migrate_sqlite_store_reads_legacy_source_schema_without_mutating_it(
         prompt_variants=[
             PromptVariantSpec(
                 id="baseline",
-                messages=[{"role": "user", "content": "Solve the task."}],
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Solve the task.",
+                    )
+                ],
             )
         ],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
@@ -320,13 +358,14 @@ def test_migrate_sqlite_store_reads_legacy_source_schema_without_mutating_it(
 
 
 def test_migrate_sqlite_store_rebuilds_overlay_projections_without_blob_copy(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source_root = tmp_path / "source_no_blobs"
     source_root.mkdir()
     source_manager = DatabaseManager(f"sqlite:///{source_root / 'themis.sqlite3'}")
     source_manager.initialize()
-    event_repo = SqliteEventRepository(source_manager)
+    event_repo = SqliteEventRepository(cast(StorageConnectionManager, source_manager))
 
     def build_trial(
         trial_id: str, candidate_id: str, evaluation_hash: str
@@ -354,58 +393,71 @@ def test_migrate_sqlite_store_rebuilds_overlay_projections_without_blob_copy(
         evaluation_hash = f"eval_{index}"
         event_repo.save_spec(trial)
         for event in [
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=1,
-                event_id=f"evt_{index}_1",
-                event_type="item_loaded",
-                stage=TimelineStage.ITEM_LOAD,
-                metadata={"item_id": trial.item_id, "dataset_source": "memory"},
+            TrialEvent.model_validate(
+                {
+                    "trial_hash": trial.spec_hash,
+                    "event_seq": 1,
+                    "event_id": f"evt_{index}_1",
+                    "event_type": "item_loaded",
+                    "stage": TimelineStage.ITEM_LOAD,
+                    "metadata": {
+                        "item_id": trial.item_id,
+                        "dataset_source": "memory",
+                    },
+                }
             ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=2,
-                event_id=f"evt_{index}_2",
-                event_type="candidate_started",
-                candidate_id=candidate_id,
-                payload={"sample_index": 0},
+            TrialEvent.model_validate(
+                {
+                    "trial_hash": trial.spec_hash,
+                    "event_seq": 2,
+                    "event_id": f"evt_{index}_2",
+                    "event_type": "candidate_started",
+                    "candidate_id": candidate_id,
+                    "payload": {"sample_index": 0},
+                }
             ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=3,
-                event_id=f"evt_{index}_3",
-                event_type="evaluation_completed",
-                candidate_id=candidate_id,
-                stage="evaluation",
-                metadata={
-                    "metric_id": "exact_match",
-                    "score": 1.0,
-                    "transform_hash": None,
-                    "evaluation_hash": evaluation_hash,
-                },
-                payload={
-                    "spec_hash": candidate_id,
-                    "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
-                },
+            TrialEvent.model_validate(
+                {
+                    "trial_hash": trial.spec_hash,
+                    "event_seq": 3,
+                    "event_id": f"evt_{index}_3",
+                    "event_type": "evaluation_completed",
+                    "candidate_id": candidate_id,
+                    "stage": "evaluation",
+                    "metadata": {
+                        "metric_id": "exact_match",
+                        "score": 1.0,
+                        "transform_hash": None,
+                        "evaluation_hash": evaluation_hash,
+                    },
+                    "payload": {
+                        "spec_hash": candidate_id,
+                        "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
+                    },
+                }
             ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=4,
-                event_id=f"evt_{index}_4",
-                event_type="projection_completed",
-                stage=TimelineStage.PROJECTION,
-                metadata={
-                    "transform_hash": None,
-                    "evaluation_hash": evaluation_hash,
-                    "projection_version": "v1",
-                },
+            TrialEvent.model_validate(
+                {
+                    "trial_hash": trial.spec_hash,
+                    "event_seq": 4,
+                    "event_id": f"evt_{index}_4",
+                    "event_type": "projection_completed",
+                    "stage": TimelineStage.PROJECTION,
+                    "metadata": {
+                        "transform_hash": None,
+                        "evaluation_hash": evaluation_hash,
+                        "projection_version": "v1",
+                    },
+                }
             ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=5,
-                event_id=f"evt_{index}_5",
-                event_type="trial_completed",
-                payload={"status": "ok"},
+            TrialEvent.model_validate(
+                {
+                    "trial_hash": trial.spec_hash,
+                    "event_seq": 5,
+                    "event_id": f"evt_{index}_5",
+                    "event_type": "trial_completed",
+                    "payload": {"status": "ok"},
+                }
             ),
         ]:
             event_repo.append_event(event)
@@ -423,7 +475,7 @@ def test_migrate_sqlite_store_rebuilds_overlay_projections_without_blob_copy(
         transform_hash: str | None = None,
         evaluation_hash: str | None = None,
         extra_events=None,
-    ):
+    ) -> object:
         materialized.append((trial_hash, transform_hash, evaluation_hash))
         return original_materialize(
             trial_hash,

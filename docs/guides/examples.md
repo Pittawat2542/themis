@@ -20,6 +20,7 @@ deterministic and order-based rather than random.
 | `10_agent_eval.py` | Bootstrap prompts, follow-up turns, tool declaration and selection, runtime handlers, and agent traces |
 | `11_quick_benchmark.py` | `BenchmarkSpec.simple()`, `BenchmarkSpec.preview()`, and `PluginRegistry.from_dict()` |
 | `12_iter_and_estimate.py` | `run_benchmark_iter()` streaming, `estimate()` trial matrix, and `RunDiff.has_invalidated_resume_work` |
+| `13_catalog_builtin_benchmark.py` | `themis.catalog.list_catalog_benchmarks()` and `build_catalog_benchmark_project(...)` with a local fixture dataset loader |
 
 ## Intentionally Untouched
 

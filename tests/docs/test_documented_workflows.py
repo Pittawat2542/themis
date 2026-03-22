@@ -36,6 +36,36 @@ def _run_quickcheck(*args: str) -> str:
     )
 
 
+def _run_themis(*args: str) -> str:
+    return _run_command(
+        sys.executable,
+        "-c",
+        "from themis.cli.main import main; raise SystemExit(main())",
+        *args,
+    )
+
+
+def test_quick_start_docs_match_quick_eval_smoke_output() -> None:
+    quick_start = (PROJECT_ROOT / "docs/quick-start/index.md").read_text()
+    output = _run_themis(
+        "quick-eval",
+        "inline",
+        "--model",
+        "demo-model",
+        "--provider",
+        "demo",
+        "--input",
+        "2 + 2",
+        "--expected",
+        "4",
+        "--format",
+        "json",
+    ).strip()
+
+    assert output
+    assert output in quick_start
+
+
 def test_hello_world_docs_match_runnable_example() -> None:
     _reset_example_state()
 

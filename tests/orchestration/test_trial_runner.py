@@ -413,13 +413,20 @@ def test_trial_runner_rejects_selected_tools_without_handlers_before_inference(
     assert seen["called"] is False
 
 
-def test_trial_runner_prefers_runtime_tool_handlers_over_registry(trial_spec):
+def test_trial_runner_prefers_runtime_tool_handlers_over_registry(
+    trial_spec: TrialSpec,
+) -> None:
     registry_handler = object()
     runtime_handler = object()
     seen: dict[str, object] = {}
 
     class ToolAwareEngine(InferenceEngine):
-        def infer(self, trial, context: DatasetContext, runtime):
+        def infer(
+            self,
+            trial: TrialSpec,
+            context: DatasetContext,
+            runtime: RuntimeContext,
+        ) -> InferenceResult:
             del trial, context
             seen["handler"] = runtime.tool_handlers["search"]
             return InferenceResult(

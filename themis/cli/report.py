@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import argparse
 import importlib
 from json import JSONDecodeError
 from pathlib import Path
 import tomllib
-from typing import Any
+from typing import Literal, cast
 
+from cyclopts import App
+from rich.console import Console
 from pydantic import ValidationError
 
+from themis.cli._common import invoke_app
 from themis.config_report import generate_config_report
 from themis.errors import SpecValidationError
 from themis.specs.experiment import ProjectSpec
@@ -20,74 +22,66 @@ from themis.types.enums import ErrorCode
 from themis.types.json_validation import format_validation_error
 
 
-def add_report_arguments(parser: argparse.ArgumentParser) -> None:
-    """Attach config-report arguments to an argparse parser.
+def build_app(*, standalone: bool = False) -> App:
+    """Build the config-report Cyclopts app.
 
     Args:
-        parser: The parser that should receive config-report arguments.
+        standalone: Whether to use the standalone executable name instead of the
+            nested parent-command name.
+
+    Returns:
+        App: Configured report CLI application.
     """
 
-    input_group = parser.add_mutually_exclusive_group(required=True)
-    input_group.add_argument("--factory")
-    input_group.add_argument("--project-file")
-    parser.add_argument("--run-id")
-    parser.add_argument(
-        "--format",
-        choices=["json", "yaml", "markdown", "latex"],
-        default="markdown",
+    app = App(
+        name="themis-report" if standalone else "report",
+        help="Render reproducibility-friendly config reports from a factory or run.",
     )
-    parser.add_argument(
-        "--verbosity",
-        choices=["default", "full"],
-        default="default",
-    )
-    parser.add_argument("--output")
 
+    @app.default
+    def report(
+        factory: str | None = None,
+        project_file: str | None = None,
+        run_id: str | None = None,
+        format: str = "markdown",
+        verbosity: str = "default",
+        output: str | None = None,
+    ) -> int:
+        if (factory is None) == (project_file is None):
+            return _emit_error("Pass exactly one of --factory or --project-file.")
+        if format not in {"json", "yaml", "markdown", "latex"}:
+            return _emit_error("--format must be one of: json, yaml, markdown, latex.")
+        if verbosity not in {"default", "full"}:
+            return _emit_error("--verbosity must be one of: default, full.")
+        resolved_format = cast(
+            Literal["json", "yaml", "markdown", "latex"],
+            format,
+        )
+        resolved_verbosity = cast(Literal["default", "full"], verbosity)
+        if factory is not None:
+            if run_id is not None:
+                return _emit_error("--run-id requires --project-file.")
+            config = _load_factory(factory)
+            entrypoint = factory
+        else:
+            if run_id is None:
+                return _emit_error("--run-id is required with --project-file.")
+            assert project_file is not None
+            config = _load_run_manifest_bundle(project_file, run_id)
+            entrypoint = f"run_manifest:{run_id}"
 
-def configure_report_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Configure one parser to serve the config-report CLI.
+        rendered = generate_config_report(
+            config,
+            format=resolved_format,
+            output=output,
+            entrypoint=entrypoint,
+            verbosity=resolved_verbosity,
+        )
+        if output is None:
+            print(rendered, end="")
+        return 0
 
-    Args:
-        parser: The parser to configure for config-report dispatch.
-
-    Returns:
-        The same parser after arguments and dispatch metadata are attached.
-    """
-
-    add_report_arguments(parser)
-    parser.set_defaults(handler=run_with_args, _parser=parser)
-    return parser
-
-
-def build_parser(*, prog: str = "themis report") -> argparse.ArgumentParser:
-    """Build the config-report CLI parser.
-
-    Args:
-        prog: Program name displayed in usage text.
-
-    Returns:
-        A fully configured parser for the standalone config-report CLI.
-    """
-
-    parser = argparse.ArgumentParser(prog=prog)
-    return configure_report_parser(parser)
-
-
-def add_report_subparser(
-    subparsers: argparse._SubParsersAction[Any],
-) -> argparse.ArgumentParser:
-    """Add the report command to a parent CLI.
-
-    Args:
-        subparsers: Parent CLI subparser collection that should receive the
-            `report` command.
-
-    Returns:
-        The configured report parser that was attached to the parent CLI.
-    """
-
-    parser = subparsers.add_parser("report")
-    return configure_report_parser(parser)
+    return app
 
 
 def _load_factory(factory_path: str) -> object:
@@ -148,60 +142,20 @@ def _load_run_manifest_bundle(project_file: str, run_id: str) -> dict[str, objec
     return bundle
 
 
-def run_with_args(args: argparse.Namespace) -> int:
-    """Execute the parsed config-report command.
-
-    Args:
-        args: Parsed report arguments, including the selected input mode and
-            output-rendering options.
-
-    Returns:
-        A shell-compatible exit status for the report command.
-
-    Raises:
-        SystemExit: Raised by argparse when required argument combinations are
-            missing.
-        ValueError: If the referenced run manifest cannot be found.
-    """
-
-    parser: argparse.ArgumentParser = args._parser
-    if args.factory is not None:
-        if args.run_id is not None:
-            parser.error("--run-id requires --project-file.")
-        config = _load_factory(args.factory)
-        entrypoint = args.factory
-    else:
-        if args.run_id is None:
-            parser.error("--run-id is required with --project-file.")
-        assert args.project_file is not None
-        config = _load_run_manifest_bundle(args.project_file, args.run_id)
-        entrypoint = f"run_manifest:{args.run_id}"
-
-    rendered = generate_config_report(
-        config,
-        format=args.format,
-        output=args.output,
-        entrypoint=entrypoint,
-        verbosity=args.verbosity,
-    )
-    if args.output is None:
-        print(rendered, end="")
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     """Run the config-report CLI.
 
     Args:
-        argv: Optional argument vector to parse instead of `sys.argv`.
+        argv: Optional command-line arguments. When ``None``, Cyclopts reads from
+            the process command line.
 
     Returns:
-        A shell-compatible exit status for the selected config-report action.
-
-    Raises:
-        SystemExit: Propagated by argparse when invalid CLI input is supplied.
+        int: Shell-style exit status from the invoked CLI command.
     """
 
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    return run_with_args(args)
+    return invoke_app(build_app(standalone=True), argv)
+
+
+def _emit_error(message: str) -> int:
+    Console(stderr=True, markup=False).print(message)
+    return 1

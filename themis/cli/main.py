@@ -2,61 +2,44 @@
 
 from __future__ import annotations
 
-import argparse
+from cyclopts import App
 
-from themis.cli import quickcheck as quickcheck_cli
-from themis.cli import report as report_cli
-
-
-def _system_exit_code(code: object) -> int:
-    """Normalize ``SystemExit.code`` to a shell exit status."""
-
-    if code is None:
-        return 0
-    if isinstance(code, int):
-        return code
-    return 1
+from themis import __version__
+from themis.cli._common import invoke_app
+from themis.cli.init import build_app as build_init_app
+from themis.cli.quick_eval import build_app as build_quick_eval_app
+from themis.cli.quickcheck import build_app as build_quickcheck_app
+from themis.cli.report import build_app as build_report_app
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Build the top-level Themis CLI parser.
+def build_app() -> App:
+    """Build the top-level Themis Cyclopts app.
 
     Returns:
-        A parser configured with the currently supported Themis subcommands.
+        App: Configured root CLI application with all subcommands attached.
     """
 
-    parser = argparse.ArgumentParser(prog="themis")
-    subparsers = parser.add_subparsers(dest="subcommand", required=True)
-
-    quickcheck_cli.add_quickcheck_subparser(subparsers)
-    report_cli.add_report_subparser(subparsers)
-    return parser
+    app = App(
+        name="themis",
+        help="Themis benchmark-first CLI.",
+        version=__version__,
+    )
+    app.command(build_quick_eval_app())
+    app.command(build_quickcheck_app())
+    app.command(build_report_app())
+    app.command(build_init_app())
+    return app
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the top-level Themis CLI.
 
     Args:
-        argv: Optional argument vector to parse instead of `sys.argv`.
+        argv: Optional command-line arguments. When ``None``, Cyclopts reads from
+            the process command line.
 
     Returns:
-        A shell-compatible exit status produced by the selected subcommand.
-
-    Raises:
-        SystemExit: Normalized into the returned shell exit status when argparse
-            or a subcommand exits.
+        int: Shell-style exit status from the invoked CLI command.
     """
 
-    parser = build_parser()
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit as exc:
-        return _system_exit_code(exc.code)
-
-    handler = getattr(args, "handler", None)
-    if handler is None:
-        parser.error("Unknown command.")
-    try:
-        return handler(args)
-    except SystemExit as exc:
-        return _system_exit_code(exc.code)
+    return invoke_app(build_app(), argv)

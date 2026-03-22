@@ -148,6 +148,10 @@ class DatasetSpec(SpecBase):
     data_dir: str | None = Field(
         default=None, description="Local directory containing the data."
     )
+    config_name: str | None = Field(
+        default=None,
+        description="Optional Hugging Face dataset config/subset name.",
+    )
     split: str = Field(default="test", description="Dataset split to evaluate.")
     revision: str | None = Field(
         default=None, description="Git commit or tag for version pinning."

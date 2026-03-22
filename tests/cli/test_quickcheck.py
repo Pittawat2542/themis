@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-from argparse import Namespace
 import logging
 
 from themis.cli.quickcheck import (
     _load_dimensions,
     _parse_dimension_filters,
     _run_scores,
-    build_parser,
     main,
-    run_with_args,
 )
 from themis.storage.sqlite_schema import DatabaseManager
 
@@ -293,33 +290,26 @@ def test_quickcheck_failures_can_select_evaluation_overlay(tmp_path, capsys):
     assert "metric failed" in failures_output
 
 
-def test_quickcheck_parser_sets_parser_default() -> None:
-    args = build_parser().parse_args(["failures", "--db", "example.db"])
+def test_quickcheck_help_lists_primary_subcommands(capsys) -> None:
+    assert main(["--help"]) == 0
 
-    assert args._parser.prog == "themis-quickcheck"
+    out = capsys.readouterr().out
+    assert "failures" in out
+    assert "scores" in out
+    assert "latency" in out
 
 
-def test_quickcheck_run_with_args_returns_error_code_for_unknown_command(
-    tmp_path,
-) -> None:
-    db_path = tmp_path / "quickcheck_empty.db"
+def test_quickcheck_latency_preserves_token_summary_output(tmp_path, capsys) -> None:
+    db_path = tmp_path / "quickcheck_latency_tokens.db"
     manager = DatabaseManager(f"sqlite:///{db_path}")
     manager.initialize()
+    _seed_quickcheck_db(manager)
 
-    assert (
-        run_with_args(
-            Namespace(
-                command="unknown",
-                db=str(db_path),
-                limit=10,
-                transform_hash=None,
-                evaluation_hash=None,
-                metric=None,
-                task=None,
-            )
-        )
-        == 2
-    )
+    assert main(["latency", "--db", str(db_path)]) == 0
+
+    output = capsys.readouterr().out
+    assert "tokens_in" in output
+    assert "tokens_out" in output
 
 
 def test_quickcheck_scores_pushes_slice_filter_into_sql() -> None:
