@@ -5,9 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 import csv
 from dataclasses import dataclass, field
+import inspect
 import json
 from pathlib import Path
 import random
+import re
 
 from themis._optional import import_optional
 from themis.prompting import render_prompt_messages
@@ -22,9 +24,9 @@ Answer: {answer}
 Confidence: {confidence}%"""
 
 type CatalogRow = dict[str, object]
-type CatalogPromptMessage = dict[str, str]
+type CatalogPromptMessage = dict[str, object]
 type CatalogMetadataLoader = Callable[[str, str | None], JSONDict]
-type CatalogRowLoader = Callable[[str, str, str | None], list[CatalogRow]]
+type CatalogRowLoader = Callable[..., list[CatalogRow]]
 type CatalogRowNormalizer = Callable[
     [list[CatalogRow], object], "CatalogNormalizedRows"
 ]
@@ -65,10 +67,12 @@ class CatalogDatasetProvider:
         elif dataset.source == DatasetSource.HUGGINGFACE:
             if dataset.dataset_id is None:
                 raise ValueError("HuggingFace catalog datasets require a dataset_id.")
-            rows = self._huggingface_loader(
+            rows = _invoke_huggingface_loader(
+                self._huggingface_loader,
                 dataset.dataset_id,
                 dataset.split,
                 dataset.revision,
+                config_name=dataset.config_name,
             )
         else:
             raise ValueError(f"Unsupported catalog dataset source '{dataset.source}'.")
@@ -123,10 +127,12 @@ class BuiltinDatasetProvider(CatalogDatasetProvider):
             raise ValueError(
                 "Built-in HuggingFace dataset providers require a dataset_id."
             )
-        return self._huggingface_loader(
+        return _invoke_huggingface_loader(
+            self._huggingface_loader,
             dataset.dataset_id,
             dataset.split,
             dataset.revision,
+            config_name=dataset.config_name,
         )
 
     def normalize_loaded_rows(
@@ -189,6 +195,7 @@ def load_huggingface_rows(
     dataset_id: str,
     split: str,
     revision: str | None = None,
+    config_name: str | None = None,
     *,
     datasets_module=None,
 ) -> list[CatalogRow]:
@@ -196,13 +203,21 @@ def load_huggingface_rows(
 
     datasets = datasets_module or import_optional("datasets", extra="datasets")
     try:
-        dataset = datasets.load_dataset(dataset_id, split=split, revision=revision)
+        dataset = _datasets_load_dataset(
+            datasets,
+            dataset_id,
+            split=split,
+            revision=revision,
+            config_name=config_name,
+        )
     except Exception as exc:
         if _should_retry_huggingface_streaming(dataset_id, exc, datasets):
-            dataset = datasets.load_dataset(
+            dataset = _datasets_load_dataset(
+                datasets,
                 dataset_id,
                 split=split,
                 revision=revision,
+                config_name=config_name,
                 streaming=True,
             )
         else:
@@ -215,13 +230,20 @@ def load_hle_rows(
     dataset_id: str,
     split: str,
     revision: str | None = None,
+    config_name: str | None = None,
     *,
     datasets_module=None,
 ) -> list[CatalogRow]:
     """Load HLE rows without forcing image decoding during iteration."""
 
     datasets = datasets_module or import_optional("datasets", extra="datasets")
-    dataset = datasets.load_dataset(dataset_id, split=split, revision=revision)
+    dataset = _datasets_load_dataset(
+        datasets,
+        dataset_id,
+        split=split,
+        revision=revision,
+        config_name=config_name,
+    )
     dataset = _prepare_huggingface_dataset_for_iteration(dataset, datasets)
     return _assign_missing_item_ids([dict(row) for row in dataset])
 
@@ -230,6 +252,7 @@ def load_healthbench_rows(
     dataset_id: str,
     split: str,
     revision: str | None = None,
+    config_name: str | None = None,
     *,
     datasets_module=None,
 ) -> list[CatalogRow]:
@@ -237,13 +260,21 @@ def load_healthbench_rows(
 
     datasets = datasets_module or import_optional("datasets", extra="datasets")
     try:
-        dataset = datasets.load_dataset(dataset_id, split=split, revision=revision)
+        dataset = _datasets_load_dataset(
+            datasets,
+            dataset_id,
+            split=split,
+            revision=revision,
+            config_name=config_name,
+        )
     except Exception as exc:
         if _should_retry_huggingface_streaming(dataset_id, exc, datasets):
-            dataset = datasets.load_dataset(
+            dataset = _datasets_load_dataset(
+                datasets,
                 dataset_id,
                 split=split,
                 revision=revision,
+                config_name=config_name,
                 streaming=True,
             )
         else:
@@ -254,6 +285,7 @@ def load_healthbench_rows(
 def inspect_huggingface_dataset(
     dataset_id: str,
     *,
+    config_name: str | None = None,
     split: str = "test",
     revision: str | None = None,
     metadata_loader: CatalogMetadataLoader | None = None,
@@ -272,18 +304,26 @@ def inspect_huggingface_dataset(
         )
     )
     rows = (
-        row_loader(dataset_id, split, revision)
+        _invoke_huggingface_loader(
+            row_loader,
+            dataset_id,
+            split,
+            revision,
+            config_name=config_name,
+        )
         if row_loader is not None
         else load_huggingface_rows(
             dataset_id,
             split,
             revision,
+            config_name,
             datasets_module=datasets,
         )
     )
     return validate_json_dict(
         {
             "dataset_id": dataset_id,
+            "config_name": config_name,
             "split": split,
             "revision": revision,
             "splits": _string_list(metadata.get("splits")),
@@ -339,6 +379,45 @@ def _apply_query(rows: list[CatalogRow], query) -> list[CatalogRow]:
     return filtered
 
 
+def _datasets_load_dataset(
+    datasets_module,
+    dataset_id: str,
+    *,
+    split: str,
+    revision: str | None,
+    config_name: str | None,
+    streaming: bool = False,
+):
+    kwargs: dict[str, object] = {
+        "split": split,
+        "revision": revision,
+    }
+    if streaming:
+        kwargs["streaming"] = True
+    if config_name is None:
+        return datasets_module.load_dataset(dataset_id, **kwargs)
+    return datasets_module.load_dataset(dataset_id, config_name, **kwargs)
+
+
+def _invoke_huggingface_loader(
+    loader: CatalogRowLoader,
+    dataset_id: str,
+    split: str,
+    revision: str | None,
+    *,
+    config_name: str | None,
+) -> list[CatalogRow]:
+    signature = inspect.signature(loader)
+    if "config_name" in signature.parameters:
+        return loader(
+            dataset_id,
+            split,
+            revision,
+            config_name=config_name,
+        )
+    return loader(dataset_id, split, revision)
+
+
 def _assign_missing_item_ids(rows: list[CatalogRow]) -> list[CatalogRow]:
     normalized: list[CatalogRow] = []
     for index, row in enumerate(rows, start=1):
@@ -350,7 +429,10 @@ def _assign_missing_item_ids(rows: list[CatalogRow]) -> list[CatalogRow]:
 
 def _render_string_template(template: str, payload: CatalogRow) -> str:
     message = PromptMessage(role=PromptRole.USER, content=template)
-    return render_prompt_messages([message], payload, strict=True)[0]["content"]
+    rendered = render_prompt_messages([message], payload, strict=True)[0]["content"]
+    if not isinstance(rendered, str):
+        raise ValueError("Catalog dataset transforms require string prompt content.")
+    return rendered
 
 
 def _apply_dataset_transforms(
@@ -439,6 +521,75 @@ def _normalize_mcq_rows(
     return CatalogNormalizedRows(rows=normalized)
 
 
+def _normalize_gpqa_diamond_rows(
+    rows: list[CatalogRow],
+    dataset: object,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        question, options = _parse_gpqa_diamond_question(
+            str(payload.get("question", ""))
+        )
+        payload["question"] = question
+        payload["options"] = options
+        payload["expected"] = str(payload.get("answer", "")).strip().upper()
+        payload["metadata"] = {}
+        payload["options_text"] = _format_options_text(options)
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
+def _normalize_babe_rows(
+    rows: list[CatalogRow],
+    dataset: object,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        label_value = payload.get("label", 0)
+        label = int(label_value) if isinstance(label_value, int | bool | float) else 0
+        payload["item_id"] = str(payload.get("uuid", payload.get("item_id", "")))
+        payload["question"] = str(payload.get("text", ""))
+        payload["options"] = ["Entirely factual", "Opinionated or subjective"]
+        payload["expected"] = "A" if label == 0 else "B"
+        payload["metadata"] = _metadata_dict(
+            payload, ["outlet", "topic", "type", "label_opinion"]
+        )
+        payload["options_text"] = _format_options_text(payload["options"])
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
+def _normalize_mmmlu_rows(
+    rows: list[CatalogRow],
+    dataset: object,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        payload["item_id"] = str(payload.get("Unnamed: 0", payload.get("item_id", "")))
+        payload["question"] = str(payload.get("Question", ""))
+        payload["options"] = [
+            str(payload.get("A", "")),
+            str(payload.get("B", "")),
+            str(payload.get("C", "")),
+            str(payload.get("D", "")),
+        ]
+        payload["expected"] = str(payload.get("Answer", "")).strip().upper()
+        metadata = _metadata_dict(payload, ["Subject"])
+        if "Subject" in payload:
+            metadata["subject"] = str(payload["Subject"])
+            metadata.pop("Subject", None)
+        payload["metadata"] = metadata
+        payload["options_text"] = _format_options_text(payload["options"])
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
 def _normalize_simpleqa_rows(
     rows: list[CatalogRow],
     dataset: object,
@@ -453,6 +604,24 @@ def _normalize_simpleqa_rows(
             ["topic", "answer_type", "multi_step", "requires_reasoning"],
         )
         payload.setdefault("expected_response", str(payload.get("answer", "")))
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
+def _normalize_frontierscience_rows(
+    rows: list[CatalogRow],
+    dataset: object,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        payload["prompt_text"] = str(payload.get("problem", ""))
+        payload["expected_response"] = str(payload.get("answer", ""))
+        payload["metadata"] = {
+            "subject": str(payload.get("subject", "")),
+            "task_group_id": str(payload.get("task_group_id", "")),
+        }
         normalized.append(payload)
     return CatalogNormalizedRows(rows=normalized)
 
@@ -496,6 +665,83 @@ def _normalize_lpfqa_rows(
         payload["expected_response"] = _extract_lpfqa_reference_answer(
             str(payload.get("response_reference", ""))
         )
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
+def _normalize_phybench_rows(
+    rows: list[CatalogRow],
+    dataset: object,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        payload["item_id"] = str(payload.get("id", payload.get("item_id", "")))
+        payload["problem"] = str(payload.get("content", ""))
+        payload["answer"] = str(payload.get("answer", "")).strip()
+        payload["metadata"] = _metadata_dict(payload, ["tag"])
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
+def _normalize_procbench_rows(
+    rows: list[CatalogRow],
+    dataset: object,
+) -> CatalogNormalizedRows:
+    del dataset
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        label = payload.get("label")
+        final_value: object = None
+        if isinstance(label, dict):
+            final_value = label.get("final")
+        payload["item_id"] = str(
+            payload.get("problem_name", payload.get("item_id", ""))
+        )
+        payload["prompt_text"] = str(payload.get("prompt", ""))
+        payload["expected"] = final_value
+        payload["metadata"] = _metadata_dict(payload, ["task_name", "example_name"])
+        normalized.append(payload)
+    return CatalogNormalizedRows(rows=normalized)
+
+
+def _normalize_superchem_rows(
+    rows: list[CatalogRow],
+    dataset_or_slice: object,
+) -> CatalogNormalizedRows:
+    language = "en"
+    dimensions = getattr(dataset_or_slice, "dimensions", {})
+    if isinstance(dimensions, dict):
+        resolved_language = dimensions.get("language")
+        if isinstance(resolved_language, str) and resolved_language in {"en", "zh"}:
+            language = resolved_language
+    normalized: list[CatalogRow] = []
+    for row in rows:
+        payload = dict(row)
+        options = _superchem_options(payload, language=language)
+        expected = _superchem_answer(payload, language=language)
+        question = str(payload.get(f"question_{language}", ""))
+        prompt_text = (
+            f"{question}\n\nOptions:\n{_format_options_text(options)}\n\n"
+            "Return the best option letter only."
+        )
+        prompt_parts: list[dict[str, object]] = [{"type": "text", "text": prompt_text}]
+        for image_url in _superchem_question_images(payload):
+            prompt_parts.append({"type": "image_url", "image_url": image_url})
+        payload["item_id"] = str(payload.get("uuid", payload.get("item_id", "")))
+        payload["question"] = question
+        payload["options"] = options
+        payload["expected"] = expected
+        payload["prompt_text"] = prompt_text
+        payload["prompt_messages"] = [
+            {"role": "user", "content": prompt_parts},
+        ]
+        metadata = _metadata_dict(payload, ["field", "question_type"])
+        metadata["language"] = language
+        payload["metadata"] = metadata
+        payload["options_text"] = _format_options_text(options)
         normalized.append(payload)
     return CatalogNormalizedRows(rows=normalized)
 
@@ -582,7 +828,7 @@ def _prompt_messages_from_payload(payload: CatalogRow) -> list[CatalogPromptMess
             continue
         role = entry.get("role")
         content = entry.get("content")
-        if isinstance(role, str) and isinstance(content, str):
+        if isinstance(role, str) and _is_prompt_content(content):
             messages.append({"role": role, "content": content})
     return messages
 
@@ -596,15 +842,89 @@ def _prompt_messages_from_context(context: object) -> list[CatalogPromptMessage]
                 if (
                     isinstance(entry, dict)
                     and isinstance(entry.get("role"), str)
-                    and isinstance(entry.get("content"), str)
+                    and _is_prompt_content(entry.get("content"))
                 ):
                     messages.append(
                         {
                             "role": str(entry["role"]),
-                            "content": str(entry["content"]),
+                            "content": entry["content"],
                         }
                     )
             return messages
+    return []
+
+
+def _is_prompt_content(value: object) -> bool:
+    if isinstance(value, str):
+        return True
+    if not isinstance(value, list):
+        return False
+    for part in value:
+        if not isinstance(part, dict):
+            return False
+        part_type = part.get("type")
+        if part_type == "text" and isinstance(part.get("text"), str):
+            continue
+        if part_type == "image_url" and isinstance(part.get("image_url"), str):
+            continue
+        return False
+    return True
+
+
+_GPQA_OPTION_RE = re.compile(r"^([a-z])\)\s*(.+)$")
+_GPQA_MAPPING_RE = re.compile(r"^([A-Z])\.\s*([a-z])$")
+
+
+def _parse_gpqa_diamond_question(question: str) -> tuple[str, list[str]]:
+    lines = [line.strip() for line in question.splitlines() if line.strip()]
+    lower_options: dict[str, str] = {}
+    upper_mapping: dict[str, str] = {}
+    question_lines: list[str] = []
+    saw_option_block = False
+    for line in lines:
+        option_match = _GPQA_OPTION_RE.match(line)
+        if option_match is not None:
+            saw_option_block = True
+            lower_options[option_match.group(1)] = option_match.group(2).strip()
+            continue
+        mapping_match = _GPQA_MAPPING_RE.match(line)
+        if mapping_match is not None:
+            upper_mapping[mapping_match.group(1)] = mapping_match.group(2)
+            continue
+        if not saw_option_block:
+            question_lines.append(line)
+    options = [
+        lower_options[upper_mapping[label]]
+        for label in ("A", "B", "C", "D")
+        if label in upper_mapping and upper_mapping[label] in lower_options
+    ]
+    return "\n".join(question_lines).strip(), options
+
+
+def _superchem_options(payload: CatalogRow, *, language: str) -> list[str]:
+    raw_options = payload.get(f"options_{language}")
+    if isinstance(raw_options, dict):
+        return [
+            str(raw_options[key])
+            for key in sorted(raw_options)
+            if isinstance(raw_options.get(key), str)
+        ]
+    return []
+
+
+def _superchem_answer(payload: CatalogRow, *, language: str) -> str:
+    raw_answer = payload.get(f"answer_{language}")
+    if isinstance(raw_answer, list) and raw_answer:
+        return str(raw_answer[0]).strip().upper()
+    return ""
+
+
+def _superchem_question_images(payload: CatalogRow) -> list[str]:
+    raw_images = payload.get("question_images")
+    if isinstance(raw_images, list):
+        return [str(item) for item in raw_images if isinstance(item, str) and item]
+    if isinstance(raw_images, dict):
+        return [str(key) for key in raw_images if isinstance(key, str) and key]
     return []
 
 

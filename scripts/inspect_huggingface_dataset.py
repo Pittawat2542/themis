@@ -19,7 +19,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "dataset_specs",
         nargs="+",
-        help="One or more dataset repo ids, optionally as dataset_id:split.",
+        help=(
+            "One or more dataset repo ids, optionally as dataset_id:split or "
+            "dataset_id@config_name:split."
+        ),
     )
     parser.add_argument(
         "--split",
@@ -49,10 +52,13 @@ def main() -> int:
     args = _parse_args()
     summaries: list[dict[str, object]] = []
     for dataset_spec in args.dataset_specs:
-        dataset_id, split = _parse_dataset_spec(dataset_spec, default_split=args.split)
+        dataset_id, config_name, split = _parse_dataset_spec(
+            dataset_spec, default_split=args.split
+        )
         summaries.append(
             inspect_huggingface_dataset(
                 dataset_id,
+                config_name=config_name,
                 split=split,
                 revision=args.revision,
                 max_samples=args.samples,
@@ -69,15 +75,25 @@ def main() -> int:
     return 0
 
 
-def _parse_dataset_spec(spec: str, *, default_split: str) -> tuple[str, str]:
-    if ":" not in spec:
-        return spec, default_split
-    dataset_id, split = spec.rsplit(":", maxsplit=1)
-    if not dataset_id or not split:
+def _parse_dataset_spec(
+    spec: str, *, default_split: str
+) -> tuple[str, str | None, str]:
+    dataset_ref = spec
+    split = default_split
+    if ":" in spec:
+        dataset_ref, split = spec.rsplit(":", maxsplit=1)
+    if not dataset_ref or not split:
         raise ValueError(
-            "Dataset specs must use dataset_id or dataset_id:split format."
+            "Dataset specs must use dataset_id, dataset_id:split, or dataset_id@config:split format."
         )
-    return dataset_id, split
+    if "@" not in dataset_ref:
+        return dataset_ref, None, split
+    dataset_id, config_name = dataset_ref.rsplit("@", maxsplit=1)
+    if not dataset_id or not config_name:
+        raise ValueError(
+            "Dataset specs with configs must use dataset_id@config or dataset_id@config:split."
+        )
+    return dataset_id, config_name, split
 
 
 if __name__ == "__main__":

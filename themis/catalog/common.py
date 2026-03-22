@@ -54,13 +54,20 @@ def load_huggingface_rows(
     dataset_id: str,
     split: str,
     revision: str | None = None,
+    config_name: str | None = None,
 ) -> list[dict[str, object]]:
-    return _datasets.load_huggingface_rows(dataset_id, split, revision)
+    return _datasets.load_huggingface_rows(
+        dataset_id,
+        split,
+        revision,
+        config_name,
+    )
 
 
 def inspect_huggingface_dataset(
     dataset_id: str,
     *,
+    config_name: str | None = None,
     split: str = "test",
     revision: str | None = None,
     metadata_loader=None,
@@ -69,6 +76,7 @@ def inspect_huggingface_dataset(
 ) -> JSONDict:
     return _datasets.inspect_huggingface_dataset(
         dataset_id,
+        config_name=config_name,
         split=split,
         revision=revision,
         metadata_loader=metadata_loader,
@@ -90,6 +98,19 @@ def _catalog_metadata_str(definition: BenchmarkDefinition, key: str) -> str:
         return value
     raise ValueError(
         f"Built-in benchmark '{definition.benchmark_id}' metadata must define '{key}'."
+    )
+
+
+def _catalog_metadata_optional_str(
+    definition: BenchmarkDefinition, key: str
+) -> str | None:
+    value = _catalog_metadata(definition).get(key)
+    if value is None:
+        return None
+    if isinstance(value, str) and value:
+        return value
+    raise ValueError(
+        f"Built-in benchmark '{definition.benchmark_id}' metadata '{key}' must be a non-empty string when present."
     )
 
 
@@ -369,6 +390,7 @@ def mcq_dataset_spec(
     return DatasetSpec(
         source=DatasetSource.HUGGINGFACE,
         dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+        config_name=_catalog_metadata_optional_str(definition, "config_name"),
         split=_catalog_metadata_str(definition, "split"),
         revision=config.dataset_revision,
         transforms=[
@@ -394,6 +416,7 @@ def math_dataset_spec(
     return DatasetSpec(
         source=DatasetSource.HUGGINGFACE,
         dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+        config_name=_catalog_metadata_optional_str(definition, "config_name"),
         split=_catalog_metadata_str(definition, "split"),
         revision=config.dataset_revision,
         transforms=[
@@ -559,6 +582,9 @@ def build_simpleqa_benchmark(
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
                     dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    config_name=_catalog_metadata_optional_str(
+                        definition, "config_name"
+                    ),
                     split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                     transforms=[
@@ -616,6 +642,9 @@ def build_healthbench_benchmark(
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
                     dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    config_name=_catalog_metadata_optional_str(
+                        definition, "config_name"
+                    ),
                     split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                 ),
@@ -667,6 +696,9 @@ def build_lpfqa_benchmark(
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
                     dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    config_name=_catalog_metadata_optional_str(
+                        definition, "config_name"
+                    ),
                     split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                     transforms=[
@@ -724,6 +756,9 @@ def build_hle_benchmark(
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
                     dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    config_name=_catalog_metadata_optional_str(
+                        definition, "config_name"
+                    ),
                     split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                     transforms=[
@@ -755,6 +790,128 @@ def build_hle_benchmark(
                 ],
             )
             for variant_id in variant_ids
+        ],
+        inference_grid=InferenceGridSpec(
+            params=[
+                InferenceParamsSpec(
+                    max_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    seed=config.seed,
+                )
+            ]
+        ),
+    )
+
+
+def build_frontierscience_benchmark(
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
+) -> BenchmarkSpec:
+    prompt_variant_id = f"{definition.benchmark_id}-default"
+    return BenchmarkSpec(
+        benchmark_id=definition.benchmark_id,
+        models=[
+            ModelSpec(
+                model_id=config.model_id,
+                provider=config.provider,
+                extras=_runtime._provider_model_extras(config.provider),
+            )
+        ],
+        slices=[
+            SliceSpec(
+                slice_id=definition.benchmark_id,
+                dataset=DatasetSpec(
+                    source=DatasetSource.HUGGINGFACE,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    config_name=_catalog_metadata_optional_str(
+                        definition, "config_name"
+                    ),
+                    split=_catalog_metadata_str(definition, "split"),
+                    revision=config.dataset_revision,
+                ),
+                dataset_query=make_dataset_query(config),
+                prompt_variant_ids=[prompt_variant_id],
+                generation=GenerationSpec(),
+                scores=[ScoreSpec(name="judge", metrics=["frontierscience_score"])],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id=prompt_variant_id,
+                family=definition.benchmark_id,
+                messages=[
+                    PromptMessage(role=PromptRole.USER, content="{item.prompt_text}")
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(
+            params=[
+                InferenceParamsSpec(
+                    max_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    seed=config.seed,
+                )
+            ]
+        ),
+    )
+
+
+def build_procbench_benchmark(
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
+) -> BenchmarkSpec:
+    prompt_variant_id = f"{definition.benchmark_id}-default"
+    metadata = _catalog_metadata(definition)
+    raw_task_ids = metadata.get("task_ids", [])
+    task_ids = (
+        [str(item) for item in raw_task_ids] if isinstance(raw_task_ids, list) else []
+    )
+    return BenchmarkSpec(
+        benchmark_id=definition.benchmark_id,
+        models=[
+            ModelSpec(
+                model_id=config.model_id,
+                provider=config.provider,
+                extras=_runtime._provider_model_extras(config.provider),
+            )
+        ],
+        slices=[
+            SliceSpec(
+                slice_id=f"procbench-{task_id}",
+                dataset=DatasetSpec(
+                    source=DatasetSource.HUGGINGFACE,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    config_name=task_id,
+                    split=_catalog_metadata_str(definition, "split"),
+                    revision=config.dataset_revision,
+                ),
+                dataset_query=make_dataset_query(config),
+                dimensions={"task_name": task_id},
+                prompt_variant_ids=[prompt_variant_id],
+                generation=GenerationSpec(),
+                scores=[
+                    ScoreSpec(name="default", metrics=["procbench_final_accuracy"])
+                ],
+            )
+            for task_id in task_ids
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id=prompt_variant_id,
+                family=definition.benchmark_id,
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content=(
+                            "{item.prompt_text}\n\n"
+                            "Return only the final answer. "
+                            "If the answer is a list, return a JSON list."
+                        ),
+                    )
+                ],
+            )
         ],
         inference_grid=InferenceGridSpec(
             params=[
@@ -900,6 +1057,9 @@ def _build_code_generation_benchmark(
                 dataset=DatasetSpec(
                     source=DatasetSource.HUGGINGFACE,
                     dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    config_name=_catalog_metadata_optional_str(
+                        definition, "config_name"
+                    ),
                     split=_catalog_metadata_str(definition, "split"),
                     revision=config.dataset_revision,
                     transforms=transforms,
@@ -1003,6 +1163,23 @@ def register_lpfqa(
     )
 
 
+def register_frontierscience(
+    _definition,
+    registry: PluginRegistry,
+    config: BenchmarkDefinitionConfig,
+) -> None:
+    from .benchmarks.frontierscience.metric import FrontierScienceJudgeMetric
+
+    registry.register_metric(
+        "frontierscience_score",
+        partial(
+            FrontierScienceJudgeMetric,
+            judge_model_id=str(config.judge_model_id),
+            judge_provider=str(config.judge_provider),
+        ),
+    )
+
+
 def register_hle(
     _definition,
     registry: PluginRegistry,
@@ -1065,6 +1242,21 @@ def register_livecodebench(
     )
 
 
+def register_procbench(
+    _definition,
+    registry: PluginRegistry,
+    config: BenchmarkDefinitionConfig,
+) -> None:
+    del config
+    from .benchmarks.procbench.metric import ProcbenchFinalAccuracyMetric
+
+    if not registry.has_metric("procbench_final_accuracy"):
+        registry.register_metric(
+            "procbench_final_accuracy",
+            ProcbenchFinalAccuracyMetric,
+        )
+
+
 def _register_code_execution_metric(
     registry: PluginRegistry,
     *,
@@ -1089,6 +1281,22 @@ def render_healthbench_preview(
                 "follow_up_turns": [],
             },
             label="healthbench preview",
+        )
+    ]
+
+
+def render_context_prompt_preview(
+    prompt_variant_id: str,
+    sample: dict[str, object],
+) -> list[JSONDict]:
+    return [
+        _json_dict(
+            {
+                "prompt_variant_id": prompt_variant_id,
+                "messages": _datasets._prompt_messages_from_context(sample),
+                "follow_up_turns": [],
+            },
+            label="context prompt preview",
         )
     ]
 

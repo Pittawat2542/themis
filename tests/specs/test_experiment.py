@@ -124,6 +124,34 @@ def test_prompt_message_requires_role_and_content():
         PromptMessage.model_validate({"foo": "bar"})
 
 
+def test_prompt_message_accepts_multimodal_content_parts() -> None:
+    message = PromptMessage.model_validate(
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Look at this figure."},
+                {"type": "image_url", "image_url": "https://example.com/plot.png"},
+            ],
+        }
+    )
+
+    assert isinstance(message.content, list)
+    rendered = message.model_dump(mode="json")
+    assert rendered["content"][0]["type"] == "text"
+    assert rendered["content"][1]["type"] == "image_url"
+
+
+def test_dataset_spec_accepts_huggingface_config_name() -> None:
+    dataset = DatasetSpec(
+        source=DatasetSource.HUGGINGFACE,
+        dataset_id="openai/MMMLU",
+        config_name="AR_XY",
+        split="test",
+    )
+
+    assert dataset.config_name == "AR_XY"
+
+
 def test_trial_spec_validation():
     trial = TrialSpec(
         trial_id="t_1",

@@ -143,7 +143,7 @@ class PromptMessage(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     role: PromptRole
-    content: str
+    content: PromptContent
 
     @field_validator("role", mode="before")
     @classmethod
@@ -151,6 +151,31 @@ class PromptMessage(BaseModel):
         if isinstance(value, str):
             return PromptRole(value)
         return value
+
+
+class PromptTextPart(BaseModel):
+    """One text part in a multimodal prompt message."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    type: Literal["text"]
+    text: str
+
+
+class PromptImageURLPart(BaseModel):
+    """One image-url part in a multimodal prompt message."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    type: Literal["image_url"]
+    image_url: str
+
+
+PromptContentPart: TypeAlias = Annotated[
+    PromptTextPart | PromptImageURLPart,
+    Field(discriminator="type"),
+]
+PromptContent: TypeAlias = str | list[PromptContentPart]
 
 
 class PromptTurnSpec(BaseModel):

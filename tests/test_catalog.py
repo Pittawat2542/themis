@@ -12,9 +12,16 @@ from themis import BenchmarkDefinition, DatasetQuerySpec
 from themis.benchmark.specs import DatasetSliceSpec
 from themis.catalog.datasets import common as dataset_common
 from themis.catalog.datasets.common import (
+    _normalize_babe_rows,
+    _normalize_frontierscience_rows,
+    _normalize_gpqa_diamond_rows,
     _normalize_healthbench_rows,
     _normalize_imo_answerbench_rows,
+    _normalize_mmmlu_rows,
     _normalize_math_short_answer_rows,
+    _normalize_phybench_rows,
+    _normalize_procbench_rows,
+    _normalize_superchem_rows,
 )
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
 from themis.errors import ThemisError
@@ -94,9 +101,12 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         "aime_2026",
         "aethercode",
         "apex_2025",
+        "babe",
         "beyond_aime",
         "codeforces",
         "encyclo_k",
+        "frontierscience",
+        "gpqa_diamond",
         "healthbench",
         "hle",
         "hmmt_feb_2025",
@@ -105,9 +115,41 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         "livecodebench",
         "lpfqa",
         "mmlu_pro",
+        "mmmlu",
+        "phybench",
+        "procbench",
         "simpleqa_verified",
+        "superchem",
         "supergpqa",
     }
+
+
+@pytest.mark.parametrize(
+    ("benchmark_id", "expected_dataset_id", "expected_config_name"),
+    [
+        ("mmmlu", "openai/MMMLU", "default"),
+        ("mmmlu:AR_XY", "openai/MMMLU", "AR_XY"),
+        ("procbench:task01", "ifujisawa/procbench", "task01"),
+        ("superchem", "ZehuaZhao/SUPERChem", "default"),
+        ("superchem:zh", "ZehuaZhao/SUPERChem", "default"),
+    ],
+)
+def test_catalog_variant_benchmarks_expose_expected_hf_config_name(
+    benchmark_id: str,
+    expected_dataset_id: str,
+    expected_config_name: str,
+) -> None:
+    definition = catalog.get_catalog_benchmark(benchmark_id)
+    requires_judge = definition.requires_judge
+    benchmark = definition.build_benchmark(
+        model_id="demo-model",
+        provider="demo",
+        judge_model_id="judge-model" if requires_judge else None,
+        judge_provider="demo" if requires_judge else None,
+    )
+
+    assert benchmark.slices[0].dataset.dataset_id == expected_dataset_id
+    assert benchmark.slices[0].dataset.config_name == expected_config_name
 
 
 def test_builtin_runtime_defaults_use_8192_generator_tokens() -> None:
@@ -159,7 +201,9 @@ def test_builtin_judge_spec_defaults_use_8192_tokens() -> None:
     [
         ("mmlu_pro", "TIGER-Lab/MMLU-Pro", "test"),
         ("supergpqa", "m-a-p/SuperGPQA", "train"),
+        ("gpqa_diamond", "fingertap/GPQA-Diamond", "test"),
         ("encyclo_k", "m-a-p/Encyclo-K", "test"),
+        ("babe", "mediabiasgroup/BABE", "test"),
     ],
 )
 def test_mcq_benchmark_builders_use_expected_dataset_defaults(
@@ -188,6 +232,7 @@ def test_mcq_benchmark_builders_use_expected_dataset_defaults(
         ("apex_2025", "MathArena/apex_2025", "train"),
         ("beyond_aime", "ByteDance-Seed/BeyondAIME", "test"),
         ("imo_answerbench", "Hwilner/imo-answerbench", "train"),
+        ("phybench", "Eureka-Lab/PHYBench", "train"),
     ],
 )
 def test_math_benchmark_builders_use_expected_dataset_defaults(
@@ -208,7 +253,7 @@ def test_math_benchmark_builders_use_expected_dataset_defaults(
 
 @pytest.mark.parametrize(
     "benchmark_id",
-    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only"],
+    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only", "frontierscience"],
 )
 def test_judge_backed_benchmark_builders_require_explicit_judge_config(
     benchmark_id: str,
@@ -335,6 +380,17 @@ def test_hle_build_benchmark_emits_separate_slices_and_prompt_variants_per_varia
         "hle-text_only-default",
         "hle-no_tool-default",
     ]
+
+
+def test_procbench_aggregate_builds_one_slice_per_task_variant() -> None:
+    definition = catalog.get_catalog_benchmark("procbench")
+
+    benchmark = definition.build_benchmark(model_id="demo-model", provider="demo")
+
+    assert len(benchmark.slices) == 23
+    assert benchmark.slices[0].dataset.config_name == "task01"
+    assert benchmark.slices[-1].dataset.config_name == "task23"
+    assert benchmark.slices[0].scores[0].metrics == ["procbench_final_accuracy"]
 
 
 def test_hle_preview_renders_one_entry_per_selected_variant() -> None:
@@ -468,6 +524,204 @@ def test_math_short_answer_row_normalizer_maps_imo_answerbench_fields() -> None:
     assert metadata["source"] == "Sharygin 2008"
 
 
+def test_gpqa_diamond_row_normalizer_parses_inline_option_mapping() -> None:
+    normalized = _normalize_gpqa_diamond_rows(
+        [
+            {
+                "question": (
+                    "Which option is correct?\n\n"
+                    "a) alpha\nb) beta\nc) gamma\nd) delta\n\n"
+                    "A. d\nB. a\nC. b\nD. c"
+                ),
+                "answer": "D",
+            }
+        ],
+        DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="fingertap/GPQA-Diamond",
+        ),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+
+    assert row["question"] == "Which option is correct?"
+    assert row["options"] == ["delta", "alpha", "beta", "gamma"]
+    assert row["expected"] == "D"
+
+
+def test_babe_row_normalizer_maps_binary_labels_to_choice_benchmark() -> None:
+    normalized = _normalize_babe_rows(
+        [
+            {
+                "uuid": "babe-1",
+                "text": "This is an article lead.",
+                "label": 1,
+                "outlet": "Outlet",
+                "topic": "topic-a",
+                "type": "left",
+                "label_opinion": "Expresses writer's opinion",
+            }
+        ],
+        DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="mediabiasgroup/BABE",
+        ),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    metadata = _row_mapping(row["metadata"])
+
+    assert row["item_id"] == "babe-1"
+    assert row["options"] == ["Entirely factual", "Opinionated or subjective"]
+    assert row["expected"] == "B"
+    assert metadata["outlet"] == "Outlet"
+    assert metadata["topic"] == "topic-a"
+
+
+def test_mmmlu_row_normalizer_maps_fixed_choice_columns() -> None:
+    normalized = _normalize_mmmlu_rows(
+        [
+            {
+                "Unnamed: 0": 7,
+                "Question": "What is 2 + 2?",
+                "A": "1",
+                "B": "4",
+                "C": "3",
+                "D": "5",
+                "Answer": "B",
+                "Subject": "math",
+            }
+        ],
+        DatasetSpec(source=DatasetSource.HUGGINGFACE, dataset_id="openai/MMMLU"),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    metadata = _row_mapping(row["metadata"])
+
+    assert row["item_id"] == "7"
+    assert row["options"] == ["1", "4", "3", "5"]
+    assert row["expected"] == "B"
+    assert metadata["subject"] == "math"
+
+
+def test_phybench_row_normalizer_maps_problem_and_answer_fields() -> None:
+    normalized = _normalize_phybench_rows(
+        [
+            {
+                "id": 42,
+                "tag": "OPTICS",
+                "content": "Find the focal length.",
+                "answer": "\\frac{1}{2}",
+            }
+        ],
+        DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="Eureka-Lab/PHYBench",
+        ),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    metadata = _row_mapping(row["metadata"])
+
+    assert row["item_id"] == "42"
+    assert row["problem"] == "Find the focal length."
+    assert row["answer"] == "\\frac{1}{2}"
+    assert metadata["tag"] == "OPTICS"
+
+
+def test_frontierscience_row_normalizer_keeps_rubric_and_metadata() -> None:
+    normalized = _normalize_frontierscience_rows(
+        [
+            {
+                "problem": "Solve the physics problem.",
+                "answer": "Points: 1.0, Item: derive the formula.",
+                "subject": "physics",
+                "task_group_id": "group-1",
+            }
+        ],
+        DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="openai/frontierscience",
+        ),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    metadata = _row_mapping(row["metadata"])
+
+    assert row["prompt_text"] == "Solve the physics problem."
+    assert row["expected_response"] == "Points: 1.0, Item: derive the formula."
+    assert metadata["subject"] == "physics"
+    assert metadata["task_group_id"] == "group-1"
+
+
+def test_procbench_row_normalizer_exposes_final_label_only_for_v1() -> None:
+    normalized = _normalize_procbench_rows(
+        [
+            {
+                "problem_name": "task01_0001",
+                "prompt": "Do the thing.",
+                "task_name": "task01",
+                "label": {"final": ["a", "b"], "intermediate": ["x"]},
+            }
+        ],
+        DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="ifujisawa/procbench",
+        ),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    metadata = _row_mapping(row["metadata"])
+
+    assert row["item_id"] == "task01_0001"
+    assert row["prompt_text"] == "Do the thing."
+    assert row["expected"] == ["a", "b"]
+    assert "intermediate" not in row
+    assert metadata["task_name"] == "task01"
+
+
+def test_superchem_row_normalizer_builds_multimodal_prompt_for_language_variant() -> (
+    None
+):
+    normalized = _normalize_superchem_rows(
+        [
+            {
+                "uuid": "chem-1",
+                "field": "chemistry",
+                "question_type": "multiple_choice",
+                "question_en": "What is shown?",
+                "question_zh": "图中显示了什么？",
+                "question_images": ["/tmp/chem-1.png"],
+                "options_en": {"A": "Alpha", "B": "Beta"},
+                "options_zh": {"A": "甲", "B": "乙"},
+                "answer_en": ["B"],
+                "answer_zh": ["B"],
+            }
+        ],
+        DatasetSliceSpec(
+            benchmark_id="superchem:zh",
+            slice_id="superchem-zh",
+            dimensions={"language": "zh"},
+            dataset=DatasetSpec(
+                source=DatasetSource.HUGGINGFACE,
+                dataset_id="ZehuaZhao/SUPERChem",
+            ),
+        ),
+    )
+
+    row = _row_mapping(normalized.rows[0])
+    prompt_messages = row["prompt_messages"]
+    metadata = _row_mapping(row["metadata"])
+
+    assert isinstance(prompt_messages, list)
+    assert prompt_messages[0]["role"] == "user"
+    assert isinstance(prompt_messages[0]["content"], list)
+    assert prompt_messages[0]["content"][0]["type"] == "text"
+    assert prompt_messages[0]["content"][1]["type"] == "image_url"
+    assert row["expected"] == "B"
+    assert metadata["language"] == "zh"
+
+
 def test_build_catalog_registry_registers_multiple_providers() -> None:
     registry = catalog.build_catalog_registry(["demo", "openai"])
 
@@ -501,6 +755,11 @@ def test_build_catalog_registry_registers_multiple_providers() -> None:
             "hle:text_only",
             "HLEJudgeMetric",
             "themis.catalog.benchmarks.hle.metric",
+        ),
+        (
+            "frontierscience",
+            "FrontierScienceJudgeMetric",
+            "themis.catalog.benchmarks.frontierscience.metric",
         ),
     ],
 )
@@ -544,6 +803,16 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
             "encyclo_k",
             "BuiltinEncycloKDatasetProvider",
             "themis.catalog.benchmarks.encyclo_k",
+        ),
+        (
+            "gpqa_diamond",
+            "BuiltinGPQADiamondDatasetProvider",
+            "themis.catalog.benchmarks.gpqa_diamond",
+        ),
+        (
+            "babe",
+            "BuiltinBABEDatasetProvider",
+            "themis.catalog.benchmarks.babe",
         ),
         (
             "simpleqa_verified",
@@ -599,6 +868,31 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
             "imo_answerbench",
             "BuiltinIMOAnswerBenchDatasetProvider",
             "themis.catalog.benchmarks.imo_answerbench",
+        ),
+        (
+            "phybench",
+            "BuiltinPHYBenchDatasetProvider",
+            "themis.catalog.benchmarks.phybench",
+        ),
+        (
+            "frontierscience",
+            "BuiltinFrontierScienceDatasetProvider",
+            "themis.catalog.benchmarks.frontierscience.dataset",
+        ),
+        (
+            "mmmlu",
+            "BuiltinMMMLUDatasetProvider",
+            "themis.catalog.benchmarks.mmmlu",
+        ),
+        (
+            "procbench",
+            "BuiltinProcbenchDatasetProvider",
+            "themis.catalog.benchmarks.procbench.dataset",
+        ),
+        (
+            "superchem",
+            "BuiltinSuperChemDatasetProvider",
+            "themis.catalog.benchmarks.superchem.dataset",
         ),
     ],
 )

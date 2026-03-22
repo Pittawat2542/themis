@@ -143,8 +143,11 @@ def _run_openai_chat_inference(
 def _resolved_messages(trial, context: object) -> list[dict[str, object]]:
     context_messages = _prompt_messages_from_context(context)
     if context_messages:
-        return [dict(message) for message in context_messages]
-    return [message.model_dump(mode="json") for message in trial.prompt.messages]
+        return [_openai_message_payload(dict(message)) for message in context_messages]
+    return [
+        _openai_message_payload(message.model_dump(mode="json"))
+        for message in trial.prompt.messages
+    ]
 
 
 def _run_text_judge(
@@ -268,6 +271,38 @@ def _coerce_message_text(content: object) -> str:
                     text_parts.append(text)
         return "".join(text_parts)
     return ""
+
+
+def _openai_message_payload(message: dict[str, object]) -> dict[str, object]:
+    content = message.get("content")
+    if not isinstance(content, list):
+        return dict(message)
+    converted_parts: list[dict[str, object]] = []
+    for part in content:
+        if not isinstance(part, dict):
+            raise InferenceError(
+                code=ErrorCode.PLUGIN_INCOMPATIBLE,
+                message="Prompt message content parts must be objects.",
+            )
+        part_type = part.get("type")
+        if part_type == "text":
+            converted_parts.append({"type": "text", "text": str(part.get("text", ""))})
+            continue
+        if part_type == "image_url":
+            converted_parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": str(part.get("image_url", ""))},
+                }
+            )
+            continue
+        raise InferenceError(
+            code=ErrorCode.PLUGIN_INCOMPATIBLE,
+            message=f"Unsupported prompt content part type '{part_type}'.",
+        )
+    payload = dict(message)
+    payload["content"] = converted_parts
+    return payload
 
 
 def _runtime_secret(runtime, key: str) -> str | None:

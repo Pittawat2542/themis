@@ -25,8 +25,11 @@ Current builtin benchmarks:
 | `aime_2026` | Short-answer math | `math_equivalence` | No | `MathArena/aime_2026` | `train` |
 | `aethercode` | Code generation with sandboxed execution | `aethercode_pass_rate` | No | `m-a-p/AetherCode` (`v1_2024`) | `test` |
 | `apex_2025` | Short-answer math | `math_equivalence` | No | `MathArena/apex_2025` | `train` |
+| `babe` | Binary media-bias classification | `choice_accuracy` | No | `mediabiasgroup/BABE` | `test` |
 | `beyond_aime` | Short-answer math | `math_equivalence` | No | `ByteDance-Seed/BeyondAIME` | `test` |
 | `encyclo_k` | Multiple choice | `choice_accuracy` | No | `m-a-p/Encyclo-K` | `test` |
+| `frontierscience` | Judge-backed science reasoning | `frontierscience_score` | Yes | `openai/frontierscience` | `test` |
+| `gpqa_diamond` | Multiple choice | `choice_accuracy` | No | `fingertap/GPQA-Diamond` | `test` |
 | `healthbench` | Rubric-scored response | `healthbench_score` | Yes | `openai/healthbench` | `test` |
 | `hle:<variant>[,<variant>...]` | Judge-backed QA | `hle_accuracy` | Yes | `cais/hle` | `test` |
 | `hmmt_feb_2025` | Short-answer math | `math_equivalence` | No | `MathArena/hmmt_feb_2025` | `train` |
@@ -35,8 +38,12 @@ Current builtin benchmarks:
 | `livecodebench` | Code generation with sandboxed execution | `livecodebench_pass_rate` | No | `livecodebench/code_generation_lite` (`release_v6`) | `test` |
 | `lpfqa` | Judge-backed free-form QA | `lpfqa_score` | Yes | `m-a-p/LPFQA` | `train` |
 | `mmlu_pro` | Multiple choice | `choice_accuracy` | No | `TIGER-Lab/MMLU-Pro` | `test` |
+| `mmmlu[:<config>]` | Multilingual multiple choice | `choice_accuracy` | No | `openai/MMMLU` (`default` or language config) | `test` |
 | `codeforces` | Code generation with sandboxed execution | `codeforces_pass_rate` | No | `open-r1/codeforces` (`verifiable-prompts`) | `test` |
+| `phybench` | Short-answer physics | `math_equivalence` | No | `Eureka-Lab/PHYBench` | `train` |
+| `procbench[:taskNN]` | Procedural reasoning final-answer evaluation | `procbench_final_accuracy` | No | `ifujisawa/procbench` (`task01`...`task23`) | `train` |
 | `simpleqa_verified` | Judge-backed short answer | `simpleqa_verified_score` | Yes | `google/simpleqa-verified` | `eval` |
+| `superchem[:en|:zh]` | Multimodal chemistry multiple choice | `choice_accuracy` | No | `ZehuaZhao/SUPERChem` (`default`) | `train` |
 | `supergpqa` | Multiple choice | `choice_accuracy` | No | `m-a-p/SuperGPQA` | `train` |
 
 For sandbox setup, backend selection, runtime environment variables, and
@@ -59,6 +66,33 @@ HLE requires explicit variants in the benchmark id. Example ids:
 - `hle:text_only`
 - `hle:no_tool`
 - `hle:text_only,no_tool`
+
+MMMLU supports the following explicit config variants in addition to the base
+`mmmlu` benchmark:
+
+- `mmmlu:AR_XY`
+- `mmmlu:BN_BD`
+- `mmmlu:DE_DE`
+- `mmmlu:ES_LA`
+- `mmmlu:FR_FR`
+- `mmmlu:HI_IN`
+- `mmmlu:ID_ID`
+- `mmmlu:IT_IT`
+- `mmmlu:JA_JP`
+- `mmmlu:KO_KR`
+- `mmmlu:PT_BR`
+- `mmmlu:SW_KE`
+- `mmmlu:YO_NG`
+- `mmmlu:ZH_CN`
+
+Procbench supports the base aggregate `procbench` benchmark plus explicit task
+variants such as:
+
+- `procbench:task01`
+- `procbench:task12`
+- `procbench:task23`
+
+SuperChem defaults to English. Use `superchem:zh` for the Chinese variant.
 
 Use `build_catalog_benchmark_project(...)` when you want the full runnable
 Python path for a builtin benchmark:
