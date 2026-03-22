@@ -173,6 +173,7 @@ def test_trial_spec_validation():
                 id="dice",
                 server_label="dice",
                 server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
             )
         ],
         candidate_count=5,
@@ -211,6 +212,7 @@ def test_experiment_spec():
                 id="dice",
                 server_label="dice",
                 server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
             )
         ],
         item_sampling=ItemSamplingSpec(kind="all"),
@@ -252,6 +254,7 @@ def test_project_spec():
                 id="calendar",
                 server_label="google_calendar",
                 connector_id="connector_googlecalendar",
+                require_approval="never",
                 authorization_secret_name="GOOGLE_CALENDAR_TOKEN",
             )
         ],
@@ -278,11 +281,13 @@ def test_project_spec_rejects_duplicate_mcp_server_ids() -> None:
                     id="dice",
                     server_label="dice",
                     server_url="https://dmcp-server.deno.dev/sse",
+                    require_approval="never",
                 ),
                 McpServerSpec(
                     id="dice",
                     server_label="dice-override",
                     server_url="https://example.com/mcp",
+                    require_approval="never",
                 ),
             ],
         )

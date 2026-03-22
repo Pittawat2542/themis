@@ -47,6 +47,7 @@ def test_mcp_server_spec_supports_remote_server_and_allowed_tools():
         server_label="dice",
         server_url="https://dmcp-server.deno.dev/sse",
         allowed_tools=["roll", "stats"],
+        require_approval="never",
         authorization_secret_name="DICE_TOKEN",
     )
 
@@ -60,7 +61,7 @@ def test_mcp_server_spec_requires_exactly_one_connection_target():
     with pytest.raises(
         ValidationError, match="requires exactly one of server_url or connector_id"
     ):
-        McpServerSpec(id="bad", server_label="bad")
+        McpServerSpec(id="bad", server_label="bad", require_approval="never")
 
     with pytest.raises(
         ValidationError, match="requires exactly one of server_url or connector_id"
@@ -70,6 +71,7 @@ def test_mcp_server_spec_requires_exactly_one_connection_target():
             server_label="bad",
             server_url="https://example.com/mcp",
             connector_id="connector_dropbox",
+            require_approval="never",
         )
 
 
@@ -79,6 +81,7 @@ def test_mcp_server_spec_normalizes_blank_connection_targets() -> None:
         server_label="google_calendar",
         server_url="   ",
         connector_id="connector_googlecalendar",
+        require_approval="never",
     )
     assert by_connector.server_url is None
     assert by_connector.connector_id == "connector_googlecalendar"
@@ -88,6 +91,7 @@ def test_mcp_server_spec_normalizes_blank_connection_targets() -> None:
         server_label="dice",
         server_url="https://dmcp-server.deno.dev/sse",
         connector_id="  ",
+        require_approval="never",
     )
     assert by_url.server_url == "https://dmcp-server.deno.dev/sse"
     assert by_url.connector_id is None
@@ -100,6 +104,16 @@ def test_mcp_server_spec_normalizes_blank_connection_targets() -> None:
             server_label="bad",
             server_url=" ",
             connector_id="\t",
+            require_approval="never",
+        )
+
+
+def test_mcp_server_spec_requires_explicit_require_approval() -> None:
+    with pytest.raises(ValidationError, match="require_approval"):
+        McpServerSpec(
+            id="dice",
+            server_label="dice",
+            server_url="https://dmcp-server.deno.dev/sse",
         )
 
 

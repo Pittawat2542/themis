@@ -278,6 +278,7 @@ def test_compatibility_rejects_mcp_for_engines_without_support() -> None:
                         id="dice",
                         server_label="dice",
                         server_url="https://dmcp-server.deno.dev/sse",
+                        require_approval="never",
                     )
                 ]
             }
@@ -349,6 +350,7 @@ def test_compatibility_rejects_openai_mcp_with_follow_up_turns() -> None:
                         id="dice",
                         server_label="dice",
                         server_url="https://dmcp-server.deno.dev/sse",
+                        require_approval="never",
                     )
                 ],
             }

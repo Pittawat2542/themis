@@ -133,6 +133,7 @@ project = ProjectSpec(
             id="dice",
             server_label="dice",
             server_url="https://dmcp-server.deno.dev/sse",
+            require_approval="never",
         )
     ],
 )

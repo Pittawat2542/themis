@@ -602,6 +602,7 @@ def test_pre_inference_hook_can_mutate_mcp_servers_without_losing_tools(
                     id="dice",
                     server_label="dice",
                     server_url="https://dmcp-server.deno.dev/sse",
+                    require_approval="never",
                 )
             ],
         }
@@ -652,6 +653,7 @@ def test_pre_inference_hook_can_mutate_mcp_servers_without_losing_tools(
                 id="calendar",
                 server_label="google_calendar",
                 connector_id="connector_googlecalendar",
+                require_approval="never",
             )
         ],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=16)]),

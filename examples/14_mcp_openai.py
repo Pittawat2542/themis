@@ -55,6 +55,7 @@ def main() -> None:
                 server_description="A remote MCP server for dice rolling.",
                 server_url="https://dmcp-server.deno.dev/sse",
                 allowed_tools=["roll"],
+                require_approval="never",
             )
         ],
     )

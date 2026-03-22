@@ -80,8 +80,11 @@ class McpServerSpec(SpecBase):
         description="Optional allow-list of tool names exposed from the server.",
     )
     require_approval: Literal["never", "always"] = Field(
-        default="never",
-        description="Whether MCP tool calls require approval at execution time.",
+        ...,
+        description=(
+            "Required approval mode for MCP tool calls; callers must explicitly "
+            "provide either 'never' or 'always'."
+        ),
     )
     authorization_secret_name: str | None = Field(
         default=None,

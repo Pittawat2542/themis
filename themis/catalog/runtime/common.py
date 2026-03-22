@@ -270,6 +270,9 @@ def _run_openai_responses_mcp_inference(
     latency_ms = (perf_counter() - start) * 1000
     output_text = _response_output_text(response)
     conversation = _response_conversation(response, final_text=output_text)
+    # Responses/MCP usage metadata is optional. Callers that need token
+    # accounting may need a follow-up request to the provider's token endpoint.
+    token_usage = _response_token_usage(response)
     return InferenceResult(
         inference=InferenceRecord(
             spec_hash=(
@@ -279,6 +282,7 @@ def _run_openai_responses_mcp_inference(
             raw_text=output_text,
             latency_ms=latency_ms,
             provider_request_id=getattr(response, "id", None),
+            token_usage=token_usage,
             conversation=conversation,
         ),
         conversation=conversation,
@@ -583,6 +587,49 @@ def _response_item_attr(item: object, name: str) -> object:
     if isinstance(item, dict):
         return item.get(name)
     return getattr(item, name, None)
+
+
+def _response_usage(response: object) -> object:
+    if isinstance(response, dict):
+        return response.get("usage")
+    return getattr(response, "usage", None)
+
+
+def _usage_attr(usage: object, name: str) -> object:
+    if isinstance(usage, dict):
+        return usage.get(name)
+    return getattr(usage, name, None)
+
+
+def _response_token_usage(response: object) -> TokenUsage | None:
+    usage = _response_usage(response)
+    if usage is None:
+        return None
+    prompt_tokens = _usage_attr(usage, "prompt_tokens")
+    completion_tokens = _usage_attr(usage, "completion_tokens")
+    if completion_tokens is None:
+        completion_tokens = _usage_attr(usage, "output_tokens")
+    total_tokens = _usage_attr(usage, "total_tokens")
+    reasoning_tokens = _usage_attr(usage, "reasoning_tokens")
+    if reasoning_tokens is None:
+        output_details = _usage_attr(usage, "output_tokens_details")
+        reasoning_tokens = _usage_attr(output_details, "reasoning_tokens")
+    if (
+        prompt_tokens is None
+        and completion_tokens is None
+        and total_tokens is None
+        and reasoning_tokens is None
+    ):
+        return None
+    prompt_value = int(prompt_tokens or 0)
+    completion_value = int(completion_tokens or 0)
+    total_value = int(total_tokens or (prompt_value + completion_value))
+    return TokenUsage(
+        prompt_tokens=prompt_value,
+        completion_tokens=completion_value,
+        total_tokens=total_value,
+        reasoning_tokens=(None if reasoning_tokens is None else int(reasoning_tokens)),
+    )
 
 
 def _response_mcp_tool_name(item: object) -> str:

@@ -218,6 +218,11 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
 ) -> None:
     response = SimpleNamespace(
         id="resp_123",
+        usage=SimpleNamespace(
+            prompt_tokens=11,
+            completion_tokens=7,
+            total_tokens=18,
+        ),
         output=[
             SimpleNamespace(
                 type="mcp_call",
@@ -264,6 +269,7 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
                 server_label="dice",
                 server_url="https://dmcp-server.deno.dev/sse",
                 allowed_tools=["roll"],
+                require_approval="never",
                 authorization_secret_name="DICE_TOKEN",
             )
         ],
@@ -282,6 +288,8 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
     assert result.inference.spec_hash == "inference_trial_mcp_123"
     assert result.inference.raw_text == "6"
     assert result.inference.provider_request_id == "resp_123"
+    assert result.inference.token_usage is not None
+    assert result.inference.token_usage.total_tokens == 18
     create_kwargs = responses.create.call_args.kwargs
     assert create_kwargs["model"] == "gpt-5"
     assert create_kwargs["input"][0]["content"][0]["text"] == "Roll 2d4+1"
@@ -346,6 +354,7 @@ def test_openai_chat_inference_rejects_mcp_without_secret(
                 id="calendar",
                 server_label="google_calendar",
                 connector_id="connector_googlecalendar",
+                require_approval="never",
                 authorization_secret_name="GOOGLE_TOKEN",
             )
         ],

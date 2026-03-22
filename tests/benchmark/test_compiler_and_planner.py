@@ -254,6 +254,7 @@ def test_compile_benchmark_preserves_mcp_server_ids() -> None:
                 id="dice",
                 server_label="dice",
                 server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
             )
         ],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
@@ -428,11 +429,13 @@ def test_compile_benchmark_merges_project_mcp_servers_with_benchmark_overrides()
                 id="dice",
                 server_label="dice-override",
                 server_url="https://example.com/dice",
+                require_approval="never",
             ),
             McpServerSpec(
                 id="docs",
                 server_label="docs",
                 server_url="https://example.com/docs",
+                require_approval="never",
             ),
         ],
         inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
@@ -446,11 +449,13 @@ def test_compile_benchmark_merges_project_mcp_servers_with_benchmark_overrides()
                 id="dice",
                 server_label="dice",
                 server_url="https://dmcp-server.deno.dev/sse",
+                require_approval="never",
             ),
             McpServerSpec(
                 id="calendar",
                 server_label="google_calendar",
                 connector_id="connector_googlecalendar",
+                require_approval="never",
             ),
         ],
     )
