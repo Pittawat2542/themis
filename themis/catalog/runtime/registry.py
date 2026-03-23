@@ -8,7 +8,7 @@ from themis.contracts.protocols import InferenceEngine, Metric
 from themis import PluginRegistry
 from themis.registry import EngineCapabilities
 
-from .engines.common import DemoEngine, OpenAIChatEngine, OpenAICompatibleChatEngine
+from .engines.common import DemoEngine, OpenAIChatEngine
 from .metrics.common import (
     ChoiceAccuracyMetric,
     ExactMatchMetric,
@@ -34,10 +34,6 @@ _ENGINE_REGISTRATIONS: dict[str, tuple[type[InferenceEngine], EngineCapabilities
     "openai": (
         cast(type[InferenceEngine], OpenAIChatEngine),
         EngineCapabilities(supports_seed=True, supports_mcp=True),
-    ),
-    "openai_compatible": (
-        cast(type[InferenceEngine], OpenAICompatibleChatEngine),
-        EngineCapabilities(supports_seed=True),
     ),
 }
 

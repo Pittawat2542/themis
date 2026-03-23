@@ -384,14 +384,14 @@ def test_quick_eval_benchmark_requires_explicit_judge_config(
     assert "judge" in capsys.readouterr().err.lower()
 
 
-def test_quick_eval_openai_compatible_uses_env_base_url(
+def test_quick_eval_openai_uses_env_base_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from themis.cli import quick_eval as quick_eval_cli
 
-    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "http://127.0.0.1:1234/v1")
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:1234/v1")
 
-    extras = quick_eval_cli._provider_model_extras("openai_compatible")
+    extras = quick_eval_cli._provider_model_extras("openai")
 
     assert extras["base_url"] == "http://127.0.0.1:1234/v1"
 

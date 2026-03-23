@@ -37,10 +37,8 @@ def build_app() -> App:
             normalized_provider = provider.replace("-", "_")
             if benchmark is None and template not in {"qa", "mcq"}:
                 raise ValueError("--template must be one of: qa, mcq.")
-            if normalized_provider not in {"demo", "openai", "openai_compatible"}:
-                raise ValueError(
-                    "--provider must be one of: demo, openai, openai-compatible."
-                )
+            if normalized_provider not in {"demo", "openai"}:
+                raise ValueError("--provider must be one of: demo, openai.")
             if project_root.exists() and any(project_root.iterdir()):
                 raise ValueError(
                     f"Refusing to scaffold into non-empty directory {project_root}."
@@ -137,8 +135,7 @@ def _build_scaffold_files(
             THEMIS_CATALOG_JUDGE_MODEL=
             THEMIS_CATALOG_JUDGE_PROVIDER=
             OPENAI_API_KEY=
-            OPENAI_COMPAT_API_KEY=
-            OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8000/v1
+            OPENAI_BASE_URL=
             """
         ).lstrip(),
         project_root / "README.md": _readme_template(
@@ -229,11 +226,7 @@ def _settings_template(*, provider: str, model: str) -> str:
             judge_model_id: str | None = os.getenv("THEMIS_CATALOG_JUDGE_MODEL") or None
             judge_provider: str | None = os.getenv("THEMIS_CATALOG_JUDGE_PROVIDER") or None
             openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
-            openai_compat_api_key: str | None = os.getenv("OPENAI_COMPAT_API_KEY")
-            openai_compat_base_url: str = os.getenv(
-                "OPENAI_COMPAT_BASE_URL",
-                "http://127.0.0.1:8000/v1",
-            ).rstrip("/")
+            openai_base_url: str | None = os.getenv("OPENAI_BASE_URL") or None
 
             @property
             def provider_name(self) -> str:
@@ -246,16 +239,16 @@ def _settings_template(*, provider: str, model: str) -> str:
                 return self.judge_provider.replace("-", "_")
 
             def model_extras(self) -> dict[str, object]:
-                if self.provider_name == "openai_compatible":
-                    extras: dict[str, object] = {{
-                        "base_url": self.openai_compat_base_url,
-                        "timeout_seconds": 60.0,
-                    }}
-                    if self.openai_compat_api_key:
-                        extras["api_key"] = self.openai_compat_api_key
+                if self.provider_name != "openai":
+                    return {{}}
+                extras: dict[str, object] = {{}}
+                if self.openai_base_url:
+                    extras["base_url"] = self.openai_base_url.rstrip("/")
+                    extras["timeout_seconds"] = 60.0
+                if self.openai_api_key:
+                    extras["api_key"] = self.openai_api_key
+                if extras:
                     return extras
-                if self.provider_name == "openai" and self.openai_api_key:
-                    return {{"api_key": self.openai_api_key}}
                 return {{}}
 
 
@@ -575,8 +568,7 @@ def _build_builtin_scaffold_files(
             THEMIS_CATALOG_JUDGE_MODEL=
             THEMIS_CATALOG_JUDGE_PROVIDER=
             OPENAI_API_KEY=
-            OPENAI_COMPAT_API_KEY=
-            OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8000/v1
+            OPENAI_BASE_URL=
             """
         ).lstrip(),
         project_root / "README.md": dedent(

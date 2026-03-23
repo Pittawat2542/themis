@@ -73,10 +73,7 @@ def _run_openai_chat_inference(
     if base_url is not None:
         client_kwargs["base_url"] = base_url
     api_key = (
-        _runtime_secret(runtime, "OPENAI_API_KEY")
-        or _runtime_secret(runtime, "OPENAI_COMPAT_API_KEY")
-        or extras.get("api_key")
-        or "dummy"
+        _runtime_secret(runtime, "OPENAI_API_KEY") or extras.get("api_key") or "dummy"
     )
     client_kwargs["api_key"] = str(api_key)
     client = openai.OpenAI(**client_kwargs)
@@ -212,10 +209,7 @@ def _run_openai_responses_mcp_inference(
     if base_url is not None:
         client_kwargs["base_url"] = base_url
     api_key = (
-        _runtime_secret(runtime, "OPENAI_API_KEY")
-        or _runtime_secret(runtime, "OPENAI_COMPAT_API_KEY")
-        or extras.get("api_key")
-        or "dummy"
+        _runtime_secret(runtime, "OPENAI_API_KEY") or extras.get("api_key") or "dummy"
     )
     client_kwargs["api_key"] = str(api_key)
     client = openai.OpenAI(**client_kwargs)
@@ -346,14 +340,10 @@ def _normalize_provider_name(provider: str) -> str:
 
 def _provider_model_extras(provider: str) -> JSONDict:
     normalized = _normalize_provider_name(provider)
-    if normalized == "openai_compatible":
-        return {
-            "base_url": os.getenv(
-                "OPENAI_COMPAT_BASE_URL",
-                "http://127.0.0.1:8000/v1",
-            ),
-            "timeout_seconds": 60.0,
-        }
+    if normalized == "openai":
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url:
+            return {"base_url": base_url.rstrip("/"), "timeout_seconds": 60.0}
     return {}
 
 

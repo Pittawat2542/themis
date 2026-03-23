@@ -27,6 +27,7 @@ from themis.catalog.datasets.common import (
     _normalize_superchem_rows,
 )
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
+from themis.catalog.runtime.engines.common import OpenAIChatEngine
 from themis.errors import SpecValidationError, ThemisError
 from themis.catalog.runtime.common import (
     _build_judge_spec,
@@ -289,18 +290,69 @@ def test_get_catalog_benchmark_rejects_invalid_humaneval_variants(
         catalog.get_catalog_benchmark(benchmark_id)
 
 
-def test_openai_compatible_benchmarks_use_env_base_url(
+def test_openai_benchmarks_use_env_base_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "http://127.0.0.1:1234/v1")
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:1234/v1")
     definition = catalog.get_catalog_benchmark("aime_2026")
 
     benchmark = definition.build_benchmark(
         model_id="demo-model",
-        provider="openai_compatible",
+        provider="openai",
     )
 
     assert benchmark.models[0].extras["base_url"] == "http://127.0.0.1:1234/v1"
+
+
+def test_openai_chat_engine_uses_model_base_url_and_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = SimpleNamespace(
+        id="chatcmpl_123",
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="4"),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(
+            prompt_tokens=3,
+            completion_tokens=1,
+            total_tokens=4,
+        ),
+    )
+    completions = MagicMock()
+    completions.create.return_value = response
+    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    openai_factory = MagicMock(return_value=client)
+    openai_module = SimpleNamespace(OpenAI=openai_factory)
+    monkeypatch.setattr(
+        "themis.catalog.runtime.common.import_optional",
+        lambda name, extra: openai_module,
+    )
+
+    trial = SimpleNamespace(
+        item_id="item-1",
+        model=ModelSpec(
+            model_id="gpt-5",
+            provider="openai",
+            extras={
+                "base_url": "http://127.0.0.1:1234/v1",
+                "api_key": "test-key",
+            },
+        ),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="2 + 2")]
+        ),
+        params=InferenceParamsSpec(max_tokens=16, temperature=0.0),
+        mcp_servers=[],
+    )
+
+    result = OpenAIChatEngine().infer(trial, {}, RuntimeContext())
+
+    assert result.inference.raw_text == "4"
+    assert openai_factory.call_args.kwargs["base_url"] == "http://127.0.0.1:1234/v1"
+    assert openai_factory.call_args.kwargs["api_key"] == "test-key"
 
 
 def test_builtin_judge_spec_defaults_use_8192_tokens() -> None:

@@ -665,14 +665,10 @@ def _build_inline_rows(
 
 
 def _provider_model_extras(provider: str) -> JSONDict:
-    if provider == "openai_compatible":
-        return {
-            "base_url": os.getenv(
-                "OPENAI_COMPAT_BASE_URL",
-                "http://127.0.0.1:8000/v1",
-            ),
-            "timeout_seconds": 60.0,
-        }
+    if provider == "openai":
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url:
+            return {"base_url": base_url.rstrip("/"), "timeout_seconds": 60.0}
     return {}
 
 

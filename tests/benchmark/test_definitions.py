@@ -116,12 +116,12 @@ def test_benchmark_definition_runtime_config_normalizes_providers_and_requires_j
 
     config = definition.build_runtime_config(
         model_id="demo-model",
-        provider="openai-compatible",
+        provider="openai",
         judge_model_id="judge-model",
         judge_provider="demo-provider",
     )
 
-    assert config.provider == "openai_compatible"
+    assert config.provider == "openai"
     assert config.judge_provider == "demo_provider"
 
 

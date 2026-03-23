@@ -205,7 +205,7 @@ export THEMIS_CODE_SANDBOX=piston
 themis quick-eval benchmark \
   --benchmark livecodebench \
   --model your-model \
-  --provider openai_compatible \
+  --provider openai \
   --format json
 
 To generate multiple candidates per task for HumanEval-style `pass@k`:
@@ -214,7 +214,7 @@ To generate multiple candidates per task for HumanEval-style `pass@k`:
 themis quick-eval benchmark \
   --benchmark humaneval_plus:mini,v0.1.10 \
   --model your-model \
-  --provider openai_compatible \
+  --provider openai \
   --num-samples 10 \
   --format json
 ```

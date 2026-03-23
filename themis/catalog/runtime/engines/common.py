@@ -30,27 +30,15 @@ class OpenAIChatEngine:
     """Minimal OpenAI chat-completions adapter for catalog workflows."""
 
     def infer(self, trial, context, runtime):
-        return _run_openai_chat_inference(
-            trial,
-            context,
-            runtime,
-            base_url=None,
-            provider_label="OpenAI",
-            missing_extra="providers-openai",
-        )
-
-
-class OpenAICompatibleChatEngine:
-    """Minimal OpenAI-compatible chat-completions adapter for catalog workflows."""
-
-    def infer(self, trial, context, runtime):
         extras = dict(trial.model.extras)
-        base_url = str(extras.get("base_url", "http://127.0.0.1:8000/v1")).rstrip("/")
+        raw_base_url = extras.get("base_url")
         return _run_openai_chat_inference(
             trial,
             context,
             runtime,
-            base_url=base_url,
-            provider_label="OpenAI-compatible endpoint",
+            base_url=(
+                str(raw_base_url).rstrip("/") if isinstance(raw_base_url, str) else None
+            ),
+            provider_label="OpenAI",
             missing_extra="providers-openai",
         )
