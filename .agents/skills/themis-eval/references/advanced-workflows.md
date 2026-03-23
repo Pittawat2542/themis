@@ -13,6 +13,30 @@ orchestrator = Orchestrator.from_project_file(
 )
 ```
 
+## Start From A Built-In Benchmark Project
+
+When the user wants a shipped benchmark plus editable project wiring, use the
+catalog builder instead of recreating the benchmark manually:
+
+```python
+from pathlib import Path
+
+from themis.catalog import build_catalog_benchmark_project
+
+project, benchmark, registry, dataset_loader = build_catalog_benchmark_project(
+    benchmark_id="codeforces",
+    model_id="demo-model",
+    provider="demo",
+    storage_root=Path(".cache/themis-examples/codeforces-snippet"),
+)
+```
+
+The CLI starter path is the same idea:
+
+```bash
+themis init starter-mmlu --benchmark mmlu_pro
+```
+
 ## Evolve A Benchmark Incrementally
 
 Common cases:

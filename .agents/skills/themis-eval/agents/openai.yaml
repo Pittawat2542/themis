@@ -1,4 +1,4 @@
 interface:
   display_name: "Themis Eval"
-  short_description: "Build, inspect, and monitor Themis eval workflows"
-  default_prompt: "Use $themis-eval to build, inspect, monitor, or debug a themis-eval experiment workflow."
+  short_description: "Build and inspect Themis benchmark workflows"
+  default_prompt: "Use $themis-eval to build, run, inspect, or debug a benchmark-first themis-eval workflow."

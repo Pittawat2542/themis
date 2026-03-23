@@ -34,6 +34,21 @@ Artifact bundle filenames are scoped by the active overlay key. Generation
 views write `benchmark-aggregate-gen.json`, while evaluation views write
 `benchmark-aggregate-ev-<evaluation_hash>.json`.
 
+## Stream Runs Or Estimate First
+
+```python
+estimate = orchestrator.estimate(benchmark)
+print(estimate.trial_count)
+print(estimate.trial_matrix)
+
+for update in orchestrator.run_benchmark_iter(benchmark):
+    if update.trial_record is not None:
+        print(update.trial_record.spec_hash)
+```
+
+Use this path when the user wants trial-matrix visibility, streamed progress,
+or wants to know whether a changed benchmark invalidates resume work.
+
 ## Export Project And Benchmark Config Reports
 
 ```python
@@ -61,3 +76,20 @@ result = orchestrator.run_benchmark(
     progress=ProgressConfig(renderer=ProgressRendererType.LOG),
 )
 ```
+
+## Preserve Tool Handler Provenance
+
+When local tool implementations matter for reproducibility, include version
+metadata in the runtime context:
+
+```python
+from themis.specs.experiment import RuntimeContext
+
+runtime = RuntimeContext(
+    tool_handlers={"search": search_handler},
+    tool_handler_versions={"search": "2.1.0"},
+)
+```
+
+Stored candidates then preserve which tool implementation version participated
+in the run.

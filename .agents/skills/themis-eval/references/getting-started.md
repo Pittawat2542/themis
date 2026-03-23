@@ -16,6 +16,42 @@ Add extras only when the workflow needs them:
 - `telemetry`
 - `storage-postgres`
 
+## Pick The Fastest Entry Point
+
+Start with the smallest path that answers the user:
+
+- smoke test one prompt: `themis quick-eval inline ...`
+- scaffold a local project: `themis init starter-eval`
+- start from a shipped benchmark definition:
+  `themis quick-eval benchmark ...` or `themis init ... --benchmark <id>`
+- write Python directly when the benchmark or runtime needs custom logic
+
+For example:
+
+```bash
+themis quick-eval inline \
+  --model demo-model \
+  --provider demo \
+  --input "2 + 2" \
+  --expected "4" \
+  --format json
+```
+
+```bash
+themis quick-eval benchmark \
+  --benchmark mmlu_pro \
+  --model demo-model \
+  --provider demo \
+  --preview \
+  --format json
+```
+
+If the user does not want to run `themis init` but still wants the same ideal
+project shape, either:
+
+- read `references/project-structure.md`
+- run `scripts/generate_project_structure.py` to materialize the layout in a target folder
+
 ## Use The Core Mental Model
 
 The normal user workflow is:
@@ -26,6 +62,9 @@ The normal user workflow is:
 4. define `BenchmarkSpec`
 5. build `Orchestrator`
 6. run and inspect `BenchmarkResult`
+
+When the benchmark already exists in the shipped catalog, prefer that over
+rebuilding it from scratch.
 
 ## Start From This Bundled Pattern
 
@@ -142,6 +181,28 @@ Use an explicit `seed=` when you want a reproducible sampled subset. If you
 omit the seed for count-based sampling, Themis keeps deterministic order-based
 selection from the provider instead of randomizing.
 
+## Use The Quick Authoring Helpers
+
+`BenchmarkSpec.simple(...)` is the fastest Python path for a small benchmark:
+
+```python
+benchmark = BenchmarkSpec.simple(
+    benchmark_id="arithmetic-quick",
+    model=ModelSpec(model_id="demo-model", provider="demo"),
+    dataset_rows=[{"item_id": "item-1", "question": "2 + 2", "answer": "4"}],
+    prompt_template="What is {question}?",
+    metric_id="exact_match",
+)
+```
+
+Use `BenchmarkSpec.preview(item)` before running when the user wants to inspect
+rendered prompts:
+
+```python
+preview = benchmark.preview({"question": "2 + 2", "answer": "4"})
+print(preview["arithmetic-quick-default"]["messages"][0]["content"])
+```
+
 ## Add Built-In Progress Logging When Needed
 
 ```python
@@ -150,6 +211,24 @@ from themis.progress import ProgressConfig, ProgressRendererType
 result = orchestrator.run_benchmark(
     benchmark,
     progress=ProgressConfig(renderer=ProgressRendererType.LOG),
+)
+```
+
+## Use Built-In Benchmark Catalog Projects When Possible
+
+Reach for the shipped benchmark catalog when the user wants standard benchmark
+definitions such as `mmlu_pro`, `aime_2026`, `codeforces`, or `livecodebench`.
+
+```python
+from pathlib import Path
+
+from themis.catalog import build_catalog_benchmark_project
+
+project, benchmark, registry, dataset_loader = build_catalog_benchmark_project(
+    benchmark_id="mmlu_pro",
+    model_id="demo-model",
+    provider="demo",
+    storage_root=Path(".cache/themis-examples/catalog-snippet"),
 )
 ```
 
