@@ -25,6 +25,13 @@ flowchart LR
 - Dataset access is query-aware through `DatasetProvider.scan(slice_spec, query)`.
 - Parse pipelines are public authoring concepts, not metric-local hacks.
 - Reporting is aggregation-first through `BenchmarkResult.aggregate(...)` and `paired_compare(...)`.
+- Quick-start paths now include `themis quick-eval`, `themis init`, and a
+  built-in benchmark catalog for standard benchmark definitions.
+- Agent-style runs support bootstrap message sequences, local tool selection,
+  and OpenAI-hosted MCP server selection inside the benchmark model.
+- Reproducibility metadata now includes deterministic seed-aware planning,
+  streamed benchmark execution helpers, and persisted runtime provenance such as
+  tool-handler versions.
 
 ## Start Here
 
