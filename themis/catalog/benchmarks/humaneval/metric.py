@@ -10,7 +10,7 @@ from themis.records import MetricScore
 from themis.types.json_validation import validate_json_dict
 
 from .dataset import _json_loads_unbounded
-from ..codeforces.metric import SandboxExecutor, _default_executor
+from ...runtime.code_execution import SandboxExecutor, _default_executor
 
 _PYTHON_FENCE_PATTERN = re.compile(
     r"```(?:python|py)?\s*(?P<code>.+?)\s*```",

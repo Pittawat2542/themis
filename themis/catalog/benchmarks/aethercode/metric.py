@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..codeforces.metric import CodeExecutionMetric, SandboxExecutor
+from ...runtime.code_execution import CodeExecutionMetric, SandboxExecutor
 
 
 def _default_checker_support_files() -> dict[str, str]:

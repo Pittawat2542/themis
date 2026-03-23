@@ -14,7 +14,10 @@ from themis.catalog.benchmarks.humaneval.dataset import (
     BuiltinHumanEvalDatasetProvider,
 )
 from themis.catalog.benchmarks.humaneval.metric import HumanEvalExecutionMetric
-from themis.catalog.common import summarize_humaneval, summarize_humaneval_plus
+from themis.catalog.common.summaries import (
+    summarize_humaneval,
+    summarize_humaneval_plus,
+)
 from themis.orchestration.trial_planner import TrialPlanner
 from themis.types.events import ScoreRow
 

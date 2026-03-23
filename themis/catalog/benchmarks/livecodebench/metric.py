@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..codeforces.metric import CodeExecutionMetric, SandboxExecutor
+from ...runtime.code_execution import CodeExecutionMetric, SandboxExecutor
 
 
 class LiveCodeBenchExecutionMetric(CodeExecutionMetric):
