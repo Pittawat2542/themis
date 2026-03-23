@@ -4,6 +4,45 @@ All notable changes to Themis will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [3.1.0] - 2026-03-23
+
+### Added
+- Added first-class agent and tool evaluation support with bootstrap prompts,
+  scripted follow-up turns, explicit tool passing, and OpenAI MCP server
+  support, plus new guides and examples for agent-style benchmark runs.
+- Added benchmark authoring and orchestration ergonomics including
+  `BenchmarkSpec.preview()`, `BenchmarkSpec.simple()`,
+  `Orchestrator.run_benchmark_iter()`, `PluginRegistry.from_dict()`,
+  `RuntimeContext.tool_handler_versions`, and richer cost, run-diff, and
+  engine-capability metadata.
+- Added a built-in benchmark catalog and quick-start CLI workflows powered by
+  Cyclopts, including starter commands, generic benchmark-definition APIs, math
+  benchmarks, configurable HLE variants, and catalog support for Codeforces,
+  AetherCode, LiveCodeBench, and other curated benchmarks.
+
+### Changed
+- Improved reproducibility by planning and persisting deterministic seeds,
+  storing candidate-scoped effective generation parameters and executed judge
+  configs, and surfacing those executed settings in projections, timeline
+  views, and documentation.
+- Refreshed the README, docs, examples, and package smoke checks around agent
+  evals, MCP-backed runs, benchmark catalog workflows, code benchmark
+  execution, and reproducibility guidance.
+- Expanded the curated public package surface and starter utilities so the new
+  benchmark, catalog, MCP, and CLI capabilities are available directly from the
+  root package and documented onboarding flow.
+
+### Fixed
+- Fixed benchmark compilation and execution issues around tool-id validation,
+  tool-handler execution in agent evals, and runtime handling for tool-aware
+  trials.
+- Fixed MCP runtime validation and configuration handling so response payload
+  settings are preserved, MCP arguments are validated, and approval mode must
+  be configured explicitly.
+- Fixed packaging, typing, storage, and docs consistency issues uncovered by
+  the new starter workflows and built-in benchmarks, including local package
+  validation coverage for the added public surfaces.
+
 ## [3.0.0] - 2026-03-18
 
 ### Added
