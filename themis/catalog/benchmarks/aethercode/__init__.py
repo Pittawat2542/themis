@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_aethercode_benchmark,
-    register_aethercode,
-    summarize_aethercode,
-)
+from ...common.builders import build_aethercode_benchmark
+from ...common.registration import register_aethercode
+from ...common.summaries import summarize_aethercode
 from .dataset import (
     DEFAULT_AETHERCODE_SUBSET,
     BuiltinAetherCodeDatasetProvider,

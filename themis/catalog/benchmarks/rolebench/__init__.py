@@ -23,8 +23,9 @@ from themis.types.events import ScoreRow
 from themis.types.json_types import JSONDict
 from themis.types.json_validation import validate_json_dict
 
-from ...common import iter_score_rows, make_dataset_query
-from ... import runtime as _runtime
+from ...common.builders import make_dataset_query
+from ...common.summaries import iter_score_rows
+from ...runtime._provider import _provider_model_extras
 from .dataset import BuiltinRoleBenchDatasetProvider
 from .metric import RoleBenchRougeMetric
 
@@ -113,7 +114,7 @@ def _build_rolebench_benchmark(
             ModelSpec(
                 model_id=config.model_id,
                 provider=config.provider,
-                extras=_runtime._provider_model_extras(config.provider),
+                extras=_provider_model_extras(config.provider),
             )
         ],
         slices=slices,

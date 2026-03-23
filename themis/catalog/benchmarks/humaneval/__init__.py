@@ -6,13 +6,9 @@ from dataclasses import replace
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_humaneval_benchmark,
-    register_humaneval,
-    register_humaneval_plus,
-    summarize_humaneval,
-    summarize_humaneval_plus,
-)
+from ...common.builders import build_humaneval_benchmark
+from ...common.registration import register_humaneval, register_humaneval_plus
+from ...common.summaries import summarize_humaneval, summarize_humaneval_plus
 from .dataset import (
     DEFAULT_HUMANEVAL_PLUS_VERSION,
     BuiltinHumanEvalDatasetProvider,

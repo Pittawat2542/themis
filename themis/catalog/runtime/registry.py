@@ -16,7 +16,7 @@ from .metrics.common import (
     NormalizedExactMatchMetric,
     NumericExactMatchMetric,
 )
-from .common import _normalize_provider_name
+from ._provider import _normalize_provider_name
 
 _SHARED_METRIC_FACTORIES: dict[str, type[Metric]] = {
     "exact_match": cast(type[Metric], ExactMatchMetric),

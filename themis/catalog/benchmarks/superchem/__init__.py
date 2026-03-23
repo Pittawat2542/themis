@@ -8,12 +8,10 @@ from themis import BenchmarkDefinition, BenchmarkDefinitionConfig
 from themis.benchmark.specs import BenchmarkSpec
 from themis.types.json_types import JSONDict
 
-from ...common import (
-    build_mcq_benchmark,
-    register_mcq,
-    render_context_prompt_preview,
-    summarize_mcq,
-)
+from ...common.builders import build_mcq_benchmark
+from ...common.previews import render_context_prompt_preview
+from ...common.registration import register_mcq
+from ...common.summaries import summarize_mcq
 from .dataset import BuiltinSuperChemDatasetProvider
 
 _SUPPORTED_SUPERCHEM_LANGUAGES = ("en", "zh")

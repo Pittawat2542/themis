@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_lpfqa_benchmark,
-    register_lpfqa,
-    summarize_lpfqa,
-)
+from ...common.builders import build_lpfqa_benchmark
+from ...common.registration import register_lpfqa
+from ...common.summaries import summarize_lpfqa
 from .dataset import BuiltinLPFQADatasetProvider
 
 

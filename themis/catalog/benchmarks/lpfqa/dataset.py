@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from ...datasets.common import (
-    BuiltinDatasetProvider,
-    CatalogNormalizedRows,
-    _normalize_lpfqa_rows,
-    load_huggingface_rows,
-)
+from ...datasets._loaders import load_huggingface_rows
+from ...datasets._normalizers import _normalize_lpfqa_rows
+from ...datasets._providers import BuiltinDatasetProvider
+from ...datasets._types import CatalogNormalizedRows
 
 
 class BuiltinLPFQADatasetProvider(BuiltinDatasetProvider):

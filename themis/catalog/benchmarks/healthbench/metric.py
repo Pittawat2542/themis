@@ -14,8 +14,9 @@ from themis.types.enums import PromptRole
 from themis.types.json_types import JSONDict
 from themis.types.json_validation import validate_json_dict
 
-from ...datasets import _prompt_messages_from_context
-from ...runtime.common import _coerce_json_dict, _run_text_judge
+from ...datasets._prompts import _prompt_messages_from_context
+from ...runtime._coercion import _coerce_json_dict
+from ...runtime._judges import _run_text_judge
 
 _HEALTHBENCH_GRADER_TEMPLATE = """Your job is to look at a conversation and a rubric item, and score the last turn in the conversation on how well it follows the rubric item.
 

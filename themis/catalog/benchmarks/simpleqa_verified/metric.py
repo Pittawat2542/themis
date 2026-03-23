@@ -6,11 +6,8 @@ from themis import PromptMessage
 from themis.records import MetricScore
 from themis.types.enums import PromptRole
 
-from ...runtime.common import (
-    _parse_simpleqa_grade,
-    _run_text_judge,
-    _simpleqa_demo_grade,
-)
+from ...runtime._coercion import _parse_simpleqa_grade, _simpleqa_demo_grade
+from ...runtime._judges import _run_text_judge
 
 _SIMPLEQA_GRADER_TEMPLATE = """Your job is to look at a question, a gold target, and a predicted answer, and then assign a grade of either ["CORRECT", "INCORRECT", "NOT_ATTEMPTED"].
 

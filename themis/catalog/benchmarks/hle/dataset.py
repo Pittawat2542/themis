@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from ...datasets.common import (
-    _HLE_RESPONSE_TEMPLATE,
-    _apply_query,
-    BuiltinDatasetProvider,
-    CatalogNormalizedRows,
-    load_hle_rows,
-)
+from ...datasets._loaders import load_hle_rows
+from ...datasets._prompts import _HLE_RESPONSE_TEMPLATE
+from ...datasets._providers import BuiltinDatasetProvider, _apply_query
+from ...datasets._types import CatalogNormalizedRows
 
 
 class BuiltinHLEDatasetProvider(BuiltinDatasetProvider):

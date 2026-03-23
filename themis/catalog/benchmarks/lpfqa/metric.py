@@ -7,12 +7,8 @@ import json
 from themis.extractors.builtin import _normalize_text, extract_embedded_json_payload
 from themis.records import MetricScore
 
-from ...runtime.common import (
-    _coerce_json_dict,
-    _extract_lpfqa_reference_answer,
-    _prompt_messages_with_optional_system,
-    _run_text_judge,
-)
+from ...runtime._coercion import _coerce_json_dict, _extract_lpfqa_reference_answer
+from ...runtime._judges import _prompt_messages_with_optional_system, _run_text_judge
 
 
 class LPFQAJudgeMetric:

@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_healthbench_benchmark,
-    register_healthbench,
-    render_healthbench_preview,
-    summarize_healthbench,
-)
+from ...common.builders import build_healthbench_benchmark
+from ...common.previews import render_healthbench_preview
+from ...common.registration import register_healthbench
+from ...common.summaries import summarize_healthbench
 from .dataset import BuiltinHealthBenchDatasetProvider
 
 

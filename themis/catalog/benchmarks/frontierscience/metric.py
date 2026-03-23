@@ -9,7 +9,8 @@ from themis.extractors.builtin import extract_embedded_json_payload
 from themis.records import MetricScore
 from themis.types.enums import PromptRole
 
-from ...runtime.common import _coerce_json_dict, _run_text_judge
+from ...runtime._coercion import _coerce_json_dict
+from ...runtime._judges import _run_text_judge
 
 _FRONTIERSCIENCE_GRADER_TEMPLATE = """You are grading a model response against the benchmark rubric.
 

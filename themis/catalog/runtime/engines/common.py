@@ -5,11 +5,8 @@ from __future__ import annotations
 from themis.contracts.protocols import InferenceResult
 from themis.records import InferenceRecord
 
-from ..common import (
-    _context_item_id,
-    _expected_demo_response,
-    _run_openai_chat_inference,
-)
+from .._coercion import _context_item_id, _expected_demo_response
+from .._openai import _run_openai_chat_inference
 
 
 class DemoEngine:

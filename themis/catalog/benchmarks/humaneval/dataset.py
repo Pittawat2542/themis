@@ -15,7 +15,8 @@ from urllib import request
 
 from themis.specs.foundational import DatasetSpec
 
-from ...datasets.common import BuiltinDatasetProvider, CatalogNormalizedRows
+from ...datasets._providers import BuiltinDatasetProvider
+from ...datasets._types import CatalogNormalizedRows
 
 DEFAULT_HUMANEVAL_PLUS_VERSION = "v0.1.10"
 _CACHE_ROOT = Path.home() / ".cache" / "themis" / "humaneval"

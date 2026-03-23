@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import io
+import importlib
 import inspect
 from types import SimpleNamespace
 from typing import Any, cast
@@ -13,8 +14,7 @@ from pydantic import SecretStr
 import themis.catalog as catalog
 from themis import BenchmarkDefinition, DatasetQuerySpec
 from themis.benchmark.specs import DatasetSliceSpec
-from themis.catalog.datasets import common as dataset_common
-from themis.catalog.datasets.common import (
+from themis.catalog.datasets._normalizers import (
     _normalize_babe_rows,
     _normalize_frontierscience_rows,
     _normalize_gpqa_diamond_rows,
@@ -28,14 +28,15 @@ from themis.catalog.datasets.common import (
 )
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
 from themis.catalog.runtime.engines.common import OpenAIChatEngine
+from themis.errors import MetricError
 from themis.errors import SpecValidationError, ThemisError
-from themis.catalog.runtime.common import (
-    _build_judge_spec,
-    _coerce_usage_int,
-    _openai_mcp_tool_payload,
+from themis.catalog.runtime._coercion import _coerce_usage_int
+from themis.catalog.runtime._openai import (
     _openai_response_input_message,
     _run_openai_chat_inference,
 )
+from themis.catalog.runtime._provider import _build_judge_spec
+from themis.catalog.runtime._responses import _openai_mcp_tool_payload
 from themis.contracts.protocols import InferenceResult
 from themis.specs.experiment import (
     InferenceParamsSpec,
@@ -91,7 +92,7 @@ class _StubResult:
             {str(getattr(row, "trial_hash")) for row in score_rows}
         )
         self.active_evaluation_hash = None
-        self._builtin_scan_stats = dict(scan_stats or {})
+        self.scan_stats = dict(scan_stats or {})
         self._trial_summaries = list(trial_summaries or [])
 
     def iter_trial_summaries(self):
@@ -327,7 +328,7 @@ def test_openai_chat_engine_uses_model_base_url_and_api_key(
     openai_factory = MagicMock(return_value=client)
     openai_module = SimpleNamespace(OpenAI=openai_factory)
     monkeypatch.setattr(
-        "themis.catalog.runtime.common.import_optional",
+        "themis.catalog.runtime._openai.import_optional",
         lambda name, extra: openai_module,
     )
 
@@ -397,7 +398,7 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
     client = SimpleNamespace(responses=responses)
     openai_module = SimpleNamespace(OpenAI=MagicMock(return_value=client))
     monkeypatch.setattr(
-        "themis.catalog.runtime.common.import_optional",
+        "themis.catalog.runtime._openai.import_optional",
         lambda name, extra: openai_module,
     )
 
@@ -488,7 +489,7 @@ def test_openai_chat_inference_rejects_non_object_mcp_arguments(
     client = SimpleNamespace(responses=responses)
     openai_module = SimpleNamespace(OpenAI=MagicMock(return_value=client))
     monkeypatch.setattr(
-        "themis.catalog.runtime.common.import_optional",
+        "themis.catalog.runtime._openai.import_optional",
         lambda name, extra: openai_module,
     )
 
@@ -556,7 +557,7 @@ def test_openai_chat_inference_rejects_mcp_without_secret(
 ) -> None:
     openai_module = SimpleNamespace(OpenAI=MagicMock())
     monkeypatch.setattr(
-        "themis.catalog.runtime.common.import_optional",
+        "themis.catalog.runtime._openai.import_optional",
         lambda name, extra: openai_module,
     )
     trial = SimpleNamespace(
@@ -1177,6 +1178,30 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
     assert type(metric).__module__ == metric_module
 
 
+def test_judge_backed_metric_registration_is_idempotent() -> None:
+    definition = catalog.get_catalog_benchmark("simpleqa_verified")
+    registry = catalog.build_catalog_registry("demo")
+
+    definition.register_required_components(
+        registry,
+        judge_model_id="judge-a",
+        judge_provider="demo",
+    )
+    first_registration = registry.get_metric_registration("simpleqa_verified_score")
+    definition.register_required_components(
+        registry,
+        judge_model_id="judge-b",
+        judge_provider="demo",
+    )
+    second_registration = registry.get_metric_registration("simpleqa_verified_score")
+
+    assert (
+        second_registration.registration_order == first_registration.registration_order
+    )
+    metric = registry.get_metric("simpleqa_verified_score")
+    assert metric.judge_model_id == "judge-a"
+
+
 @pytest.mark.parametrize(
     ("benchmark_id", "provider_type", "provider_module"),
     [
@@ -1723,10 +1748,29 @@ def test_math_equivalence_metric_returns_install_hint_when_optional_dependency_m
         best_extraction=lambda: SimpleNamespace(success=True, parsed_answer="1/2")
     )
 
-    score = metric.score(None, candidate, {"expected": "0.5"})
+    with pytest.raises(MetricError, match="themis-eval\\[math\\]"):
+        metric.score(None, candidate, {"expected": "0.5"})
 
-    assert score.value == 0.0
-    assert score.error == 'Install it with `uv add "themis-eval[math]"`.'
+
+def test_math_equivalence_metric_raises_metric_error_on_verification_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    metric = MathEquivalenceMetric()
+
+    fake_math_verify = SimpleNamespace(
+        parse=lambda value: value,
+        verify=lambda gold, answer: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    monkeypatch.setattr(
+        "themis.catalog.runtime.metrics.common.import_optional",
+        lambda module_name, *, extra: fake_math_verify,
+    )
+    candidate = SimpleNamespace(
+        best_extraction=lambda: SimpleNamespace(success=True, parsed_answer="1/2")
+    )
+
+    with pytest.raises(MetricError, match="boom"):
+        metric.score(None, candidate, {"expected": "0.5"})
 
 
 def test_rolebench_rouge_metric_scores_overlap_using_rouge_l_f1(
@@ -1786,10 +1830,8 @@ def test_rolebench_rouge_metric_returns_install_hint_when_optional_dependency_mi
         inference=SimpleNamespace(raw_text="The moon will dim.")
     )
 
-    score = metric.score(None, candidate, {"expected": "The moon will dim tonight."})
-
-    assert score.value == 0.0
-    assert score.error == 'Install it with `uv add "themis-eval[text-metrics]"`.'
+    with pytest.raises(MetricError, match="themis-eval\\[text-metrics\\]"):
+        metric.score(None, candidate, {"expected": "The moon will dim tonight."})
 
 
 def test_rolebench_summary_groups_multi_variant_runs_by_variant() -> None:
@@ -1857,6 +1899,72 @@ def test_catalog_preview_rows_are_available_for_all_builtin_benchmarks() -> None
         assert isinstance(rows[0], dict)
 
 
+def test_catalog_common_package_curates_public_exports() -> None:
+    common = importlib.import_module("themis.catalog.common")
+
+    assert common.__all__ == [
+        "build_catalog_benchmark_project",
+        "inspect_huggingface_dataset",
+        "iter_score_rows",
+        "load_huggingface_rows",
+        "load_local_rows",
+        "make_dataset_query",
+    ]
+    assert not hasattr(common, "summarize_humaneval")
+
+
+def test_catalog_common_submodules_expose_moved_helpers() -> None:
+    builders = importlib.import_module("themis.catalog.common.builders")
+    previews = importlib.import_module("themis.catalog.common.previews")
+    registration = importlib.import_module("themis.catalog.common.registration")
+    summaries = importlib.import_module("themis.catalog.common.summaries")
+
+    assert callable(builders.build_humaneval_benchmark)
+    assert callable(builders.make_dataset_query)
+    assert callable(previews.render_context_prompt_preview)
+    assert callable(registration.register_humaneval)
+    assert callable(summaries.summarize_humaneval)
+    assert callable(summaries.summarize_humaneval_plus)
+
+
+def test_catalog_dataset_package_curates_public_exports() -> None:
+    datasets = importlib.import_module("themis.catalog.datasets")
+
+    assert datasets.__all__ == [
+        "BuiltinDatasetProvider",
+        "BuiltinMCQDatasetProvider",
+        "CatalogDatasetProvider",
+        "CatalogNormalizedRows",
+        "inspect_huggingface_dataset",
+        "load_healthbench_rows",
+        "load_huggingface_rows",
+        "load_hle_rows",
+        "load_local_rows",
+    ]
+    assert not hasattr(datasets, "_prompt_messages_from_context")
+    assert not hasattr(datasets, "_normalize_healthbench_rows")
+
+
+def test_catalog_runtime_package_curates_public_exports() -> None:
+    runtime = importlib.import_module("themis.catalog.runtime")
+
+    assert runtime.__all__ == [
+        "ChoiceAccuracyMetric",
+        "DemoEngine",
+        "ExactMatchMetric",
+        "MathEquivalenceMetric",
+        "NormalizedExactMatchMetric",
+        "NumericExactMatchMetric",
+        "OpenAIChatEngine",
+        "build_catalog_registry",
+        "register_catalog_engine",
+        "register_catalog_metrics",
+    ]
+    assert not hasattr(runtime, "_build_judge_spec")
+    assert not hasattr(runtime, "_normalize_provider_name")
+    assert not hasattr(runtime, "_provider_model_extras")
+
+
 def test_load_huggingface_rows_disables_image_decoding_for_iteration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1895,8 +2003,7 @@ def test_load_huggingface_rows_disables_image_decoding_for_iteration(
             return fake_dataset
 
     monkeypatch.setattr(
-        dataset_common,
-        "import_optional",
+        "themis.catalog.datasets._loaders.import_optional",
         lambda module_name, *, extra: _FakeDatasetsModule,
     )
 
@@ -1944,8 +2051,7 @@ def test_load_huggingface_rows_retries_healthbench_with_streaming(
             raise _DatasetGenerationError("broken non-streaming cast")
 
     monkeypatch.setattr(
-        dataset_common,
-        "import_optional",
+        "themis.catalog.datasets._loaders.import_optional",
         lambda module_name, *, extra: _FakeDatasetsModule,
     )
 

@@ -6,7 +6,9 @@ from dataclasses import replace
 
 from themis import BenchmarkDefinition
 
-from ...common import build_procbench_benchmark, register_procbench, summarize_mcq
+from ...common.builders import build_procbench_benchmark
+from ...common.registration import register_procbench
+from ...common.summaries import summarize_mcq
 from .dataset import BuiltinProcbenchDatasetProvider
 
 _SUPPORTED_PROCBENCH_TASK_IDS = tuple(f"task{index:02d}" for index in range(1, 24))

@@ -9,12 +9,12 @@ from themis.extractors.builtin import _normalize_text, extract_embedded_json_pay
 from themis.records import MetricScore
 from themis.types.enums import PromptRole
 
-from ...runtime.common import (
+from ...runtime._coercion import (
     _coerce_json_dict,
     _extract_hle_answer,
     _extract_hle_confidence,
-    _run_text_judge,
 )
+from ...runtime._judges import _run_text_judge
 
 _HLE_JUDGE_TEMPLATE = """Judge whether the following [response] to [question] is correct based on [correct_answer].
 
