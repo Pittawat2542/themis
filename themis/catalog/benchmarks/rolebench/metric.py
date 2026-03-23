@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from themis._optional import import_optional
+from themis.errors import MetricError
 from themis.records import MetricScore
+from themis.types.enums import ErrorCode
 
 
 class RoleBenchRougeMetric:
@@ -25,12 +27,11 @@ class RoleBenchRougeMetric:
                 extra="text-metrics",
             )
         except Exception as exc:
-            return MetricScore(
-                metric_id="rolebench_rouge_l_f1",
-                value=0.0,
-                details={"precision": 0.0, "recall": 0.0, "f1": 0.0},
-                error=str(exc),
-            )
+            raise MetricError(
+                code=ErrorCode.MISSING_OPTIONAL_DEPENDENCY,
+                message=str(exc),
+                details={"metric_id": "rolebench_rouge_l_f1"},
+            ) from exc
         scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
         result = scorer.score(expected, str(response_text))["rougeL"]
         return MetricScore(

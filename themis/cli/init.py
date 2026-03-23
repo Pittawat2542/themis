@@ -821,7 +821,7 @@ def _builtin_app_template(*, package_name: str) -> str:
                 benchmark,
                 progress=_build_progress_config(),
             )
-            setattr(result, "_builtin_scan_stats", dataset_provider.last_scan_stats())
+            result.scan_stats = dataset_provider.last_scan_stats()
             rows = result.aggregate(
                 group_by=["model_id", "slice_id", "metric_id", "prompt_variant_id"]
             )

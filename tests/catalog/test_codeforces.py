@@ -533,6 +533,66 @@ def test_sandbox_fusion_executor_wraps_python_args() -> None:
     assert '"checker.py": "cHJpbnQoJ2NoZWNrZXInKQ=="' in body
 
 
+def test_piston_executor_passes_timeout_to_urlopen() -> None:
+    captured: dict[str, object] = {}
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"run":{"stdout":"ok\\n","stderr":"","code":0}}'
+
+    def _fake_urlopen(req, *, timeout=None):
+        captured["timeout"] = timeout
+        return _Response()
+
+    executor = PistonSandboxExecutor(
+        base_url="http://localhost:2000",
+        urlopen=_fake_urlopen,
+    )
+
+    result = executor.execute(code="print(1)", language="python")
+
+    assert result.ok is True
+    assert captured["timeout"] == pytest.approx(30.0)
+
+
+def test_sandbox_fusion_executor_passes_timeout_to_urlopen() -> None:
+    captured: dict[str, object] = {}
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return (
+                b'{"status":"Success","message":"","compile_result":null,'
+                b'"run_result":{"status":"Finished","return_code":0,'
+                b'"stdout":"ok\\n","stderr":""}}'
+            )
+
+    def _fake_urlopen(req, *, timeout=None):
+        captured["timeout"] = timeout
+        return _Response()
+
+    executor = SandboxFusionExecutor(
+        base_url="http://localhost:8080",
+        urlopen=_fake_urlopen,
+    )
+
+    result = executor.execute(code="print(1)", language="python")
+
+    assert result.ok is True
+    assert captured["timeout"] == pytest.approx(30.0)
+
+
 def test_piston_executor_prefers_generic_env_var(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

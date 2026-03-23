@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from urllib import request
 
-from ...datasets.common import BuiltinDatasetProvider, CatalogNormalizedRows
+from ..._http import DEFAULT_HTTP_TIMEOUT_SECONDS, iter_jsonl_url, load_json_url
+from ...datasets._providers import BuiltinDatasetProvider
+from ...datasets._types import CatalogNormalizedRows
 
 _ROLEBENCH_VARIANT_PATHS = {
     "instruction_generalization_eng": "instruction-generalization",
@@ -100,10 +101,11 @@ def _load_json_file(
     *,
     urlopen=request.urlopen,
 ) -> object:
-    with urlopen(
-        request.Request(_rolebench_file_url(dataset_id, revision, path))
-    ) as response:
-        return json.loads(response.read().decode("utf-8"))
+    return load_json_url(
+        _rolebench_file_url(dataset_id, revision, path),
+        urlopen=urlopen,
+        timeout=DEFAULT_HTTP_TIMEOUT_SECONDS,
+    )
 
 
 def _load_jsonl_file(
@@ -113,18 +115,16 @@ def _load_jsonl_file(
     *,
     urlopen=request.urlopen,
 ) -> list[dict[str, object]]:
-    with urlopen(
-        request.Request(_rolebench_file_url(dataset_id, revision, path))
-    ) as response:
-        rows: list[dict[str, object]] = []
-        for raw_line in response.read().decode("utf-8").splitlines():
-            if not raw_line.strip():
-                continue
-            payload = json.loads(raw_line)
-            if not isinstance(payload, dict):
-                raise ValueError("RoleBench JSONL rows must be JSON objects.")
-            rows.append(dict(payload))
-        return rows
+    rows: list[dict[str, object]] = []
+    for payload in iter_jsonl_url(
+        _rolebench_file_url(dataset_id, revision, path),
+        urlopen=urlopen,
+        timeout=DEFAULT_HTTP_TIMEOUT_SECONDS,
+    ):
+        if not isinstance(payload, dict):
+            raise ValueError("RoleBench JSONL rows must be JSON objects.")
+        rows.append(dict(payload))
+    return rows
 
 
 def _rolebench_file_url(dataset_id: str, revision: str | None, path: str) -> str:

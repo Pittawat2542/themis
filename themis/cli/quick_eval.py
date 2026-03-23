@@ -506,7 +506,7 @@ def _run_builtin_benchmark(
             return 0
 
         result = orchestrator.run_benchmark(benchmark)
-        setattr(result, "_builtin_scan_stats", dataset_provider.last_scan_stats())
+        result.scan_stats = dataset_provider.last_scan_stats()
         payload["rows"] = result.aggregate(
             group_by=["model_id", "slice_id", "metric_id", "prompt_variant_id"]
         )

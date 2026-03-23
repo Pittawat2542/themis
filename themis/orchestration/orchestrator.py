@@ -653,6 +653,7 @@ class Orchestrator:
             benchmark_id=benchmark.benchmark_id,
             slice_ids=[slice_spec.slice_id for slice_spec in benchmark.slices],
             prompt_variant_ids=prompt_variant_ids,
+            scan_stats=getattr(result, "scan_stats", {}),
         )
 
     def _wrap_source_result(
@@ -703,6 +704,7 @@ class Orchestrator:
             benchmark_id=sorted(benchmark_ids)[0],
             slice_ids=slice_ids,
             prompt_variant_ids=prompt_variant_ids,
+            scan_stats=getattr(result, "scan_stats", {}),
         )
 
     def _manifest_source_spec(

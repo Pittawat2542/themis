@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 from collections.abc import Callable
 import json
-import pickle
 import random
 from typing import cast
 from urllib import request
@@ -15,13 +14,14 @@ from themis.benchmark.query import DatasetQuerySpec
 from themis.specs.foundational import DatasetSpec
 from themis.types.enums import DatasetSource, SamplingKind
 
-from ...datasets.common import (
+from ..._http import DEFAULT_HTTP_TIMEOUT_SECONDS, iter_jsonl_url
+from ...datasets._normalizers import _metadata_dict
+from ...datasets._providers import (
     BuiltinDatasetProvider,
-    CatalogNormalizedRows,
     _apply_query,
-    _metadata_dict,
     _row_metadata_value,
 )
+from ...datasets._types import CatalogNormalizedRows
 
 DEFAULT_LIVECODEBENCH_VERSION_TAG = "release_v6"
 
@@ -251,12 +251,14 @@ def _iter_livecodebench_rows(
     if split != "test":
         raise ValueError("LiveCodeBench only provides the 'test' split.")
     for filename in _livecodebench_filenames(version_tag):
-        req = request.Request(_livecodebench_file_url(dataset_id, revision, filename))
-        with urlopen(req) as response:
-            for raw_line in response:
-                if not raw_line.strip():
-                    continue
-                yield dict(json.loads(raw_line))
+        for payload in iter_jsonl_url(
+            _livecodebench_file_url(dataset_id, revision, filename),
+            urlopen=urlopen,
+            timeout=DEFAULT_HTTP_TIMEOUT_SECONDS,
+        ):
+            if not isinstance(payload, dict):
+                raise ValueError("LiveCodeBench rows must be JSON objects.")
+            yield dict(payload)
 
 
 def _livecodebench_filenames(version_tag: str) -> list[str]:
@@ -326,8 +328,18 @@ def _decode_livecodebench_tests(value: object) -> list[dict[str, str]]:
         try:
             raw_tests = json.loads(value)
         except json.JSONDecodeError:
-            decoded = pickle.loads(zlib.decompress(base64.b64decode(value)))
-            raw_tests = json.loads(decoded)
+            try:
+                decoded = zlib.decompress(base64.b64decode(value))
+                raw_tests = json.loads(decoded.decode("utf-8"))
+            except (
+                ValueError,
+                zlib.error,
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+            ) as exc:
+                raise ValueError(
+                    "LiveCodeBench private_test_cases must be JSON or base64+zlib-compressed JSON."
+                ) from exc
     else:
         return []
     if not isinstance(raw_tests, list):

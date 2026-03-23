@@ -5,12 +5,13 @@ from __future__ import annotations
 from themis._optional import import_optional
 from themis.specs.foundational import DatasetSpec
 
-from ...datasets.common import (
-    BuiltinDatasetProvider,
-    CatalogNormalizedRows,
-    _metadata_dict,
+from ...datasets._loaders import (
+    _is_dataset_generation_error,
     _prepare_huggingface_dataset_for_iteration,
 )
+from ...datasets._normalizers import _metadata_dict
+from ...datasets._providers import BuiltinDatasetProvider
+from ...datasets._types import CatalogNormalizedRows
 
 DEFAULT_AETHERCODE_SUBSET = "v1_2024"
 
@@ -89,7 +90,9 @@ def _load_aethercode_rows(
             split=split,
             revision=revision,
         )
-    except Exception:
+    except Exception as exc:
+        if not _is_dataset_generation_error(exc, datasets):
+            raise
         dataset = datasets.load_dataset(
             dataset_id,
             DEFAULT_AETHERCODE_SUBSET,

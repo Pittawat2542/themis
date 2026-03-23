@@ -38,6 +38,7 @@ class BenchmarkResult(ExperimentResult):
         benchmark_id: str | None = None,
         slice_ids: list[str] | None = None,
         prompt_variant_ids: list[str] | None = None,
+        scan_stats: JSONDict | None = None,
     ) -> None:
         super().__init__(
             projection_repo=projection_repo,
@@ -50,6 +51,7 @@ class BenchmarkResult(ExperimentResult):
         self.benchmark_id = benchmark_id
         self.slice_ids = list(slice_ids or [])
         self.prompt_variant_ids = list(prompt_variant_ids or [])
+        self.scan_stats = dict(scan_stats or {})
 
     def aggregate(
         self,
@@ -155,6 +157,7 @@ class BenchmarkResult(ExperimentResult):
             benchmark_id=self.benchmark_id,
             slice_ids=self.slice_ids,
             prompt_variant_ids=self.prompt_variant_ids,
+            scan_stats=self.scan_stats,
         )
 
     def for_evaluation(self, evaluation_hash: str) -> "BenchmarkResult":
@@ -168,6 +171,7 @@ class BenchmarkResult(ExperimentResult):
             benchmark_id=self.benchmark_id,
             slice_ids=self.slice_ids,
             prompt_variant_ids=self.prompt_variant_ids,
+            scan_stats=self.scan_stats,
         )
 
     def persist_artifacts(

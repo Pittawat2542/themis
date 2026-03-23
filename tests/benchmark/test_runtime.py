@@ -193,6 +193,7 @@ def test_benchmark_result_overlay_views_preserve_benchmark_metadata() -> None:
         benchmark_id="bench-1",
         slice_ids=["slice-qa"],
         prompt_variant_ids=["qa-default"],
+        scan_stats={"loaded_count": 2},
     )
 
     transform_view = result.for_transform("transform-1")
@@ -201,9 +202,11 @@ def test_benchmark_result_overlay_views_preserve_benchmark_metadata() -> None:
     assert isinstance(transform_view, BenchmarkResult)
     assert transform_view.benchmark_id == "bench-1"
     assert transform_view.active_transform_hash == "transform-1"
+    assert transform_view.scan_stats == {"loaded_count": 2}
     assert isinstance(evaluation_view, BenchmarkResult)
     assert evaluation_view.benchmark_id == "bench-1"
     assert evaluation_view.active_evaluation_hash == "evaluation-1"
+    assert evaluation_view.scan_stats == {"loaded_count": 2}
 
 
 def test_benchmark_result_aggregate_handles_missing_dimension_values() -> None:
