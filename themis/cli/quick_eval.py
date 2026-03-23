@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path, PurePath
 import re
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 from cyclopts import App, Parameter
 from rich.console import Console
@@ -70,6 +70,57 @@ class QuickEvalConfig:
     preview: bool
     estimate_only: bool
     format: Literal["table", "json"]
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkSummaryOutput:
+    summary: JSONDict
+
+    def render(self, console: Console) -> None:
+        summary_table = Table(title="Benchmark Summary")
+        summary_table.add_column("Field")
+        summary_table.add_column("Value")
+        for key, value in self.summary.items():
+            summary_table.add_row(str(key), str(value))
+        console.print(summary_table)
+
+
+@dataclass(frozen=True, slots=True)
+class HumanEvalSummaryOutput(BenchmarkSummaryOutput):
+    metric_id: str
+    task_count: int
+    sample_count_min: int
+    base_pass_at_k: dict[str, float]
+    plus_pass_at_k: dict[str, float] | None = None
+
+    def render(self, console: Console) -> None:
+        overview_table = Table(title="Benchmark Summary")
+        overview_table.add_column("Field")
+        overview_table.add_column("Value")
+        overview_table.add_row("metric_id", self.metric_id)
+        overview_table.add_row("task_count", str(self.task_count))
+        overview_table.add_row("sample_count_min", str(self.sample_count_min))
+        console.print(overview_table)
+
+        pass_table = Table(title="Pass@K")
+        pass_table.add_column("Variant")
+        for column in self._all_pass_keys():
+            pass_table.add_column(column)
+        pass_table.add_row("base", *self._row_values(self.base_pass_at_k))
+        if self.plus_pass_at_k is not None:
+            pass_table.add_row("plus", *self._row_values(self.plus_pass_at_k))
+        console.print(pass_table)
+
+    def _all_pass_keys(self) -> list[str]:
+        keys = list(self.base_pass_at_k)
+        if self.plus_pass_at_k is not None:
+            for key in self.plus_pass_at_k:
+                if key not in keys:
+                    keys.append(key)
+        return keys
+
+    def _row_values(self, values: dict[str, float]) -> list[str]:
+        return [str(values.get(key, "")) for key in self._all_pass_keys()]
 
 
 def build_app() -> App:
@@ -240,6 +291,7 @@ def build_app() -> App:
         benchmark: str,
         model: str,
         provider: str = "openai",
+        num_samples: int = 1,
         subset: int | None = None,
         revision: str | None = None,
         judge_model: str | None = None,
@@ -272,6 +324,7 @@ def build_app() -> App:
         return _run_builtin_benchmark(
             config,
             benchmark_id=benchmark,
+            num_samples=num_samples,
             subset=subset,
             dataset_revision=revision,
             judge_model_id=judge_model,
@@ -395,6 +448,7 @@ def _run_builtin_benchmark(
     config: QuickEvalConfig,
     *,
     benchmark_id: str,
+    num_samples: int,
     subset: int | None,
     dataset_revision: str | None,
     judge_model_id: str | None,
@@ -416,6 +470,7 @@ def _run_builtin_benchmark(
             temperature=config.temperature,
             top_p=config.top_p,
             seed=config.seed,
+            num_samples=num_samples,
             subset=subset,
             dataset_revision=dataset_revision,
             judge_model_id=judge_model_id,
@@ -691,12 +746,11 @@ def _emit_quick_eval_output(
     if "sqlite_db" in payload:
         console.print(f"SQLite DB: {payload['sqlite_db']}")
     if "summary" in payload:
-        summary_table = Table(title="Benchmark Summary")
-        summary_table.add_column("Field")
-        summary_table.add_column("Value")
-        for key, value in payload["summary"].items():
-            summary_table.add_row(str(key), str(value))
-        console.print(summary_table)
+        summary_output = _build_benchmark_summary_output(
+            str(payload.get("benchmark", "")),
+            cast(JSONDict, payload["summary"]),
+        )
+        summary_output.render(console)
 
 
 def _emit_quick_eval_error(exc: Exception) -> int:
@@ -715,3 +769,45 @@ def _format_display_path(path: PurePath) -> str:
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return slug or "quick-eval"
+
+
+def _build_benchmark_summary_output(
+    benchmark_id: str,
+    summary: JSONDict,
+) -> BenchmarkSummaryOutput:
+    normalized = benchmark_id.strip().lower()
+    if normalized.startswith("humaneval"):
+        return HumanEvalSummaryOutput(
+            summary=summary,
+            metric_id=str(summary.get("metric_id", "")),
+            task_count=_int_summary_value(summary.get("task_count")),
+            sample_count_min=_int_summary_value(summary.get("sample_count_min")),
+            base_pass_at_k=_float_mapping(summary.get("base_pass_at_k")),
+            plus_pass_at_k=(
+                _float_mapping(summary.get("plus_pass_at_k"))
+                if "plus_pass_at_k" in summary
+                else None
+            ),
+        )
+    return BenchmarkSummaryOutput(summary=summary)
+
+
+def _int_summary_value(value: object) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    return 0
+
+
+def _float_mapping(value: object) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    payload: dict[str, float] = {}
+    for key, item in value.items():
+        if isinstance(item, bool):
+            payload[str(key)] = float(item)
+            continue
+        if isinstance(item, (int, float)):
+            payload[str(key)] = float(item)
+    return payload

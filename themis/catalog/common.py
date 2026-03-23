@@ -133,6 +133,7 @@ def build_catalog_benchmark_project(
     temperature: float = 0.0,
     top_p: float | None = None,
     seed: int | None = None,
+    num_samples: int = 1,
     subset: int | None = None,
     dataset_revision: str | None = None,
     judge_model_id: str | None = None,
@@ -156,6 +157,7 @@ def build_catalog_benchmark_project(
         temperature=temperature,
         top_p=top_p,
         seed=seed,
+        num_samples=num_samples,
         subset=subset,
         dataset_revision=dataset_revision,
         judge_model_id=judge_model_id,
@@ -373,6 +375,30 @@ def summarize_aethercode(definition, result) -> JSONDict:
 
 def summarize_livecodebench(definition, result) -> JSONDict:
     return mean_summary(_primary_metric_id(definition), result)
+
+
+def summarize_humaneval(definition, result) -> JSONDict:
+    return _summarize_humaneval_pass_at_k(
+        result,
+        metric_id=(
+            _primary_metric_id(definition)
+            if definition is not None
+            else "humaneval_pass_rate"
+        ),
+        include_plus=False,
+    )
+
+
+def summarize_humaneval_plus(definition, result) -> JSONDict:
+    return _summarize_humaneval_pass_at_k(
+        result,
+        metric_id=(
+            _primary_metric_id(definition)
+            if definition is not None
+            else "humaneval_plus_pass_rate"
+        ),
+        include_plus=True,
+    )
 
 
 def make_dataset_query(config: BenchmarkDefinitionConfig) -> DatasetQuerySpec:
@@ -1026,6 +1052,67 @@ def build_livecodebench_benchmark(
     )
 
 
+def build_humaneval_benchmark(
+    definition: BenchmarkDefinition,
+    config: BenchmarkDefinitionConfig,
+) -> BenchmarkSpec:
+    prompt_variant_id = f"{definition.benchmark_id}-default"
+    return BenchmarkSpec(
+        benchmark_id=definition.benchmark_id,
+        models=[
+            ModelSpec(
+                model_id=config.model_id,
+                provider=config.provider,
+                extras=_runtime._provider_model_extras(config.provider),
+            )
+        ],
+        slices=[
+            SliceSpec(
+                slice_id=definition.benchmark_id,
+                dataset=DatasetSpec(
+                    source=DatasetSource.HUGGINGFACE,
+                    dataset_id=_catalog_metadata_str(definition, "dataset_id"),
+                    split=_catalog_metadata_str(definition, "split"),
+                    revision=config.dataset_revision,
+                ),
+                dataset_query=make_dataset_query(config),
+                dimensions={
+                    "humaneval_variant": str(
+                        _catalog_metadata(definition).get("variant", "base")
+                    )
+                },
+                prompt_variant_ids=[prompt_variant_id],
+                generation=GenerationSpec(),
+                scores=[
+                    ScoreSpec(
+                        name="execution",
+                        metrics=[_primary_metric_id(definition)],
+                    )
+                ],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id=prompt_variant_id,
+                family=definition.benchmark_id,
+                messages=[
+                    PromptMessage(role=PromptRole.USER, content="{item.prompt_text}")
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(
+            params=[
+                InferenceParamsSpec(
+                    max_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    seed=config.seed,
+                )
+            ]
+        ),
+    )
+
+
 def _build_code_generation_benchmark(
     definition: BenchmarkDefinition,
     config: BenchmarkDefinitionConfig,
@@ -1242,6 +1329,36 @@ def register_livecodebench(
     )
 
 
+def register_humaneval(
+    _definition,
+    registry: PluginRegistry,
+    config: BenchmarkDefinitionConfig,
+) -> None:
+    del config
+    from .benchmarks.humaneval.metric import HumanEvalExecutionMetric
+
+    if not registry.has_metric("humaneval_pass_rate"):
+        registry.register_metric(
+            "humaneval_pass_rate",
+            partial(HumanEvalExecutionMetric, metric_id="humaneval_pass_rate"),
+        )
+
+
+def register_humaneval_plus(
+    _definition,
+    registry: PluginRegistry,
+    config: BenchmarkDefinitionConfig,
+) -> None:
+    del config
+    from .benchmarks.humaneval.metric import HumanEvalExecutionMetric
+
+    if not registry.has_metric("humaneval_plus_pass_rate"):
+        registry.register_metric(
+            "humaneval_plus_pass_rate",
+            partial(HumanEvalExecutionMetric, metric_id="humaneval_plus_pass_rate"),
+        )
+
+
 def register_procbench(
     _definition,
     registry: PluginRegistry,
@@ -1265,6 +1382,75 @@ def _register_code_execution_metric(
 ) -> None:
     if not registry.has_metric(metric_id):
         registry.register_metric(metric_id, metric_factory)
+
+
+def _summarize_humaneval_pass_at_k(
+    result,
+    *,
+    metric_id: str,
+    include_plus: bool,
+) -> JSONDict:
+    summaries = {
+        row.trial_hash: row for row in getattr(result, "iter_trial_summaries")()
+    }
+    grouped: dict[str, list[ScoreRow]] = {}
+    for row in iter_score_rows(result, metric_id):
+        summary = summaries.get(row.trial_hash)
+        if summary is None or summary.item_id is None:
+            continue
+        grouped.setdefault(summary.item_id, []).append(row)
+
+    totals = [len(rows) for rows in grouped.values() if rows]
+    sample_count_min = min(totals) if totals else 0
+    base_correct = [
+        sum(1 for row in rows if row.details.get("base_status") == "pass")
+        for rows in grouped.values()
+    ]
+    payload: JSONDict = {
+        "metric_id": metric_id,
+        "task_count": len(grouped),
+        "sample_count_min": sample_count_min,
+        "base_pass_at_k": _estimate_pass_at_k_payload(totals, base_correct),
+    }
+    if include_plus:
+        plus_correct = [
+            sum(
+                1
+                for row in rows
+                if row.details.get("base_status") == "pass"
+                and row.details.get("plus_status") == "pass"
+            )
+            for rows in grouped.values()
+        ]
+        payload["plus_pass_at_k"] = _estimate_pass_at_k_payload(totals, plus_correct)
+    return _json_dict(payload, label="humaneval summary")
+
+
+def _estimate_pass_at_k_payload(
+    totals: list[int],
+    correct_counts: list[int],
+) -> JSONDict:
+    if not totals or not correct_counts:
+        return _json_dict({}, label="pass@k payload")
+    payload: dict[str, float] = {}
+    for k in (1, 10, 100):
+        if min(totals) < k:
+            continue
+        values = [
+            _estimate_pass_at_k(n, c, k)
+            for n, c in zip(totals, correct_counts, strict=True)
+        ]
+        payload[f"pass@{k}"] = sum(values) / len(values)
+    return _json_dict(payload, label="pass@k payload")
+
+
+def _estimate_pass_at_k(num_samples: int, num_correct: int, k: int) -> float:
+    if num_samples - num_correct < k:
+        return 1.0
+    product = 1.0
+    for value in range(num_samples - num_correct + 1, num_samples + 1):
+        product *= 1.0 - k / value
+    return 1.0 - product
 
 
 def render_healthbench_preview(

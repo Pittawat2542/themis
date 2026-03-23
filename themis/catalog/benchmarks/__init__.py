@@ -20,6 +20,11 @@ from .hle import (
 )
 from .hmmt_feb_2025 import DEFINITION as HMMT_FEB_2025_DEFINITION
 from .hmmt_nov_2025 import DEFINITION as HMMT_NOV_2025_DEFINITION
+from .humaneval import (
+    DEFINITION as HUMANEVAL_DEFINITION,
+    PLUS_DEFINITION as HUMANEVAL_PLUS_DEFINITION,
+    build_humaneval_definition,
+)
 from .imo_answerbench import DEFINITION as IMO_ANSWERBENCH_DEFINITION
 from .lpfqa import DEFINITION as LPFQA_DEFINITION
 from .livecodebench import DEFINITION as LIVECODEBENCH_DEFINITION
@@ -69,6 +74,8 @@ _CATALOG_BENCHMARKS: dict[str, BenchmarkDefinition] = {
         FRONTIERSCIENCE_DEFINITION,
         HMMT_FEB_2025_DEFINITION,
         HMMT_NOV_2025_DEFINITION,
+        HUMANEVAL_DEFINITION,
+        HUMANEVAL_PLUS_DEFINITION,
         IMO_ANSWERBENCH_DEFINITION,
         LPFQA_DEFINITION,
         HLE_DEFINITION,
@@ -87,6 +94,10 @@ def list_catalog_benchmarks() -> list[str]:
 
 def get_catalog_benchmark(name: str) -> BenchmarkDefinition:
     normalized = name.strip().lower().replace("-", "_")
+    if normalized == "humaneval" or normalized.startswith("humaneval:"):
+        return build_humaneval_definition("humaneval", normalized)
+    if normalized == "humaneval_plus" or normalized.startswith("humaneval_plus:"):
+        return build_humaneval_definition("humaneval_plus", normalized)
     if normalized == "hle":
         supported = ", ".join(supported_hle_variant_ids())
         raise ValueError(

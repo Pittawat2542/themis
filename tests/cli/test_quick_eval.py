@@ -266,6 +266,55 @@ def test_quick_eval_benchmark_defaults_to_8192_max_tokens(
     assert observed["max_tokens"] == 8192
 
 
+def test_quick_eval_benchmark_forwards_num_samples(tmp_path: Path, monkeypatch) -> None:
+    from themis.cli import quick_eval as quick_eval_cli
+
+    observed: dict[str, object] = {}
+
+    class _StubDefinition:
+        benchmark_id = "humaneval"
+        primary_metric_id = "humaneval_pass_rate"
+
+        def render_preview(self, **kwargs):
+            del kwargs
+            return [{"messages": [{"role": "user", "content": "preview"}]}]
+
+    def _stub_build_catalog_benchmark_project(**kwargs):
+        observed.update(kwargs)
+        return object(), object(), object(), object(), _StubDefinition()
+
+    monkeypatch.setattr(
+        quick_eval_cli,
+        "build_catalog_benchmark_project",
+        _stub_build_catalog_benchmark_project,
+    )
+
+    assert (
+        main(
+            [
+                "quick-eval",
+                "benchmark",
+                "--benchmark",
+                "humaneval",
+                "--model",
+                "demo-model",
+                "--provider",
+                "demo",
+                "--num-samples",
+                "5",
+                "--preview",
+                "--format",
+                "json",
+                "--storage-root",
+                str(tmp_path / "benchmark-preview"),
+            ]
+        )
+        == 0
+    )
+
+    assert observed["num_samples"] == 5
+
+
 def test_quick_eval_benchmark_estimate_uses_builtin_dataset_loader(
     tmp_path: Path, capsys, monkeypatch
 ) -> None:
@@ -414,3 +463,59 @@ def test_quick_eval_math_benchmark_estimate_uses_builtin_dataset_loader(
     payload = json.loads(capsys.readouterr().out)
     assert payload["benchmark"] == "aime_2026"
     assert payload["estimate"]["trial_count"] == 2
+
+
+def test_build_benchmark_summary_output_detects_humaneval_plus() -> None:
+    summary_output = quick_eval_cli._build_benchmark_summary_output(
+        "humaneval_plus:mini,v0.1.10",
+        {
+            "metric_id": "humaneval_plus_pass_rate",
+            "task_count": 1,
+            "sample_count_min": 1,
+            "base_pass_at_k": {"pass@1": 1.0},
+            "plus_pass_at_k": {"pass@1": 0.5},
+        },
+    )
+
+    assert isinstance(summary_output, quick_eval_cli.HumanEvalSummaryOutput)
+    assert summary_output.plus_pass_at_k == {"pass@1": 0.5}
+
+
+def test_emit_quick_eval_output_renders_humaneval_plus_summary_table(
+    capsys,
+) -> None:
+    quick_eval_cli._emit_quick_eval_output(
+        {
+            "mode": "benchmark",
+            "benchmark": "humaneval_plus:mini,v0.1.10",
+            "model": "demo-model",
+            "provider": "demo",
+            "metric": "humaneval_plus_pass_rate",
+            "storage_root": "/tmp/demo",
+            "rows": [
+                {
+                    "model_id": "demo-model",
+                    "slice_id": "humaneval_plus:mini,v0.1.10",
+                    "metric_id": "humaneval_plus_pass_rate",
+                    "prompt_variant_id": "humaneval_plus:mini,v0.1.10-default",
+                    "mean": 1.0,
+                    "count": 1,
+                }
+            ],
+            "summary": {
+                "metric_id": "humaneval_plus_pass_rate",
+                "task_count": 1,
+                "sample_count_min": 1,
+                "base_pass_at_k": {"pass@1": 1.0},
+                "plus_pass_at_k": {"pass@1": 0.5},
+            },
+        },
+        format="table",
+    )
+
+    output = capsys.readouterr().out
+
+    assert "Pass@K" in output
+    assert "base" in output
+    assert "plus" in output
+    assert "{'pass@1': 1.0}" not in output

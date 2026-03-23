@@ -49,9 +49,7 @@ class PistonSandboxExecutor:
         urlopen=request.urlopen,
     ) -> None:
         self._base_url = (
-            base_url
-            or os.getenv("THEMIS_CODEFORCES_PISTON_URL")
-            or "http://localhost:2000"
+            base_url or os.getenv("THEMIS_CODE_PISTON_URL") or "http://localhost:2000"
         ).rstrip("/")
         self._urlopen = urlopen
 
@@ -125,7 +123,7 @@ class SandboxFusionExecutor:
     ) -> None:
         self._base_url = (
             base_url
-            or os.getenv("THEMIS_CODEFORCES_SANDBOX_FUSION_URL")
+            or os.getenv("THEMIS_CODE_SANDBOX_FUSION_URL")
             or "http://localhost:8080"
         ).rstrip("/")
         self._urlopen = urlopen
@@ -485,13 +483,13 @@ def _resolve_piston_runtime(language: str) -> tuple[str, str]:
     normalized = language.strip().lower()
     if normalized == "python":
         return (
-            os.getenv("THEMIS_CODEFORCES_PISTON_PYTHON_LANGUAGE", "python"),
-            os.getenv("THEMIS_CODEFORCES_PISTON_PYTHON_VERSION", "*"),
+            os.getenv("THEMIS_CODE_PISTON_PYTHON_LANGUAGE", "python"),
+            os.getenv("THEMIS_CODE_PISTON_PYTHON_VERSION", "*"),
         )
     if normalized in {"cpp", "cplusplus"}:
         return (
-            os.getenv("THEMIS_CODEFORCES_PISTON_CPP_LANGUAGE", "c++"),
-            os.getenv("THEMIS_CODEFORCES_PISTON_CPP_VERSION", "*"),
+            os.getenv("THEMIS_CODE_PISTON_CPP_LANGUAGE", "c++"),
+            os.getenv("THEMIS_CODE_PISTON_CPP_VERSION", "*"),
         )
     raise ValueError(f"Unsupported Codeforces language '{language}'.")
 
@@ -642,14 +640,12 @@ def _coalesce_message(*payloads: dict[str, object]) -> str | None:
 
 
 def _default_executor() -> SandboxExecutor:
-    backend = os.getenv("THEMIS_CODEFORCES_SANDBOX", "piston").strip().lower()
+    backend = os.getenv("THEMIS_CODE_SANDBOX", "piston").strip().lower()
     if backend == "piston":
         return PistonSandboxExecutor()
     if backend == "sandbox_fusion":
         return SandboxFusionExecutor()
-    raise ValueError(
-        "THEMIS_CODEFORCES_SANDBOX must be either 'piston' or 'sandbox_fusion'."
-    )
+    raise ValueError("THEMIS_CODE_SANDBOX must be either 'piston' or 'sandbox_fusion'.")
 
 
 def _sandbox_fusion_code(

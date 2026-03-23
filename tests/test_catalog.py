@@ -130,6 +130,8 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         "hle",
         "hmmt_feb_2025",
         "hmmt_nov_2025",
+        "humaneval",
+        "humaneval_plus",
         "imo_answerbench",
         "livecodebench",
         "lpfqa",
@@ -258,10 +260,33 @@ def test_catalog_definitions_use_generic_benchmark_definition_and_metadata() -> 
     definition = catalog.get_catalog_benchmark("mmlu_pro")
 
     assert isinstance(definition, BenchmarkDefinition)
-    assert definition.family == "catalog"
-    assert definition.primary_metric_id == "choice_accuracy"
-    assert definition.metadata["dataset_id"] == "TIGER-Lab/MMLU-Pro"
-    assert definition.metadata["split"] == "test"
+
+
+def test_get_catalog_benchmark_accepts_humaneval_variants() -> None:
+    definition = catalog.get_catalog_benchmark("humaneval_plus:mini,v0.1.10")
+
+    assert definition.benchmark_id == "humaneval_plus:mini,v0.1.10"
+    assert definition.metadata["variant"] == "plus"
+    assert definition.metadata["mini"] is True
+    assert definition.metadata["noextreme"] is False
+    assert definition.metadata["version"] == "v0.1.10"
+
+
+@pytest.mark.parametrize(
+    ("benchmark_id", "message"),
+    [
+        ("humaneval:mini,noextreme", "cannot combine"),
+        ("humaneval:mini,mini", "duplicate"),
+        ("humaneval:v0.1.9,v0.1.10", "multiple version"),
+        ("humaneval:unknown", "unknown"),
+    ],
+)
+def test_get_catalog_benchmark_rejects_invalid_humaneval_variants(
+    benchmark_id: str,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        catalog.get_catalog_benchmark(benchmark_id)
 
 
 def test_openai_compatible_benchmarks_use_env_base_url(

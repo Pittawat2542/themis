@@ -8,6 +8,8 @@ The built-in code benchmarks today are:
 - `codeforces`
 - `aethercode`
 - `livecodebench`
+- `humaneval`
+- `humaneval_plus`
 
 They all share the same local sandbox backends and execution runtime.
 
@@ -18,6 +20,8 @@ They all share the same local sandbox backends and execution runtime.
 | `codeforces` | `open-r1/codeforces` | `verifiable-prompts` on `test` | Python or C++ (dataset-native) | `stdio` |
 | `aethercode` | `m-a-p/AetherCode` | `v1_2024` on `test` | C++17 | `stdio` with C++ special judges |
 | `livecodebench` | `livecodebench/code_generation_lite` | `release_v6` on `test` | Python 3 | `stdio` and function-call |
+| `humaneval` | `evalplus/HumanEvalPlus` | default or versioned EvalPlus release | Python 3 | `function` with EvalPlus base tests |
+| `humaneval_plus` | `evalplus/HumanEvalPlus` | default or versioned EvalPlus release | Python 3 | `function` with EvalPlus base+extra tests |
 
 ## What A Code Benchmark Needs
 
@@ -34,18 +38,17 @@ For all built-in code benchmarks, Themis currently supports two local backends:
 Select the backend with:
 
 ```bash
-export THEMIS_CODEFORCES_SANDBOX=piston
+export THEMIS_CODE_SANDBOX=piston
 ```
 
 or:
 
 ```bash
-export THEMIS_CODEFORCES_SANDBOX=sandbox_fusion
+export THEMIS_CODE_SANDBOX=sandbox_fusion
 ```
 
-The environment variable names still use the historical `CODEFORCES` prefix for
-backward compatibility, but they now apply to `codeforces`, `aethercode`, and
-`livecodebench`.
+The generic `THEMIS_CODE_*` env vars apply across `codeforces`,
+`aethercode`, `livecodebench`, `humaneval`, and `humaneval_plus`.
 
 ## Backend Configuration
 
@@ -60,16 +63,16 @@ http://localhost:2000
 Override it with:
 
 ```bash
-export THEMIS_CODEFORCES_PISTON_URL=http://localhost:2000
+export THEMIS_CODE_PISTON_URL=http://localhost:2000
 ```
 
 Runtime selection is also configurable:
 
 ```bash
-export THEMIS_CODEFORCES_PISTON_PYTHON_LANGUAGE=python
-export THEMIS_CODEFORCES_PISTON_PYTHON_VERSION=3.12.0
-export THEMIS_CODEFORCES_PISTON_CPP_LANGUAGE=c++
-export THEMIS_CODEFORCES_PISTON_CPP_VERSION=*
+export THEMIS_CODE_PISTON_PYTHON_LANGUAGE=python
+export THEMIS_CODE_PISTON_PYTHON_VERSION=3.12.0
+export THEMIS_CODE_PISTON_CPP_LANGUAGE=c++
+export THEMIS_CODE_PISTON_CPP_VERSION=*
 ```
 
 Use Piston when you want native stdin plus argv handling without additional
@@ -86,7 +89,7 @@ http://localhost:8080
 Override it with:
 
 ```bash
-export THEMIS_CODEFORCES_SANDBOX_FUSION_URL=http://localhost:8080
+export THEMIS_CODE_SANDBOX_FUSION_URL=http://localhost:8080
 ```
 
 Sandbox Fusion is also supported for all built-in code benchmarks. Themis sends
@@ -146,6 +149,41 @@ The built-in `livecodebench` benchmark uses
 - the loader reads the raw `test*.jsonl` release files directly because the
   dataset repository ships a custom loading script
 
+### `humaneval`
+
+The built-in `humaneval` benchmark uses the EvalPlus HumanEvalPlus release data
+as the dataset source, but scores only the original HumanEval base tests.
+
+- prompts ask for a complete Python function
+- candidate outputs can be plain code or fenced Python code blocks
+- execution runs all tests for one candidate in a single sandbox call
+- summaries report EvalPlus-style base `pass@k`
+
+Variant suffixes are supported after `:`:
+
+- `mini`
+- `noextreme`
+- one explicit version token such as `v0.1.10`
+
+Examples:
+
+- `humaneval`
+- `humaneval:v0.1.10`
+- `humaneval:mini,v0.1.10`
+
+`HUMANEVAL_OVERRIDE_PATH` can point to a local JSONL file when you want to run
+against a pinned local copy or fixture dataset.
+
+### `humaneval_plus`
+
+The built-in `humaneval_plus` benchmark uses the same dataset source and prompt
+shape as `humaneval`, but its primary metric requires a candidate to pass both
+the base HumanEval tests and the EvalPlus extra tests.
+
+- aggregate rows still use the normal benchmark-native mean surface
+- benchmark summaries add EvalPlus-style `base_pass_at_k` and `plus_pass_at_k`
+- `--num-samples` is the main way to request `pass@k` values above `pass@1`
+
 ## Minimal CLI Flow
 
 Preview the benchmark:
@@ -162,13 +200,24 @@ themis quick-eval benchmark \
 For a real run, use a provider-backed model and set the sandbox backend first:
 
 ```bash
-export THEMIS_CODEFORCES_SANDBOX=piston
+export THEMIS_CODE_SANDBOX=piston
 
 themis quick-eval benchmark \
   --benchmark livecodebench \
   --model your-model \
   --provider openai_compatible \
   --format json
+
+To generate multiple candidates per task for HumanEval-style `pass@k`:
+
+```bash
+themis quick-eval benchmark \
+  --benchmark humaneval_plus:mini,v0.1.10 \
+  --model your-model \
+  --provider openai_compatible \
+  --num-samples 10 \
+  --format json
+```
 ```
 
 ## Minimal Python Flow
@@ -242,6 +291,8 @@ print(definition.summarize_result(result))
   judges.
 - `livecodebench` currently targets Python and decodes private test payloads
   from the raw benchmark files.
+- `humaneval` and `humaneval_plus` currently target Python function-generation
+  tasks from EvalPlus releases and honor `HUMANEVAL_OVERRIDE_PATH`.
 - Checker-based problems are supported on both backends.
 
 For the catalog entry point and benchmark list, see

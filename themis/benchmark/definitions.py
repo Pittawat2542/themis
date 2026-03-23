@@ -46,6 +46,7 @@ class BenchmarkDefinitionConfig:
     temperature: float = 0.0
     top_p: float | None = None
     seed: int | None = None
+    num_samples: int = 1
     dataset_revision: str | None = None
     subset: int | None = None
     judge_model_id: str | None = None
@@ -75,6 +76,7 @@ class BenchmarkDefinition:
         temperature: float = 0.0,
         top_p: float | None = None,
         seed: int | None = None,
+        num_samples: int = 1,
         dataset_revision: str | None = None,
         subset: int | None = None,
         judge_model_id: str | None = None,
@@ -92,6 +94,7 @@ class BenchmarkDefinition:
             temperature=temperature,
             top_p=top_p,
             seed=seed,
+            num_samples=num_samples,
             dataset_revision=dataset_revision,
             subset=subset,
             judge_model_id=judge_model_id,
@@ -111,6 +114,7 @@ class BenchmarkDefinition:
         temperature: float = 0.0,
         top_p: float | None = None,
         seed: int | None = None,
+        num_samples: int = 1,
         dataset_revision: str | None = None,
         subset: int | None = None,
         judge_model_id: str | None = None,
@@ -123,12 +127,15 @@ class BenchmarkDefinition:
             temperature=temperature,
             top_p=top_p,
             seed=seed,
+            num_samples=num_samples,
             dataset_revision=dataset_revision,
             subset=subset,
             judge_model_id=judge_model_id,
             judge_provider=judge_provider,
         )
-        return self.builder(self, config)
+        return self.builder(self, config).model_copy(
+            update={"num_samples": config.num_samples}
+        )
 
     def register_required_components(
         self,
@@ -211,6 +218,7 @@ def build_benchmark_definition_project(
     temperature: float = 0.0,
     top_p: float | None = None,
     seed: int | None = None,
+    num_samples: int = 1,
     subset: int | None = None,
     dataset_revision: str | None = None,
     judge_model_id: str | None = None,
@@ -230,6 +238,7 @@ def build_benchmark_definition_project(
         temperature=temperature,
         top_p=top_p,
         seed=seed,
+        num_samples=num_samples,
         subset=subset,
         dataset_revision=dataset_revision,
         judge_model_id=judge_model_id,

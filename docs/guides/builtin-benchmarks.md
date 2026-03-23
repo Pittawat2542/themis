@@ -34,6 +34,8 @@ Current builtin benchmarks:
 | `hle:<variant>[,<variant>...]` | Judge-backed QA | `hle_accuracy` | Yes | `cais/hle` | `test` |
 | `hmmt_feb_2025` | Short-answer math | `math_equivalence` | No | `MathArena/hmmt_feb_2025` | `train` |
 | `hmmt_nov_2025` | Short-answer math | `math_equivalence` | No | `MathArena/hmmt_nov_2025` | `train` |
+| `humaneval[:mini|:noextreme|:vX.Y.Z|...]` | Function-level code generation with EvalPlus base tests | `humaneval_pass_rate` | No | `evalplus/HumanEvalPlus` | `test` |
+| `humaneval_plus[:mini|:noextreme|:vX.Y.Z|...]` | Function-level code generation with EvalPlus base+extra tests | `humaneval_plus_pass_rate` | No | `evalplus/HumanEvalPlus` | `test` |
 | `imo_answerbench` | Short-answer math | `math_equivalence` | No | `Hwilner/imo-answerbench` | `train` |
 | `livecodebench` | Code generation with sandboxed execution | `livecodebench_pass_rate` | No | `livecodebench/code_generation_lite` (`release_v6`) | `test` |
 | `lpfqa` | Judge-backed free-form QA | `lpfqa_score` | Yes | `m-a-p/LPFQA` | `train` |
@@ -67,6 +69,22 @@ HLE requires explicit variants in the benchmark id. Example ids:
 - `hle:text_only`
 - `hle:no_tool`
 - `hle:text_only,no_tool`
+
+HumanEval supports variant tokens after `:`. Supported tokens are:
+
+- `mini`
+- `noextreme`
+- one explicit dataset version such as `v0.1.10`
+
+Examples:
+
+- `humaneval`
+- `humaneval_plus`
+- `humaneval:v0.1.10`
+- `humaneval_plus:mini,v0.1.10`
+
+`mini` and `noextreme` are mutually exclusive. Duplicate or unknown tokens are
+rejected.
 
 MMMLU supports the following explicit config variants in addition to the base
 `mmmlu` benchmark:

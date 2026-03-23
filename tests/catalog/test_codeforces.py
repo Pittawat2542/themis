@@ -13,8 +13,11 @@ from themis.catalog.benchmarks.codeforces.dataset import (
 from themis.catalog.benchmarks.codeforces import dataset as codeforces_dataset
 from themis.catalog.benchmarks.codeforces.metric import (
     CodeforcesExecutionMetric,
+    PistonSandboxExecutor,
     SandboxFusionExecutor,
     SandboxExecutionResult,
+    _default_executor,
+    _resolve_piston_runtime,
 )
 from themis.contracts.protocols import InferenceResult
 from themis.orchestration.trial_planner import TrialPlanner
@@ -528,3 +531,55 @@ def test_sandbox_fusion_executor_wraps_python_args() -> None:
     assert "checker.py" in body
     assert "solution_output.txt" in body
     assert '"checker.py": "cHJpbnQoJ2NoZWNrZXInKQ=="' in body
+
+
+def test_piston_executor_prefers_generic_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("THEMIS_CODE_PISTON_URL", "http://generic-piston:2000")
+
+    executor = PistonSandboxExecutor()
+
+    assert executor._base_url == "http://generic-piston:2000"
+
+
+def test_sandbox_fusion_executor_prefers_generic_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("THEMIS_CODE_SANDBOX_FUSION_URL", "http://generic-sf:8080")
+
+    executor = SandboxFusionExecutor()
+
+    assert executor._base_url == "http://generic-sf:8080"
+
+
+def test_default_executor_uses_generic_sandbox_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("THEMIS_CODE_SANDBOX", "sandbox_fusion")
+
+    executor = _default_executor()
+
+    assert isinstance(executor, SandboxFusionExecutor)
+
+
+def test_default_executor_ignores_legacy_sandbox_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("THEMIS_CODE_SANDBOX", raising=False)
+    monkeypatch.setenv("THEMIS_CODEFORCES_SANDBOX", "sandbox_fusion")
+
+    executor = _default_executor()
+
+    assert isinstance(executor, PistonSandboxExecutor)
+
+
+def test_resolve_piston_runtime_ignores_legacy_env_vars(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("THEMIS_CODEFORCES_PISTON_PYTHON_LANGUAGE", "python")
+    monkeypatch.setenv("THEMIS_CODEFORCES_PISTON_PYTHON_VERSION", "3.12.0")
+
+    runtime = _resolve_piston_runtime("python")
+
+    assert runtime == ("python", "*")
