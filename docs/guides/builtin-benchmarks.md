@@ -42,6 +42,7 @@ Current builtin benchmarks:
 | `codeforces` | Code generation with sandboxed execution | `codeforces_pass_rate` | No | `open-r1/codeforces` (`verifiable-prompts`) | `test` |
 | `phybench` | Short-answer physics | `math_equivalence` | No | `Eureka-Lab/PHYBench` | `train` |
 | `procbench[:taskNN]` | Procedural reasoning final-answer evaluation | `procbench_final_accuracy` | No | `ifujisawa/procbench` (`task01`...`task23`) | `train` |
+| `rolebench[:instruction_generalization_eng|:role_generalization_eng]` | Personality role-play response generation | `rolebench_rouge_l_f1` | No | `ZenMoore/RoleBench` | `test` |
 | `simpleqa_verified` | Judge-backed short answer | `simpleqa_verified_score` | Yes | `google/simpleqa-verified` | `eval` |
 | `superchem[:en|:zh]` | Multimodal chemistry multiple choice | `choice_accuracy` | No | `ZehuaZhao/SUPERChem` (`default`) | `train` |
 | `supergpqa` | Multiple choice | `choice_accuracy` | No | `m-a-p/SuperGPQA` | `train` |
@@ -91,6 +92,16 @@ variants such as:
 - `procbench:task01`
 - `procbench:task12`
 - `procbench:task23`
+
+RoleBench supports the aggregate English benchmark plus explicit single-variant
+ids:
+
+- `rolebench`
+- `rolebench:instruction_generalization_eng`
+- `rolebench:role_generalization_eng`
+
+RoleBench scoring uses ROUGE-L F1. Install the optional dependency with
+`uv add "themis-eval[text-metrics]"` if you want to run it locally.
 
 SuperChem defaults to English. Use `superchem:zh` for the Chinese variant.
 

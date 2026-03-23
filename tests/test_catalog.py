@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import io
 import inspect
 from types import SimpleNamespace
 from typing import Any, cast
@@ -136,6 +137,7 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         "mmmlu",
         "phybench",
         "procbench",
+        "rolebench",
         "simpleqa_verified",
         "superchem",
         "supergpqa",
@@ -148,6 +150,16 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         ("mmmlu", "openai/MMMLU", "default"),
         ("mmmlu:AR_XY", "openai/MMMLU", "AR_XY"),
         ("procbench:task01", "ifujisawa/procbench", "task01"),
+        (
+            "rolebench:instruction_generalization_eng",
+            "ZenMoore/RoleBench",
+            "instruction_generalization_eng",
+        ),
+        (
+            "rolebench:role_generalization_eng",
+            "ZenMoore/RoleBench",
+            "role_generalization_eng",
+        ),
         ("superchem", "ZehuaZhao/SUPERChem", "default"),
         ("superchem:zh", "ZehuaZhao/SUPERChem", "default"),
     ],
@@ -168,6 +180,67 @@ def test_catalog_variant_benchmarks_expose_expected_hf_config_name(
 
     assert benchmark.slices[0].dataset.dataset_id == expected_dataset_id
     assert benchmark.slices[0].dataset.config_name == expected_config_name
+
+
+def test_get_catalog_benchmark_accepts_rolebench_variant_ids() -> None:
+    definition = catalog.get_catalog_benchmark(
+        "rolebench:instruction_generalization_eng"
+    )
+
+    assert definition.benchmark_id == "rolebench:instruction_generalization_eng"
+    assert definition.metadata["variant_ids"] == ["instruction_generalization_eng"]
+
+
+def test_get_catalog_benchmark_rejects_unknown_rolebench_variant_ids() -> None:
+    with pytest.raises(ValueError, match="unknown RoleBench variant"):
+        catalog.get_catalog_benchmark("rolebench:missing")
+
+
+def test_rolebench_aggregate_builds_one_slice_per_variant() -> None:
+    definition = catalog.get_catalog_benchmark("rolebench")
+
+    benchmark = definition.build_benchmark(model_id="demo-model", provider="demo")
+
+    assert benchmark.benchmark_id == "rolebench"
+    assert [slice_spec.slice_id for slice_spec in benchmark.slices] == [
+        "rolebench-instruction_generalization_eng",
+        "rolebench-role_generalization_eng",
+    ]
+    assert [slice_spec.dimensions for slice_spec in benchmark.slices] == [
+        {"rolebench_variant": "instruction_generalization_eng"},
+        {"rolebench_variant": "role_generalization_eng"},
+    ]
+    assert [slice_spec.dataset.dataset_id for slice_spec in benchmark.slices] == [
+        "ZenMoore/RoleBench",
+        "ZenMoore/RoleBench",
+    ]
+    assert [slice_spec.dataset.split for slice_spec in benchmark.slices] == [
+        "test",
+        "test",
+    ]
+    assert [slice_spec.dataset.config_name for slice_spec in benchmark.slices] == [
+        "instruction_generalization_eng",
+        "role_generalization_eng",
+    ]
+    assert [slice_spec.scores[0].metrics for slice_spec in benchmark.slices] == [
+        ["rolebench_rouge_l_f1"],
+        ["rolebench_rouge_l_f1"],
+    ]
+
+
+def test_render_preview_formats_rolebench_prompt_from_fixture_sample() -> None:
+    definition = catalog.get_catalog_benchmark(
+        "rolebench:instruction_generalization_eng"
+    )
+
+    preview = definition.render_preview(model_id="demo-model", provider="demo")
+
+    messages = cast(list[dict[str, object]], preview[0]["messages"])
+    assert messages[0]["role"] == "system"
+    assert "You are {role}" not in str(messages[0]["content"])
+    assert "assigned one personality role" in str(messages[0]["content"])
+    assert messages[1]["role"] == "user"
+    assert "question" not in str(messages[1]["content"]).lower()
 
 
 def test_builtin_runtime_defaults_use_8192_generator_tokens() -> None:
@@ -1076,6 +1149,11 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
             "themis.catalog.benchmarks.hle.dataset",
         ),
         (
+            "rolebench",
+            "BuiltinRoleBenchDatasetProvider",
+            "themis.catalog.benchmarks.rolebench.dataset",
+        ),
+        (
             "aime_2026",
             "BuiltinMathArenaDatasetProvider",
             "themis.catalog.benchmarks.aime_2026",
@@ -1152,7 +1230,7 @@ def test_builtin_benchmarks_use_benchmark_specific_dataset_providers(
 
 @pytest.mark.parametrize(
     "benchmark_id",
-    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only"],
+    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only", "rolebench"],
 )
 def test_specialized_dataset_providers_inline_their_own_implementation(
     benchmark_id: str,
@@ -1349,6 +1427,126 @@ def test_hle_dataset_provider_keeps_image_rows_for_no_tool_variant() -> None:
     assert rows.rows[1]["metadata"] == {"hle_variant": "no_tool"}
 
 
+def test_rolebench_loader_fetches_exact_variant_files_and_combines_subsets() -> None:
+    from themis.catalog.benchmarks.rolebench.dataset import _load_rolebench_rows
+
+    file_map = {
+        "https://huggingface.co/datasets/ZenMoore/RoleBench/resolve/main/profiles-eng/desc.json": '{"Wizard":"Speaks cryptically."}',
+        "https://huggingface.co/datasets/ZenMoore/RoleBench/resolve/main/rolebench-eng/instruction-generalization/general/test.jsonl": "\n".join(
+            [
+                '{"role":"Wizard","question":"General question?","generated":["General answer."]}',
+                "",
+            ]
+        ),
+        "https://huggingface.co/datasets/ZenMoore/RoleBench/resolve/main/rolebench-eng/instruction-generalization/role_specific/test.jsonl": '{"role":"Wizard","question":"Specific question?","generated":["Specific answer."]}',
+    }
+
+    def _fake_urlopen(request: object):
+        url = getattr(request, "full_url", request)
+        assert isinstance(url, str)
+        return io.BytesIO(file_map[url].encode("utf-8"))
+
+    rows = _load_rolebench_rows(
+        "ZenMoore/RoleBench",
+        "test",
+        None,
+        config_name="instruction_generalization_eng",
+        urlopen=_fake_urlopen,
+    )
+
+    assert len(rows) == 2
+    assert [row["subset"] for row in rows] == ["general", "role_specific"]
+    assert rows[0]["desc"] == "Speaks cryptically."
+    assert rows[1]["question"] == "Specific question?"
+
+
+def test_rolebench_dataset_provider_normalizes_expected_ids_and_metadata() -> None:
+    definition = catalog.get_catalog_benchmark(
+        "rolebench:instruction_generalization_eng"
+    )
+    provider = cast(Any, definition.build_dataset_provider())
+    slice_spec = DatasetSliceSpec(
+        benchmark_id="rolebench:instruction_generalization_eng",
+        slice_id="rolebench-instruction_generalization_eng",
+        dimensions={"rolebench_variant": "instruction_generalization_eng"},
+        dataset=DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="ZenMoore/RoleBench",
+            config_name="instruction_generalization_eng",
+        ),
+    )
+
+    rows = provider.prepare_rows(
+        [
+            {
+                "role": "Wizard",
+                "desc": "Speaks cryptically.",
+                "question": "What is the prophecy?",
+                "generated": ["The moon will dim."],
+                "subset": "general",
+                "source_line_number": 7,
+            }
+        ],
+        slice_spec,
+    )
+
+    assert (
+        rows.rows[0]["item_id"] == "rolebench-instruction_generalization_eng-general-7"
+    )
+    assert rows.rows[0]["expected"] == "The moon will dim."
+    assert rows.rows[0]["metadata"] == {
+        "rolebench_variant": "instruction_generalization_eng",
+        "subset": "general",
+        "role": "Wizard",
+    }
+
+
+def test_rolebench_dataset_provider_uses_config_name_to_isolate_variant_loader() -> (
+    None
+):
+    definition = catalog.get_catalog_benchmark("rolebench")
+    benchmark = definition.build_benchmark(model_id="demo-model", provider="demo")
+    seen_config_names: list[str | None] = []
+
+    def _loader(
+        dataset_id: str,
+        split: str,
+        revision: str | None,
+        *,
+        config_name: str | None = None,
+    ) -> list[dict[str, object]]:
+        del dataset_id, split, revision
+        seen_config_names.append(config_name)
+        return [
+            {
+                "role": "Wizard",
+                "desc": "Speaks cryptically.",
+                "question": "What is the prophecy?",
+                "generated": ["The moon will dim."],
+                "subset": "general",
+                "source_line_number": 1,
+            }
+        ]
+
+    provider = cast(Any, definition.build_dataset_provider(huggingface_loader=_loader))
+
+    first_rows = cast(
+        list[dict[str, object]], provider.scan(benchmark.slices[0], DatasetQuerySpec())
+    )
+    second_rows = cast(
+        list[dict[str, object]], provider.scan(benchmark.slices[1], DatasetQuerySpec())
+    )
+
+    assert seen_config_names == [
+        "instruction_generalization_eng",
+        "role_generalization_eng",
+    ]
+    first_metadata = cast(dict[str, object], first_rows[0]["metadata"])
+    second_metadata = cast(dict[str, object], second_rows[0]["metadata"])
+    assert first_metadata["rolebench_variant"] == "instruction_generalization_eng"
+    assert second_metadata["rolebench_variant"] == "role_generalization_eng"
+
+
 def test_inspect_huggingface_dataset_uses_loader_hooks_for_schema_and_samples() -> None:
     summary = catalog.inspect_huggingface_dataset(
         "demo/qa",
@@ -1452,6 +1650,122 @@ def test_math_equivalence_metric_returns_install_hint_when_optional_dependency_m
 
     assert score.value == 0.0
     assert score.error == 'Install it with `uv add "themis-eval[math]"`.'
+
+
+def test_rolebench_rouge_metric_scores_overlap_using_rouge_l_f1(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from themis.catalog.benchmarks.rolebench.metric import RoleBenchRougeMetric
+
+    metric = RoleBenchRougeMetric()
+
+    class _FakeRougeScorer:
+        def __init__(self, metrics: list[str], *, use_stemmer: bool) -> None:
+            assert metrics == ["rougeL"]
+            assert use_stemmer is True
+
+        def score(self, target: str, prediction: str) -> dict[str, object]:
+            assert target == "The moon will dim tonight."
+            assert prediction == "The moon will dim."
+            return {"rougeL": SimpleNamespace(precision=0.9, recall=0.6, fmeasure=0.72)}
+
+    monkeypatch.setattr(
+        "themis.catalog.benchmarks.rolebench.metric.import_optional",
+        lambda module_name, *, extra: SimpleNamespace(RougeScorer=_FakeRougeScorer),
+    )
+    candidate = SimpleNamespace(
+        inference=SimpleNamespace(raw_text="The moon will dim.")
+    )
+
+    score = metric.score(None, candidate, {"expected": "The moon will dim tonight."})
+
+    assert score.metric_id == "rolebench_rouge_l_f1"
+    assert score.value == pytest.approx(0.72)
+    assert score.details == {
+        "precision": pytest.approx(0.9),
+        "recall": pytest.approx(0.6),
+        "f1": pytest.approx(0.72),
+    }
+
+
+def test_rolebench_rouge_metric_returns_install_hint_when_optional_dependency_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from themis.catalog.benchmarks.rolebench.metric import RoleBenchRougeMetric
+
+    metric = RoleBenchRougeMetric()
+
+    def _raise_missing_optional(module_name: str, *, extra: str):
+        raise ThemisError(
+            code=ErrorCode.MISSING_OPTIONAL_DEPENDENCY,
+            message=f'Install it with `uv add "themis-eval[{extra}]"`.',
+        )
+
+    monkeypatch.setattr(
+        "themis.catalog.benchmarks.rolebench.metric.import_optional",
+        _raise_missing_optional,
+    )
+    candidate = SimpleNamespace(
+        inference=SimpleNamespace(raw_text="The moon will dim.")
+    )
+
+    score = metric.score(None, candidate, {"expected": "The moon will dim tonight."})
+
+    assert score.value == 0.0
+    assert score.error == 'Install it with `uv add "themis-eval[text-metrics]"`.'
+
+
+def test_rolebench_summary_groups_multi_variant_runs_by_variant() -> None:
+    definition = catalog.get_catalog_benchmark("rolebench")
+    rows = [
+        SimpleNamespace(
+            trial_hash="trial-1",
+            candidate_id="cand-1",
+            metric_id="rolebench_rouge_l_f1",
+            score=0.8,
+            prompt_variant_id="rolebench-instruction_generalization_eng-default",
+        ),
+        SimpleNamespace(
+            trial_hash="trial-2",
+            candidate_id="cand-2",
+            metric_id="rolebench_rouge_l_f1",
+            score=0.5,
+            prompt_variant_id="rolebench-role_generalization_eng-default",
+        ),
+    ]
+
+    summary = definition.summarize_result(
+        _StubResult(
+            rows,
+            trial_summaries=[
+                SimpleNamespace(
+                    trial_hash="trial-1",
+                    slice_id="rolebench-instruction_generalization_eng",
+                    dimensions={"rolebench_variant": "instruction_generalization_eng"},
+                ),
+                SimpleNamespace(
+                    trial_hash="trial-2",
+                    slice_id="rolebench-role_generalization_eng",
+                    dimensions={"rolebench_variant": "role_generalization_eng"},
+                ),
+            ],
+        )
+    )
+
+    assert summary["metric_id"] == "rolebench_rouge_l_f1"
+    assert summary["count"] == 2
+    assert summary["mean"] == pytest.approx(0.65)
+    assert summary["variant_ids"] == [
+        "instruction_generalization_eng",
+        "role_generalization_eng",
+    ]
+    variants = _json_mapping(summary["variants"])
+    assert _json_mapping(variants["instruction_generalization_eng"])[
+        "mean"
+    ] == pytest.approx(0.8)
+    assert _json_mapping(variants["role_generalization_eng"])["mean"] == pytest.approx(
+        0.5
+    )
 
 
 def test_catalog_preview_rows_are_available_for_all_builtin_benchmarks() -> None:

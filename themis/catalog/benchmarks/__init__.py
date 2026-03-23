@@ -35,6 +35,11 @@ from .procbench import (
     build_procbench_definition,
     supported_procbench_task_ids,
 )
+from .rolebench import (
+    DEFINITION as ROLEBENCH_DEFINITION,
+    build_rolebench_definition,
+    supported_rolebench_variant_ids,
+)
 from .codeforces import DEFINITION as CODEFORCES_DEFINITION
 from .simpleqa_verified import DEFINITION as SIMPLEQA_VERIFIED_DEFINITION
 from .superchem import (
@@ -70,6 +75,7 @@ _CATALOG_BENCHMARKS: dict[str, BenchmarkDefinition] = {
         CODEFORCES_DEFINITION,
         LIVECODEBENCH_DEFINITION,
         PROCBENCH_DEFINITION,
+        ROLEBENCH_DEFINITION,
         SUPERCHEM_DEFINITION,
     )
 }
@@ -139,6 +145,15 @@ def get_catalog_benchmark(name: str) -> BenchmarkDefinition:
                 f"Built-in benchmark 'procbench' received unknown task id: {task_id}"
             )
         return build_procbench_definition([task_id])
+    if normalized.startswith("rolebench:"):
+        variant_id = normalized.split(":", 1)[1].strip()
+        supported_variant_ids = set(supported_rolebench_variant_ids())
+        if variant_id not in supported_variant_ids:
+            raise ValueError(
+                "Built-in benchmark 'rolebench' received unknown RoleBench variant: "
+                f"{variant_id}"
+            )
+        return build_rolebench_definition([variant_id])
     if normalized.startswith("superchem:"):
         language = normalized.split(":", 1)[1].strip()
         supported_languages = set(supported_superchem_languages())
