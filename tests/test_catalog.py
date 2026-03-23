@@ -26,6 +26,9 @@ from themis.catalog.datasets._normalizers import (
     _normalize_procbench_rows,
     _normalize_superchem_rows,
 )
+from themis.catalog.benchmarks.simpleqa_verified.metric import (
+    SimpleQAVerifiedJudgeMetric,
+)
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
 from themis.catalog.runtime.engines.common import OpenAIChatEngine
 from themis.errors import MetricError
@@ -1199,6 +1202,7 @@ def test_judge_backed_metric_registration_is_idempotent() -> None:
         second_registration.registration_order == first_registration.registration_order
     )
     metric = registry.get_metric("simpleqa_verified_score")
+    assert isinstance(metric, SimpleQAVerifiedJudgeMetric)
     assert metric.judge_model_id == "judge-a"
 
 
