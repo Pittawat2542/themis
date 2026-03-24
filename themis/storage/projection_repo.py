@@ -20,7 +20,7 @@ from themis.storage.projection_materializer import ProjectionMaterializer
 from themis.storage.projection_queries import ProjectionQueries
 from themis.storage.timeline_views import ProjectionTimelineViews
 from themis.types.enums import RecordType
-from themis.types.events import ScoreRow, TrialEvent, TrialSummaryRow
+from themis.types.events import ScoreRow, TraceScoreRow, TrialEvent, TrialSummaryRow
 
 
 class SqliteProjectionRepository:
@@ -206,6 +206,40 @@ class SqliteProjectionRepository:
             transform_hash=transform_hash,
             evaluation_hash=evaluation_hash,
         )
+
+    def iter_trace_scores(
+        self,
+        *,
+        trial_hashes: Sequence[str] | None = None,
+        metric_id: str | None = None,
+        trace_score_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> Iterator[TraceScoreRow]:
+        """Yield projected trace metric scores filtered by trial, metric, and trace score."""
+        yield from self._queries.iter_trace_scores(
+            trial_hashes=trial_hashes,
+            metric_id=metric_id,
+            trace_score_hash=trace_score_hash,
+            evaluation_hash=evaluation_hash,
+        )
+
+    def replace_trace_metric_scores(
+        self,
+        trial_hash: str,
+        trace_rows: Sequence[TraceScoreRow],
+        *,
+        evaluation_hash: str | None = None,
+    ) -> None:
+        """Persist or replace trace score rows for one evaluation overlay."""
+        overlay_key = overlay_key_for(evaluation_hash=evaluation_hash)
+        with self.manager.get_connection() as conn:
+            with conn:
+                self._writer.replace_trace_metric_scores(
+                    conn,
+                    trial_hash,
+                    list(trace_rows),
+                    overlay_key,
+                )
 
     def has_trial(
         self,

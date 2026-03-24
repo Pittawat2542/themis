@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from ...datasets.common import (
-    BuiltinDatasetProvider,
-    CatalogNormalizedRows,
-    _assign_missing_item_ids,
-    _datasets_load_dataset,
-    _normalize_superchem_rows,
-)
+from ...datasets._loaders import _datasets_load_dataset
+from ...datasets._normalizers import _normalize_superchem_rows
+from ...datasets._providers import BuiltinDatasetProvider, _assign_missing_item_ids
+from ...datasets._types import CatalogNormalizedRows
 
 
 class BuiltinSuperChemDatasetProvider(BuiltinDatasetProvider):

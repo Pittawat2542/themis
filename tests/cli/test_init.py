@@ -30,6 +30,10 @@ def test_init_generates_lean_project_scaffold(tmp_path: Path) -> None:
     assert "class CatalogSettings" in settings_module
     assert "THEMIS_CATALOG_PROVIDER" in settings_module
     assert "THEMIS_CATALOG_MODEL" in settings_module
+    assert "OPENAI_BASE_URL" in settings_module
+    assert "OPENAI_COMPAT_BASE_URL" not in settings_module
+    assert "OPENAI_BASE_URL=" in (project_root / ".env.example").read_text()
+    assert "OPENAI_COMPAT_BASE_URL" not in (project_root / ".env.example").read_text()
 
 
 def test_init_generated_project_runs_preview_mode(tmp_path: Path) -> None:

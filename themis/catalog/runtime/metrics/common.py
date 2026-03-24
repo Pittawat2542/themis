@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from themis._optional import import_optional
+from themis.errors import MetricError
 from themis.extractors.builtin import _normalize_text
 from themis.records import MetricScore
+from themis.types.enums import ErrorCode
 
-from ..common import _coerce_float, _expected_text
+from .._coercion import _coerce_float, _expected_text
 
 
 class ExactMatchMetric:
@@ -98,12 +100,11 @@ class MathEquivalenceMetric:
         try:
             math_verify = import_optional("math_verify", extra="math")
         except Exception as exc:
-            return MetricScore(
-                metric_id="math_equivalence",
-                value=0.0,
+            raise MetricError(
+                code=ErrorCode.MISSING_OPTIONAL_DEPENDENCY,
+                message=str(exc),
                 details=details,
-                error=str(exc),
-            )
+            ) from exc
         try:
             parsed_gold = math_verify.parse(gold_answer)
             parsed_candidate = math_verify.parse(candidate_answer)
@@ -116,9 +117,8 @@ class MathEquivalenceMetric:
             )
         except Exception as exc:
             details["verification_error"] = str(exc)
-            return MetricScore(
-                metric_id="math_equivalence",
-                value=0.0,
+            raise MetricError(
+                code=ErrorCode.METRIC_COMPUTATION,
+                message=str(exc),
                 details=details,
-                error=str(exc),
-            )
+            ) from exc

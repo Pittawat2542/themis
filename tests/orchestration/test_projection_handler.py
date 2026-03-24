@@ -4,6 +4,7 @@ import pytest
 
 from themis.orchestration.projection_handler import ProjectionHandler
 from themis.orchestration.task_resolution import resolve_task_stages
+from themis.records.conversation import ToolCallEvent, ToolCallPayload
 from themis.records.trial import TrialRecord
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import (
@@ -12,15 +13,18 @@ from themis.specs.foundational import (
     ExtractorChainSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    MetricRefSpec,
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
+    TraceEvaluationSpec,
 )
+from themis.registry.plugin_registry import PluginRegistry
 from themis.storage.event_repo import SqliteEventRepository
 from themis.storage.projection_repo import SqliteProjectionRepository
 from themis.storage.sqlite_schema import DatabaseManager
 from themis.storage._protocols import StorageConnectionManager
-from themis.types.enums import RecordStatus, DatasetSource
+from themis.types.enums import PromptRole, RecordStatus, DatasetSource
 from themis.types.events import (
     ProjectionCompletedEventMetadata,
     TimelineStage,
@@ -31,7 +35,7 @@ from themis.types.events import (
 from typing import Any, cast
 
 
-def _make_trial() -> TrialSpec:
+def _make_trial(*, include_trace_evaluations: bool = True) -> TrialSpec:
     return TrialSpec(
         trial_id="trial_projection_handler",
         model=ModelSpec(model_id="gpt-4o-mini", provider="openai"),
@@ -54,6 +58,22 @@ def _make_trial() -> TrialSpec:
                     metrics=["exact_match"],
                 )
             ],
+            trace_evaluations=(
+                [
+                    TraceEvaluationSpec(
+                        name="workflow",
+                        scope="candidate_trace",
+                        metrics=[
+                            MetricRefSpec(
+                                id="tool_presence",
+                                config={"tool_name": "search"},
+                            )
+                        ],
+                    )
+                ]
+                if include_trace_evaluations
+                else []
+            ),
         ),
         item_id="item-1",
         prompt=PromptTemplateSpec(id="baseline", messages=[]),
@@ -75,7 +95,7 @@ def test_projection_handler_appends_projection_event_and_materializes_overlay(tm
         projection_version="test-v2",
     )
 
-    trial = _make_trial()
+    trial = _make_trial(include_trace_evaluations=False)
     resolved = resolve_task_stages(trial.task)
     transform_hash = resolved.output_transforms[0].transform_hash
     evaluation_hash = resolved.evaluations[0].evaluation_hash
@@ -161,6 +181,211 @@ def test_projection_handler_appends_projection_event_and_materializes_overlay(tm
         )
         is not None
     )
+
+
+def test_projection_handler_persists_trace_scores_after_materialization(tmp_path):
+    manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_trace_scores.db")
+    manager.initialize()
+
+    event_repo = SqliteEventRepository(cast(StorageConnectionManager, manager))
+    projection_repo = SqliteProjectionRepository(
+        cast(StorageConnectionManager, manager)
+    )
+    registry = PluginRegistry()
+    handler = ProjectionHandler(
+        event_repo=event_repo,
+        projection_repo=projection_repo,
+        registry=registry,
+    )
+
+    trial = _make_trial()
+    resolved = resolve_task_stages(trial.task)
+    evaluation_hash = resolved.evaluations[0].evaluation_hash
+    event_repo.save_spec(trial)
+
+    for event in [
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=1,
+            event_id="evt_1",
+            event_type=TrialEventType.ITEM_LOADED,
+            stage=TimelineStage.ITEM_LOAD,
+            metadata=cast(
+                TrialEventMetadata,
+                {"item_id": trial.item_id, "dataset_source": "memory"},
+            ),
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=2,
+            event_id="evt_2",
+            event_type=TrialEventType.CANDIDATE_STARTED,
+            candidate_id="candidate_1",
+            payload={"sample_index": 0},
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=3,
+            event_id="evt_3",
+            event_type=TrialEventType.INFERENCE_COMPLETED,
+            candidate_id="candidate_1",
+            stage=TimelineStage.INFERENCE,
+            metadata=cast(
+                TrialEventMetadata,
+                {"provider": "openai", "model_id": "gpt-4o-mini"},
+            ),
+            payload={"spec_hash": "inf_1", "raw_text": "used search"},
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=4,
+            event_id="evt_4",
+            event_type=TrialEventType.CONVERSATION_EVENT,
+            candidate_id="candidate_1",
+            payload=ToolCallEvent(
+                role=PromptRole.ASSISTANT,
+                event_index=0,
+                payload=ToolCallPayload(
+                    tool_name="search",
+                    tool_arguments={"query": "2+2"},
+                    call_id="call-1",
+                ),
+            ).model_dump(mode="json"),
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=5,
+            event_id="evt_5",
+            event_type=TrialEventType.EVALUATION_COMPLETED,
+            candidate_id="candidate_1",
+            stage=TimelineStage.EVALUATION,
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "transform_hash": None,
+                    "evaluation_hash": evaluation_hash,
+                    "metric_id": "exact_match",
+                    "score": 1.0,
+                },
+            ),
+            payload={
+                "spec_hash": evaluation_hash,
+                "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
+            },
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=6,
+            event_id="evt_6",
+            event_type=TrialEventType.CANDIDATE_COMPLETED,
+            candidate_id="candidate_1",
+            payload={"status": "ok"},
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=7,
+            event_id="evt_7",
+            event_type=TrialEventType.TRIAL_COMPLETED,
+            payload={"status": "ok"},
+        ),
+    ]:
+        event_repo.append_event(event)
+
+    handler.on_trial_completed(trial.spec_hash, evaluation_hash=evaluation_hash)
+
+    rows = list(
+        projection_repo.iter_trace_scores(
+            trial_hashes=[trial.spec_hash],
+            trace_score_hash=resolved.trace_evaluations[0].trace_score_hash,
+            evaluation_hash=evaluation_hash,
+        )
+    )
+
+    assert len(rows) == 1
+    assert rows[0].metric_id == "tool_presence"
+
+
+def test_projection_handler_requires_registry_when_trace_evaluations_exist(tmp_path):
+    manager = DatabaseManager(f"sqlite:///{tmp_path}/projection_trace_registry.db")
+    manager.initialize()
+
+    event_repo = SqliteEventRepository(cast(StorageConnectionManager, manager))
+    projection_repo = SqliteProjectionRepository(
+        cast(StorageConnectionManager, manager)
+    )
+    handler = ProjectionHandler(
+        event_repo=event_repo,
+        projection_repo=projection_repo,
+    )
+
+    trial = _make_trial()
+    resolved = resolve_task_stages(trial.task)
+    evaluation_hash = resolved.evaluations[0].evaluation_hash
+    event_repo.save_spec(trial)
+
+    for event in [
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=1,
+            event_id="evt_1",
+            event_type=TrialEventType.ITEM_LOADED,
+            stage=TimelineStage.ITEM_LOAD,
+            metadata=cast(
+                TrialEventMetadata,
+                {"item_id": trial.item_id, "dataset_source": "memory"},
+            ),
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=2,
+            event_id="evt_2",
+            event_type=TrialEventType.CANDIDATE_STARTED,
+            candidate_id="candidate_1",
+            payload={"sample_index": 0},
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=3,
+            event_id="evt_3",
+            event_type=TrialEventType.EVALUATION_COMPLETED,
+            candidate_id="candidate_1",
+            stage=TimelineStage.EVALUATION,
+            metadata=cast(
+                TrialEventMetadata,
+                {
+                    "evaluation_hash": evaluation_hash,
+                    "metric_id": "exact_match",
+                    "score": 1.0,
+                },
+            ),
+            payload={
+                "spec_hash": evaluation_hash,
+                "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
+            },
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=4,
+            event_id="evt_4",
+            event_type=TrialEventType.CANDIDATE_COMPLETED,
+            candidate_id="candidate_1",
+            payload={"status": "ok"},
+        ),
+        TrialEvent(
+            trial_hash=trial.spec_hash,
+            event_seq=5,
+            event_id="evt_5",
+            event_type=TrialEventType.TRIAL_COMPLETED,
+            payload={"status": "ok"},
+        ),
+    ]:
+        event_repo.append_event(event)
+
+    with pytest.raises(ValueError, match="trace evaluations"):
+        handler.on_trial_completed(
+            trial.spec_hash,
+            evaluation_hash=evaluation_hash,
+        )
 
 
 def test_projection_handler_does_not_record_projection_completion_when_materialization_fails():
@@ -270,7 +495,7 @@ def test_projection_handler_refreshes_overlay_when_newer_events_exist(tmp_path):
         projection_version="test-v2",
     )
 
-    trial = _make_trial()
+    trial = _make_trial(include_trace_evaluations=False)
     resolved = resolve_task_stages(trial.task)
     transform_hash = resolved.output_transforms[0].transform_hash
     evaluation_hash = resolved.evaluations[0].evaluation_hash

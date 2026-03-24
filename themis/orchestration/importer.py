@@ -113,6 +113,7 @@ class CandidateImporter:
                         append_event(
                             TrialEventType.CONVERSATION_EVENT,
                             candidate_id=candidate_id,
+                            stage=TimelineStage.INFERENCE,
                             payload=conversation_event.model_dump(mode="json"),
                         )
                 append_event(

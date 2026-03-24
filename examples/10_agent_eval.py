@@ -19,8 +19,10 @@ from themis import (
     ScoreSpec,
     SliceSpec,
     StorageSpec,
+    TraceScoreSpec,
     ToolSpec,
 )
+from themis.catalog import register_catalog_metrics
 from themis.contracts.protocols import InferenceResult
 from themis.records import (
     InferenceRecord,
@@ -134,6 +136,7 @@ def calculator_handler(arguments: object) -> dict[str, str]:
 
 def main() -> None:
     registry = PluginRegistry()
+    register_catalog_metrics(registry)
     registry.register_inference_engine("agent-demo", ScriptedAgentEngine())
     registry.register_metric("exact_match", ExactMatchMetric())
     registry.register_tool("calculator", calculator_handler)
@@ -179,6 +182,18 @@ def main() -> None:
                 prompt_variant_ids=["agent-default"],
                 tool_ids=["calculator"],
                 scores=[ScoreSpec(name="default", metrics=["exact_match"])],
+                trace_scores=[
+                    TraceScoreSpec(
+                        name="workflow",
+                        scope="candidate_trace",
+                        metrics=[
+                            {
+                                "id": "tool_presence",
+                                "config": {"tool_name": "calculator"},
+                            }
+                        ],
+                    )
+                ],
             )
         ],
         tools=[
@@ -249,6 +264,7 @@ def main() -> None:
     assert candidate_view is not None
 
     print(result.aggregate(group_by=["slice_id", "metric_id"]))
+    print(result.aggregate_trace(group_by=["slice_id", "metric_id"]))
     print([event.kind for event in candidate_view.conversation.events])
 
 

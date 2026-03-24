@@ -9,6 +9,8 @@ from themis.contracts.protocols import (
     DatasetContext,
     InferenceResult,
     JudgeService,
+    Metric,
+    TrialMetric,
 )
 from themis.orchestration.resolved_plugins import (
     ResolvedEvaluationPlugins,
@@ -176,6 +178,7 @@ def evaluate_candidate(
     evaluation: ResolvedEvaluation,
     judge_service: JudgeService | None = None,
     telemetry_bus: TelemetryBus | None = None,
+    all_candidates: list[CandidateRecord] | None = None,
     *,
     resolved_evaluation: ResolvedEvaluationPlugins | None = None,
 ) -> CandidateRecord:
@@ -185,10 +188,21 @@ def evaluate_candidate(
     scores: list[MetricScore] = []
     aggregate_scores: dict[str, float] = {}
     working_candidate = resolved.hooks.apply_pre_eval(trial, candidate)
+    candidate_set = (
+        sorted(all_candidates, key=lambda item: item.sample_index)
+        if all_candidates is not None
+        else [working_candidate]
+    )
+    anchor_candidate = candidate_set[0]
 
     for metric_step in resolved.metrics:
         try:
             ctx = _dataset_payload(dataset_context)
+            ctx["all_candidates"] = candidate_set
+            ctx["anchor_candidate"] = anchor_candidate
+            ctx["metric_config"] = dict(metric_step.config)
+            ctx["metric_id"] = metric_step.metric_id
+            ctx["metric_registry"] = registry
             if judge_service is not None:
                 ctx["judge_service"] = judge_service
                 ctx["runtime_context"] = runtime_context
@@ -200,7 +214,17 @@ def evaluate_candidate(
                     metric_id=metric_step.metric_id,
                 )
 
-            score_record = metric_step.metric.score(trial, working_candidate, ctx)
+            score_record = _score_metric_step(
+                trial,
+                working_candidate,
+                metric_step.metric,
+                metric_step.metric_id,
+                ctx,
+                candidate_set=candidate_set,
+                anchor_candidate=anchor_candidate,
+            )
+            if score_record is None:
+                continue
             scores.append(score_record)
             aggregate_scores[score_record.metric_id] = score_record.value
             if telemetry_bus is not None:
@@ -230,6 +254,36 @@ def evaluate_candidate(
     )
     working_candidate = resolved.hooks.apply_post_eval(trial, working_candidate)
     return working_candidate.model_copy(update={"status": RecordStatus.OK})
+
+
+def _score_metric_step(
+    trial: TrialSpec,
+    candidate: CandidateRecord,
+    metric: object,
+    metric_id: str,
+    context: dict[str, object],
+    *,
+    candidate_set: list[CandidateRecord],
+    anchor_candidate: CandidateRecord,
+) -> MetricScore | None:
+    if isinstance(metric, TrialMetric):
+        candidate_id = candidate.candidate_id or candidate.spec_hash
+        anchor_candidate_id = (
+            anchor_candidate.candidate_id or anchor_candidate.spec_hash
+        )
+        if candidate_id != anchor_candidate_id:
+            return None
+        score_record = metric.score_trial(trial, candidate_set, context)
+        if score_record.metric_id != metric_id:
+            return score_record
+        return score_record
+    if not isinstance(metric, Metric):
+        raise MetricError(
+            code=ErrorCode.METRIC_COMPUTATION,
+            message=f"Metric '{metric_id}' does not implement score().",
+            details={},
+        )
+    return metric.score(trial, candidate, context)
 
 
 def _coerce_inference_result(

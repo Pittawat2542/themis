@@ -2,13 +2,37 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import partial
 from typing import cast
 
-from themis.contracts.protocols import InferenceEngine, Metric
+from themis.contracts.protocols import InferenceEngine, Metric, TrialMetric
 from themis import PluginRegistry
 from themis.registry import EngineCapabilities
+from themis.registry.plugin_registry import MetricPlugin
 
-from .engines.common import DemoEngine, OpenAIChatEngine, OpenAICompatibleChatEngine
+from themis.catalog.metrics import (
+    AccConsistencyMetric,
+    AvgAtKMetric,
+    BERTScoreMetric,
+    BestOfNMetric,
+    BleuMetric,
+    ChrFMetric,
+    EditDistanceMetric,
+    MajorityAtKMetric,
+    MeteorMetric,
+    PassAtKMetric,
+    RougeMetric,
+    SacreBleuMetric,
+    SelfConsistencyMetric,
+    TERMetric,
+    EventSequenceTraceMetric,
+    NodePresenceTraceMetric,
+    ToolPresenceTraceMetric,
+    ToolStageTraceMetric,
+    VarianceAtKMetric,
+)
+from .engines.common import DemoEngine, OpenAIChatEngine
 from .metrics.common import (
     ChoiceAccuracyMetric,
     ExactMatchMetric,
@@ -16,14 +40,40 @@ from .metrics.common import (
     NormalizedExactMatchMetric,
     NumericExactMatchMetric,
 )
-from .common import _normalize_provider_name
+from ._provider import _normalize_provider_name
 
-_SHARED_METRIC_FACTORIES: dict[str, type[Metric]] = {
+MetricFactory = (
+    Callable[[], MetricPlugin] | type[Metric] | type[TrialMetric] | MetricPlugin
+)
+
+
+_SHARED_METRIC_FACTORIES: dict[str, MetricFactory] = {
     "exact_match": cast(type[Metric], ExactMatchMetric),
     "normalized_exact_match": cast(type[Metric], NormalizedExactMatchMetric),
     "choice_accuracy": cast(type[Metric], ChoiceAccuracyMetric),
     "numeric_exact_match": cast(type[Metric], NumericExactMatchMetric),
     "math_equivalence": cast(type[Metric], MathEquivalenceMetric),
+    "self_consistency": cast(type[Metric], SelfConsistencyMetric),
+    "best_of_n": cast(type[Metric], BestOfNMetric),
+    "pass_at_k": cast(type[Metric], PassAtKMetric),
+    "avg_at_k": cast(type[Metric], AvgAtKMetric),
+    "acc_consistency": cast(type[Metric], AccConsistencyMetric),
+    "majority_at_k": cast(type[Metric], MajorityAtKMetric),
+    "variance_at_k": cast(type[Metric], VarianceAtKMetric),
+    "tool_presence": cast(type[Metric], ToolPresenceTraceMetric),
+    "tool_stage": cast(type[Metric], ToolStageTraceMetric),
+    "event_sequence": cast(type[Metric], EventSequenceTraceMetric),
+    "node_presence": cast(type[Metric], NodePresenceTraceMetric),
+    "bleu": cast(type[Metric], BleuMetric),
+    "rouge_1": cast(type[Metric], partial(RougeMetric, "rouge1")),
+    "rouge_2": cast(type[Metric], partial(RougeMetric, "rouge2")),
+    "rouge_l": cast(type[Metric], partial(RougeMetric, "rougeL")),
+    "meteor": cast(type[Metric], MeteorMetric),
+    "bertscore": cast(type[Metric], BERTScoreMetric),
+    "sacrebleu": cast(type[Metric], SacreBleuMetric),
+    "chrf": cast(type[Metric], ChrFMetric),
+    "ter": cast(type[Metric], TERMetric),
+    "edit_distance": cast(type[Metric], EditDistanceMetric),
 }
 
 _ENGINE_REGISTRATIONS: dict[str, tuple[type[InferenceEngine], EngineCapabilities]] = {
@@ -34,10 +84,6 @@ _ENGINE_REGISTRATIONS: dict[str, tuple[type[InferenceEngine], EngineCapabilities
     "openai": (
         cast(type[InferenceEngine], OpenAIChatEngine),
         EngineCapabilities(supports_seed=True, supports_mcp=True),
-    ),
-    "openai_compatible": (
-        cast(type[InferenceEngine], OpenAICompatibleChatEngine),
-        EngineCapabilities(supports_seed=True),
     ),
 }
 

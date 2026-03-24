@@ -32,7 +32,7 @@ Every numbered example in this directory uses the benchmark-first public API.
    Evolves a benchmark by adding models and prompt variants.
 
 10. `10_agent_eval.py`
-   Demonstrates bootstrap prompts, scripted follow-up turns, benchmark tool overrides, slice-level tool selection, runtime tool handlers, and agent traces.
+   Demonstrates bootstrap prompts, scripted follow-up turns, benchmark tool overrides, slice-level tool selection, runtime tool handlers, agent traces, and persisted trace scoring.
 
 11. `11_quick_benchmark.py`
    Demonstrates `BenchmarkSpec.simple()`, preview, and `PluginRegistry.from_dict()`.

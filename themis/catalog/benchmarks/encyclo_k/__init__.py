@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_mcq_benchmark,
-    register_mcq,
-    summarize_mcq,
-)
-from ...datasets.common import BuiltinMCQDatasetProvider
+from ...common.builders import build_mcq_benchmark
+from ...common.registration import register_mcq
+from ...common.summaries import summarize_mcq
+from ...datasets._providers import BuiltinMCQDatasetProvider
 
 
 class BuiltinEncycloKDatasetProvider(BuiltinMCQDatasetProvider):

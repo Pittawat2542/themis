@@ -11,7 +11,7 @@ from themis.specs.experiment import TrialSpec
 from themis.storage._projection_codec import ProjectionCodecs
 from themis.storage._protocols import StorageConnectionManager
 from themis.storage.event_repo import SqliteEventRepository
-from themis.types.events import ScoreRow, TrialEventType, TrialSummaryRow
+from themis.types.events import ScoreRow, TraceScoreRow, TrialEventType, TrialSummaryRow
 from themis.overlays import overlay_key_for
 
 _CONVERSATION_EVENT_ADAPTER: TypeAdapter[ConversationEvent] = TypeAdapter(
@@ -187,6 +187,63 @@ class ProjectionQueries:
                 ),
                 item_id=row["item_id"],
                 status=row["status"],
+            )
+
+    def iter_trace_scores(
+        self,
+        *,
+        trial_hashes: Sequence[str] | None = None,
+        metric_id: str | None = None,
+        trace_score_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> Iterator[TraceScoreRow]:
+        if trial_hashes is not None and not trial_hashes:
+            return
+
+        overlay_key = self.overlay_key(evaluation_hash=evaluation_hash)
+        clauses: list[str] = []
+        params: list[object] = []
+        if trial_hashes:
+            placeholders = ", ".join("?" for _ in trial_hashes)
+            clauses.append(f"trial_hash IN ({placeholders})")
+            params.extend(trial_hashes)
+        if metric_id is not None:
+            clauses.append("metric_id = ?")
+            params.append(metric_id)
+        if trace_score_hash is not None:
+            clauses.append("trace_score_hash = ?")
+            params.append(trace_score_hash)
+        clauses.append("overlay_key = ?")
+        params.append(overlay_key)
+
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        query = f"""
+            SELECT trial_hash, trace_scope, trace_id, trace_score_hash, metric_id, score, details_json
+            FROM trace_metric_scores
+            {where_clause}
+            ORDER BY trial_hash, trace_scope, trace_id, trace_score_hash, metric_id
+        """
+        with self.manager.get_connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        for row in rows:
+            details = self.codecs.load_json_dict(
+                row["details_json"],
+                label="trace_metric_scores.details_json",
+                context=(
+                    f"trial_hash={row['trial_hash']}, trace_id={row['trace_id']}, "
+                    f"metric_id={row['metric_id']}"
+                ),
+                default={},
+            )
+            yield TraceScoreRow(
+                trial_hash=row["trial_hash"],
+                trace_scope=row["trace_scope"],
+                trace_id=row["trace_id"],
+                trace_score_hash=row["trace_score_hash"],
+                metric_id=row["metric_id"],
+                score=row["score"],
+                details=details,
             )
 
     def has_trial(

@@ -34,6 +34,7 @@ from themis.types.events import (
     EvaluationCompletedEventMetadata,
     ExtractionCompletedEventMetadata,
     ScoreRow,
+    TraceScoreRow,
     TrialEvent,
     TrialEventType,
     TrialSummaryRow,
@@ -192,6 +193,10 @@ def test_estimate_notes_report_empty_plans_without_heuristic_claims() -> None:
             return iter(())
 
         def iter_trial_summaries(self, *args, **kwargs) -> Iterator[TrialSummaryRow]:
+            del args, kwargs
+            return iter(())
+
+        def iter_trace_scores(self, *args, **kwargs) -> Iterator[TraceScoreRow]:
             del args, kwargs
             return iter(())
 
@@ -456,6 +461,17 @@ def test_resume_reexecutes_local_runs_with_running_items() -> None:
             del trial_hashes, transform_hash, evaluation_hash
             return iter(())
 
+        def iter_trace_scores(
+            self,
+            *,
+            trial_hashes: Sequence[str] | None = None,
+            metric_id: str | None = None,
+            trace_score_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> Iterator[TraceScoreRow]:
+            del trial_hashes, metric_id, trace_score_hash, evaluation_hash
+            return iter(())
+
         def save_trial_record(
             self,
             record: TrialRecord,
@@ -695,6 +711,17 @@ def test_submit_replans_local_run_after_execution_without_progress_tracker() -> 
             del trial_hashes, transform_hash, evaluation_hash
             return iter(())
 
+        def iter_trace_scores(
+            self,
+            *,
+            trial_hashes: Sequence[str] | None = None,
+            metric_id: str | None = None,
+            trace_score_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> Iterator[TraceScoreRow]:
+            del trial_hashes, metric_id, trace_score_hash, evaluation_hash
+            return iter(())
+
         def save_trial_record(
             self,
             record: TrialRecord,
@@ -928,6 +955,17 @@ def test_submit_executes_local_benchmark_source_without_downgrading_to_experimen
             evaluation_hash: str | None = None,
         ) -> Iterator[TrialSummaryRow]:
             del trial_hashes, transform_hash, evaluation_hash
+            return iter(())
+
+        def iter_trace_scores(
+            self,
+            *,
+            trial_hashes: Sequence[str] | None = None,
+            metric_id: str | None = None,
+            trace_score_hash: str | None = None,
+            evaluation_hash: str | None = None,
+        ) -> Iterator[TraceScoreRow]:
+            del trial_hashes, metric_id, trace_score_hash, evaluation_hash
             return iter(())
 
         def save_trial_record(

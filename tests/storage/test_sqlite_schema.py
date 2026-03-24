@@ -139,6 +139,16 @@ def test_database_manager_initialization(tmp_path):
         assert store_format_row["metadata_value"] == "stage_overlays_v3"
 
 
+def test_database_manager_creates_missing_parent_directories(tmp_path):
+    db_path = tmp_path / "nested" / "storage" / "test.db"
+
+    manager = DatabaseManager(f"sqlite:///{db_path}")
+    manager.initialize()
+
+    assert db_path.parent.exists()
+    assert db_path.exists()
+
+
 def test_database_manager_invalid_uri():
     with pytest.raises(ValueError, match="must standard 'sqlite:///'"):
         DatabaseManager("postgres://bad")

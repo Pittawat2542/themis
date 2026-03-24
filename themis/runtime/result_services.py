@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
@@ -45,6 +45,8 @@ class ResultOverlayContext:
     evaluation_hashes: list[str]
     active_transform_hash: str | None
     active_evaluation_hash: str | None
+    trace_score_hashes: list[str] = field(default_factory=list)
+    active_trace_score_hash: str | None = None
 
     def overlay_selection(self) -> OverlaySelection:
         """Returns the active overlay selection for this result view."""
@@ -167,6 +169,7 @@ class ExperimentResultAnalysisService:
             "trial_hashes": list(self.context.trial_hashes),
             "transform_hashes": list(self.context.transform_hashes),
             "evaluation_hashes": list(self.context.evaluation_hashes),
+            "trace_score_hashes": list(self.context.trace_score_hashes),
             "overlay": self.context.overlay_selection().metadata(),
             "trial_summaries": [
                 row.model_dump(mode="json") for row in self.iter_trial_summaries()

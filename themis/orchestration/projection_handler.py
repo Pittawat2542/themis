@@ -9,8 +9,10 @@ from themis.contracts.protocols import (
     TrialEventRepository,
 )
 from themis.orchestration.overlay_policy import OverlayRefreshPolicy
+from themis.orchestration.trace_scoring import score_trial_traces
 from themis.overlays import OverlaySelection
 from themis.records.trial import TrialRecord
+from themis.registry.plugin_registry import PluginRegistry
 from themis.types.enums import RecordStatus
 from themis.types.events import (
     ProjectionCompletedEventMetadata,
@@ -29,11 +31,17 @@ class ProjectionHandler:
         projection_repo: ProjectionRefreshRepository,
         projection_version: str = "v1",
         refresh_policy: OverlayRefreshPolicy | None = None,
+        registry: PluginRegistry | None = None,
     ) -> None:
         self.event_repo = event_repo
         self.projection_repo = projection_repo
         self.projection_version = projection_version
         self.refresh_policy = refresh_policy or OverlayRefreshPolicy()
+        self.registry = registry
+        if self.registry is not None:
+            from themis.catalog.runtime.registry import register_catalog_metrics
+
+            register_catalog_metrics(self.registry)
 
     def on_trial_completed(
         self,
@@ -53,11 +61,13 @@ class ProjectionHandler:
             selection=selection,
         )
         if not needs_refresh:
-            return self.projection_repo.materialize_trial_record(
+            record = self.projection_repo.materialize_trial_record(
                 trial_hash,
                 transform_hash=transform_hash,
                 evaluation_hash=evaluation_hash,
             )
+            self._require_trace_registry(record)
+            return record
 
         next_seq = (self.event_repo.last_event_index(trial_hash) or 0) + 1
         source_range = (
@@ -117,16 +127,44 @@ class ProjectionHandler:
         conn=None,
     ) -> TrialRecord:
         if conn is not None:
-            return cast(Any, self.projection_repo).materialize_trial_record(
+            record = cast(Any, self.projection_repo).materialize_trial_record(
                 trial_hash,
                 transform_hash=transform_hash,
                 evaluation_hash=evaluation_hash,
                 extra_events=[projection_event],
                 conn=conn,
             )
-        return self.projection_repo.materialize_trial_record(
-            trial_hash,
-            transform_hash=transform_hash,
-            evaluation_hash=evaluation_hash,
-            extra_events=[projection_event],
-        )
+        else:
+            record = self.projection_repo.materialize_trial_record(
+                trial_hash,
+                transform_hash=transform_hash,
+                evaluation_hash=evaluation_hash,
+                extra_events=[projection_event],
+            )
+        self._require_trace_registry(record)
+        if self.registry is not None:
+            trace_rows = score_trial_traces(
+                projection_repo=self.projection_repo,
+                registry=self.registry,
+                record=record,
+                trial_hash=trial_hash,
+                evaluation_hash=evaluation_hash,
+            )
+            cast(Any, self.projection_repo).replace_trace_metric_scores(
+                trial_hash,
+                trace_rows,
+                evaluation_hash=evaluation_hash,
+            )
+        return record
+
+    def _require_trace_registry(self, record: TrialRecord) -> None:
+        trial_spec = record.trial_spec
+        if (
+            trial_spec is not None
+            and trial_spec.task.trace_evaluations
+            and self.registry is None
+        ):
+            raise ValueError(
+                "ProjectionHandler requires a registry when task trace evaluations "
+                "are configured."
+            )

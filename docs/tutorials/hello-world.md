@@ -19,7 +19,8 @@ Output:
 - `ArithmeticDatasetProvider.scan(...)` receives both `slice_spec` and `query`
 - the benchmark declares semantic dimensions on the slice
 - prompt selection is explicit through `prompt_variant_ids=["qa-default"]`
-- the read side is aggregation-first through `result.aggregate(...)`
+- `scores=[ScoreSpec(..., metrics=["exact_match"])]` uses the shorthand metric-ref form
+- the read side is aggregation-first through the projection-backed `result.aggregate(...)`
 
 ## Full Script
 

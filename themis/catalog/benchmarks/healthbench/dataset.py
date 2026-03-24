@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from ...datasets.common import (
-    BuiltinDatasetProvider,
-    CatalogNormalizedRows,
-    _normalize_healthbench_rows,
-    load_healthbench_rows,
-)
+from ...datasets._loaders import load_healthbench_rows
+from ...datasets._normalizers import _normalize_healthbench_rows
+from ...datasets._providers import BuiltinDatasetProvider
+from ...datasets._types import CatalogNormalizedRows
 
 
 class BuiltinHealthBenchDatasetProvider(BuiltinDatasetProvider):

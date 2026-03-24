@@ -13,6 +13,7 @@ from themis.specs.foundational import (
     McpServerSpec,
     OutputTransformSpec,
     TaskSpec,
+    TraceEvaluationSpec,
     ToolSpec,
 )
 from themis.types.enums import ErrorCode
@@ -126,9 +127,17 @@ def compile_benchmark(
                     EvaluationSpec(
                         name=score_spec.name,
                         transform=score_spec.parse,
-                        metrics=score_spec.metrics,
+                        metrics=list(score_spec.metrics),
                     )
                     for score_spec in slice_spec.scores
+                ],
+                trace_evaluations=[
+                    TraceEvaluationSpec(
+                        name=trace_score_spec.name,
+                        scope=trace_score_spec.scope,
+                        metrics=list(trace_score_spec.metrics),
+                    )
+                    for trace_score_spec in slice_spec.trace_scores
                 ],
                 benchmark_id=benchmark.benchmark_id,
                 slice_id=slice_spec.slice_id,

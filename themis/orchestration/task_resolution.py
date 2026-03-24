@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 
 from themis.errors import SpecValidationError
-from themis.specs.foundational import EvaluationSpec, OutputTransformSpec, TaskSpec
+from themis.specs.foundational import (
+    EvaluationSpec,
+    OutputTransformSpec,
+    TaskSpec,
+    TraceEvaluationSpec,
+)
 from themis.types.enums import ErrorCode
 
 
@@ -29,11 +34,22 @@ class ResolvedEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class ResolvedTraceEvaluation:
+    """One trace evaluation paired with its deterministic content hash."""
+
+    spec: TraceEvaluationSpec
+    trace_score_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedTaskStages:
     """Resolved transform and evaluation stages for one task."""
 
     output_transforms: tuple[ResolvedOutputTransform, ...]
     evaluations: tuple[ResolvedEvaluation, ...]
+    trace_evaluations: tuple[ResolvedTraceEvaluation, ...] = field(
+        default_factory=tuple
+    )
 
     def output_transform_by_hash(
         self,
@@ -59,6 +75,20 @@ class ResolvedTaskStages:
                 evaluation
                 for evaluation in self.evaluations
                 if evaluation.evaluation_hash == evaluation_hash
+            ),
+            None,
+        )
+
+    def trace_evaluation_by_hash(
+        self,
+        trace_score_hash: str,
+    ) -> ResolvedTraceEvaluation | None:
+        """Return one resolved trace evaluation by its deterministic hash."""
+        return next(
+            (
+                evaluation
+                for evaluation in self.trace_evaluations
+                if evaluation.trace_score_hash == trace_score_hash
             ),
             None,
         )
@@ -107,9 +137,34 @@ def resolve_task_stages(task: TaskSpec) -> ResolvedTaskStages:
                 evaluation_hash=evaluation_hash,
             )
         )
+    trace_evaluation_identities: dict[str, str] = {}
+    resolved_trace_evaluations: list[ResolvedTraceEvaluation] = []
+    for trace_evaluation in task.trace_evaluations:
+        trace_score_hash = _hash_payload(
+            trace_evaluation.canonical_dict(),
+            short=True,
+        )
+        canonical_trace_score_hash = _hash_payload(
+            trace_evaluation.canonical_dict(),
+            short=False,
+        )
+        _record_short_hash_identity(
+            stage_kind="trace evaluation",
+            stage_label=trace_evaluation.name,
+            short_hash=trace_score_hash,
+            canonical_hash=canonical_trace_score_hash,
+            known_identities=trace_evaluation_identities,
+        )
+        resolved_trace_evaluations.append(
+            ResolvedTraceEvaluation(
+                spec=trace_evaluation,
+                trace_score_hash=trace_score_hash,
+            )
+        )
     return ResolvedTaskStages(
         output_transforms=resolved_transform_tuple,
         evaluations=tuple(resolved_evaluations),
+        trace_evaluations=tuple(resolved_trace_evaluations),
     )
 
 

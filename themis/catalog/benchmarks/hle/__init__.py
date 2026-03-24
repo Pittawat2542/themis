@@ -6,11 +6,9 @@ from dataclasses import replace
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_hle_benchmark,
-    register_hle,
-    summarize_hle,
-)
+from ...common.builders import build_hle_benchmark
+from ...common.registration import register_hle
+from ...common.summaries import summarize_hle
 from .dataset import BuiltinHLEDatasetProvider
 
 _SUPPORTED_HLE_VARIANT_IDS = ("text_only", "no_tool")

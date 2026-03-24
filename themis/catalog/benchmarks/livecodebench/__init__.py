@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_livecodebench_benchmark,
-    register_livecodebench,
-    summarize_livecodebench,
-)
+from ...common.builders import build_livecodebench_benchmark
+from ...common.registration import register_livecodebench
+from ...common.summaries import summarize_livecodebench
 from .dataset import (
     DEFAULT_LIVECODEBENCH_VERSION_TAG,
     BuiltinLiveCodeBenchDatasetProvider,

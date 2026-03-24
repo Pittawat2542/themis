@@ -5,12 +5,10 @@ from __future__ import annotations
 from themis._optional import import_optional
 from themis.specs.foundational import DatasetSpec
 
-from ...datasets.common import (
-    BuiltinDatasetProvider,
-    CatalogNormalizedRows,
-    _metadata_dict,
-    _prepare_huggingface_dataset_for_iteration,
-)
+from ...datasets._loaders import _prepare_huggingface_dataset_for_iteration
+from ...datasets._normalizers import _metadata_dict
+from ...datasets._providers import BuiltinDatasetProvider
+from ...datasets._types import CatalogNormalizedRows
 
 
 class BuiltinOpenR1CodeforcesDatasetProvider(BuiltinDatasetProvider):

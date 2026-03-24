@@ -73,7 +73,10 @@ class CandidateReplayState:
             self.conversation_events.append(
                 _CONVERSATION_EVENT_ADAPTER.validate_python(event.payload)
             )
-        if event.stage == TimelineStage.INFERENCE and event.payload is not None:
+        if (
+            event.event_type == TrialEventType.INFERENCE_COMPLETED
+            and event.payload is not None
+        ):
             self.inference = InferenceRecord.model_validate(event.payload)
             if isinstance(event.metadata, InferenceCompletedEventMetadata):
                 self.effective_seed = event.metadata.effective_seed

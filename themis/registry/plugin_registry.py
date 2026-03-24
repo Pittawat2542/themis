@@ -15,6 +15,8 @@ from themis.contracts.protocols import (
     JudgeService,
     Metric,
     PipelineHook,
+    TraceMetric,
+    TrialMetric,
 )
 from themis.errors import SpecValidationError
 from themis.specs.experiment import ToolHandler, TrialSpec
@@ -23,6 +25,7 @@ from themis.types.enums import ErrorCode, ResponseFormat
 
 SUPPORTED_PLUGIN_API_MAJOR = 1
 _PluginT = TypeVar("_PluginT")
+MetricPlugin = Metric | TrialMetric | TraceMetric
 
 
 def _default_response_formats() -> set[ResponseFormat]:
@@ -99,7 +102,7 @@ class PluginRegistry:
         self._registration_order = 0
         self._inference_engines: dict[str, InferenceEngineRegistration] = {}
         self._extractors: dict[str, PluginRegistration[Extractor]] = {}
-        self._metrics: dict[str, PluginRegistration[Metric]] = {}
+        self._metrics: dict[str, PluginRegistration[MetricPlugin]] = {}
         self._judges: dict[str, PluginRegistration[JudgeService]] = {}
         self._tools: dict[str, PluginRegistration[ToolHandler]] = {}
         self._hooks: list[HookRegistration] = []
@@ -193,7 +196,7 @@ class PluginRegistry:
     def register_metric(
         self,
         name: str,
-        factory: Callable[[], Metric] | type[Metric] | Metric,
+        factory: Callable[[], MetricPlugin] | type[MetricPlugin] | MetricPlugin,
         *,
         version: str = "0.0.0",
         plugin_api: str = "1.0",
@@ -311,7 +314,7 @@ class PluginRegistry:
             )
         return self._extractors[name]
 
-    def get_metric_registration(self, name: str) -> PluginRegistration[Metric]:
+    def get_metric_registration(self, name: str) -> PluginRegistration[MetricPlugin]:
         """Fetch metric registration metadata for ``name``."""
         if name not in self._metrics:
             raise SpecValidationError(
@@ -344,10 +347,24 @@ class PluginRegistry:
         self._validate_extractor_signature(name, extractor)
         return extractor
 
-    def get_metric(self, name: str) -> Metric:
+    def get_metric(self, name: str) -> MetricPlugin:
         """Instantiate or return the registered metric for ``name``."""
         registration = self.get_metric_registration(name)
-        return self._instantiate(registration.factory, required_methods=("score",))
+        factory = registration.factory
+        if isinstance(factory, type):
+            metric = factory()
+        elif not callable(factory):
+            metric = factory
+        elif (
+            hasattr(factory, "score")
+            or hasattr(factory, "score_trial")
+            or hasattr(factory, "score_trace")
+        ):
+            metric = factory
+        else:
+            metric = factory()
+        self._validate_metric_signature(name, metric)
+        return metric
 
     def get_judge(self, name: str) -> JudgeService:
         """Instantiate or return the registered judge service for ``name``."""
@@ -421,6 +438,20 @@ class PluginRegistry:
             MathAnswerExtractor,
             version="1.0.0",
             plugin_api="1.0",
+        )
+
+    def _validate_metric_signature(self, name: str, metric: MetricPlugin) -> None:
+        if (
+            hasattr(metric, "score")
+            or hasattr(metric, "score_trial")
+            or hasattr(metric, "score_trace")
+        ):
+            return
+        raise SpecValidationError(
+            code=ErrorCode.PLUGIN_INCOMPATIBLE,
+            message=(
+                f"Metric '{name}' must implement 'score', 'score_trial', or 'score_trace'."
+            ),
         )
 
     def _next_registration_order(self) -> int:

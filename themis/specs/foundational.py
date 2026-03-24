@@ -273,6 +273,27 @@ class ExtractorChainSpec(SpecBase):
         return coerced
 
 
+class MetricRefSpec(SpecBase):
+    """References one metric plus optional metric-specific configuration."""
+
+    id: str = Field(..., description="Registered metric plugin ID.")
+    config: JSONDict = Field(
+        default_factory=dict,
+        description="Metric-specific structured configuration.",
+    )
+
+    def __str__(self) -> str:
+        return self.id
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str):
+            return self.id == other and not self.config
+        return super().__eq__(other)
+
+
+MetricRefInput = MetricRefSpec | str | Mapping[str, object]
+
+
 class GenerationSpec(SpecBase):
     """Marker that a task participates in generation-stage execution."""
 
@@ -304,15 +325,65 @@ class EvaluationSpec(SpecBase):
         default=None,
         description="Optional name of the output transform this evaluation consumes.",
     )
-    metrics: list[str] = Field(
+    metrics: list[MetricRefInput] = Field(
         default_factory=list,
         description="Metric plugin IDs to execute for this evaluation.",
     )
+
+    @field_validator("metrics", mode="before")
+    @classmethod
+    def _coerce_metrics(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        coerced: list[MetricRefSpec | object] = []
+        for item in value:
+            if isinstance(item, str):
+                coerced.append(MetricRefSpec(id=item))
+            elif isinstance(item, Mapping) and not isinstance(item, MetricRefSpec):
+                coerced.append(MetricRefSpec.model_validate(item))
+            else:
+                coerced.append(item)
+        return coerced
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> EvaluationSpec:
         if not self.metrics:
             raise ValueError("EvaluationSpec must define at least one metric.")
+        return self
+
+
+class TraceEvaluationSpec(SpecBase):
+    """One named scoring pass over a persisted candidate or trial trace."""
+
+    name: str = Field(..., description="Human-readable trace evaluation label.")
+    scope: Literal["candidate_trace", "trial_trace"] = Field(
+        ...,
+        description="Trace scope consumed by the registered trace metric(s).",
+    )
+    metrics: list[MetricRefInput] = Field(
+        default_factory=list,
+        description="Trace metric plugin IDs to execute for this trace evaluation.",
+    )
+
+    @field_validator("metrics", mode="before")
+    @classmethod
+    def _coerce_metrics(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        coerced: list[MetricRefSpec | object] = []
+        for item in value:
+            if isinstance(item, str):
+                coerced.append(MetricRefSpec(id=item))
+            elif isinstance(item, Mapping) and not isinstance(item, MetricRefSpec):
+                coerced.append(MetricRefSpec.model_validate(item))
+            else:
+                coerced.append(item)
+        return coerced
+
+    @model_validator(mode="after")
+    def _validate_semantic(self) -> "TraceEvaluationSpec":
+        if not self.metrics:
+            raise ValueError("TraceEvaluationSpec must define at least one metric.")
         return self
 
 
@@ -342,6 +413,12 @@ class TaskSpec(SpecBase):
     evaluations: list[EvaluationSpec] = Field(
         default_factory=list,
         description="Named evaluation passes available for transformed outputs.",
+    )
+    trace_evaluations: list[TraceEvaluationSpec] = Field(
+        default_factory=list,
+        description=(
+            "Named trace evaluation passes over persisted candidate or trial traces."
+        ),
     )
     benchmark_id: str | None = Field(
         default=None,
@@ -404,6 +481,7 @@ class TaskSpec(SpecBase):
             self.generation is None
             and not self.output_transforms
             and not self.evaluations
+            and not self.trace_evaluations
         ):
             raise ValueError(
                 f"TaskSpec '{self.task_id}' must define at least one stage."
@@ -423,6 +501,13 @@ class TaskSpec(SpecBase):
                     f"TaskSpec '{self.task_id}' references unknown output transform "
                     f"'{evaluation.transform}'."
                 )
+        trace_evaluation_names = [
+            evaluation.name for evaluation in self.trace_evaluations
+        ]
+        if len(trace_evaluation_names) != len(set(trace_evaluation_names)):
+            raise ValueError(
+                f"TaskSpec '{self.task_id}' has duplicate trace evaluation name."
+            )
         if len(self.tool_ids) != len(set(self.tool_ids)):
             raise ValueError(f"TaskSpec '{self.task_id}' has duplicate tool id.")
         if len(self.mcp_server_ids) != len(set(self.mcp_server_ids)):

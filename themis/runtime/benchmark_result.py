@@ -9,9 +9,17 @@ from typing import Iterable, Iterator
 
 from themis.overlays import OverlaySelection
 from themis.runtime.comparison import build_comparison_table
+from themis.runtime.corpus_metrics import (
+    compute_corpus_score,
+    expected_label,
+    prediction_label,
+    select_candidate,
+    validate_candidate_selector,
+    validate_corpus_metric_id,
+)
 from themis.runtime.experiment_result import ExperimentResult
-from themis.types.enums import PValueCorrection
-from themis.types.events import ScoreRow, TrialSummaryRow
+from themis.types.enums import PValueCorrection, RecordType
+from themis.types.events import ScoreRow, TraceScoreRow, TrialSummaryRow
 from themis.types.json_types import JSONDict, JSONValueType
 
 
@@ -33,23 +41,29 @@ class BenchmarkResult(ExperimentResult):
         trial_hashes: list[str],
         transform_hashes: list[str] | None = None,
         evaluation_hashes: list[str] | None = None,
+        trace_score_hashes: list[str] | None = None,
         active_transform_hash: str | None = None,
         active_evaluation_hash: str | None = None,
+        active_trace_score_hash: str | None = None,
         benchmark_id: str | None = None,
         slice_ids: list[str] | None = None,
         prompt_variant_ids: list[str] | None = None,
+        scan_stats: JSONDict | None = None,
     ) -> None:
         super().__init__(
             projection_repo=projection_repo,
             trial_hashes=trial_hashes,
             transform_hashes=transform_hashes,
             evaluation_hashes=evaluation_hashes,
+            trace_score_hashes=trace_score_hashes,
             active_transform_hash=active_transform_hash,
             active_evaluation_hash=active_evaluation_hash,
+            active_trace_score_hash=active_trace_score_hash,
         )
         self.benchmark_id = benchmark_id
         self.slice_ids = list(slice_ids or [])
         self.prompt_variant_ids = list(prompt_variant_ids or [])
+        self.scan_stats = dict(scan_stats or {})
 
     def aggregate(
         self,
@@ -76,6 +90,99 @@ class BenchmarkResult(ExperimentResult):
             payload = dict(zip(group_by, key, strict=True))
             payload["mean"] = sum(scores) / len(scores)
             payload["count"] = len(scores)
+            results.append(payload)
+        return results
+
+    def aggregate_trace(
+        self,
+        *,
+        group_by: list[str],
+        metric_id: str | None = None,
+        trace_score_hash: str | None = None,
+    ) -> list[JSONDict]:
+        """Aggregate trace score rows using benchmark-native summary fields."""
+
+        summaries = {row.trial_hash: row for row in self.iter_trial_summaries()}
+        self._validate_group_by_keys(summaries.values(), group_by)
+        groups: dict[tuple[JSONValueType, ...], list[float]] = {}
+        for row in self.iter_trace_scores(
+            metric_id=metric_id,
+            trace_score_hash=trace_score_hash,
+        ):
+            summary = summaries.get(row.trial_hash)
+            if summary is None:
+                continue
+            key_payload = self._group_trace_payload(summary, row, group_by)
+            groups.setdefault(tuple(key_payload.values()), []).append(row.score)
+
+        results: list[JSONDict] = []
+        for key, scores in sorted(
+            groups.items(), key=lambda item: self._sort_group_key(item[0])
+        ):
+            payload = dict(zip(group_by, key, strict=True))
+            payload["mean"] = sum(scores) / len(scores)
+            payload["count"] = len(scores)
+            results.append(payload)
+        return results
+
+    def aggregate_corpus(
+        self,
+        *,
+        group_by: list[str],
+        metric_id: str,
+        candidate_selector: str | None = None,
+    ) -> list[JSONDict]:
+        """Aggregate built-in corpus metrics from persisted trial results."""
+
+        validate_corpus_metric_id(metric_id)
+        resolved_selector = validate_candidate_selector(candidate_selector)
+        summaries = {row.trial_hash: row for row in self.iter_trial_summaries()}
+        self._validate_group_by_keys(summaries.values(), group_by)
+        grouped_labels: dict[
+            tuple[JSONValueType, ...], tuple[list[str], list[str]]
+        ] = {}
+        for trial_hash, summary in summaries.items():
+            trial = self.get_trial(trial_hash)
+            if trial is None:
+                continue
+            trial_view = self.view_timeline(trial_hash, record_type=RecordType.TRIAL)
+            if trial_view is None or trial_view.item_payload is None:
+                continue
+            candidate = select_candidate(
+                trial,
+                candidate_selector=resolved_selector,
+            )
+            if candidate is None:
+                continue
+            key_payload: JSONDict = {}
+            for key in group_by:
+                key_payload[key] = self._resolve_group_value(
+                    summary,
+                    key,
+                    metric_id=metric_id,
+                )
+            grouped = grouped_labels.setdefault(
+                tuple(key_payload.values()),
+                ([], []),
+            )
+            grouped[0].append(expected_label(trial_view.item_payload))
+            grouped[1].append(prediction_label(candidate))
+
+        results: list[JSONDict] = []
+        for group_values, (expected_labels, predicted_labels) in sorted(
+            grouped_labels.items(), key=lambda item: self._sort_group_key(item[0])
+        ):
+            payload: JSONDict = {
+                group_key: group_value
+                for group_key, group_value in zip(group_by, group_values, strict=True)
+            }
+            payload["metric_id"] = metric_id
+            payload["score"] = compute_corpus_score(
+                metric_id,
+                expected_labels=expected_labels,
+                predicted_labels=predicted_labels,
+            )
+            payload["count"] = len(expected_labels)
             results.append(payload)
         return results
 
@@ -150,11 +257,14 @@ class BenchmarkResult(ExperimentResult):
             trial_hashes=self.trial_hashes,
             transform_hashes=self.transform_hashes,
             evaluation_hashes=self.evaluation_hashes,
+            trace_score_hashes=self.trace_score_hashes,
             active_transform_hash=transform_hash,
             active_evaluation_hash=None,
+            active_trace_score_hash=None,
             benchmark_id=self.benchmark_id,
             slice_ids=self.slice_ids,
             prompt_variant_ids=self.prompt_variant_ids,
+            scan_stats=self.scan_stats,
         )
 
     def for_evaluation(self, evaluation_hash: str) -> "BenchmarkResult":
@@ -163,11 +273,14 @@ class BenchmarkResult(ExperimentResult):
             trial_hashes=self.trial_hashes,
             transform_hashes=self.transform_hashes,
             evaluation_hashes=self.evaluation_hashes,
+            trace_score_hashes=self.trace_score_hashes,
             active_transform_hash=None,
             active_evaluation_hash=evaluation_hash,
+            active_trace_score_hash=None,
             benchmark_id=self.benchmark_id,
             slice_ids=self.slice_ids,
             prompt_variant_ids=self.prompt_variant_ids,
+            scan_stats=self.scan_stats,
         )
 
     def persist_artifacts(
@@ -228,6 +341,21 @@ class BenchmarkResult(ExperimentResult):
         self,
         summary: TrialSummaryRow,
         score_row: ScoreRow,
+        group_by: list[str],
+    ) -> JSONDict:
+        payload: JSONDict = {}
+        for key in group_by:
+            payload[key] = self._resolve_group_value(
+                summary,
+                key,
+                metric_id=score_row.metric_id,
+            )
+        return payload
+
+    def _group_trace_payload(
+        self,
+        summary: TrialSummaryRow,
+        score_row: TraceScoreRow,
         group_by: list[str],
     ) -> JSONDict:
         payload: JSONDict = {}

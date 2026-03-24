@@ -16,7 +16,7 @@ from themis.runtime.result_services import (
 )
 from themis.runtime.timeline_view import RecordTimelineView
 from themis.types.enums import PValueCorrection, RecordType
-from themis.types.events import ScoreRow, TrialSummaryRow
+from themis.types.events import ScoreRow, TraceScoreRow, TrialSummaryRow
 
 
 class _ExperimentProjectionRepository(Protocol):
@@ -55,6 +55,15 @@ class _ExperimentProjectionRepository(Protocol):
         evaluation_hash: str | None = None,
     ) -> Iterator[TrialSummaryRow]: ...
 
+    def iter_trace_scores(
+        self,
+        *,
+        trial_hashes: Sequence[str] | None = None,
+        metric_id: str | None = None,
+        trace_score_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> Iterator[TraceScoreRow]: ...
+
 
 def _require_optional_dependency(module_name: str, *, extra: str) -> object:
     return import_optional(module_name, extra=extra)
@@ -70,21 +79,27 @@ class ExperimentResult:
         trial_hashes: list[str],
         transform_hashes: list[str] | None = None,
         evaluation_hashes: list[str] | None = None,
+        trace_score_hashes: list[str] | None = None,
         active_transform_hash: str | None = None,
         active_evaluation_hash: str | None = None,
+        active_trace_score_hash: str | None = None,
     ) -> None:
         self.projection_repo = projection_repo
         self.trial_hashes = list(trial_hashes)
         self.transform_hashes = list(transform_hashes or [])
         self.evaluation_hashes = list(evaluation_hashes or [])
+        self.trace_score_hashes = list(trace_score_hashes or [])
         self.active_transform_hash = active_transform_hash
         self.active_evaluation_hash = active_evaluation_hash
+        self.active_trace_score_hash = active_trace_score_hash
         context = ResultOverlayContext(
             trial_hashes=self.trial_hashes,
             transform_hashes=self.transform_hashes,
             evaluation_hashes=self.evaluation_hashes,
+            trace_score_hashes=self.trace_score_hashes,
             active_transform_hash=self.active_transform_hash,
             active_evaluation_hash=self.active_evaluation_hash,
+            active_trace_score_hash=self.active_trace_score_hash,
         )
         self._analysis = ExperimentResultAnalysisService(
             projection_repo=projection_repo,
@@ -121,6 +136,20 @@ class ExperimentResult:
             evaluation_hash=self.active_evaluation_hash,
         )
 
+    def iter_trace_scores(
+        self,
+        *,
+        metric_id: str | None = None,
+        trace_score_hash: str | None = None,
+    ) -> Iterator[TraceScoreRow]:
+        """Yield trace-level score rows for the active trial set."""
+        yield from self.projection_repo.iter_trace_scores(
+            trial_hashes=self.trial_hashes,
+            metric_id=metric_id,
+            trace_score_hash=trace_score_hash or self.active_trace_score_hash,
+            evaluation_hash=self.active_evaluation_hash,
+        )
+
     def view_timeline(
         self,
         record_id: str,
@@ -154,8 +183,10 @@ class ExperimentResult:
             trial_hashes=self.trial_hashes,
             transform_hashes=self.transform_hashes,
             evaluation_hashes=self.evaluation_hashes,
+            trace_score_hashes=self.trace_score_hashes,
             active_transform_hash=transform_hash,
             active_evaluation_hash=None,
+            active_trace_score_hash=None,
         )
 
     def for_evaluation(self, evaluation_hash: str) -> "ExperimentResult":
@@ -177,8 +208,10 @@ class ExperimentResult:
             trial_hashes=self.trial_hashes,
             transform_hashes=self.transform_hashes,
             evaluation_hashes=self.evaluation_hashes,
+            trace_score_hashes=self.trace_score_hashes,
             active_transform_hash=None,
             active_evaluation_hash=evaluation_hash,
+            active_trace_score_hash=None,
         )
 
     def compare(

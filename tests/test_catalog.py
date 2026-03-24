@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import io
+import importlib
 import inspect
 from types import SimpleNamespace
 from typing import Any, cast
@@ -12,8 +14,7 @@ from pydantic import SecretStr
 import themis.catalog as catalog
 from themis import BenchmarkDefinition, DatasetQuerySpec
 from themis.benchmark.specs import DatasetSliceSpec
-from themis.catalog.datasets import common as dataset_common
-from themis.catalog.datasets.common import (
+from themis.catalog.datasets._normalizers import (
     _normalize_babe_rows,
     _normalize_frontierscience_rows,
     _normalize_gpqa_diamond_rows,
@@ -25,15 +26,20 @@ from themis.catalog.datasets.common import (
     _normalize_procbench_rows,
     _normalize_superchem_rows,
 )
+from themis.catalog.benchmarks.simpleqa_verified.metric import (
+    SimpleQAVerifiedJudgeMetric,
+)
 from themis.catalog.runtime.metrics.common import MathEquivalenceMetric
+from themis.catalog.runtime.engines.common import OpenAIChatEngine
+from themis.errors import MetricError
 from themis.errors import SpecValidationError, ThemisError
-from themis.catalog.runtime.common import (
-    _build_judge_spec,
-    _coerce_usage_int,
-    _openai_mcp_tool_payload,
+from themis.catalog.runtime._coercion import _coerce_usage_int
+from themis.catalog.runtime._openai import (
     _openai_response_input_message,
     _run_openai_chat_inference,
 )
+from themis.catalog.runtime._provider import _build_judge_spec
+from themis.catalog.runtime._responses import _openai_mcp_tool_payload
 from themis.contracts.protocols import InferenceResult
 from themis.specs.experiment import (
     InferenceParamsSpec,
@@ -89,7 +95,7 @@ class _StubResult:
             {str(getattr(row, "trial_hash")) for row in score_rows}
         )
         self.active_evaluation_hash = None
-        self._builtin_scan_stats = dict(scan_stats or {})
+        self.scan_stats = dict(scan_stats or {})
         self._trial_summaries = list(trial_summaries or [])
 
     def iter_trial_summaries(self):
@@ -129,6 +135,8 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         "hle",
         "hmmt_feb_2025",
         "hmmt_nov_2025",
+        "humaneval",
+        "humaneval_plus",
         "imo_answerbench",
         "livecodebench",
         "lpfqa",
@@ -136,6 +144,7 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         "mmmlu",
         "phybench",
         "procbench",
+        "rolebench",
         "simpleqa_verified",
         "superchem",
         "supergpqa",
@@ -148,6 +157,16 @@ def test_public_catalog_lists_requested_benchmarks() -> None:
         ("mmmlu", "openai/MMMLU", "default"),
         ("mmmlu:AR_XY", "openai/MMMLU", "AR_XY"),
         ("procbench:task01", "ifujisawa/procbench", "task01"),
+        (
+            "rolebench:instruction_generalization_eng",
+            "ZenMoore/RoleBench",
+            "instruction_generalization_eng",
+        ),
+        (
+            "rolebench:role_generalization_eng",
+            "ZenMoore/RoleBench",
+            "role_generalization_eng",
+        ),
         ("superchem", "ZehuaZhao/SUPERChem", "default"),
         ("superchem:zh", "ZehuaZhao/SUPERChem", "default"),
     ],
@@ -170,6 +189,67 @@ def test_catalog_variant_benchmarks_expose_expected_hf_config_name(
     assert benchmark.slices[0].dataset.config_name == expected_config_name
 
 
+def test_get_catalog_benchmark_accepts_rolebench_variant_ids() -> None:
+    definition = catalog.get_catalog_benchmark(
+        "rolebench:instruction_generalization_eng"
+    )
+
+    assert definition.benchmark_id == "rolebench:instruction_generalization_eng"
+    assert definition.metadata["variant_ids"] == ["instruction_generalization_eng"]
+
+
+def test_get_catalog_benchmark_rejects_unknown_rolebench_variant_ids() -> None:
+    with pytest.raises(ValueError, match="unknown RoleBench variant"):
+        catalog.get_catalog_benchmark("rolebench:missing")
+
+
+def test_rolebench_aggregate_builds_one_slice_per_variant() -> None:
+    definition = catalog.get_catalog_benchmark("rolebench")
+
+    benchmark = definition.build_benchmark(model_id="demo-model", provider="demo")
+
+    assert benchmark.benchmark_id == "rolebench"
+    assert [slice_spec.slice_id for slice_spec in benchmark.slices] == [
+        "rolebench-instruction_generalization_eng",
+        "rolebench-role_generalization_eng",
+    ]
+    assert [slice_spec.dimensions for slice_spec in benchmark.slices] == [
+        {"rolebench_variant": "instruction_generalization_eng"},
+        {"rolebench_variant": "role_generalization_eng"},
+    ]
+    assert [slice_spec.dataset.dataset_id for slice_spec in benchmark.slices] == [
+        "ZenMoore/RoleBench",
+        "ZenMoore/RoleBench",
+    ]
+    assert [slice_spec.dataset.split for slice_spec in benchmark.slices] == [
+        "test",
+        "test",
+    ]
+    assert [slice_spec.dataset.config_name for slice_spec in benchmark.slices] == [
+        "instruction_generalization_eng",
+        "role_generalization_eng",
+    ]
+    assert [slice_spec.scores[0].metrics for slice_spec in benchmark.slices] == [
+        ["rolebench_rouge_l_f1"],
+        ["rolebench_rouge_l_f1"],
+    ]
+
+
+def test_render_preview_formats_rolebench_prompt_from_fixture_sample() -> None:
+    definition = catalog.get_catalog_benchmark(
+        "rolebench:instruction_generalization_eng"
+    )
+
+    preview = definition.render_preview(model_id="demo-model", provider="demo")
+
+    messages = cast(list[dict[str, object]], preview[0]["messages"])
+    assert messages[0]["role"] == "system"
+    assert "You are {role}" not in str(messages[0]["content"])
+    assert "assigned one personality role" in str(messages[0]["content"])
+    assert messages[1]["role"] == "user"
+    assert "question" not in str(messages[1]["content"]).lower()
+
+
 def test_builtin_runtime_defaults_use_8192_generator_tokens() -> None:
     definition = catalog.get_catalog_benchmark("mmlu_pro")
 
@@ -185,24 +265,98 @@ def test_catalog_definitions_use_generic_benchmark_definition_and_metadata() -> 
     definition = catalog.get_catalog_benchmark("mmlu_pro")
 
     assert isinstance(definition, BenchmarkDefinition)
-    assert definition.family == "catalog"
-    assert definition.primary_metric_id == "choice_accuracy"
-    assert definition.metadata["dataset_id"] == "TIGER-Lab/MMLU-Pro"
-    assert definition.metadata["split"] == "test"
 
 
-def test_openai_compatible_benchmarks_use_env_base_url(
+def test_get_catalog_benchmark_accepts_humaneval_variants() -> None:
+    definition = catalog.get_catalog_benchmark("humaneval_plus:mini,v0.1.10")
+
+    assert definition.benchmark_id == "humaneval_plus:mini,v0.1.10"
+    assert definition.metadata["variant"] == "plus"
+    assert definition.metadata["mini"] is True
+    assert definition.metadata["noextreme"] is False
+    assert definition.metadata["version"] == "v0.1.10"
+
+
+@pytest.mark.parametrize(
+    ("benchmark_id", "message"),
+    [
+        ("humaneval:mini,noextreme", "cannot combine"),
+        ("humaneval:mini,mini", "duplicate"),
+        ("humaneval:v0.1.9,v0.1.10", "multiple version"),
+        ("humaneval:unknown", "unknown"),
+    ],
+)
+def test_get_catalog_benchmark_rejects_invalid_humaneval_variants(
+    benchmark_id: str,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        catalog.get_catalog_benchmark(benchmark_id)
+
+
+def test_openai_benchmarks_use_env_base_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "http://127.0.0.1:1234/v1")
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:1234/v1")
     definition = catalog.get_catalog_benchmark("aime_2026")
 
     benchmark = definition.build_benchmark(
         model_id="demo-model",
-        provider="openai_compatible",
+        provider="openai",
     )
 
     assert benchmark.models[0].extras["base_url"] == "http://127.0.0.1:1234/v1"
+
+
+def test_openai_chat_engine_uses_model_base_url_and_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = SimpleNamespace(
+        id="chatcmpl_123",
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="4"),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(
+            prompt_tokens=3,
+            completion_tokens=1,
+            total_tokens=4,
+        ),
+    )
+    completions = MagicMock()
+    completions.create.return_value = response
+    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    openai_factory = MagicMock(return_value=client)
+    openai_module = SimpleNamespace(OpenAI=openai_factory)
+    monkeypatch.setattr(
+        "themis.catalog.runtime._openai.import_optional",
+        lambda name, extra: openai_module,
+    )
+
+    trial = SimpleNamespace(
+        item_id="item-1",
+        model=ModelSpec(
+            model_id="gpt-5",
+            provider="openai",
+            extras={
+                "base_url": "http://127.0.0.1:1234/v1",
+                "api_key": "test-key",
+            },
+        ),
+        prompt=PromptTemplateSpec(
+            messages=[PromptMessage(role=PromptRole.USER, content="2 + 2")]
+        ),
+        params=InferenceParamsSpec(max_tokens=16, temperature=0.0),
+        mcp_servers=[],
+    )
+
+    result = OpenAIChatEngine().infer(trial, {}, RuntimeContext())
+
+    assert result.inference.raw_text == "4"
+    assert openai_factory.call_args.kwargs["base_url"] == "http://127.0.0.1:1234/v1"
+    assert openai_factory.call_args.kwargs["api_key"] == "test-key"
 
 
 def test_builtin_judge_spec_defaults_use_8192_tokens() -> None:
@@ -247,7 +401,7 @@ def test_openai_chat_inference_uses_responses_api_for_mcp_servers(
     client = SimpleNamespace(responses=responses)
     openai_module = SimpleNamespace(OpenAI=MagicMock(return_value=client))
     monkeypatch.setattr(
-        "themis.catalog.runtime.common.import_optional",
+        "themis.catalog.runtime._openai.import_optional",
         lambda name, extra: openai_module,
     )
 
@@ -338,7 +492,7 @@ def test_openai_chat_inference_rejects_non_object_mcp_arguments(
     client = SimpleNamespace(responses=responses)
     openai_module = SimpleNamespace(OpenAI=MagicMock(return_value=client))
     monkeypatch.setattr(
-        "themis.catalog.runtime.common.import_optional",
+        "themis.catalog.runtime._openai.import_optional",
         lambda name, extra: openai_module,
     )
 
@@ -406,7 +560,7 @@ def test_openai_chat_inference_rejects_mcp_without_secret(
 ) -> None:
     openai_module = SimpleNamespace(OpenAI=MagicMock())
     monkeypatch.setattr(
-        "themis.catalog.runtime.common.import_optional",
+        "themis.catalog.runtime._openai.import_optional",
         lambda name, extra: openai_module,
     )
     trial = SimpleNamespace(
@@ -1027,6 +1181,31 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
     assert type(metric).__module__ == metric_module
 
 
+def test_judge_backed_metric_registration_is_idempotent() -> None:
+    definition = catalog.get_catalog_benchmark("simpleqa_verified")
+    registry = catalog.build_catalog_registry("demo")
+
+    definition.register_required_components(
+        registry,
+        judge_model_id="judge-a",
+        judge_provider="demo",
+    )
+    first_registration = registry.get_metric_registration("simpleqa_verified_score")
+    definition.register_required_components(
+        registry,
+        judge_model_id="judge-b",
+        judge_provider="demo",
+    )
+    second_registration = registry.get_metric_registration("simpleqa_verified_score")
+
+    assert (
+        second_registration.registration_order == first_registration.registration_order
+    )
+    metric = registry.get_metric("simpleqa_verified_score")
+    assert isinstance(metric, SimpleQAVerifiedJudgeMetric)
+    assert metric.judge_model_id == "judge-a"
+
+
 @pytest.mark.parametrize(
     ("benchmark_id", "provider_type", "provider_module"),
     [
@@ -1074,6 +1253,11 @@ def test_judge_backed_benchmarks_use_judge_modules_grouped_by_type(
             "hle:text_only",
             "BuiltinHLEDatasetProvider",
             "themis.catalog.benchmarks.hle.dataset",
+        ),
+        (
+            "rolebench",
+            "BuiltinRoleBenchDatasetProvider",
+            "themis.catalog.benchmarks.rolebench.dataset",
         ),
         (
             "aime_2026",
@@ -1152,7 +1336,7 @@ def test_builtin_benchmarks_use_benchmark_specific_dataset_providers(
 
 @pytest.mark.parametrize(
     "benchmark_id",
-    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only"],
+    ["simpleqa_verified", "healthbench", "lpfqa", "hle:text_only", "rolebench"],
 )
 def test_specialized_dataset_providers_inline_their_own_implementation(
     benchmark_id: str,
@@ -1349,6 +1533,126 @@ def test_hle_dataset_provider_keeps_image_rows_for_no_tool_variant() -> None:
     assert rows.rows[1]["metadata"] == {"hle_variant": "no_tool"}
 
 
+def test_rolebench_loader_fetches_exact_variant_files_and_combines_subsets() -> None:
+    from themis.catalog.benchmarks.rolebench.dataset import _load_rolebench_rows
+
+    file_map = {
+        "https://huggingface.co/datasets/ZenMoore/RoleBench/resolve/main/profiles-eng/desc.json": '{"Wizard":"Speaks cryptically."}',
+        "https://huggingface.co/datasets/ZenMoore/RoleBench/resolve/main/rolebench-eng/instruction-generalization/general/test.jsonl": "\n".join(
+            [
+                '{"role":"Wizard","question":"General question?","generated":["General answer."]}',
+                "",
+            ]
+        ),
+        "https://huggingface.co/datasets/ZenMoore/RoleBench/resolve/main/rolebench-eng/instruction-generalization/role_specific/test.jsonl": '{"role":"Wizard","question":"Specific question?","generated":["Specific answer."]}',
+    }
+
+    def _fake_urlopen(request: object):
+        url = getattr(request, "full_url", request)
+        assert isinstance(url, str)
+        return io.BytesIO(file_map[url].encode("utf-8"))
+
+    rows = _load_rolebench_rows(
+        "ZenMoore/RoleBench",
+        "test",
+        None,
+        config_name="instruction_generalization_eng",
+        urlopen=_fake_urlopen,
+    )
+
+    assert len(rows) == 2
+    assert [row["subset"] for row in rows] == ["general", "role_specific"]
+    assert rows[0]["desc"] == "Speaks cryptically."
+    assert rows[1]["question"] == "Specific question?"
+
+
+def test_rolebench_dataset_provider_normalizes_expected_ids_and_metadata() -> None:
+    definition = catalog.get_catalog_benchmark(
+        "rolebench:instruction_generalization_eng"
+    )
+    provider = cast(Any, definition.build_dataset_provider())
+    slice_spec = DatasetSliceSpec(
+        benchmark_id="rolebench:instruction_generalization_eng",
+        slice_id="rolebench-instruction_generalization_eng",
+        dimensions={"rolebench_variant": "instruction_generalization_eng"},
+        dataset=DatasetSpec(
+            source=DatasetSource.HUGGINGFACE,
+            dataset_id="ZenMoore/RoleBench",
+            config_name="instruction_generalization_eng",
+        ),
+    )
+
+    rows = provider.prepare_rows(
+        [
+            {
+                "role": "Wizard",
+                "desc": "Speaks cryptically.",
+                "question": "What is the prophecy?",
+                "generated": ["The moon will dim."],
+                "subset": "general",
+                "source_line_number": 7,
+            }
+        ],
+        slice_spec,
+    )
+
+    assert (
+        rows.rows[0]["item_id"] == "rolebench-instruction_generalization_eng-general-7"
+    )
+    assert rows.rows[0]["expected"] == "The moon will dim."
+    assert rows.rows[0]["metadata"] == {
+        "rolebench_variant": "instruction_generalization_eng",
+        "subset": "general",
+        "role": "Wizard",
+    }
+
+
+def test_rolebench_dataset_provider_uses_config_name_to_isolate_variant_loader() -> (
+    None
+):
+    definition = catalog.get_catalog_benchmark("rolebench")
+    benchmark = definition.build_benchmark(model_id="demo-model", provider="demo")
+    seen_config_names: list[str | None] = []
+
+    def _loader(
+        dataset_id: str,
+        split: str,
+        revision: str | None,
+        *,
+        config_name: str | None = None,
+    ) -> list[dict[str, object]]:
+        del dataset_id, split, revision
+        seen_config_names.append(config_name)
+        return [
+            {
+                "role": "Wizard",
+                "desc": "Speaks cryptically.",
+                "question": "What is the prophecy?",
+                "generated": ["The moon will dim."],
+                "subset": "general",
+                "source_line_number": 1,
+            }
+        ]
+
+    provider = cast(Any, definition.build_dataset_provider(huggingface_loader=_loader))
+
+    first_rows = cast(
+        list[dict[str, object]], provider.scan(benchmark.slices[0], DatasetQuerySpec())
+    )
+    second_rows = cast(
+        list[dict[str, object]], provider.scan(benchmark.slices[1], DatasetQuerySpec())
+    )
+
+    assert seen_config_names == [
+        "instruction_generalization_eng",
+        "role_generalization_eng",
+    ]
+    first_metadata = cast(dict[str, object], first_rows[0]["metadata"])
+    second_metadata = cast(dict[str, object], second_rows[0]["metadata"])
+    assert first_metadata["rolebench_variant"] == "instruction_generalization_eng"
+    assert second_metadata["rolebench_variant"] == "role_generalization_eng"
+
+
 def test_inspect_huggingface_dataset_uses_loader_hooks_for_schema_and_samples() -> None:
     summary = catalog.inspect_huggingface_dataset(
         "demo/qa",
@@ -1448,10 +1752,143 @@ def test_math_equivalence_metric_returns_install_hint_when_optional_dependency_m
         best_extraction=lambda: SimpleNamespace(success=True, parsed_answer="1/2")
     )
 
-    score = metric.score(None, candidate, {"expected": "0.5"})
+    with pytest.raises(MetricError, match="themis-eval\\[math\\]"):
+        metric.score(None, candidate, {"expected": "0.5"})
 
-    assert score.value == 0.0
-    assert score.error == 'Install it with `uv add "themis-eval[math]"`.'
+
+def test_math_equivalence_metric_raises_metric_error_on_verification_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    metric = MathEquivalenceMetric()
+
+    fake_math_verify = SimpleNamespace(
+        parse=lambda value: value,
+        verify=lambda gold, answer: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    monkeypatch.setattr(
+        "themis.catalog.runtime.metrics.common.import_optional",
+        lambda module_name, *, extra: fake_math_verify,
+    )
+    candidate = SimpleNamespace(
+        best_extraction=lambda: SimpleNamespace(success=True, parsed_answer="1/2")
+    )
+
+    with pytest.raises(MetricError, match="boom"):
+        metric.score(None, candidate, {"expected": "0.5"})
+
+
+def test_rolebench_rouge_metric_scores_overlap_using_rouge_l_f1(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from themis.catalog.benchmarks.rolebench.metric import RoleBenchRougeMetric
+
+    metric = RoleBenchRougeMetric()
+
+    class _FakeRougeScorer:
+        def __init__(self, metrics: list[str], *, use_stemmer: bool) -> None:
+            assert metrics == ["rougeL"]
+            assert use_stemmer is True
+
+        def score(self, target: str, prediction: str) -> dict[str, object]:
+            assert target == "The moon will dim tonight."
+            assert prediction == "The moon will dim."
+            return {"rougeL": SimpleNamespace(precision=0.9, recall=0.6, fmeasure=0.72)}
+
+    monkeypatch.setattr(
+        "themis.catalog.benchmarks.rolebench.metric.import_optional",
+        lambda module_name, *, extra: SimpleNamespace(RougeScorer=_FakeRougeScorer),
+    )
+    candidate = SimpleNamespace(
+        inference=SimpleNamespace(raw_text="The moon will dim.")
+    )
+
+    score = metric.score(None, candidate, {"expected": "The moon will dim tonight."})
+
+    assert score.metric_id == "rolebench_rouge_l_f1"
+    assert score.value == pytest.approx(0.72)
+    assert score.details == {
+        "precision": pytest.approx(0.9),
+        "recall": pytest.approx(0.6),
+        "f1": pytest.approx(0.72),
+    }
+
+
+def test_rolebench_rouge_metric_returns_install_hint_when_optional_dependency_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from themis.catalog.benchmarks.rolebench.metric import RoleBenchRougeMetric
+
+    metric = RoleBenchRougeMetric()
+
+    def _raise_missing_optional(module_name: str, *, extra: str):
+        raise ThemisError(
+            code=ErrorCode.MISSING_OPTIONAL_DEPENDENCY,
+            message=f'Install it with `uv add "themis-eval[{extra}]"`.',
+        )
+
+    monkeypatch.setattr(
+        "themis.catalog.benchmarks.rolebench.metric.import_optional",
+        _raise_missing_optional,
+    )
+    candidate = SimpleNamespace(
+        inference=SimpleNamespace(raw_text="The moon will dim.")
+    )
+
+    with pytest.raises(MetricError, match="themis-eval\\[text-metrics\\]"):
+        metric.score(None, candidate, {"expected": "The moon will dim tonight."})
+
+
+def test_rolebench_summary_groups_multi_variant_runs_by_variant() -> None:
+    definition = catalog.get_catalog_benchmark("rolebench")
+    rows = [
+        SimpleNamespace(
+            trial_hash="trial-1",
+            candidate_id="cand-1",
+            metric_id="rolebench_rouge_l_f1",
+            score=0.8,
+            prompt_variant_id="rolebench-instruction_generalization_eng-default",
+        ),
+        SimpleNamespace(
+            trial_hash="trial-2",
+            candidate_id="cand-2",
+            metric_id="rolebench_rouge_l_f1",
+            score=0.5,
+            prompt_variant_id="rolebench-role_generalization_eng-default",
+        ),
+    ]
+
+    summary = definition.summarize_result(
+        _StubResult(
+            rows,
+            trial_summaries=[
+                SimpleNamespace(
+                    trial_hash="trial-1",
+                    slice_id="rolebench-instruction_generalization_eng",
+                    dimensions={"rolebench_variant": "instruction_generalization_eng"},
+                ),
+                SimpleNamespace(
+                    trial_hash="trial-2",
+                    slice_id="rolebench-role_generalization_eng",
+                    dimensions={"rolebench_variant": "role_generalization_eng"},
+                ),
+            ],
+        )
+    )
+
+    assert summary["metric_id"] == "rolebench_rouge_l_f1"
+    assert summary["count"] == 2
+    assert summary["mean"] == pytest.approx(0.65)
+    assert summary["variant_ids"] == [
+        "instruction_generalization_eng",
+        "role_generalization_eng",
+    ]
+    variants = _json_mapping(summary["variants"])
+    assert _json_mapping(variants["instruction_generalization_eng"])[
+        "mean"
+    ] == pytest.approx(0.8)
+    assert _json_mapping(variants["role_generalization_eng"])["mean"] == pytest.approx(
+        0.5
+    )
 
 
 def test_catalog_preview_rows_are_available_for_all_builtin_benchmarks() -> None:
@@ -1464,6 +1901,72 @@ def test_catalog_preview_rows_are_available_for_all_builtin_benchmarks() -> None
         rows = definition.preview_rows_loader(definition)
         assert rows
         assert isinstance(rows[0], dict)
+
+
+def test_catalog_common_package_curates_public_exports() -> None:
+    common = importlib.import_module("themis.catalog.common")
+
+    assert common.__all__ == [
+        "build_catalog_benchmark_project",
+        "inspect_huggingface_dataset",
+        "iter_score_rows",
+        "load_huggingface_rows",
+        "load_local_rows",
+        "make_dataset_query",
+    ]
+    assert not hasattr(common, "summarize_humaneval")
+
+
+def test_catalog_common_submodules_expose_moved_helpers() -> None:
+    builders = importlib.import_module("themis.catalog.common.builders")
+    previews = importlib.import_module("themis.catalog.common.previews")
+    registration = importlib.import_module("themis.catalog.common.registration")
+    summaries = importlib.import_module("themis.catalog.common.summaries")
+
+    assert callable(builders.build_humaneval_benchmark)
+    assert callable(builders.make_dataset_query)
+    assert callable(previews.render_context_prompt_preview)
+    assert callable(registration.register_humaneval)
+    assert callable(summaries.summarize_humaneval)
+    assert callable(summaries.summarize_humaneval_plus)
+
+
+def test_catalog_dataset_package_curates_public_exports() -> None:
+    datasets = importlib.import_module("themis.catalog.datasets")
+
+    assert datasets.__all__ == [
+        "BuiltinDatasetProvider",
+        "BuiltinMCQDatasetProvider",
+        "CatalogDatasetProvider",
+        "CatalogNormalizedRows",
+        "inspect_huggingface_dataset",
+        "load_healthbench_rows",
+        "load_huggingface_rows",
+        "load_hle_rows",
+        "load_local_rows",
+    ]
+    assert not hasattr(datasets, "_prompt_messages_from_context")
+    assert not hasattr(datasets, "_normalize_healthbench_rows")
+
+
+def test_catalog_runtime_package_curates_public_exports() -> None:
+    runtime = importlib.import_module("themis.catalog.runtime")
+
+    assert runtime.__all__ == [
+        "ChoiceAccuracyMetric",
+        "DemoEngine",
+        "ExactMatchMetric",
+        "MathEquivalenceMetric",
+        "NormalizedExactMatchMetric",
+        "NumericExactMatchMetric",
+        "OpenAIChatEngine",
+        "build_catalog_registry",
+        "register_catalog_engine",
+        "register_catalog_metrics",
+    ]
+    assert not hasattr(runtime, "_build_judge_spec")
+    assert not hasattr(runtime, "_normalize_provider_name")
+    assert not hasattr(runtime, "_provider_model_extras")
 
 
 def test_load_huggingface_rows_disables_image_decoding_for_iteration(
@@ -1504,8 +2007,7 @@ def test_load_huggingface_rows_disables_image_decoding_for_iteration(
             return fake_dataset
 
     monkeypatch.setattr(
-        dataset_common,
-        "import_optional",
+        "themis.catalog.datasets._loaders.import_optional",
         lambda module_name, *, extra: _FakeDatasetsModule,
     )
 
@@ -1553,8 +2055,7 @@ def test_load_huggingface_rows_retries_healthbench_with_streaming(
             raise _DatasetGenerationError("broken non-streaming cast")
 
     monkeypatch.setattr(
-        dataset_common,
-        "import_optional",
+        "themis.catalog.datasets._loaders.import_optional",
         lambda module_name, *, extra: _FakeDatasetsModule,
     )
 

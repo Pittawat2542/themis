@@ -21,6 +21,13 @@ from themis.progress import (
     RunProgressSnapshot,
 )
 from themis.records.candidate import CandidateRecord
+from themis.records.conversation import (
+    Conversation,
+    MessageEvent,
+    MessagePayload,
+    ToolCallEvent,
+    ToolCallPayload,
+)
 from themis.records.evaluation import MetricScore
 from themis.records.evaluation import EvaluationRecord
 from themis.records.error import ErrorRecord
@@ -51,9 +58,11 @@ from themis.specs.foundational import (
     ExtractorChainSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    MetricRefSpec,
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
+    TraceEvaluationSpec,
     ToolSpec,
 )
 from themis.storage.factory import build_storage_bundle
@@ -871,6 +880,140 @@ def test_evaluate_can_run_without_inference_engine_for_evaluation_only_task() ->
     assert trial is not None
     assert trial.candidates[0].evaluation is not None
     assert trial.candidates[0].evaluation.aggregate_scores["em"] == 1.0
+
+
+def test_import_candidates_persists_conversation_events_in_inference_stage() -> None:
+    orchestrator = Orchestrator.from_project_spec(
+        _build_project_spec(Path(tempfile.mkdtemp())),
+        registry=PluginRegistry(),
+        dataset_loader=SingleItemDatasetLoader(),
+    )
+
+    model = ModelSpec(model_id="imported-model", provider="unregistered")
+    task = TaskSpec(
+        task_id="math",
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
+        generation=GenerationSpec(),
+    )
+    prompt = PromptTemplateSpec(id="baseline", messages=[])
+    params = InferenceParamsSpec()
+    item = DataItemContext(
+        item_id="item1",
+        payload={"item_id": "item1", "question": "6 * 7"},
+    )
+    trial_spec = TrialSpec(
+        trial_id=_planned_trial_id(
+            model=model,
+            task=task,
+            prompt=prompt,
+            params=params,
+            item=item,
+        ),
+        model=model,
+        task=task,
+        item_id=item.item_id,
+        prompt=prompt,
+        params=params,
+        candidate_count=1,
+    )
+    import_record = TrialRecord(
+        spec_hash=trial_spec.spec_hash,
+        trial_spec=trial_spec,
+        status=RecordStatus.OK,
+        candidates=[
+            CandidateRecord(
+                spec_hash="cand_imported",
+                candidate_id="cand_imported",
+                sample_index=0,
+                status=RecordStatus.OK,
+                inference=InferenceRecord(spec_hash="inf_hash", raw_text="42"),
+                conversation=Conversation(
+                    events=[
+                        MessageEvent(
+                            role=PromptRole.ASSISTANT,
+                            payload=MessagePayload(content="42"),
+                            event_index=0,
+                        )
+                    ]
+                ),
+            )
+        ],
+    )
+
+    orchestrator.import_candidates([import_record])
+
+    event_repo = SqliteEventRepository(
+        cast(StorageConnectionManager, orchestrator.db_manager)
+    )
+    conversation_event = next(
+        event
+        for event in event_repo.get_events(trial_spec.spec_hash)
+        if event.event_type == TrialEventType.CONVERSATION_EVENT
+    )
+
+    assert conversation_event.stage == TimelineStage.INFERENCE
+
+
+def test_orchestrator_generate_persists_trace_scores_for_trace_evaluations() -> None:
+    class AgentTraceEngine:
+        def infer(self, trial, context, runtime):
+            del trial, context, runtime
+            return InferenceResult(
+                inference=InferenceRecord(
+                    spec_hash="trace-inf",
+                    raw_text="used search",
+                ),
+                conversation=Conversation(
+                    events=[
+                        ToolCallEvent(
+                            role=PromptRole.ASSISTANT,
+                            payload=ToolCallPayload(
+                                tool_name="search",
+                                tool_arguments={"question": "6 * 7"},
+                                call_id="call-1",
+                            ),
+                            event_index=0,
+                        )
+                    ]
+                ),
+            )
+
+    registry = PluginRegistry()
+    registry.register_inference_engine("openai", AgentTraceEngine())
+    orchestrator = Orchestrator.from_project_spec(
+        _build_project_spec(Path(tempfile.mkdtemp())),
+        registry=registry,
+        dataset_loader=SingleItemDatasetLoader(),
+    )
+    task = TaskSpec(
+        task_id="agent",
+        dataset=DatasetSpec(source=DatasetSource.MEMORY),
+        generation=GenerationSpec(),
+        trace_evaluations=[
+            TraceEvaluationSpec(
+                name="workflow",
+                scope="candidate_trace",
+                metrics=[
+                    MetricRefSpec(id="tool_presence", config={"tool_name": "search"})
+                ],
+            )
+        ],
+    )
+    prompt = PromptTemplateSpec(id="baseline", messages=[])
+    experiment = ExperimentSpec(
+        models=[ModelSpec(model_id="gpt-4o-mini", provider="openai")],
+        tasks=[task],
+        prompt_templates=[prompt],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
+        num_samples=1,
+    )
+
+    result = orchestrator.generate(experiment, runtime=RuntimeContext())
+
+    rows = list(result.iter_trace_scores(metric_id="tool_presence"))
+
+    assert len(rows) == 1
+    assert all(row.metric_id == "tool_presence" for row in rows)
 
 
 def test_generate_can_run_inside_running_event_loop() -> None:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import json
-import pickle
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -19,14 +18,15 @@ from themis.catalog.benchmarks.aethercode.metric import AetherCodeExecutionMetri
 from themis.catalog.benchmarks.codeforces.metric import SandboxExecutionResult
 from themis.catalog.benchmarks.livecodebench.dataset import (
     BuiltinLiveCodeBenchDatasetProvider,
+    _decode_livecodebench_tests,
 )
 from themis.catalog.benchmarks.livecodebench.metric import LiveCodeBenchExecutionMetric
 from themis.orchestration.trial_planner import TrialPlanner
 
 
 def _encode_livecodebench_private_tests(tests: list[dict[str, str]]) -> str:
-    payload = json.dumps(tests)
-    compressed = zlib.compress(pickle.dumps(payload, protocol=4))
+    payload = json.dumps(tests).encode("utf-8")
+    compressed = zlib.compress(payload)
     return base64.b64encode(compressed).decode("ascii")
 
 
@@ -162,6 +162,27 @@ class _FakeExecutor:
         return self._results.pop(0)
 
 
+def test_livecodebench_decoder_accepts_compressed_json_payload() -> None:
+    tests = [
+        {"input": "1", "output": "2", "testtype": "stdin"},
+        {"input": "3", "output": "4", "testtype": "functional"},
+    ]
+
+    decoded = _decode_livecodebench_tests(_encode_livecodebench_private_tests(tests))
+
+    assert decoded == [
+        {"input": "1", "output": "2"},
+        {"input": "3", "output": "4", "testtype": "functional"},
+    ]
+
+
+def test_livecodebench_decoder_rejects_unknown_binary_payloads() -> None:
+    legacy_payload = base64.b64encode(zlib.compress(b"\x80\x04legacy")).decode("ascii")
+
+    with pytest.raises(ValueError, match="LiveCodeBench"):
+        _decode_livecodebench_tests(legacy_payload)
+
+
 def test_catalog_lists_new_code_benchmarks() -> None:
     benchmark_ids = catalog.list_catalog_benchmarks()
     assert "aethercode" in benchmark_ids
@@ -237,6 +258,55 @@ def test_aethercode_builtin_project_uses_expected_subset_loader(
         "split": "test",
         "revision": None,
     }
+
+
+def test_aethercode_loader_does_not_retry_streaming_for_unrelated_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeDatasetsModule:
+        class DatasetGenerationError(Exception):
+            pass
+
+        calls: list[dict[str, object]] = []
+
+        @staticmethod
+        def load_dataset(
+            dataset_id: str,
+            config_name: str,
+            *,
+            split: str,
+            revision: str | None = None,
+            streaming: bool = False,
+        ):
+            _FakeDatasetsModule.calls.append(
+                {
+                    "dataset_id": dataset_id,
+                    "config_name": config_name,
+                    "split": split,
+                    "revision": revision,
+                    "streaming": streaming,
+                }
+            )
+            raise ValueError("bad config")
+
+    monkeypatch.setattr(
+        aethercode_dataset,
+        "import_optional",
+        lambda module_name, *, extra: _FakeDatasetsModule,
+    )
+
+    with pytest.raises(ValueError, match="bad config"):
+        aethercode_dataset._load_aethercode_rows("m-a-p/AetherCode", "test")
+
+    assert _FakeDatasetsModule.calls == [
+        {
+            "dataset_id": "m-a-p/AetherCode",
+            "config_name": "v1_2024",
+            "split": "test",
+            "revision": None,
+            "streaming": False,
+        }
+    ]
 
 
 def test_aethercode_provider_normalizes_rows() -> None:

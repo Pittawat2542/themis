@@ -204,6 +204,20 @@ class ScoreRow(BaseModel):
     details: JSONDict = Field(default_factory=dict)
 
 
+class TraceScoreRow(BaseModel):
+    """Flattened trace-level metric projection row used by trace analysis code."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    trial_hash: str
+    trace_id: str
+    trace_scope: str
+    trace_score_hash: str
+    metric_id: str
+    score: float
+    details: JSONDict = Field(default_factory=dict)
+
+
 class TrialSummaryRow(BaseModel):
     """Flattened trial-level summary row used by reporting and comparisons."""
 

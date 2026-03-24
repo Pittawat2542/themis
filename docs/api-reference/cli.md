@@ -31,6 +31,7 @@ Shared flags:
 Benchmark mode adds:
 
 - `--benchmark`
+- `--num-samples`
 - `--subset`
 - `--revision`
 - `--judge-model`

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_simpleqa_benchmark,
-    register_simpleqa,
-    summarize_simpleqa,
-)
+from ...common.builders import build_simpleqa_benchmark
+from ...common.registration import register_simpleqa
+from ...common.summaries import summarize_simpleqa
 from .dataset import BuiltinSimpleQAVerifiedDatasetProvider
 
 

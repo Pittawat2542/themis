@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition, BenchmarkDefinitionConfig
 
+from . import metrics
 from .benchmarks import get_catalog_benchmark, list_catalog_benchmarks
 from .datasets import CatalogDatasetProvider, CatalogNormalizedRows
 from .runtime import (
@@ -30,6 +31,7 @@ def build_catalog_benchmark_project(
     temperature: float = 0.0,
     top_p: float | None = None,
     seed: int | None = None,
+    num_samples: int = 1,
     subset: int | None = None,
     dataset_revision: str | None = None,
     judge_model_id: str | None = None,
@@ -46,6 +48,7 @@ def build_catalog_benchmark_project(
         temperature=temperature,
         top_p=top_p,
         seed=seed,
+        num_samples=num_samples,
         subset=subset,
         dataset_revision=dataset_revision,
         judge_model_id=judge_model_id,
@@ -66,6 +69,7 @@ __all__ = [
     "list_catalog_benchmarks",
     "load_huggingface_rows",
     "load_local_rows",
+    "metrics",
     "register_catalog_engine",
     "register_catalog_metrics",
 ]

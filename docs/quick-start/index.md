@@ -184,10 +184,10 @@ What the example script covers:
 
 - one `DatasetProvider`
 - one inference engine
-- one metric
+- one metric using `metrics=["exact_match"]` shorthand
 - one `ProjectSpec`
 - one `BenchmarkSpec`
-- one `BenchmarkResult.aggregate(...)` call
+- one projection-backed `BenchmarkResult.aggregate(...)` call
 
 For the catalog-specific library path, run:
 

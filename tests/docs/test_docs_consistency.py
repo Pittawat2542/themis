@@ -74,8 +74,11 @@ def test_builtin_catalog_docs_include_discovery_and_python_entrypoint() -> None:
     assert "list_catalog_benchmarks()" in benchmark_catalog
     assert "build_catalog_benchmark_project(...)" in benchmark_catalog
     assert "`mmlu_pro`" in benchmark_catalog
+    assert "`humaneval`" in benchmark_catalog
+    assert "`humaneval_plus`" in benchmark_catalog
     assert "builtin benchmark-backed starter" in cli_reference
     assert "default local-data template" in cli_reference
+    assert "--num-samples" in cli_reference
 
 
 def test_example_catalog_marks_medical_reasoning_eval_as_non_recommended() -> None:

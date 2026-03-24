@@ -4,16 +4,12 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_math_benchmark,
-    register_math,
-    summarize_math,
-)
-from ...datasets.common import (
-    BuiltinDatasetProvider,
-    CatalogNormalizedRows,
-    _normalize_math_short_answer_rows,
-)
+from ...common.builders import build_math_benchmark
+from ...common.registration import register_math
+from ...common.summaries import summarize_math
+from ...datasets._normalizers import _normalize_math_short_answer_rows
+from ...datasets._providers import BuiltinDatasetProvider
+from ...datasets._types import CatalogNormalizedRows
 
 
 class BuiltinBeyondAIMEDatasetProvider(BuiltinDatasetProvider):

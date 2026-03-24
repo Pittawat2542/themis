@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition
 
-from ...common import (
-    build_codeforces_benchmark,
-    register_codeforces,
-    summarize_codeforces,
-)
+from ...common.builders import build_codeforces_benchmark
+from ...common.registration import register_codeforces
+from ...common.summaries import summarize_codeforces
 from .dataset import BuiltinOpenR1CodeforcesDatasetProvider
 
 

@@ -1,5 +1,5 @@
 """Catalog runtime engines."""
 
-from .common import DemoEngine, OpenAIChatEngine, OpenAICompatibleChatEngine
+from .common import DemoEngine, OpenAIChatEngine
 
-__all__ = ["DemoEngine", "OpenAIChatEngine", "OpenAICompatibleChatEngine"]
+__all__ = ["DemoEngine", "OpenAIChatEngine"]
