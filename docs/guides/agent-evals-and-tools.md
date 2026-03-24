@@ -28,6 +28,7 @@ Use the agent pattern when:
 - the benchmark needs scripted multi-turn continuation
 - the engine owns its own tool loop or multi-step execution
 - you want tool traces preserved in the returned conversation
+- you want persisted workflow checks through `SliceSpec.trace_scores`
 
 ## Author Bootstrap Messages and Follow-Up Turns
 
@@ -165,6 +166,37 @@ runtime = RuntimeContext(
     secrets={"GOOGLE_CALENDAR_TOKEN": "...oauth token..."},
 )
 result = orchestrator.run_benchmark(benchmark, runtime=runtime)
+```
+
+## Score Persisted Agent Traces
+
+If the benchmark should score tool usage, node order, or other workflow
+behavior after the run, declare `SliceSpec.trace_scores`:
+
+```python
+SliceSpec(
+    ...,
+    tool_ids=["calculator"],
+    trace_scores=[
+        TraceScoreSpec(
+            name="workflow",
+            scope="candidate_trace",
+            metrics=[
+                {
+                    "id": "tool_presence",
+                    "config": {"tool_name": "calculator"},
+                }
+            ],
+        )
+    ],
+)
+```
+
+Read the persisted trace results from the returned `BenchmarkResult`:
+
+```python
+rows = result.aggregate_trace(group_by=["slice_id", "metric_id"])
+print(rows)
 ```
 
 ## What The Engine Receives

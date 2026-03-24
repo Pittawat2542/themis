@@ -177,6 +177,10 @@ for row in result.aggregate(
     print(row)
 ```
 
+`metrics=["exact_match"]` is the shorthand metric-ref form. When a metric needs
+structured config, switch to `MetricRefSpec(...)` or
+`{"id": "...", "config": {...}}`.
+
 Use an explicit `seed=` when you want a reproducible sampled subset. If you
 omit the seed for count-based sampling, Themis keeps deterministic order-based
 selection from the provider instead of randomizing.
@@ -202,6 +206,12 @@ rendered prompts:
 preview = benchmark.preview({"question": "2 + 2", "answer": "4"})
 print(preview["arithmetic-quick-default"]["messages"][0]["content"])
 ```
+
+After execution, pick the smallest result surface that answers the task:
+
+- `aggregate(...)` for candidate score rows
+- `aggregate_trace(...)` for persisted trace metrics from `SliceSpec.trace_scores`
+- `aggregate_corpus(...)` for post-hoc corpus metrics such as `f1_macro`
 
 ## Add Built-In Progress Logging When Needed
 

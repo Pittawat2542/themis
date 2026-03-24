@@ -9,6 +9,33 @@ for row in result.aggregate(group_by=["model_id", "slice_id", "metric_id"]):
     print(row)
 ```
 
+Use the result surface that matches the metric layer:
+
+- `aggregate(...)` for candidate score rows
+- `aggregate_trace(...)` for persisted trace metrics
+- `aggregate_corpus(...)` for post-hoc corpus metrics over stored predictions
+
+Example trace aggregation:
+
+```python
+for row in result.aggregate_trace(
+    group_by=["model_id", "slice_id", "metric_id"],
+    metric_id="tool_presence",
+):
+    print(row)
+```
+
+Example corpus aggregation:
+
+```python
+for row in result.aggregate_corpus(
+    group_by=["model_id", "slice_id"],
+    metric_id="f1_macro",
+    candidate_selector="anchor_candidate",
+):
+    print(row)
+```
+
 For one concrete example:
 
 ```python
@@ -65,6 +92,10 @@ themis-quickcheck scores --db .cache/themis-examples/04-compare-models-benchmark
 themis-quickcheck scores --db .cache/themis-examples/01-hello-world-benchmark-first/themis.sqlite3 --metric exact_match --dimension source=synthetic
 themis-quickcheck failures --db .cache/themis-examples/01-hello-world-benchmark-first/themis.sqlite3 --limit 20
 ```
+
+`themis-quickcheck` is the lightweight read path for stored summary and
+candidate-score projections. Reach for Python result APIs when the user needs
+trace-score rows, timelines, or corpus metrics.
 
 ## Run Progress
 

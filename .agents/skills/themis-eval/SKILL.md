@@ -12,7 +12,7 @@ surface:
 - `BenchmarkSpec` is the benchmark configuration.
 - `SliceSpec` is one dataset slice.
 - `DatasetQuerySpec` carries subset and filter intent.
-- `PromptVariantSpec`, `ParseSpec`, and `ScoreSpec` cover prompting, parsing, and scoring.
+- `PromptVariantSpec`, `ParseSpec`, `ScoreSpec`, and `TraceScoreSpec` cover prompting, parsing, candidate scoring, and persisted trace scoring.
 - `BenchmarkDefinition` and `build_benchmark_definition_project(...)` cover reusable benchmark packaging and starter project assembly.
 - `ToolSpec` plus `SliceSpec.tool_ids` cover first-class local tool declaration and selection for agent-capable engines.
 - `McpServerSpec` plus `SliceSpec.mcp_server_ids` cover provider-hosted remote MCP server selection for MCP-capable engines.
@@ -47,7 +47,8 @@ and these references. Do not send the user into retired experiment/task APIs.
 - Treat prompt rendering as orchestration-owned for benchmark runs. Engines receive rendered `trial.prompt.messages`, rendered `trial.prompt.follow_up_turns`, selected `trial.tools`, selected `trial.mcp_servers`, matching `runtime.tool_handlers`, and preserved prompt metadata such as `trial.prompt.id`, `trial.prompt.family`, and `trial.prompt.variables`.
 - Treat MCP as OpenAI-first in this codebase: `McpServerSpec` is for provider-hosted remote tools, not for generic MCP resource browsing.
 - Use `ParseSpec` for parsing and keep metrics focused on scoring parsed outputs.
-- Use `BenchmarkResult.aggregate(...)` and `paired_compare(...)` before reaching for lower-level report APIs.
+- Use shorthand metric refs like `metrics=["exact_match"]` when no metric config is needed; switch to `MetricRefSpec(...)` or `{"id": ..., "config": ...}` when the metric needs structured config.
+- Use `BenchmarkResult.aggregate(...)` for candidate score rows, `aggregate_trace(...)` for persisted trace metrics, and `aggregate_corpus(...)` for post-hoc corpus metrics before reaching for lower-level report APIs.
 - Prefer `from themis import generate_config_report` for one-shot reproducibility exports.
 - Use `Orchestrator.run_benchmark_iter(...)` or `estimate(...)` when the user needs streamed progress, trial-matrix inspection, or resume-impact visibility before a full run.
 - Use `themis.specs` for supporting public spec imports such as `DatasetSpec`, `GenerationSpec`, and `JudgeInferenceSpec`.
@@ -66,7 +67,7 @@ and these references. Do not send the user into retired experiment/task APIs.
 3. Implement or adapt a `DatasetProvider` plus the minimum plugin set when the built-in catalog is not enough.
 4. Define `ProjectSpec`.
 5. Define `BenchmarkSpec`, `SliceSpec`, prompt variants, parses, and scores.
-6. If the benchmark is agent-style, add bootstrap messages, optional follow-up turns, and explicit local tools plus `tool_ids` or MCP servers plus `mcp_server_ids` as needed.
+6. If the benchmark is agent-style, add bootstrap messages, optional follow-up turns, explicit local tools plus `tool_ids` or MCP servers plus `mcp_server_ids` as needed, and `trace_scores` when workflow behavior is part of the benchmark.
 7. Build `Orchestrator` from a project spec or project file.
 8. Run with `run_benchmark(...)` or `run_benchmark_iter(...)`, or export/import external work as needed.
 9. Inspect the returned `BenchmarkResult`, estimates, progress, or SQLite state with `themis-quickcheck`.
@@ -98,6 +99,7 @@ When helping the user, produce runnable code that includes:
 - bootstrap messages and follow-up turns when the user is building an agent benchmark
 - `ToolSpec` plus slice-level selection when the user needs local runtime tools
 - `McpServerSpec` plus slice-level selection and `RuntimeContext.secrets` when the user needs OpenAI-hosted MCP tools
+- `TraceScoreSpec` plus a trace metric configuration when the user needs persisted workflow checks
 - the right extras to install
-- `BenchmarkResult` inspection, `run_benchmark_iter(...)`, or `estimate(...)` calls after execution when they help answer the task
+- `BenchmarkResult` inspection, including `aggregate(...)`, `aggregate_trace(...)`, `aggregate_corpus(...)`, `run_benchmark_iter(...)`, or `estimate(...)` calls after execution when they help answer the task
 - `generate_config_report(...)` or `themis report` examples when they ask for config export

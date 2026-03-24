@@ -2,12 +2,23 @@
 
 Keep parsing and scoring separate.
 
+## Metric References
+
+`ScoreSpec.metrics` and `TraceScoreSpec.metrics` accept three equivalent shapes:
+
+- a metric id string when no per-metric config is needed
+- `MetricRefSpec(...)` when you want typed config
+- a plain mapping with `id` and optional `config`
+
+Use the shortest form that still expresses the metric.
+
 ## Parse First
 
 Use a `ParseSpec` when raw model text is not the final scoring surface:
 
 ```python
-from themis import MetricRefSpec
+from themis import ParseSpec, ScoreSpec, SliceSpec
+from themis.specs import MetricRefSpec
 
 SliceSpec(
     ...,
@@ -20,6 +31,12 @@ SliceSpec(
         )
     ],
 )
+```
+
+The same score can use the shorthand string form:
+
+```python
+ScoreSpec(name="exact", parse="parsed", metrics=["exact_match"])
 ```
 
 ## Metric Rule
@@ -63,6 +80,9 @@ Corpus metrics are not valid inside `ScoreSpec.metrics`.
 Use `trace_scores` for agent or workflow checks that inspect persisted traces:
 
 ```python
+from themis import SliceSpec, TraceScoreSpec
+from themis.specs import MetricRefSpec
+
 SliceSpec(
     ...,
     trace_scores=[
@@ -78,6 +98,10 @@ SliceSpec(
 `tool_stage` depends on conversation events written after this metrics update. Older
 stored runs may need to be re-run before `tool_stage` can match correctly.
 
+Trace metrics run after the conversation and timeline projections exist, so they
+can inspect tool calls, stage boundaries, and node events without changing the
+original generation identity.
+
 ## Corpus Metrics
 
 Use `BenchmarkResult.aggregate_corpus(...)` for classification-style corpus metrics:
@@ -87,5 +111,15 @@ rows = result.aggregate_corpus(
     group_by=["model_id", "slice_id"],
     metric_id="f1_macro",
     candidate_selector="anchor_candidate",
+)
+```
+
+Use `BenchmarkResult.aggregate_trace(...)` when you want persisted trace rows
+grouped by benchmark fields:
+
+```python
+rows = result.aggregate_trace(
+    group_by=["model_id", "slice_id", "metric_id"],
+    metric_id="tool_presence",
 )
 ```

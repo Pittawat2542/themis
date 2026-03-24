@@ -10,6 +10,10 @@ rows = result.aggregate(
 )
 ```
 
+Use `aggregate_trace(...)` for persisted workflow or agent trace metrics and
+`aggregate_corpus(...)` for post-hoc corpus metrics. `paired_compare(...)`
+continues to operate on candidate score rows.
+
 ## Pair
 
 ```python

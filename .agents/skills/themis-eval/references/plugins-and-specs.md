@@ -81,6 +81,38 @@ SliceSpec(
 )
 ```
 
+`metrics=` accepts:
+
+- a string id like `"exact_match"` when no config is needed
+- `MetricRefSpec(id="...", config={...})` when you want typed config
+- a plain mapping like `{"id": "tool_presence", "config": {...}}`
+
+Use the same metric-ref shapes in `TraceScoreSpec.metrics`.
+
+## Use Persisted Trace Scores
+
+```python
+SliceSpec(
+    ...,
+    tool_ids=["calculator"],
+    trace_scores=[
+        TraceScoreSpec(
+            name="workflow",
+            scope="candidate_trace",
+            metrics=[
+                {
+                    "id": "tool_presence",
+                    "config": {"tool_name": "calculator"},
+                }
+            ],
+        )
+    ],
+)
+```
+
+This is the right pattern when the benchmark scores workflow behavior from
+stored traces instead of candidate text.
+
 ## Use Hooks For Small Pipeline Edits
 
 ```python
