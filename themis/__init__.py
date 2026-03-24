@@ -10,6 +10,7 @@ from themis.benchmark import (
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
+    TraceScoreSpec,
     build_benchmark_definition_project,
 )
 from themis.config_report import generate_config_report
@@ -42,6 +43,7 @@ __all__ = [
     "PromptVariantSpec",
     "ParseSpec",
     "ScoreSpec",
+    "TraceScoreSpec",
     "ProjectSpec",
     "StorageConfig",
     "StorageSpec",

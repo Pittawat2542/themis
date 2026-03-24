@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from themis import BenchmarkDefinition, BenchmarkDefinitionConfig
 
+from . import metrics
 from .benchmarks import get_catalog_benchmark, list_catalog_benchmarks
 from .datasets import CatalogDatasetProvider, CatalogNormalizedRows
 from .runtime import (
@@ -68,6 +69,7 @@ __all__ = [
     "list_catalog_benchmarks",
     "load_huggingface_rows",
     "load_local_rows",
+    "metrics",
     "register_catalog_engine",
     "register_catalog_metrics",
 ]

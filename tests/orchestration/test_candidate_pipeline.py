@@ -27,6 +27,7 @@ from themis.specs.foundational import (
     ExtractorRefSpec,
     GenerationSpec,
     JudgeInferenceSpec,
+    MetricRefSpec,
     ModelSpec,
     OutputTransformSpec,
     TaskSpec,
@@ -68,6 +69,35 @@ class MockMetric:
         if candidate.extractions and candidate.extractions[-1].success:
             return MetricScore(metric_id="em", value=1.0)
         return MetricScore(metric_id="em", value=0.0)
+
+
+class TrialOnlyMetric:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, str | None]] = []
+
+    def score_trial(self, trial, candidates, context):
+        del trial
+        self.calls.append(
+            (
+                len(candidates),
+                (
+                    context.get("metric_config", {})
+                    if isinstance(context.get("metric_config"), dict)
+                    else {}
+                ).get("strategy"),
+            )
+        )
+        return MetricScore(
+            metric_id="trial_metric",
+            value=float(len(candidates)),
+            details={
+                "candidate_ids": [
+                    candidate.candidate_id or candidate.spec_hash
+                    for candidate in candidates
+                ],
+                "anchor_candidate_id": context["anchor_candidate"].candidate_id,
+            },
+        )
 
 
 class _NoOpHook:
@@ -525,3 +555,88 @@ def test_registry_rejects_legacy_two_argument_extractor():
 
     with pytest.raises(SpecValidationError, match="extractor"):
         resolve_trial_plugins(trial, registry)
+
+
+def test_evaluate_candidate_emits_trial_metric_only_on_anchor(registry):
+    trial = _make_trial().model_copy(
+        update={
+            "task": _make_trial().task.model_copy(
+                update={
+                    "evaluations": [
+                        EvaluationSpec(
+                            name="judge",
+                            transform="parsed",
+                            metrics=[
+                                MetricRefSpec(
+                                    id="trial_metric",
+                                    config={"strategy": "majority_vote"},
+                                )
+                            ],
+                        )
+                    ]
+                }
+            )
+        }
+    )
+    trial_metric = TrialOnlyMetric()
+    registry.register_metric(
+        "trial_metric",
+        trial_metric,
+        version="1.0.0",
+        plugin_api="1.0",
+    )
+    resolved = resolve_task_stages(trial.task)
+    generated_anchor = generate_candidate(
+        trial,
+        registry,
+        {},
+        RuntimeContext(environment={"suite": "tests"}),
+        cand_index=0,
+    )
+    generated_peer = generate_candidate(
+        trial,
+        registry,
+        {},
+        RuntimeContext(environment={"suite": "tests"}),
+        cand_index=1,
+    )
+    transformed_anchor = transform_candidate(
+        trial,
+        registry,
+        generated_anchor,
+        resolved.output_transforms[0],
+    )
+    transformed_peer = transform_candidate(
+        trial,
+        registry,
+        generated_peer,
+        resolved.output_transforms[0],
+    )
+
+    evaluated_anchor = evaluate_candidate(
+        trial,
+        registry,
+        {},
+        RuntimeContext(environment={"suite": "tests"}),
+        transformed_anchor,
+        resolved.evaluations[0],
+        all_candidates=[transformed_anchor, transformed_peer],
+    )
+    evaluated_peer = evaluate_candidate(
+        trial,
+        registry,
+        {},
+        RuntimeContext(environment={"suite": "tests"}),
+        transformed_peer,
+        resolved.evaluations[0],
+        all_candidates=[transformed_anchor, transformed_peer],
+    )
+
+    assert evaluated_anchor.evaluation is not None
+    assert evaluated_anchor.evaluation.aggregate_scores["trial_metric"] == 2.0
+    assert evaluated_anchor.evaluation.metric_scores[0].details[
+        "anchor_candidate_id"
+    ] == (transformed_anchor.candidate_id)
+    assert evaluated_peer.evaluation is not None
+    assert evaluated_peer.evaluation.metric_scores == []
+    assert trial_metric.calls == [(2, "majority_vote")]

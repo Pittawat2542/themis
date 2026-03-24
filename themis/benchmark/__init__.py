@@ -14,7 +14,9 @@ from themis.benchmark.specs import (
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
+    TraceScoreSpec,
 )
+from themis.specs.foundational import MetricRefSpec
 
 __all__ = [
     "BenchmarkDefinition",
@@ -26,6 +28,8 @@ __all__ = [
     "PromptVariantSpec",
     "ScoreSpec",
     "SliceSpec",
+    "TraceScoreSpec",
+    "MetricRefSpec",
     "build_benchmark_definition_project",
     "compile_benchmark",
 ]

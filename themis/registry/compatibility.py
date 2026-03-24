@@ -314,7 +314,8 @@ def check_evaluation_spec(
     """Return plugin compatibility issues for one evaluation stage."""
     issues: list[Issue] = []
 
-    for index, metric_id in enumerate(evaluation.metrics):
+    for index, metric_ref in enumerate(evaluation.metrics):
+        metric_id = metric_ref.id
         if not registry.has_metric(metric_id):
             issues.append(
                 Issue(

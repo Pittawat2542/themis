@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+import themis.catalog as catalog_module
 from themis import (
     BenchmarkSpec,
     DatasetQuerySpec,
@@ -38,7 +39,12 @@ from themis.catalog import (
     load_local_rows as _load_local_rows,
 )
 from themis.specs.experiment import SqliteBlobStorageSpec
-from themis.specs.foundational import DatasetSpec, ExtractorRefSpec, GenerationSpec
+from themis.specs.foundational import (
+    DatasetSpec,
+    ExtractorRefSpec,
+    GenerationSpec,
+    MetricRefSpec,
+)
 from themis.types.enums import CompressionCodec, DatasetSource, PromptRole
 from themis.types.json_types import JSONDict
 
@@ -329,6 +335,7 @@ def build_app() -> App:
             dataset_revision=revision,
             judge_model_id=judge_model,
             judge_provider=judge_provider,
+            huggingface_loader=catalog_module.load_huggingface_rows,
         )
 
     return app
@@ -453,6 +460,7 @@ def _run_builtin_benchmark(
     dataset_revision: str | None,
     judge_model_id: str | None,
     judge_provider: str | None,
+    huggingface_loader,
 ) -> int:
     try:
         (
@@ -475,6 +483,7 @@ def _run_builtin_benchmark(
             dataset_revision=dataset_revision,
             judge_model_id=judge_model_id,
             judge_provider=judge_provider,
+            huggingface_loader=huggingface_loader,
         )
         payload: dict[str, Any] = {
             "mode": config.mode,
@@ -535,7 +544,7 @@ def _build_benchmark(
     benchmark_id = _slugify(f"{config.mode}-{config.model}-{config.metric}")
     prompt_variant_id = f"{benchmark_id}-default"
     parses = []
-    score = ScoreSpec(name="default", metrics=[config.metric])
+    score = ScoreSpec(name="default", metrics=[MetricRefSpec(id=config.metric)])
     if parse_extractor is not None:
         parses = [
             ParseSpec(
@@ -543,7 +552,11 @@ def _build_benchmark(
                 extractors=[ExtractorRefSpec(id=parse_extractor)],
             )
         ]
-        score = ScoreSpec(name="default", parse="parsed", metrics=[config.metric])
+        score = ScoreSpec(
+            name="default",
+            parse="parsed",
+            metrics=[MetricRefSpec(id=config.metric)],
+        )
     query = (
         DatasetQuerySpec.subset(subset, seed=config.seed)
         if subset is not None

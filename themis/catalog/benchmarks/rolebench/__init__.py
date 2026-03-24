@@ -17,7 +17,7 @@ from themis import (
     ScoreSpec,
     SliceSpec,
 )
-from themis.specs.foundational import DatasetSpec, GenerationSpec
+from themis.specs.foundational import DatasetSpec, GenerationSpec, MetricRefSpec
 from themis.types.enums import DatasetSource, PromptRole
 from themis.types.events import ScoreRow
 from themis.types.json_types import JSONDict
@@ -87,7 +87,7 @@ def _build_rolebench_benchmark(
                 scores=[
                     ScoreSpec(
                         name="default",
-                        metrics=["rolebench_rouge_l_f1"],
+                        metrics=[MetricRefSpec(id="rolebench_rouge_l_f1")],
                     )
                 ],
             )

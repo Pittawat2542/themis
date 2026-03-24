@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 
@@ -20,6 +20,7 @@ from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    MetricRefSpec,
     McpServerSpec,
     ModelSpec,
     ToolSpec,
@@ -75,12 +76,52 @@ class ScoreSpec(SpecBase):
 
     name: str = Field(..., min_length=1)
     parse: str | None = Field(default=None)
-    metrics: list[str] = Field(default_factory=list)
+    metrics: list[MetricRefSpec] = Field(default_factory=list)
+
+    @field_validator("metrics", mode="before")
+    @classmethod
+    def _coerce_metrics(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        coerced: list[MetricRefSpec | object] = []
+        for item in value:
+            if isinstance(item, str):
+                coerced.append(MetricRefSpec(id=item))
+            else:
+                coerced.append(item)
+        return coerced
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> "ScoreSpec":
         if not self.metrics:
             raise ValueError("ScoreSpec must define at least one metric.")
+        return self
+
+
+class TraceScoreSpec(SpecBase):
+    """Named scoring pass over one persisted agentic trace."""
+
+    name: str = Field(..., min_length=1)
+    scope: Literal["candidate_trace", "trial_trace"] = Field(...)
+    metrics: list[MetricRefSpec] = Field(default_factory=list)
+
+    @field_validator("metrics", mode="before")
+    @classmethod
+    def _coerce_metrics(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        coerced: list[MetricRefSpec | object] = []
+        for item in value:
+            if isinstance(item, str):
+                coerced.append(MetricRefSpec(id=item))
+            else:
+                coerced.append(item)
+        return coerced
+
+    @model_validator(mode="after")
+    def _validate_semantic(self) -> "TraceScoreSpec":
+        if not self.metrics:
+            raise ValueError("TraceScoreSpec must define at least one metric.")
         return self
 
 
@@ -126,10 +167,16 @@ class SliceSpec(SpecBase):
     generation: GenerationSpec | None = Field(default=None)
     parses: list[ParseSpec] = Field(default_factory=list)
     scores: list[ScoreSpec] = Field(default_factory=list)
+    trace_scores: list[TraceScoreSpec] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_semantic(self) -> "SliceSpec":
-        if self.generation is None and not self.parses and not self.scores:
+        if (
+            self.generation is None
+            and not self.parses
+            and not self.scores
+            and not self.trace_scores
+        ):
             raise ValueError(
                 f"SliceSpec '{self.slice_id}' must define at least one stage."
             )
@@ -140,6 +187,11 @@ class SliceSpec(SpecBase):
         score_names = [score.name for score in self.scores]
         if len(score_names) != len(set(score_names)):
             raise ValueError(f"SliceSpec '{self.slice_id}' has duplicate score name.")
+        trace_score_names = [score.name for score in self.trace_scores]
+        if len(trace_score_names) != len(set(trace_score_names)):
+            raise ValueError(
+                f"SliceSpec '{self.slice_id}' has duplicate trace score name."
+            )
         for score in self.scores:
             if score.parse is not None and score.parse not in parse_name_set:
                 raise ValueError(
@@ -228,7 +280,12 @@ class BenchmarkSpec(SpecBase):
                     dataset=DatasetSpec(source=dataset_source, dataset_id=dataset_id),
                     prompt_variant_ids=[variant_id],
                     generation=GenerationSpec(),
-                    scores=[ScoreSpec(name="default", metrics=[metric])],
+                    scores=[
+                        ScoreSpec(
+                            name="default",
+                            metrics=[MetricRefSpec(id=metric)],
+                        )
+                    ],
                 )
             ],
             prompt_variants=[

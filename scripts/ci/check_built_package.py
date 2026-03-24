@@ -31,6 +31,7 @@ EXPECTED_ROOT_EXPORTS = {
     "ParseSpec",
     "ScoreSpec",
     "SliceSpec",
+    "TraceScoreSpec",
     "StorageConfig",
     "StorageSpec",
     "SqliteBlobStorageSpec",

@@ -13,6 +13,8 @@ from themis.contracts.protocols import (
     JudgeService,
     Metric,
     RenderedPrompt,
+    TraceMetric,
+    TrialMetric,
 )
 from themis.orchestration.task_resolution import (
     ResolvedEvaluation,
@@ -156,7 +158,8 @@ class ResolvedMetricStep:
     """One concrete metric instance resolved for execution."""
 
     metric_id: str
-    metric: Metric
+    config: Mapping[str, JSONValueType]
+    metric: Metric | TrialMetric
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,13 +324,28 @@ def resolve_evaluation_plugins(
         evaluation=evaluation,
         metrics=tuple(
             ResolvedMetricStep(
-                metric_id=metric_id,
-                metric=registry.get_metric(metric_id),
+                metric_id=metric_ref.id,
+                config=metric_ref.config,
+                metric=_resolve_evaluation_metric(registry, metric_ref.id),
             )
-            for metric_id in evaluation.spec.metrics
+            for metric_ref in evaluation.spec.metrics
         ),
         hooks=hooks or ResolvedPipelineHooks.from_registry(registry),
     )
+
+
+def _resolve_evaluation_metric(
+    registry: PluginRegistry,
+    metric_id: str,
+) -> Metric | TrialMetric:
+    metric = registry.get_metric(metric_id)
+    if isinstance(metric, Metric) or isinstance(metric, TrialMetric):
+        return metric
+    if isinstance(metric, TraceMetric):
+        raise TypeError(
+            f"Metric '{metric_id}' is trace-only and cannot run in candidate evaluation."
+        )
+    raise TypeError(f"Metric '{metric_id}' is incompatible with evaluation execution.")
 
 
 def _declared_trial_stages(trial: TrialSpec) -> set[ResolvedStage]:

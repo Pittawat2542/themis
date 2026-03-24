@@ -33,12 +33,19 @@ from themis.specs.foundational import (
     ToolSpec,
 )
 from themis.types.enums import RecordType
-from themis.types.events import ScoreRow, TrialEvent, TrialEventType, TrialSummaryRow
+from themis.types.events import (
+    ScoreRow,
+    TraceScoreRow,
+    TrialEvent,
+    TrialEventType,
+    TrialSummaryRow,
+)
 from themis.types.json_types import JSONValueType
 
 if TYPE_CHECKING:
     from themis.benchmark.query import DatasetQuerySpec
     from themis.benchmark.specs import DatasetSliceSpec
+    from themis.runtime.trace_view import TraceView
     from themis.runtime.timeline_view import RecordTimelineView
 
 DatasetContext = DataItemContext | Mapping[str, object]
@@ -105,6 +112,33 @@ class Metric(Protocol):
         context: MetricContext,
     ) -> MetricScore:
         """Score one candidate against the provided metric context."""
+        ...
+
+
+@runtime_checkable
+class TrialMetric(Protocol):
+    """Scorer that turns a candidate set plus context into one `MetricScore`."""
+
+    def score_trial(
+        self,
+        trial: TrialSpec,
+        candidates: Sequence[CandidateRecord],
+        context: MetricContext,
+    ) -> MetricScore:
+        """Score one full candidate set against the provided metric context."""
+        ...
+
+
+@runtime_checkable
+class TraceMetric(Protocol):
+    """Scorer that turns one persisted execution trace into one `MetricScore`."""
+
+    def score_trace(
+        self,
+        trace: TraceView,
+        context: MetricContext,
+    ) -> MetricScore:
+        """Score one candidate or trial trace against the provided metric context."""
         ...
 
 
@@ -318,6 +352,17 @@ class ProjectionRepository(Protocol):
         evaluation_hash: str | None = None,
     ) -> Iterator[TrialSummaryRow]:
         """Iterate trial summary rows for reporting and comparison joins."""
+        ...
+
+    def iter_trace_scores(
+        self,
+        *,
+        trial_hashes: Sequence[str] | None = None,
+        metric_id: str | None = None,
+        trace_score_hash: str | None = None,
+        evaluation_hash: str | None = None,
+    ) -> Iterator[TraceScoreRow]:
+        """Iterate flattened trace score rows for reporting and comparisons."""
         ...
 
     def save_trial_record(

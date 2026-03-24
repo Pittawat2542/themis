@@ -279,7 +279,7 @@ def _benchmark_template(
             ScoreSpec,
             SliceSpec,
         )
-        from themis.specs import DatasetSpec, GenerationSpec
+        from themis.specs import DatasetSpec, GenerationSpec, MetricRefSpec
         from themis.types.enums import DatasetSource, PromptRole
 
 
@@ -307,7 +307,7 @@ def _benchmark_template(
                             ScoreSpec(
                                 name="default",
                                 parse="parsed",
-                                metrics=["{metric_name}"],
+                                metrics=[MetricRefSpec(id="{metric_name}")],
                             )
                         ],
                     )

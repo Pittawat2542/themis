@@ -74,7 +74,13 @@ math = [
     "math-verify[antlr4_13_2]>=0.7.0",
 ]
 text-metrics = [
+    "bert-score>=0.3.13",
+    "evaluate>=0.4.3",
+    "nltk>=3.9",
+    "rapidfuzz>=3.10.1",
     "rouge-score>=0.1.2",
+    "sacrebleu>=2.5.1",
+    "scikit-learn>=1.5.0",
 ]
 providers-openai = [
     "openai>=1.0.0",
@@ -121,10 +127,15 @@ namespace_packages = true
 [[tool.mypy.overrides]]
 module = [
     "bert_score.*",
+    "evaluate",
+    "evaluate.*",
     "nltk.*",
     "pandas",
     "pandas.*",
+    "rapidfuzz.*",
     "rouge_score.*",
+    "sacrebleu.*",
+    "sklearn.*",
     "vllm.*",
 ]
 ignore_missing_imports = true

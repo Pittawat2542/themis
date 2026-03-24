@@ -17,11 +17,13 @@ from themis import (
     PromptVariantSpec,
     ScoreSpec,
     SliceSpec,
+    TraceScoreSpec,
     ToolSpec,
 )
 from themis.benchmark.specs import DatasetSliceSpec
 from themis.benchmark.compiler import compile_benchmark
 from themis.errors import SpecValidationError
+from themis.orchestration.task_resolution import resolve_task_stages
 from themis.orchestration.trial_planner import TrialPlanner
 from themis.specs.experiment import DataItemContext
 from themis.specs.experiment import ExperimentSpec
@@ -31,6 +33,7 @@ from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    MetricRefSpec,
     TaskSpec,
 )
 
@@ -107,6 +110,113 @@ def test_compile_benchmark_maps_prompt_applicability_and_slice_metadata() -> Non
     assert task.allowed_prompt_template_ids == ["qa-default"]
     assert isinstance(task.dataset_query, DatasetQuerySpec)
     assert task.dataset_query.count == 5
+
+
+def test_compile_benchmark_preserves_structured_metric_refs() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="math-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="arithmetic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["qa-default"],
+                generation=GenerationSpec(),
+                scores=[
+                    ScoreSpec(
+                        name="default",
+                        metrics=[
+                            MetricRefSpec(
+                                id="self_consistency",
+                                config={
+                                    "strategy": "majority_vote",
+                                    "base_metric": {"id": "exact_match"},
+                                },
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="qa-default",
+                family="qa",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Question: {item.question}",
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    experiment = compile_benchmark(benchmark)
+
+    assert experiment.tasks[0].evaluations[0].metrics == [
+        MetricRefSpec(
+            id="self_consistency",
+            config={
+                "strategy": "majority_vote",
+                "base_metric": {"id": "exact_match"},
+            },
+        )
+    ]
+
+
+def test_compile_benchmark_preserves_trace_scores() -> None:
+    benchmark = BenchmarkSpec(
+        benchmark_id="agent-bench",
+        models=[ModelSpec(model_id="demo-model", provider="demo")],
+        slices=[
+            SliceSpec(
+                slice_id="agentic",
+                dataset=DatasetSpec(source=DatasetSource.MEMORY),
+                prompt_variant_ids=["agent-default"],
+                generation=GenerationSpec(),
+                trace_scores=[
+                    TraceScoreSpec(
+                        name="workflow",
+                        scope="candidate_trace",
+                        metrics=[
+                            MetricRefSpec(
+                                id="tool_presence",
+                                config={"tool_name": "search"},
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+        prompt_variants=[
+            PromptVariantSpec(
+                id="agent-default",
+                family="agent",
+                messages=[
+                    PromptMessage(
+                        role=PromptRole.USER,
+                        content="Solve: {item.question}",
+                    )
+                ],
+            )
+        ],
+        inference_grid=InferenceGridSpec(params=[InferenceParamsSpec(max_tokens=32)]),
+    )
+
+    experiment = compile_benchmark(benchmark)
+    task = experiment.tasks[0]
+    resolved = resolve_task_stages(task)
+
+    assert len(task.trace_evaluations) == 1
+    assert task.trace_evaluations[0].name == "workflow"
+    assert task.trace_evaluations[0].scope == "candidate_trace"
+    assert task.trace_evaluations[0].metrics == [
+        MetricRefSpec(id="tool_presence", config={"tool_name": "search"})
+    ]
+    assert len(resolved.trace_evaluations) == 1
+    assert resolved.trace_evaluations[0].trace_score_hash
 
 
 def test_compile_benchmark_preserves_follow_up_turns() -> None:

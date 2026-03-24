@@ -20,6 +20,7 @@ from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    MetricRefSpec,
     JinjaTransform,
     RenameFieldTransform,
     TransformSpec,
@@ -137,7 +138,7 @@ def build_mcq_benchmark(
                     ScoreSpec(
                         name="default",
                         parse="parsed",
-                        metrics=["choice_accuracy"],
+                        metrics=[MetricRefSpec(id="choice_accuracy")],
                     )
                 ],
             )
@@ -177,7 +178,7 @@ def build_math_benchmark(
                     ScoreSpec(
                         name="default",
                         parse="parsed",
-                        metrics=["math_equivalence"],
+                        metrics=[MetricRefSpec(id="math_equivalence")],
                     )
                 ],
             )
@@ -221,7 +222,12 @@ def build_simpleqa_benchmark(
                 dataset_query=make_dataset_query(config),
                 prompt_variant_ids=[prompt_variant_id],
                 generation=GenerationSpec(),
-                scores=[ScoreSpec(name="judge", metrics=["simpleqa_verified_score"])],
+                scores=[
+                    ScoreSpec(
+                        name="judge",
+                        metrics=[MetricRefSpec(id="simpleqa_verified_score")],
+                    )
+                ],
             )
         ],
         prompt_variants=[
@@ -257,7 +263,12 @@ def build_healthbench_benchmark(
                 dataset_query=make_dataset_query(config),
                 prompt_variant_ids=[prompt_variant_id],
                 generation=GenerationSpec(),
-                scores=[ScoreSpec(name="judge", metrics=["healthbench_score"])],
+                scores=[
+                    ScoreSpec(
+                        name="judge",
+                        metrics=[MetricRefSpec(id="healthbench_score")],
+                    )
+                ],
             )
         ],
         prompt_variants=[
@@ -299,7 +310,12 @@ def build_lpfqa_benchmark(
                 dataset_query=make_dataset_query(config),
                 prompt_variant_ids=[prompt_variant_id],
                 generation=GenerationSpec(),
-                scores=[ScoreSpec(name="judge", metrics=["lpfqa_score"])],
+                scores=[
+                    ScoreSpec(
+                        name="judge",
+                        metrics=[MetricRefSpec(id="lpfqa_score")],
+                    )
+                ],
             )
         ],
         prompt_variants=[
@@ -346,7 +362,12 @@ def build_hle_benchmark(
                 dimensions={"hle_variant": variant_id},
                 prompt_variant_ids=[f"hle-{variant_id}-default"],
                 generation=GenerationSpec(),
-                scores=[ScoreSpec(name="judge", metrics=["hle_accuracy"])],
+                scores=[
+                    ScoreSpec(
+                        name="judge",
+                        metrics=[MetricRefSpec(id="hle_accuracy")],
+                    )
+                ],
             )
             for variant_id in variant_ids
         ],
@@ -385,7 +406,12 @@ def build_frontierscience_benchmark(
                 dataset_query=make_dataset_query(config),
                 prompt_variant_ids=[prompt_variant_id],
                 generation=GenerationSpec(),
-                scores=[ScoreSpec(name="judge", metrics=["frontierscience_score"])],
+                scores=[
+                    ScoreSpec(
+                        name="judge",
+                        metrics=[MetricRefSpec(id="frontierscience_score")],
+                    )
+                ],
             )
         ],
         prompt_variants=[
@@ -426,7 +452,10 @@ def build_procbench_benchmark(
                 prompt_variant_ids=[prompt_variant_id],
                 generation=GenerationSpec(),
                 scores=[
-                    ScoreSpec(name="default", metrics=["procbench_final_accuracy"])
+                    ScoreSpec(
+                        name="default",
+                        metrics=[MetricRefSpec(id="procbench_final_accuracy")],
+                    )
                 ],
             )
             for task_id in task_ids
@@ -510,7 +539,7 @@ def build_humaneval_benchmark(
                 scores=[
                     ScoreSpec(
                         name="execution",
-                        metrics=[_primary_metric_id(definition)],
+                        metrics=[MetricRefSpec(id=_primary_metric_id(definition))],
                     )
                 ],
             )
@@ -560,7 +589,12 @@ def _build_code_generation_benchmark(
                 dataset_query=make_dataset_query(config),
                 prompt_variant_ids=[prompt_variant_id],
                 generation=GenerationSpec(),
-                scores=[ScoreSpec(name="execution", metrics=[metric_id])],
+                scores=[
+                    ScoreSpec(
+                        name="execution",
+                        metrics=[MetricRefSpec(id=metric_id)],
+                    )
+                ],
             )
         ],
         prompt_variants=[

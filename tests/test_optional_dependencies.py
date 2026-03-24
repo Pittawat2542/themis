@@ -132,3 +132,15 @@ def test_providers_vllm_extra_is_linux_only_in_packaging_metadata() -> None:
     providers_vllm = pyproject["project"]["optional-dependencies"]["providers-vllm"]
 
     assert providers_vllm == ["vllm>=0.17.0; sys_platform == 'linux'"]
+
+
+def test_text_metrics_extra_contains_sampling_text_dependencies() -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    text_metrics = pyproject["project"]["optional-dependencies"]["text-metrics"]
+
+    assert "bert-score>=0.3.13" in text_metrics
+    assert "evaluate>=0.4.3" in text_metrics
+    assert "nltk>=3.9" in text_metrics
+    assert "rouge-score>=0.1.2" in text_metrics
+    assert "sacrebleu>=2.5.1" in text_metrics
+    assert "scikit-learn>=1.5.0" in text_metrics

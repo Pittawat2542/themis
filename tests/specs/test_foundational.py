@@ -4,10 +4,12 @@ from pydantic import ValidationError
 import themis.specs.foundational as foundational
 from themis.specs.foundational import (
     DatasetSpec,
+    EvaluationSpec,
     ExtractorChainSpec,
     ExtractorRefSpec,
     JinjaTransform,
     JudgeInferenceSpec,
+    MetricRefSpec,
     McpServerSpec,
     ModelSpec,
     RenameFieldTransform,
@@ -288,6 +290,33 @@ def test_extractor_chain_spec_coerces_string_and_mapping_entries():
     assert chain.extractors == [
         ExtractorRefSpec(id="regex", config={}),
         ExtractorRefSpec(id="json_schema", config={"schema": {"type": "object"}}),
+    ]
+
+
+def test_metric_ref_spec_coerces_string_and_mapping_entries() -> None:
+    evaluation = EvaluationSpec(
+        name="judge",
+        metrics=[
+            "exact_match",
+            {
+                "id": "self_consistency",
+                "config": {
+                    "strategy": "majority_vote",
+                    "base_metric": {"id": "exact_match"},
+                },
+            },
+        ],
+    )
+
+    assert evaluation.metrics == [
+        MetricRefSpec(id="exact_match", config={}),
+        MetricRefSpec(
+            id="self_consistency",
+            config={
+                "strategy": "majority_vote",
+                "base_metric": {"id": "exact_match"},
+            },
+        ),
     ]
 
 
