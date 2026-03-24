@@ -96,9 +96,9 @@ class DatabaseManager:
                 (STORE_FORMAT_KEY, STORE_FORMAT_VERSION),
             )
             return
-        if existing_store_format == STORE_FORMAT_VERSION:
+        if existing_store_format in {STORE_FORMAT_VERSION, "stage_overlays_v4"}:
             return
-        if existing_store_format == "stage_overlays_v2":
+        if existing_store_format in {"stage_overlays_v2", "stage_overlays_v3"}:
             conn.execute(
                 """
                 UPDATE store_metadata
@@ -172,6 +172,34 @@ class DatabaseManager:
         )
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_specs_canonical_hash ON specs(canonical_hash)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trace_metric_scores (
+                trial_hash TEXT NOT NULL,
+                trace_scope TEXT NOT NULL,
+                trace_id TEXT NOT NULL,
+                trace_score_hash TEXT NOT NULL,
+                overlay_key TEXT NOT NULL DEFAULT 'gen',
+                metric_id TEXT NOT NULL,
+                score REAL NOT NULL,
+                details_json TEXT,
+                PRIMARY KEY (
+                    trial_hash,
+                    trace_scope,
+                    trace_id,
+                    trace_score_hash,
+                    overlay_key,
+                    metric_id
+                )
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_trace_metric_trial_hash
+            ON trace_metric_scores(trial_hash, overlay_key, trace_score_hash)
+            """
         )
 
     def _ensure_columns(

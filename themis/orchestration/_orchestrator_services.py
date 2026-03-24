@@ -74,6 +74,7 @@ def build_orchestrator_services(
     projection_handler = ProjectionHandler(
         event_repo=event_repo,
         projection_repo=projection_repo,
+        registry=registry,
     )
     executor = TrialExecutor(
         runner=cast(_ExecutionRunner, runner),

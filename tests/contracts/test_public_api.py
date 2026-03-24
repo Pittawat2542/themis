@@ -25,6 +25,7 @@ def test_specs_namespace_exposes_public_benchmark_models() -> None:
         "PromptVariantSpec",
         "ParseSpec",
         "ScoreSpec",
+        "TraceScoreSpec",
         "ToolSpec",
         "McpServerSpec",
         "DatasetSpec",
@@ -48,6 +49,7 @@ def test_specs_namespace_exposes_public_benchmark_models() -> None:
 def test_runtime_namespace_exposes_benchmark_result_only() -> None:
     assert "BenchmarkResult" in themis.runtime.__all__
     assert "RecordTimelineView" in themis.runtime.__all__
+    assert "TraceView" in themis.runtime.__all__
     assert "ExperimentResult" not in themis.runtime.__all__
     assert "ComparisonTable" not in themis.runtime.__all__
 
@@ -59,6 +61,14 @@ def test_config_report_root_helper_remains_public() -> None:
 
 def test_benchmark_result_public_methods_exist() -> None:
     result_type = themis.BenchmarkResult
-    for method in ["aggregate", "paired_compare", "persist_artifacts", "report"]:
+    for method in [
+        "aggregate",
+        "aggregate_corpus",
+        "aggregate_trace",
+        "iter_trace_scores",
+        "paired_compare",
+        "persist_artifacts",
+        "report",
+    ]:
         assert hasattr(result_type, method)
     assert not hasattr(result_type, "build_report")

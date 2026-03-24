@@ -14,7 +14,7 @@ themis-quickcheck scores \
 Output:
 
 ```text
-ev:73c1137b0a71	demo-model	arithmetic	exact_match	1.0000	1
+ev:edc937106dcf	demo-model	arithmetic	exact_match	1.0000	1
 ```
 
 Filter by slice:

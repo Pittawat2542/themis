@@ -8,7 +8,7 @@ from themis.records.candidate import CandidateRecord
 from themis.records.timeline import RecordTimeline
 from themis.records.trial import TrialRecord
 from themis.storage._protocols import StorageConnection
-from themis.types.events import TimelineStage
+from themis.types.events import TimelineStage, TraceScoreRow
 
 
 class ProjectionWriter:
@@ -229,6 +229,47 @@ class ProjectionWriter:
             """,
             (trial_hash, overlay_key, overlay_key),
         )
+
+    def replace_trace_metric_scores(
+        self,
+        conn: StorageConnection,
+        trial_hash: str,
+        trace_rows: list[TraceScoreRow],
+        overlay_key: str,
+    ) -> None:
+        conn.execute(
+            """
+            DELETE FROM trace_metric_scores
+            WHERE trial_hash = ? AND overlay_key = ?
+            """,
+            (trial_hash, overlay_key),
+        )
+        for row in trace_rows:
+            conn.execute(
+                """
+                INSERT INTO trace_metric_scores (
+                    trial_hash,
+                    trace_scope,
+                    trace_id,
+                    trace_score_hash,
+                    overlay_key,
+                    metric_id,
+                    score,
+                    details_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row.trial_hash,
+                    row.trace_scope,
+                    row.trace_id,
+                    row.trace_score_hash,
+                    overlay_key,
+                    row.metric_id,
+                    row.score,
+                    json.dumps(row.details) if row.details else None,
+                ),
+            )
 
     def insert_timeline(
         self,

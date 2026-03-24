@@ -606,6 +606,12 @@ def test_trial_runner_emits_single_candidate_events_in_exact_stage_order(trial_s
         TrialEventType.EXTRACTION_COMPLETED,
         TrialEventType.EVALUATION_COMPLETED,
     ]
+    conversation_event = next(
+        event
+        for event in events
+        if event.event_type == TrialEventType.CONVERSATION_EVENT
+    )
+    assert conversation_event.stage == TimelineStage.INFERENCE
 
 
 def test_trial_runner_retry(trial_spec):
@@ -760,7 +766,7 @@ def test_trial_runner_replays_artifact_backed_stage_payloads_without_inline_json
     with manager.get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT stage, payload_json, artifact_refs_json
+            SELECT event_type, stage, payload_json, artifact_refs_json
             FROM trial_events
             WHERE trial_hash = ? AND stage IS NOT NULL
             ORDER BY event_seq ASC
@@ -768,25 +774,24 @@ def test_trial_runner_replays_artifact_backed_stage_payloads_without_inline_json
             (executed_trial.spec_hash,),
         ).fetchall()
 
-    by_stage = {
-        row["stage"]: row
-        for row in rows
-        if row["stage"]
-        in {
-            TimelineStage.ITEM_LOAD,
-            TimelineStage.INFERENCE,
-            TimelineStage.EXTRACTION,
-            TimelineStage.EVALUATION,
-        }
-    }
-    assert by_stage[TimelineStage.ITEM_LOAD]["payload_json"] is None
-    assert by_stage[TimelineStage.ITEM_LOAD]["artifact_refs_json"] is not None
-    assert by_stage[TimelineStage.INFERENCE]["payload_json"] is None
-    assert by_stage[TimelineStage.INFERENCE]["artifact_refs_json"] is not None
-    assert by_stage[TimelineStage.EXTRACTION]["payload_json"] is None
-    assert by_stage[TimelineStage.EXTRACTION]["artifact_refs_json"] is not None
-    assert by_stage[TimelineStage.EVALUATION]["payload_json"] is None
-    assert by_stage[TimelineStage.EVALUATION]["artifact_refs_json"] is not None
+    by_event_type = {row["event_type"]: row for row in rows}
+    assert by_event_type[TrialEventType.ITEM_LOADED]["payload_json"] is None
+    assert by_event_type[TrialEventType.ITEM_LOADED]["artifact_refs_json"] is not None
+    assert by_event_type[TrialEventType.INFERENCE_COMPLETED]["payload_json"] is None
+    assert (
+        by_event_type[TrialEventType.INFERENCE_COMPLETED]["artifact_refs_json"]
+        is not None
+    )
+    assert by_event_type[TrialEventType.EXTRACTION_COMPLETED]["payload_json"] is None
+    assert (
+        by_event_type[TrialEventType.EXTRACTION_COMPLETED]["artifact_refs_json"]
+        is not None
+    )
+    assert by_event_type[TrialEventType.EVALUATION_COMPLETED]["payload_json"] is None
+    assert (
+        by_event_type[TrialEventType.EVALUATION_COMPLETED]["artifact_refs_json"]
+        is not None
+    )
 
 
 def test_trial_runner_delegates_generation_candidate_execution(trial_spec):

@@ -22,6 +22,7 @@ THEMIS_TABLES = {
     "trial_events",
     "candidate_summary",
     "metric_scores",
+    "trace_metric_scores",
     "record_timeline",
     "observability_refs",
     "observability_links",
@@ -120,6 +121,19 @@ CREATE TABLE IF NOT EXISTS metric_scores (
     PRIMARY KEY (candidate_id, metric_id, overlay_key)
 );
 
+CREATE TABLE IF NOT EXISTS trace_metric_scores (
+    trial_hash TEXT NOT NULL,
+    trace_scope TEXT NOT NULL,
+    trace_id TEXT NOT NULL,
+    trace_score_hash TEXT NOT NULL,
+    overlay_key TEXT NOT NULL DEFAULT 'gen',
+    metric_id TEXT NOT NULL,
+    score REAL NOT NULL,
+    details_json TEXT,
+    PRIMARY KEY (trial_hash, trace_scope, trace_id, trace_score_hash, overlay_key, metric_id),
+    FOREIGN KEY(trial_hash, overlay_key) REFERENCES trial_summary(trial_hash, overlay_key)
+);
+
 CREATE TABLE IF NOT EXISTS record_timeline (
     record_id TEXT NOT NULL,
     record_type TEXT NOT NULL,
@@ -205,6 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_trial_events_candidate_seq ON trial_events(trial_
 CREATE INDEX IF NOT EXISTS idx_trial_summary_overlay ON trial_summary(trial_hash, overlay_key);
 CREATE INDEX IF NOT EXISTS idx_candidate_trial_hash ON candidate_summary(trial_hash, overlay_key);
 CREATE INDEX IF NOT EXISTS idx_metric_candidate_hash ON metric_scores(candidate_id, overlay_key);
+CREATE INDEX IF NOT EXISTS idx_trace_metric_trial_hash ON trace_metric_scores(trial_hash, overlay_key, trace_score_hash);
 CREATE INDEX IF NOT EXISTS idx_record_timeline_trial ON record_timeline(trial_hash, overlay_key, record_type, candidate_id);
 CREATE INDEX IF NOT EXISTS idx_observability_trial ON observability_refs(trial_hash, overlay_key, candidate_id);
 CREATE INDEX IF NOT EXISTS idx_observability_links_trial ON observability_links(trial_hash, overlay_key, candidate_id, provider);

@@ -292,6 +292,7 @@ class TrialEventEmitter:
             append_event(
                 TrialEventType.CONVERSATION_EVENT,
                 candidate_id=candidate.spec_hash,
+                stage=TimelineStage.INFERENCE,
                 payload=conversation_event.model_dump(mode="json"),
             )
 

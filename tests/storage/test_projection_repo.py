@@ -15,7 +15,7 @@ from themis.specs.foundational import (
     TaskSpec,
 )
 from themis.orchestration.task_resolution import resolve_task_stages
-from themis.types.events import ScoreRow, TrialSummaryRow
+from themis.types.events import ScoreRow, TraceScoreRow, TrialSummaryRow
 from themis.types.enums import (
     ErrorCode,
     ErrorWhere,
@@ -208,6 +208,106 @@ def test_projection_repo_delegates_materialization_to_materializer(tmp_path) -> 
 
     assert result is expected
     assert stub.calls == [("trial_hash", "tx_hash", "eval_hash", None, None)]
+
+
+def test_projection_repo_iter_trace_scores_defaults_to_generation_overlay(
+    tmp_path,
+) -> None:
+    manager = DatabaseManager(f"sqlite:///{tmp_path}/proj_trace_overlay.db")
+    manager.initialize()
+    repo = SqliteProjectionRepository(cast(StorageConnectionManager, manager))
+
+    with manager.get_connection() as conn:
+        for overlay_key in ("gen", "ev:evaluation-1"):
+            conn.execute(
+                """
+                INSERT INTO trial_summary (
+                    trial_hash,
+                    overlay_key,
+                    status
+                )
+                VALUES (?, ?, ?)
+                """,
+                ("trial-1", overlay_key, RecordStatus.OK.value),
+            )
+        conn.execute(
+            """
+            INSERT INTO trace_metric_scores (
+                trial_hash,
+                trace_scope,
+                trace_id,
+                trace_score_hash,
+                overlay_key,
+                metric_id,
+                score,
+                details_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "trial-1",
+                "candidate_trace",
+                "cand-1",
+                "trace-gen",
+                "gen",
+                "tool_presence",
+                1.0,
+                "{}",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO trace_metric_scores (
+                trial_hash,
+                trace_scope,
+                trace_id,
+                trace_score_hash,
+                overlay_key,
+                metric_id,
+                score,
+                details_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "trial-1",
+                "candidate_trace",
+                "cand-1",
+                "trace-eval",
+                "ev:evaluation-1",
+                "tool_presence",
+                0.0,
+                "{}",
+            ),
+        )
+
+    assert list(repo.iter_trace_scores(trial_hashes=["trial-1"])) == [
+        TraceScoreRow(
+            trial_hash="trial-1",
+            trace_scope="candidate_trace",
+            trace_id="cand-1",
+            trace_score_hash="trace-gen",
+            metric_id="tool_presence",
+            score=1.0,
+            details={},
+        )
+    ]
+    assert list(
+        repo.iter_trace_scores(
+            trial_hashes=["trial-1"],
+            evaluation_hash="evaluation-1",
+        )
+    ) == [
+        TraceScoreRow(
+            trial_hash="trial-1",
+            trace_scope="candidate_trace",
+            trace_id="cand-1",
+            trace_score_hash="trace-eval",
+            metric_id="tool_presence",
+            score=0.0,
+            details={},
+        )
+    ]
 
 
 def test_projection_repo_get_trial_record_uses_query_service_and_materializer(
