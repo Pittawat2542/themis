@@ -3,6 +3,7 @@
 import sqlite3
 import threading
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 from themis.errors import StorageError
@@ -30,6 +31,7 @@ class DatabaseManager:
     def get_connection(self) -> Iterator[sqlite3.Connection]:
         """Provides a thread-local SQLite connection."""
         if not hasattr(self._local, "conn"):
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
             self._local.conn = sqlite3.connect(
                 self.db_path,
                 timeout=30.0,
