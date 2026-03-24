@@ -25,6 +25,7 @@ from themis.orchestration.task_resolution import (
 from themis.records.candidate import CandidateRecord
 from themis.registry.plugin_registry import PluginRegistry
 from themis.specs.experiment import TrialSpec
+from themis.specs.foundational import MetricRefSpec
 from themis.types.enums import RunStage
 from themis.types.json_types import JSONValueType
 
@@ -320,16 +321,19 @@ def resolve_evaluation_plugins(
     hooks: ResolvedPipelineHooks | None = None,
 ) -> ResolvedEvaluationPlugins:
     """Resolve metric dependencies for one evaluation stage."""
+    metric_steps: list[ResolvedMetricStep] = []
+    for metric_ref in evaluation.spec.metrics:
+        coerced_metric_ref = _coerce_metric_ref(metric_ref)
+        metric_steps.append(
+            ResolvedMetricStep(
+                metric_id=coerced_metric_ref.id,
+                config=coerced_metric_ref.config,
+                metric=_resolve_evaluation_metric(registry, coerced_metric_ref.id),
+            )
+        )
     return ResolvedEvaluationPlugins(
         evaluation=evaluation,
-        metrics=tuple(
-            ResolvedMetricStep(
-                metric_id=metric_ref.id,
-                config=metric_ref.config,
-                metric=_resolve_evaluation_metric(registry, metric_ref.id),
-            )
-            for metric_ref in evaluation.spec.metrics
-        ),
+        metrics=tuple(metric_steps),
         hooks=hooks or ResolvedPipelineHooks.from_registry(registry),
     )
 
@@ -346,6 +350,12 @@ def _resolve_evaluation_metric(
             f"Metric '{metric_id}' is trace-only and cannot run in candidate evaluation."
         )
     raise TypeError(f"Metric '{metric_id}' is incompatible with evaluation execution.")
+
+
+def _coerce_metric_ref(metric_ref: object) -> MetricRefSpec:
+    if isinstance(metric_ref, MetricRefSpec):
+        return metric_ref
+    return MetricRefSpec.model_validate(metric_ref)
 
 
 def _declared_trial_stages(trial: TrialSpec) -> set[ResolvedStage]:

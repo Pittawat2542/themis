@@ -16,7 +16,7 @@ from themis.runtime.corpus_metrics import SUPPORTED_CORPUS_METRIC_IDS
 from themis.specs.experiment import InferenceParamsSpec, PromptTemplateSpec, TrialSpec
 from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
 from themis.types.enums import DatasetSource
-from themis.types.json_types import JSONDict
+from themis.types.json_types import JSONDict, JSONValueType
 from themis.types.enums import PValueCorrection
 from themis.types.enums import RecordStatus
 from themis.types.events import ScoreRow, TraceScoreRow, TrialSummaryRow
@@ -140,7 +140,7 @@ def _trial_record(
     item_id: str,
     raw_text: str,
     answer: str,
-    parsed_answer: object | None = None,
+    parsed_answer: JSONValueType | None = None,
 ) -> TrialRecord:
     trial_spec = TrialSpec(
         trial_id=trial_hash,

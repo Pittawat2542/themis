@@ -9,6 +9,7 @@ from pydantic import TypeAdapter
 from themis.records.conversation import ConversationEvent
 from themis.records.trial import TrialRecord
 from themis.runtime.trace_view import TraceEvent, TraceView
+from themis.specs.foundational import MetricRefSpec
 from themis.types.enums import RecordType
 from themis.types.events import TraceScoreRow, TrialEvent, TrialEventType
 
@@ -66,7 +67,12 @@ def score_trial_traces(
             scope=trace_evaluation.scope,
         )
         for trace_view in trace_views:
-            for metric_ref in trace_evaluation.metrics:
+            for raw_metric_ref in trace_evaluation.metrics:
+                metric_ref = (
+                    raw_metric_ref
+                    if isinstance(raw_metric_ref, MetricRefSpec)
+                    else MetricRefSpec.model_validate(raw_metric_ref)
+                )
                 metric = registry.get_metric(metric_ref.id)
                 if not hasattr(metric, "score_trace"):
                     raise TypeError(

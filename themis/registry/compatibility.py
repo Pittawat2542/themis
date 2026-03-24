@@ -7,6 +7,7 @@ import warnings
 from typing import TYPE_CHECKING, TypeAlias
 
 from themis.errors import SpecValidationError
+from themis.specs.foundational import MetricRefSpec
 from themis.registry.plugin_registry import PluginRegistry, SUPPORTED_PLUGIN_API_MAJOR
 from themis.specs.experiment import ToolHandler, TrialSpec
 from themis.specs.foundational import EvaluationSpec, OutputTransformSpec
@@ -315,6 +316,8 @@ def check_evaluation_spec(
     issues: list[Issue] = []
 
     for index, metric_ref in enumerate(evaluation.metrics):
+        if not isinstance(metric_ref, MetricRefSpec):
+            metric_ref = MetricRefSpec.model_validate(metric_ref)
         metric_id = metric_ref.id
         if not registry.has_metric(metric_id):
             issues.append(

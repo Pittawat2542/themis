@@ -291,6 +291,9 @@ class MetricRefSpec(SpecBase):
         return super().__eq__(other)
 
 
+MetricRefInput = MetricRefSpec | str | Mapping[str, object]
+
+
 class GenerationSpec(SpecBase):
     """Marker that a task participates in generation-stage execution."""
 
@@ -322,7 +325,7 @@ class EvaluationSpec(SpecBase):
         default=None,
         description="Optional name of the output transform this evaluation consumes.",
     )
-    metrics: list[MetricRefSpec] = Field(
+    metrics: list[MetricRefInput] = Field(
         default_factory=list,
         description="Metric plugin IDs to execute for this evaluation.",
     )
@@ -336,6 +339,8 @@ class EvaluationSpec(SpecBase):
         for item in value:
             if isinstance(item, str):
                 coerced.append(MetricRefSpec(id=item))
+            elif isinstance(item, Mapping) and not isinstance(item, MetricRefSpec):
+                coerced.append(MetricRefSpec.model_validate(item))
             else:
                 coerced.append(item)
         return coerced
@@ -355,7 +360,7 @@ class TraceEvaluationSpec(SpecBase):
         ...,
         description="Trace scope consumed by the registered trace metric(s).",
     )
-    metrics: list[MetricRefSpec] = Field(
+    metrics: list[MetricRefInput] = Field(
         default_factory=list,
         description="Trace metric plugin IDs to execute for this trace evaluation.",
     )
@@ -369,6 +374,8 @@ class TraceEvaluationSpec(SpecBase):
         for item in value:
             if isinstance(item, str):
                 coerced.append(MetricRefSpec(id=item))
+            elif isinstance(item, Mapping) and not isinstance(item, MetricRefSpec):
+                coerced.append(MetricRefSpec.model_validate(item))
             else:
                 coerced.append(item)
         return coerced

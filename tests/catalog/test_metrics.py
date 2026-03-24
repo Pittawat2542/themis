@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 from themis.catalog.metrics import (
@@ -15,18 +13,21 @@ from themis.catalog.metrics import (
     self_consistency,
 )
 from themis.catalog.runtime.registry import register_catalog_metrics
+from themis.records.candidate import CandidateRecord
 from themis.records.evaluation import MetricScore
+from themis.records.inference import InferenceRecord
 from themis.registry.plugin_registry import PluginRegistry
 
 
-def _candidate(text: str, *, sample_index: int) -> object:
-    return SimpleNamespace(
+def _candidate(text: str, *, sample_index: int) -> CandidateRecord:
+    return CandidateRecord(
         candidate_id=f"candidate-{sample_index}",
         spec_hash=f"candidate-{sample_index}",
         sample_index=sample_index,
-        inference=SimpleNamespace(raw_text=text),
-        extractions=[],
-        best_extraction=lambda: None,
+        inference=InferenceRecord(
+            spec_hash=f"inference-{sample_index}",
+            raw_text=text,
+        ),
     )
 
 

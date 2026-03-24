@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from pydantic import Field, ValidationInfo, field_validator, model_validator
@@ -20,6 +21,7 @@ from themis.specs.foundational import (
     DatasetSpec,
     ExtractorRefSpec,
     GenerationSpec,
+    MetricRefInput,
     MetricRefSpec,
     McpServerSpec,
     ModelSpec,
@@ -76,7 +78,7 @@ class ScoreSpec(SpecBase):
 
     name: str = Field(..., min_length=1)
     parse: str | None = Field(default=None)
-    metrics: list[MetricRefSpec] = Field(default_factory=list)
+    metrics: list[MetricRefInput] = Field(default_factory=list)
 
     @field_validator("metrics", mode="before")
     @classmethod
@@ -87,6 +89,8 @@ class ScoreSpec(SpecBase):
         for item in value:
             if isinstance(item, str):
                 coerced.append(MetricRefSpec(id=item))
+            elif isinstance(item, Mapping) and not isinstance(item, MetricRefSpec):
+                coerced.append(MetricRefSpec.model_validate(item))
             else:
                 coerced.append(item)
         return coerced
@@ -103,7 +107,7 @@ class TraceScoreSpec(SpecBase):
 
     name: str = Field(..., min_length=1)
     scope: Literal["candidate_trace", "trial_trace"] = Field(...)
-    metrics: list[MetricRefSpec] = Field(default_factory=list)
+    metrics: list[MetricRefInput] = Field(default_factory=list)
 
     @field_validator("metrics", mode="before")
     @classmethod
@@ -114,6 +118,8 @@ class TraceScoreSpec(SpecBase):
         for item in value:
             if isinstance(item, str):
                 coerced.append(MetricRefSpec(id=item))
+            elif isinstance(item, Mapping) and not isinstance(item, MetricRefSpec):
+                coerced.append(MetricRefSpec.model_validate(item))
             else:
                 coerced.append(item)
         return coerced
