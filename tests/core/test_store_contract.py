@@ -10,8 +10,8 @@ from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
-from themis.core.stores.memory import InMemoryRunStore
-from themis.core.stores.sqlite import SqliteRunStore
+from themis.core.stores import InMemoryRunStore, jsonl_store, mongodb_store, postgres_store, sqlite_store
+from tests.core.store_fakes import fake_psycopg_module, fake_pymongo_module
 
 
 def _snapshot() -> RunSnapshot:
@@ -43,16 +43,28 @@ def _snapshot() -> RunSnapshot:
     return experiment.compile()
 
 
+def _store(label: str, tmp_path: Path, monkeypatch) -> RunStore:
+    if label == "memory":
+        return InMemoryRunStore()
+    if label == "sqlite":
+        return sqlite_store(tmp_path / "run_store.sqlite3")
+    if label == "jsonl":
+        return jsonl_store(tmp_path / "jsonl-store")
+    if label == "postgres":
+        monkeypatch.setattr("themis.core.stores.postgres.importlib.import_module", lambda name: fake_psycopg_module())
+        return postgres_store(str(tmp_path / "postgres.sqlite3"), tmp_path / "postgres-blobs")
+    if label == "mongodb":
+        monkeypatch.setattr("themis.core.stores.mongodb.importlib.import_module", lambda name: fake_pymongo_module())
+        return mongodb_store("mongodb://example", "themis_test", tmp_path / "mongodb-blobs")
+    raise AssertionError(label)
+
+
 @pytest.mark.parametrize(
-    ("label", "factory"),
-    [
-        ("memory", lambda tmp_path: InMemoryRunStore()),
-        ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
-    ],
+    "label",
+    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
 )
-def test_run_store_contract_round_trips_snapshot_and_events(label: str, factory, tmp_path: Path) -> None:
-    del label
-    store: RunStore = factory(tmp_path)
+def test_run_store_contract_round_trips_snapshot_and_events(label: str, tmp_path: Path, monkeypatch) -> None:
+    store = _store(label, tmp_path, monkeypatch)
     snapshot = _snapshot()
 
     store.initialize()
@@ -69,15 +81,11 @@ def test_run_store_contract_round_trips_snapshot_and_events(label: str, factory,
 
 
 @pytest.mark.parametrize(
-    ("label", "factory"),
-    [
-        ("memory", lambda tmp_path: InMemoryRunStore()),
-        ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
-    ],
+    "label",
+    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
 )
-def test_run_store_contract_deduplicates_blob_content(label: str, factory, tmp_path: Path) -> None:
-    del label
-    store: RunStore = factory(tmp_path)
+def test_run_store_contract_deduplicates_blob_content(label: str, tmp_path: Path, monkeypatch) -> None:
+    store = _store(label, tmp_path, monkeypatch)
 
     store.initialize()
     left = store.store_blob(b'{"answer":"4"}', "application/json")
@@ -87,15 +95,11 @@ def test_run_store_contract_deduplicates_blob_content(label: str, factory, tmp_p
 
 
 @pytest.mark.parametrize(
-    ("label", "factory"),
-    [
-        ("memory", lambda tmp_path: InMemoryRunStore()),
-        ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
-    ],
+    "label",
+    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
 )
-def test_run_store_contract_loads_blob_content(label: str, factory, tmp_path: Path) -> None:
-    del label
-    store: RunStore = factory(tmp_path)
+def test_run_store_contract_loads_blob_content(label: str, tmp_path: Path, monkeypatch) -> None:
+    store = _store(label, tmp_path, monkeypatch)
 
     store.initialize()
     ref = store.store_blob(b'{"answer":"4"}', "application/json")
@@ -104,15 +108,11 @@ def test_run_store_contract_loads_blob_content(label: str, factory, tmp_path: Pa
 
 
 @pytest.mark.parametrize(
-    ("label", "factory"),
-    [
-        ("memory", lambda tmp_path: InMemoryRunStore()),
-        ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
-    ],
+    "label",
+    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
 )
-def test_run_store_exposes_snapshot_projection(label: str, factory, tmp_path: Path) -> None:
-    del label
-    store: RunStore = factory(tmp_path)
+def test_run_store_exposes_snapshot_projection(label: str, tmp_path: Path, monkeypatch) -> None:
+    store = _store(label, tmp_path, monkeypatch)
     snapshot = _snapshot()
 
     store.initialize()
@@ -124,15 +124,11 @@ def test_run_store_exposes_snapshot_projection(label: str, factory, tmp_path: Pa
 
 
 @pytest.mark.parametrize(
-    ("label", "factory"),
-    [
-        ("memory", lambda tmp_path: InMemoryRunStore()),
-        ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
-    ],
+    "label",
+    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
 )
-def test_run_store_refreshes_read_model_projections_after_event_writes(label: str, factory, tmp_path: Path) -> None:
-    del label
-    store: RunStore = factory(tmp_path)
+def test_run_store_refreshes_read_model_projections_after_event_writes(label: str, tmp_path: Path, monkeypatch) -> None:
+    store = _store(label, tmp_path, monkeypatch)
     snapshot = _snapshot()
 
     store.initialize()

@@ -1,53 +1,12 @@
 from __future__ import annotations
 
-import sqlite3
-import types
-
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import RunCompletedEvent, RunStartedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.stores import create_run_store
 from themis.core.stores.postgres import PostgresRunStore, postgres_store
-
-
-class _FakeCursor:
-    def __init__(self, cursor: sqlite3.Cursor) -> None:
-        self._cursor = cursor
-
-    def fetchone(self):
-        row = self._cursor.fetchone()
-        return dict(row) if row is not None else None
-
-    def fetchall(self):
-        return [dict(row) for row in self._cursor.fetchall()]
-
-
-class _FakeConnection:
-    def __init__(self, path: str) -> None:
-        self._connection = sqlite3.connect(path)
-        self._connection.row_factory = sqlite3.Row
-
-    def execute(self, query: str, params=()):
-        translated = query.replace("%s", "?")
-        return _FakeCursor(self._connection.execute(translated, params))
-
-    def __enter__(self):
-        self._connection.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return self._connection.__exit__(exc_type, exc, tb)
-
-    def commit(self) -> None:
-        self._connection.commit()
-
-
-def _fake_psycopg_module():
-    module = types.SimpleNamespace()
-    module.rows = types.SimpleNamespace(dict_row=object())
-    module.connect = lambda url, row_factory=None: _FakeConnection(url)
-    return module
+from tests.core.store_fakes import fake_psycopg_module
 
 
 def _snapshot():
@@ -72,7 +31,7 @@ def _snapshot():
 
 
 def test_postgres_store_persists_events_projections_and_blobs(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("themis.core.stores.postgres.importlib.import_module", lambda name: _fake_psycopg_module())
+    monkeypatch.setattr("themis.core.stores.postgres.importlib.import_module", lambda name: fake_psycopg_module())
     database_path = tmp_path / "postgres.sqlite3"
     blob_root = tmp_path / "postgres-blobs"
     store = postgres_store(str(database_path), blob_root)
@@ -92,7 +51,7 @@ def test_postgres_store_persists_events_projections_and_blobs(monkeypatch, tmp_p
 
 
 def test_store_factory_can_build_postgres_backend(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("themis.core.stores.postgres.importlib.import_module", lambda name: _fake_psycopg_module())
+    monkeypatch.setattr("themis.core.stores.postgres.importlib.import_module", lambda name: fake_psycopg_module())
 
     store = create_run_store(
         StorageConfig(
