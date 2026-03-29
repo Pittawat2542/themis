@@ -19,14 +19,26 @@ from themis.core.events import (
     RunCompletedEvent,
     RunStartedEvent,
     ScoreCompletedEvent,
+    StepCompletedEvent,
+    StepStartedEvent,
 )
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult, Message, ParsedOutput, ScoreError, TraceStep
+from themis.core.models import (
+    Case,
+    Dataset,
+    GenerationResult,
+    Message,
+    ParsedOutput,
+    Score,
+    ScoreError,
+    TraceStep,
+)
 from themis.core.orchestrator import Orchestrator
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
+from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.tracing import NoOpTracingProvider
-from themis.core.workflows import EvalStep, JudgeResponse
+from themis.core.workflows import AggregationResult, JudgeCall, JudgeResponse, ParsedJudgment, RenderedJudgePrompt
 
 
 class RecordingSubscriber:
@@ -95,6 +107,7 @@ class RecordingTracer(NoOpTracingProvider):
 class ErrorMetric:
     component_id = "metric/error"
     version = "1.0"
+    metric_family = "pure"
 
     def fingerprint(self) -> str:
         return "metric-error"
@@ -127,21 +140,86 @@ class TracedGenerator:
         )
 
 
-class DemoWorkflow:
+class DemoJudgeWorkflow:
     component_id = "workflow/demo"
     version = "1.0"
 
     def fingerprint(self) -> str:
         return "workflow-demo"
 
-    def steps(self) -> list[EvalStep]:
+    def judge_calls(self) -> list[JudgeCall]:
+        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+
+    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+        del call, ctx
+        if hasattr(subject, "candidates"):
+            content = f"Grade {subject.candidates[0].final_output}"
+        elif hasattr(subject, "trace"):
+            content = f"Grade {subject.trace.model_dump(mode='json')}"
+        else:
+            content = f"Grade {subject.conversation.model_dump(mode='json')}"
+        return RenderedJudgePrompt(prompt_id="prompt-0", content=content)
+
+    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+        del call, ctx
+        label = response.raw_response.strip().split()[0].lower()
+        return ParsedJudgment(label=label, score=1.0 if label == "pass" else 0.0)
+
+    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+        del call, ctx
+        return Score(metric_id="metric/llm", value=float(judgment.score or 0.0), details={"label": judgment.label})
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None:
+        del judgments, ctx
+        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+
+
+class PairwiseSelectionWorkflow:
+    component_id = "workflow/select"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "workflow-select"
+
+    def judge_calls(self) -> list[JudgeCall]:
         return [
-            EvalStep(step_type="render_prompt", config={"template": "Grade {candidate_output}"}),
-            EvalStep(step_type="model_call"),
-            EvalStep(step_type="parse_judgment", config={"label_scores": {"pass": 1.0, "fail": 0.0}}),
-            EvalStep(step_type="emit_score"),
-            EvalStep(step_type="aggregate_scores", config={"method": "mean"}),
+            JudgeCall(
+                call_id="call-a-vs-b",
+                judge_model_id="judge/demo",
+                dimension_id="winner",
+                candidate_indices=[0, 1],
+            )
         ]
+
+    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+        del ctx
+        return RenderedJudgePrompt(
+            prompt_id=f"prompt-{call.call_id}",
+            content=f"A={subject.candidates[0].final_output}; B={subject.candidates[1].final_output}",
+        )
+
+    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+        del call, ctx
+        return ParsedJudgment(label=response.raw_response.strip().lower())
+
+    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+        del call, ctx
+        return Score(metric_id="metric/select", value=1.0 if judgment.label == "a" else 0.0)
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None:
+        del scores, ctx
+        winner = max(sorted({judgment.label for judgment in judgments}), key=[judgment.label for judgment in judgments].count)
+        return AggregationResult(method="majority_vote", value=winner, details={"winner": winner})
 
 
 class RecordingLLMMetric:
@@ -150,15 +228,16 @@ class RecordingLLMMetric:
     metric_family = "llm"
 
     def __init__(self) -> None:
-        self.subject = None
+        self.subject: CandidateSetSubject | None = None
+        self.ctx: EvalScoreContext | None = None
 
     def fingerprint(self) -> str:
         return "metric-llm"
 
     def build_workflow(self, subject, ctx: EvalScoreContext):
-        del ctx
         self.subject = subject
-        return DemoWorkflow()
+        self.ctx = ctx
+        return DemoJudgeWorkflow()
 
 
 class RecordingSelectionMetric:
@@ -167,7 +246,7 @@ class RecordingSelectionMetric:
     metric_family = "selection"
 
     def __init__(self) -> None:
-        self.subject = None
+        self.subject: CandidateSetSubject | None = None
 
     def fingerprint(self) -> str:
         return "metric-select"
@@ -175,7 +254,7 @@ class RecordingSelectionMetric:
     def build_workflow(self, subject, ctx: EvalScoreContext):
         del ctx
         self.subject = subject
-        return DemoWorkflow()
+        return PairwiseSelectionWorkflow()
 
 
 class RecordingTraceMetric:
@@ -184,7 +263,7 @@ class RecordingTraceMetric:
     metric_family = "trace"
 
     def __init__(self) -> None:
-        self.subject = None
+        self.subject: TraceSubject | ConversationSubject | None = None
 
     def fingerprint(self) -> str:
         return "metric-trace"
@@ -192,7 +271,7 @@ class RecordingTraceMetric:
     def build_workflow(self, subject, ctx: EvalScoreContext):
         del ctx
         self.subject = subject
-        return DemoWorkflow()
+        return DemoJudgeWorkflow()
 
 
 def _experiment() -> Experiment:
@@ -364,7 +443,7 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         evaluation=EvaluationConfig(
             metrics=["metric/demo", llm_metric, selection_metric, trace_metric],
             parsers=["parser/demo"],
-            judge_models=["judge/demo"],
+            judge_models=["judge/demo", "judge/demo"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -388,7 +467,10 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         reducer=resolve_reducer_component(experiment.generation.reducer),
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
         metrics=[resolve_metric_component(metric) for metric in experiment.evaluation.metrics],
-        judge_models=[resolve_judge_model_component("judge/demo")],
+        judge_models=[
+            resolve_judge_model_component("judge/demo"),
+            resolve_judge_model_component("judge/demo"),
+        ],
         subscribers=[subscriber],
     )
 
@@ -402,12 +484,66 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         "metric/select",
         "metric/trace",
     ]
+    assert llm_metric.subject is not None
+    assert llm_metric.ctx is not None
+    assert selection_metric.subject is not None
+    assert trace_metric.subject is not None
+    assert isinstance(trace_metric.subject, TraceSubject)
     assert llm_metric.subject.candidates[0].candidate_id == "case-1-reduced"
     assert [candidate.candidate_id for candidate in selection_metric.subject.candidates] == [
         "case-1-candidate-7",
         "case-1-candidate-11",
     ]
     assert trace_metric.subject.trace.steps[0].output["seed"] == 7
+    assert [ref.component_id for ref in llm_metric.ctx.judge_model_refs] == ["judge/demo", "judge/demo"]
     assert "before_judge" in subscriber.calls
     assert "after_judge" in subscriber.calls
     assert any(isinstance(event, EvaluationCompletedEvent) for event in events)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_persists_workflow_events_through_orchestrator_event_sink() -> None:
+    llm_metric = RecordingLLMMetric()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="generator/demo",
+            candidate_policy={"num_samples": 1},
+            reducer="reducer/demo",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[llm_metric],
+            parsers=["parser/demo"],
+            judge_models=["judge/demo"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    subscriber = RecordingSubscriber()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component(experiment.generation.generator),
+        reducer=resolve_reducer_component(experiment.generation.reducer),
+        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        metrics=[llm_metric],
+        judge_models=[resolve_judge_model_component("judge/demo")],
+        subscribers=[subscriber],
+    )
+
+    await orchestrator.run(snapshot)
+
+    events = store.query_events(snapshot.run_id)
+    assert any(isinstance(event, StepStartedEvent) for event in events)
+    assert any(isinstance(event, StepCompletedEvent) for event in events)
+    assert subscriber.calls.count("on_event") >= len(events)

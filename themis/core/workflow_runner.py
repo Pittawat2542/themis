@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 
 from themis.core.contexts import EvalScoreContext
-from themis.core.events import StepCompletedEvent, StepFailedEvent, StepStartedEvent
+from themis.core.base import JSONValue
+from themis.core.events import RunEvent, StepCompletedEvent, StepFailedEvent, StepStartedEvent
 from themis.core.models import Score, TraceStep, WorkflowTrace
 from themis.core.planner import Planner
 from themis.core.protocols import EvaluationWorkflow, JudgeModel
@@ -14,6 +16,7 @@ from themis.core.subjects import CandidateSetSubject, ConversationSubject, Trace
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
+    JudgeCall,
     JudgeResponse,
     ParsedJudgment,
     RenderedJudgePrompt,
@@ -25,18 +28,23 @@ class WorkflowBuildError(ValueError):
 
 
 class DefaultWorkflowRunner:
-    """Sequential interpreter for Themis-owned evaluation workflows."""
+    """Concurrent interpreter for Themis-owned evaluation workflows."""
 
     def __init__(
         self,
         *,
-        store: RunStore,
+        store: RunStore | None = None,
         judge_models: Iterable[JudgeModel],
         model_call_executor: Callable[[JudgeModel, str, int | None], Awaitable[JudgeResponse]] | None = None,
+        persist_event: Callable[[RunEvent], Awaitable[None]] | None = None,
     ) -> None:
+        if store is None and persist_event is None:
+            raise ValueError("DefaultWorkflowRunner requires a store or persist_event callback")
         self.store = store
         self.judge_models = {model.component_id: model for model in judge_models}
         self.model_call_executor = model_call_executor
+        self.persist_event = persist_event
+        self.planner = Planner()
 
     async def run_evaluation(
         self,
@@ -45,224 +53,290 @@ class DefaultWorkflowRunner:
         metric_id: str,
         ctx: EvalScoreContext,
     ) -> EvaluationExecution:
-        rendered_prompts: list[RenderedJudgePrompt] = []
-        judge_responses: list[JudgeResponse] = []
-        parsed_judgments: list[ParsedJudgment] = []
-        scores: list[Score] = []
-        aggregation_output: AggregationResult | None = None
-        trace_steps: list[TraceStep] = []
         workflow_id = workflow.component_id
-        subject_kind = self._subject_kind(subject)
-        execution_id = f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:{workflow.fingerprint()}"
-        state: dict[str, object] = {}
+        planned_calls = self.planner.plan_judge_calls(
+            run_id=ctx.run_id,
+            case_id=ctx.case.case_id,
+            metric_id=metric_id,
+            calls=workflow.judge_calls(),
+        )
+        rendered_prompts: list[RenderedJudgePrompt] = []
+        render_trace_steps: list[TraceStep] = []
+        call_inputs: list[tuple[JudgeCall, RenderedJudgePrompt]] = []
 
-        for index, step in enumerate(workflow.steps()):
-            step_id = f"step-{index}"
-            self.store.persist_event(
+        for call in planned_calls:
+            render_step_id = f"{call.call_id}:render_prompt"
+            await self._persist_event(
                 StepStartedEvent(
                     run_id=ctx.run_id,
                     workflow_id=workflow_id,
-                    step_id=step_id,
-                    step_type=step.step_type,
+                    step_id=render_step_id,
+                    step_type="render_prompt",
                 )
             )
             try:
-                details = await self._execute_step(
-                    step_id=step_id,
-                    step_type=step.step_type,
-                    step_config=step.config,
-                    subject=subject,
-                    metric_id=metric_id,
-                    ctx=ctx,
-                    rendered_prompts=rendered_prompts,
-                    judge_responses=judge_responses,
-                    parsed_judgments=parsed_judgments,
-                    scores=scores,
-                    state=state,
-                    trace_steps=trace_steps,
+                prompt = workflow.render_prompt(call, subject, ctx)
+                rendered_prompts.append(prompt)
+                call_inputs.append((call, prompt))
+                render_trace_steps.append(
+                    TraceStep(
+                        step_name=render_step_id,
+                        step_type="render_prompt",
+                        input={"call_id": call.call_id, "judge_model": call.judge_model_id},
+                        output={"prompt": prompt.content},
+                    )
                 )
-                if step.step_type == "aggregate_scores":
-                    aggregation_output = details["aggregation_output"]  # type: ignore[assignment]
-                    event_details = {"aggregation_method": aggregation_output.method}
-                else:
-                    event_details = {
-                        key: value
-                        for key, value in details.items()
-                        if key != "aggregation_output"
-                    }
-                self.store.persist_event(
+                await self._persist_event(
                     StepCompletedEvent(
                         run_id=ctx.run_id,
                         workflow_id=workflow_id,
-                        step_id=step_id,
-                        step_type=step.step_type,
-                        details=event_details,
+                        step_id=render_step_id,
+                        step_type="render_prompt",
+                        details={"prompt_id": prompt.prompt_id},
                     )
                 )
             except Exception as exc:
-                self.store.persist_event(
+                await self._persist_event(
                     StepFailedEvent(
                         run_id=ctx.run_id,
                         workflow_id=workflow_id,
-                        step_id=step_id,
-                        step_type=step.step_type,
+                        step_id=render_step_id,
+                        step_type="render_prompt",
                         error_message=str(exc),
                     )
                 )
                 raise
 
+        call_results = await asyncio.gather(
+            *[
+                self._execute_call(
+                    workflow_id=workflow_id,
+                    workflow=workflow,
+                    call=call,
+                    prompt=prompt,
+                    metric_id=metric_id,
+                    ctx=ctx,
+                )
+                for call, prompt in call_inputs
+            ]
+        )
+
+        judge_responses = [result[0] for result in call_results]
+        parsed_judgments = [result[1] for result in call_results]
+        scores = [result[2] for result in call_results if result[2] is not None]
+        trace_steps = list(render_trace_steps)
+        for _, _, _, call_trace_steps in call_results:
+            trace_steps.extend(call_trace_steps)
+
+        aggregate_step_id = "aggregate_scores"
+        aggregation_output: AggregationResult | None = None
+        await self._persist_event(
+            StepStartedEvent(
+                run_id=ctx.run_id,
+                workflow_id=workflow_id,
+                step_id=aggregate_step_id,
+                step_type="aggregate_scores",
+            )
+        )
+        try:
+            aggregation_output = workflow.aggregate(parsed_judgments, scores, ctx)
+            details: dict[str, JSONValue] = {}
+            if aggregation_output is not None:
+                details["aggregation_method"] = aggregation_output.method
+                details["aggregation_value"] = aggregation_output.value
+            trace_steps.append(
+                TraceStep(
+                    step_name=aggregate_step_id,
+                    step_type="aggregate_scores",
+                    input={"score_count": len(scores), "judgment_count": len(parsed_judgments)},
+                    output={
+                        "value": aggregation_output.value if aggregation_output is not None else None,
+                        "method": aggregation_output.method if aggregation_output is not None else "none",
+                    },
+                )
+            )
+            await self._persist_event(
+                StepCompletedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=aggregate_step_id,
+                    step_type="aggregate_scores",
+                    details=details,
+                )
+            )
+        except Exception as exc:
+            await self._persist_event(
+                StepFailedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=aggregate_step_id,
+                    step_type="aggregate_scores",
+                    error_message=str(exc),
+                )
+            )
+            raise
+
         return EvaluationExecution(
-            execution_id=execution_id,
-            subject_kind=subject_kind,
+            execution_id=f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:{workflow.fingerprint()}",
+            subject_kind=self._subject_kind(subject),
+            judge_calls=planned_calls,
             rendered_prompts=rendered_prompts,
             judge_responses=judge_responses,
             parsed_judgments=parsed_judgments,
             scores=scores,
             aggregation_output=aggregation_output,
-            trace=WorkflowTrace(trace_id=f"{execution_id}:trace", steps=trace_steps),
+            trace=WorkflowTrace(trace_id=f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:trace", steps=trace_steps),
         )
 
-    async def _execute_step(
+    async def _execute_call(
         self,
         *,
-        step_id: str,
-        step_type: str,
-        step_config: dict[str, object],
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        workflow_id: str,
+        workflow: EvaluationWorkflow,
+        call: JudgeCall,
+        prompt: RenderedJudgePrompt,
         metric_id: str,
         ctx: EvalScoreContext,
-        rendered_prompts: list[RenderedJudgePrompt],
-        judge_responses: list[JudgeResponse],
-        parsed_judgments: list[ParsedJudgment],
-        scores: list[Score],
-        state: dict[str, object],
-        trace_steps: list[TraceStep],
-    ) -> dict[str, object]:
-        if step_type == "render_prompt":
-            prompt = self._render_prompt(subject=subject, ctx=ctx, template=str(step_config.get("template", "{candidate_output}")))
-            rendered_prompts.append(RenderedJudgePrompt(prompt_id=step_id, content=prompt))
-            state["prompt"] = prompt
-            trace_steps.append(
-                TraceStep(
-                    step_name=step_id,
-                    step_type=step_type,
-                    input={"template": str(step_config.get("template", "{candidate_output}"))},
-                    output={"prompt": prompt},
-                )
-            )
-            return {"prompt_id": step_id}
+    ) -> tuple[JudgeResponse, ParsedJudgment, Score | None, list[TraceStep]]:
+        trace_steps: list[TraceStep] = []
+        model_step_id = f"{call.call_id}:model_call"
+        parse_step_id = f"{call.call_id}:parse_judgment"
+        score_step_id = f"{call.call_id}:emit_score"
 
-        if step_type == "model_call":
-            prompt = str(state["prompt"])
-            judge_model_id = str(step_config.get("judge_model", ctx.judge_model_ref.component_id))
-            judge_model = self.judge_models[judge_model_id]
-            effective_seed = Planner.judge_seed_for_call(
+        await self._persist_event(
+            StepStartedEvent(
                 run_id=ctx.run_id,
-                case_id=ctx.case.case_id,
-                metric_id=metric_id,
-                judge_index=int(step_config.get("judge_index", 0)),
-                repeat_index=int(step_config.get("repeat_index", 0)),
-                dimension_id=str(step_config["dimension_id"]) if "dimension_id" in step_config else None,
+                workflow_id=workflow_id,
+                step_id=model_step_id,
+                step_type="model_call",
             )
+        )
+        try:
+            judge_model = self.judge_models[call.judge_model_id]
             if self.model_call_executor is None:
-                response = await judge_model.judge(prompt, seed=effective_seed)
+                response = await judge_model.judge(prompt.content, seed=call.effective_seed)
             else:
-                response = await self.model_call_executor(judge_model, prompt, effective_seed)
-            response = response.model_copy(update={"effective_seed": effective_seed})
-            judge_responses.append(response)
-            state["response"] = response
+                response = await self.model_call_executor(judge_model, prompt.content, call.effective_seed)
+            response = response.model_copy(update={"effective_seed": call.effective_seed})
             trace_steps.append(
                 TraceStep(
-                    step_name=step_id,
-                    step_type=step_type,
-                    input={"prompt": prompt, "judge_model": judge_model_id, "seed": effective_seed},
+                    step_name=model_step_id,
+                    step_type="model_call",
+                    input={"prompt": prompt.content, "judge_model": call.judge_model_id, "seed": call.effective_seed},
                     output={"raw_response": response.raw_response},
                 )
             )
-            return {"judge_model": judge_model_id, "effective_seed": effective_seed}
-
-        if step_type == "parse_judgment":
-            response = judge_responses[-1]
-            label = response.raw_response.strip().split()[0].lower()
-            label_scores = step_config.get("label_scores", {})
-            score_value = None
-            if isinstance(label_scores, dict) and label in label_scores:
-                score_value = float(label_scores[label])  # type: ignore[arg-type]
-            judgment = ParsedJudgment(label=label, score=score_value, rationale=response.raw_response)
-            parsed_judgments.append(judgment)
-            state["judgment"] = judgment
-            trace_steps.append(
-                TraceStep(
-                    step_name=step_id,
-                    step_type=step_type,
-                    input={"raw_response": response.raw_response},
-                    output={"label": label, "score": score_value or 0.0},
+            await self._persist_event(
+                StepCompletedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=model_step_id,
+                    step_type="model_call",
+                    details={"judge_model": call.judge_model_id, "effective_seed": call.effective_seed},
                 )
             )
-            return {"label": label}
-
-        if step_type == "emit_score":
-            judgment = parsed_judgments[-1]
-            score = Score(metric_id=metric_id, value=float(judgment.score or 0.0), details={"label": judgment.label})
-            scores.append(score)
-            trace_steps.append(
-                TraceStep(
-                    step_name=step_id,
-                    step_type=step_type,
-                    input={"label": judgment.label},
-                    output={"metric_id": metric_id, "value": score.value},
+        except Exception as exc:
+            await self._persist_event(
+                StepFailedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=model_step_id,
+                    step_type="model_call",
+                    error_message=str(exc),
                 )
             )
-            return {"score": score.value}
+            raise
 
-        if step_type == "aggregate_scores":
-            method = str(step_config.get("method", "mean"))
-            values = [score.value for score in scores]
-            if method == "majority_vote":
-                labels = [judgment.label for judgment in parsed_judgments]
-                winner = ""
-                if labels:
-                    winner = max(sorted(set(labels)), key=labels.count)
-                aggregate_value = 1.0 if winner == "pass" else 0.0
-                aggregation_output = AggregationResult(
-                    method=method,
-                    value=aggregate_value,
-                    details={"label": winner},
-                )
-            else:
-                aggregate_value = sum(values) / len(values) if values else 0.0
-                aggregation_output = AggregationResult(method=method, value=aggregate_value)
-            trace_steps.append(
-                TraceStep(
-                    step_name=step_id,
-                    step_type=step_type,
-                    input={"scores": values},
-                    output={"value": aggregate_value, "method": method},
-                )
+        await self._persist_event(
+            StepStartedEvent(
+                run_id=ctx.run_id,
+                workflow_id=workflow_id,
+                step_id=parse_step_id,
+                step_type="parse_judgment",
             )
-            return {"aggregation_output": aggregation_output}
-
-        raise WorkflowBuildError(f"Unsupported workflow step: {step_type}")
-
-    def _render_prompt(
-        self,
-        *,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
-        ctx: EvalScoreContext,
-        template: str,
-    ) -> str:
-        candidate_output = ""
-        if isinstance(subject, CandidateSetSubject) and subject.candidates:
-            candidate_output = str(subject.candidates[0].final_output)
-        elif isinstance(subject, TraceSubject):
-            candidate_output = str(subject.trace.model_dump(mode="json"))
-        elif isinstance(subject, ConversationSubject):
-            candidate_output = str(subject.conversation.model_dump(mode="json"))
-        return template.format(
-            candidate_output=candidate_output,
-            case_input=ctx.case.input,
-            parsed_output=ctx.parsed_output.value,
         )
+        try:
+            judgment = workflow.parse_judgment(call, response, ctx)
+            trace_steps.append(
+                TraceStep(
+                    step_name=parse_step_id,
+                    step_type="parse_judgment",
+                    input={"raw_response": response.raw_response, "call_id": call.call_id},
+                    output={"label": judgment.label, "score": judgment.score},
+                )
+            )
+            await self._persist_event(
+                StepCompletedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=parse_step_id,
+                    step_type="parse_judgment",
+                    details={"label": judgment.label},
+                )
+            )
+        except Exception as exc:
+            await self._persist_event(
+                StepFailedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=parse_step_id,
+                    step_type="parse_judgment",
+                    error_message=str(exc),
+                )
+            )
+            raise
+
+        await self._persist_event(
+            StepStartedEvent(
+                run_id=ctx.run_id,
+                workflow_id=workflow_id,
+                step_id=score_step_id,
+                step_type="emit_score",
+            )
+        )
+        try:
+            score = workflow.score_judgment(call, judgment, ctx)
+            trace_steps.append(
+                TraceStep(
+                    step_name=score_step_id,
+                    step_type="emit_score",
+                    input={"label": judgment.label, "call_id": call.call_id},
+                    output={"metric_id": metric_id, "value": score.value if score is not None else None},
+                )
+            )
+            await self._persist_event(
+                StepCompletedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=score_step_id,
+                    step_type="emit_score",
+                    details={
+                        "score_emitted": score is not None,
+                        "score": score.value if score is not None else None,
+                    },
+                )
+            )
+        except Exception as exc:
+            await self._persist_event(
+                StepFailedEvent(
+                    run_id=ctx.run_id,
+                    workflow_id=workflow_id,
+                    step_id=score_step_id,
+                    step_type="emit_score",
+                    error_message=str(exc),
+                )
+            )
+            raise
+
+        return response, judgment, score, trace_steps
+
+    async def _persist_event(self, event: RunEvent) -> None:
+        if self.persist_event is not None:
+            await self.persist_event(event)
+            return
+        if self.store is None:
+            raise RuntimeError("No store configured for workflow event persistence")
+        self.store.persist_event(event)
 
     def _subject_kind(
         self,

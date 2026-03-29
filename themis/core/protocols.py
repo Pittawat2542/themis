@@ -21,7 +21,14 @@ from themis.core.models import (
     ScoreError,
 )
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
-from themis.core.workflows import EvalStep, EvaluationExecution, JudgeResponse
+from themis.core.workflows import (
+    AggregationResult,
+    EvaluationExecution,
+    JudgeCall,
+    JudgeResponse,
+    ParsedJudgment,
+    RenderedJudgePrompt,
+)
 
 
 @runtime_checkable
@@ -65,7 +72,35 @@ class EvaluationWorkflow(Protocol):
 
     def fingerprint(self) -> str: ...
 
-    def steps(self) -> list[EvalStep]: ...
+    def judge_calls(self) -> list[JudgeCall]: ...
+
+    def render_prompt(
+        self,
+        call: JudgeCall,
+        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        ctx: EvalScoreContext,
+    ) -> RenderedJudgePrompt: ...
+
+    def parse_judgment(
+        self,
+        call: JudgeCall,
+        response: JudgeResponse,
+        ctx: EvalScoreContext,
+    ) -> ParsedJudgment: ...
+
+    def score_judgment(
+        self,
+        call: JudgeCall,
+        judgment: ParsedJudgment,
+        ctx: EvalScoreContext,
+    ) -> Score | None: ...
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None: ...
 
 
 @runtime_checkable

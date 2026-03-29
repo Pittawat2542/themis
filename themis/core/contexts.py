@@ -40,6 +40,6 @@ class ScoreContext(HashableModel):
 
 
 class EvalScoreContext(ScoreContext):
-    judge_model_ref: ComponentRef
+    judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     judge_seed: int | None = None
     eval_workflow_config: dict[str, JSONValue] = Field(default_factory=dict)

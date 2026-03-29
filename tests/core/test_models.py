@@ -144,11 +144,13 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
         parsed_output=score.parsed_output,
         dataset_metadata={"split": "test"},
         seed=7,
-        judge_model_ref=ComponentRef(
-            component_id="judge/demo",
-            version="1.0",
-            fingerprint="abc123",
-        ),
+        judge_model_refs=[
+            ComponentRef(
+                component_id="judge/demo",
+                version="1.0",
+                fingerprint="abc123",
+            )
+        ],
         judge_seed=9,
         eval_workflow_config={"rubric": "pass_fail"},
     )
@@ -169,7 +171,7 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
     assert ParseContext.model_validate_json(parse.model_dump_json()) == parse
     assert ScoreContext.model_validate_json(score.model_dump_json()) == score
     assert EvalScoreContext.model_validate_json(eval_score.model_dump_json()) == eval_score
-    assert isinstance(eval_score.judge_model_ref, ComponentRef)
+    assert isinstance(eval_score.judge_model_refs[0], ComponentRef)
     assert GenerationConfig.model_validate_json(generation.model_dump_json()) == generation
     assert EvaluationConfig.model_validate_json(evaluation.model_dump_json()) == evaluation
     assert StorageConfig.model_validate_json(storage.model_dump_json()) == storage

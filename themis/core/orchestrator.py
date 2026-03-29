@@ -1,4 +1,4 @@
-"""Async execution orchestrator for Themis Phase 2."""
+"""Async execution orchestrator for Themis Phase 3."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import asyncio
 import json
 from time import monotonic
 from collections.abc import Mapping
+from typing import TypeGuard
 
 from themis.core.config import RuntimeConfig
 from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
@@ -61,6 +62,20 @@ from themis.core.workflow_runner import DefaultWorkflowRunner, WorkflowBuildErro
 from themis.core.workflows import JudgeResponse
 
 DEFAULT_PROVIDER_RATE_LIMIT = 60
+WorkflowMetric = LLMMetric | SelectionMetric | TraceMetric
+RuntimeMetric = PureMetric | WorkflowMetric
+
+
+def _is_pure_metric(metric: RuntimeMetric) -> TypeGuard[PureMetric]:
+    return isinstance(metric, PureMetric)
+
+
+def _is_workflow_metric(metric: RuntimeMetric) -> TypeGuard[WorkflowMetric]:
+    return (
+        isinstance(metric, LLMMetric)
+        or isinstance(metric, SelectionMetric)
+        or isinstance(metric, TraceMetric)
+    )
 
 
 class TokenBucketRateLimiter:
@@ -108,7 +123,7 @@ class Orchestrator:
         generator: Generator,
         reducer: CandidateReducer | None = None,
         parser: Parser | None = None,
-        metrics: list[PureMetric | LLMMetric | SelectionMetric | TraceMetric] | None = None,
+        metrics: list[RuntimeMetric] | None = None,
         judge_models: list[JudgeModel] | None = None,
         workflow_runner: WorkflowRunner | None = None,
         planner: Planner | None = None,
@@ -162,6 +177,7 @@ class Orchestrator:
             store=store,
             judge_models=self.judge_models,
             model_call_executor=self._execute_judge_model_call,
+            persist_event=self._persist_event,
         )
         self._provider_semaphores: dict[str, asyncio.Semaphore] = {}
         self._provider_limiters: dict[str, TokenBucketRateLimiter] = {}
@@ -330,6 +346,8 @@ class Orchestrator:
             if metric_kind == "pure" and metric.component_id in successful_scores:
                 continue
             if metric_kind == "pure":
+                if not _is_pure_metric(metric):
+                    raise TypeError(f"Metric {metric.component_id} does not implement PureMetric")
                 score_ctx = ScoreContext(run_id=snapshot.run_id, case=case, parsed_output=parsed, seed=items[0].seed)
                 self._notify("before_score", parsed, score_ctx)
                 span = self.tracing_provider.start_span(
@@ -383,6 +401,8 @@ class Orchestrator:
                     had_failure = True
                 continue
 
+            if not _is_workflow_metric(metric):
+                raise TypeError(f"Metric {metric.component_id} does not implement a workflow metric protocol")
             eval_ctx = self._evaluation_context(snapshot, case, parsed, items[0].seed)
             subject = self._evaluation_subject(
                 metric_kind=metric_kind,
@@ -405,6 +425,10 @@ class Orchestrator:
                 self._notify("after_judge", execution, eval_ctx)
                 workflow_executions[metric.component_id] = execution
                 evaluation_failures.pop(metric.component_id, None)
+                execution_blob_ref = await self._store_blob(
+                    json.dumps(execution.model_dump(mode="json"), sort_keys=True).encode("utf-8"),
+                    "application/json",
+                )
                 await self._persist_event(
                     EvaluationCompletedEvent(
                         run_id=snapshot.run_id,
@@ -412,6 +436,7 @@ class Orchestrator:
                         candidate_id=reduced.candidate_id,
                         metric_id=metric.component_id,
                         execution=execution.model_dump(mode="json"),
+                        execution_blob_ref=execution_blob_ref,
                     )
                 )
                 final_score = self._final_workflow_score(metric.component_id, execution)
@@ -564,7 +589,7 @@ class Orchestrator:
             case=case,
             parsed_output=parsed,
             seed=seed,
-            judge_model_ref=snapshot.identity.judge_model_refs[0],
+            judge_model_refs=list(snapshot.identity.judge_model_refs),
             judge_seed=seed,
             eval_workflow_config=snapshot.identity.workflow_overrides,
         )

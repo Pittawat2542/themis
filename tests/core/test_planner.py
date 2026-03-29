@@ -6,7 +6,7 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.planner import Planner
-from themis.core.workflows import JudgeResponse
+from themis.core.workflows import JudgeCall, JudgeResponse
 
 
 class DummyLLMMetric:
@@ -184,6 +184,52 @@ def test_planner_judge_seed_is_deterministic_and_varies_by_fanout_axes() -> None
 
     assert first == second
     assert first != different_repeat
+
+
+def test_planner_plans_judge_calls_with_effective_seed_and_stable_order() -> None:
+    planner = Planner()
+    calls = [
+        JudgeCall(
+            call_id="call-b",
+            judge_model_id="judge/demo-b",
+            dimension_id="accuracy",
+            repeat_index=1,
+            candidate_indices=[0, 1],
+        ),
+        JudgeCall(
+            call_id="call-a",
+            judge_model_id="judge/demo-a",
+            dimension_id="helpfulness",
+            candidate_indices=[0],
+        ),
+    ]
+
+    planned = planner.plan_judge_calls(
+        run_id="run-1",
+        case_id="case-1",
+        metric_id="metric/llm",
+        calls=calls,
+    )
+
+    assert [call.call_id for call in planned] == ["call-a", "call-b"]
+    assert planned[0].effective_seed == planner.judge_seed_for_call(
+        run_id="run-1",
+        case_id="case-1",
+        metric_id="metric/llm",
+        judge_model_id="judge/demo-a",
+        repeat_index=0,
+        dimension_id="helpfulness",
+        candidate_indices=[0],
+    )
+    assert planned[1].effective_seed == planner.judge_seed_for_call(
+        run_id="run-1",
+        case_id="case-1",
+        metric_id="metric/llm",
+        judge_model_id="judge/demo-b",
+        repeat_index=1,
+        dimension_id="accuracy",
+        candidate_indices=[0, 1],
+    )
 
 
 def test_planner_requires_self_consistency_count_when_enabled() -> None:

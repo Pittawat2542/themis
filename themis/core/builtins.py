@@ -1,4 +1,4 @@
-"""Executable builtin runtime components for Themis Phase 2."""
+"""Executable builtin runtime components for Themis Phase 3."""
 
 from __future__ import annotations
 
@@ -7,7 +7,16 @@ from typing import cast
 
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
 from themis.core.models import Case, GenerationResult, Message, ParsedOutput, ReducedCandidate, Score
-from themis.core.protocols import CandidateReducer, Generator, JudgeModel, Parser, PureMetric
+from themis.core.protocols import (
+    CandidateReducer,
+    Generator,
+    JudgeModel,
+    LLMMetric,
+    Parser,
+    PureMetric,
+    SelectionMetric,
+    TraceMetric,
+)
 from themis.core.workflows import JudgeResponse
 
 
@@ -93,7 +102,9 @@ class DemoJudgeModel:
 _BUILTIN_GENERATORS: dict[str, Generator] = {"generator/demo": DemoGenerator()}
 _BUILTIN_REDUCERS: dict[str, CandidateReducer] = {"reducer/demo": DemoReducer()}
 _BUILTIN_PARSERS: dict[str, Parser] = {"parser/demo": DemoParser()}
-_BUILTIN_METRICS: dict[str, PureMetric] = {"metric/demo": DemoMetric()}
+BuiltinMetric = PureMetric | LLMMetric | SelectionMetric | TraceMetric
+
+_BUILTIN_METRICS: dict[str, BuiltinMetric] = {"metric/demo": DemoMetric()}
 _BUILTIN_JUDGE_MODELS: dict[str, JudgeModel] = {"judge/demo": DemoJudgeModel()}
 
 
@@ -118,8 +129,8 @@ def resolve_parser_component(value: object) -> Parser:
     return cast(Parser, _resolve(_BUILTIN_PARSERS, value))
 
 
-def resolve_metric_component(value: object) -> PureMetric:
-    return cast(PureMetric, _resolve(_BUILTIN_METRICS, value))
+def resolve_metric_component(value: object) -> BuiltinMetric:
+    return cast(BuiltinMetric, _resolve(_BUILTIN_METRICS, value))
 
 
 def resolve_judge_model_component(value: object) -> JudgeModel:

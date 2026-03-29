@@ -1,4 +1,4 @@
-"""Lazy work-item planner for Themis Phase 2."""
+"""Lazy work-item planner for Themis Phase 3."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import hashlib
 
 from themis.core.results import GenerationWorkItem
 from themis.core.snapshot import RunSnapshot
+from themis.core.workflows import JudgeCall
 
 
 class Planner:
@@ -15,14 +16,63 @@ class Planner:
         run_id: str,
         case_id: str,
         metric_id: str,
+        judge_model_id: str = "",
         judge_index: int = 0,
         repeat_index: int = 0,
         dimension_id: str | None = None,
+        candidate_indices: list[int] | None = None,
     ) -> int:
         digest = hashlib.sha256(
-            f"{run_id}:{case_id}:{metric_id}:{judge_index}:{repeat_index}:{dimension_id or ''}".encode("utf-8")
+            ":".join(
+                [
+                    run_id,
+                    case_id,
+                    metric_id,
+                    judge_model_id,
+                    str(judge_index),
+                    str(repeat_index),
+                    dimension_id or "",
+                    ",".join(str(index) for index in (candidate_indices or [])),
+                ]
+            ).encode("utf-8")
         ).hexdigest()
         return int(digest[:8], 16)
+
+    def plan_judge_calls(
+        self,
+        *,
+        run_id: str,
+        case_id: str,
+        metric_id: str,
+        calls: list[JudgeCall],
+    ) -> list[JudgeCall]:
+        planned: list[JudgeCall] = []
+        for call in sorted(
+            calls,
+            key=lambda item: (
+                item.call_id,
+                item.dimension_id or "",
+                item.judge_model_id,
+                item.repeat_index,
+                tuple(item.candidate_indices),
+            ),
+        ):
+            planned.append(
+                call.model_copy(
+                    update={
+                        "effective_seed": self.judge_seed_for_call(
+                            run_id=run_id,
+                            case_id=case_id,
+                            metric_id=metric_id,
+                            judge_model_id=call.judge_model_id,
+                            repeat_index=call.repeat_index,
+                            dimension_id=call.dimension_id,
+                            candidate_indices=call.candidate_indices,
+                        )
+                    }
+                )
+            )
+        return planned
 
     def validate_snapshot(self, snapshot: RunSnapshot) -> None:
         candidate_policy = snapshot.identity.candidate_policy

@@ -6,11 +6,17 @@ from themis.core.builtins import resolve_judge_model_component
 from themis.core.components import component_ref_from_value
 from themis.core.contexts import EvalScoreContext
 from themis.core.events import StepCompletedEvent, StepStartedEvent
-from themis.core.models import Case, GenerationResult, ParsedOutput
+from themis.core.models import Case, GenerationResult, ParsedOutput, Score
 from themis.core.stores.memory import InMemoryRunStore
-from themis.core.subjects import CandidateSetSubject
+from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.workflow_runner import DefaultWorkflowRunner
-from themis.core.workflows import EvalStep, JudgeResponse
+from themis.core.workflows import (
+    AggregationResult,
+    JudgeCall,
+    JudgeResponse,
+    ParsedJudgment,
+    RenderedJudgePrompt,
+)
 
 
 class DemoEvaluationWorkflow:
@@ -20,14 +26,120 @@ class DemoEvaluationWorkflow:
     def fingerprint(self) -> str:
         return "workflow-demo-eval-fingerprint"
 
-    def steps(self) -> list[EvalStep]:
+    def judge_calls(self) -> list[JudgeCall]:
+        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+
+    def render_prompt(
+        self,
+        call: JudgeCall,
+        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        ctx: EvalScoreContext,
+    ) -> RenderedJudgePrompt:
+        del call, ctx
+        assert isinstance(subject, CandidateSetSubject)
+        return RenderedJudgePrompt(prompt_id="prompt-0", content=f"Grade candidate: {subject.candidates[0].final_output}")
+
+    def parse_judgment(
+        self,
+        call: JudgeCall,
+        response: JudgeResponse,
+        ctx: EvalScoreContext,
+    ) -> ParsedJudgment:
+        del call, ctx
+        label = response.raw_response.strip().split()[0].lower()
+        return ParsedJudgment(label=label, score=1.0 if label == "pass" else 0.0, rationale=response.raw_response)
+
+    def score_judgment(
+        self,
+        call: JudgeCall,
+        judgment: ParsedJudgment,
+        ctx: EvalScoreContext,
+    ) -> Score | None:
+        del call, ctx
+        return Score(metric_id="metric/judge", value=float(judgment.score or 0.0), details={"label": judgment.label})
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None:
+        del judgments, ctx
+        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+
+
+class PairwiseSelectionWorkflow:
+    component_id = "workflow/pairwise"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "workflow-pairwise-fingerprint"
+
+    def judge_calls(self) -> list[JudgeCall]:
         return [
-            EvalStep(step_type="render_prompt", config={"template": "Grade candidate: {candidate_output}"}),
-            EvalStep(step_type="model_call"),
-            EvalStep(step_type="parse_judgment", config={"label_scores": {"pass": 1.0, "fail": 0.0}}),
-            EvalStep(step_type="emit_score"),
-            EvalStep(step_type="aggregate_scores", config={"method": "mean"}),
+            JudgeCall(
+                call_id="call-a-vs-b",
+                judge_model_id="judge/selector-a",
+                dimension_id="winner",
+                candidate_indices=[0, 1],
+            ),
+            JudgeCall(
+                call_id="call-repeat",
+                judge_model_id="judge/selector-b",
+                dimension_id="winner",
+                repeat_index=1,
+                candidate_indices=[0, 1],
+            ),
         ]
+
+    def render_prompt(
+        self,
+        call: JudgeCall,
+        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        ctx: EvalScoreContext,
+    ) -> RenderedJudgePrompt:
+        del ctx
+        assert isinstance(subject, CandidateSetSubject)
+        candidate_a = subject.candidates[call.candidate_indices[0]]
+        candidate_b = subject.candidates[call.candidate_indices[1]]
+        return RenderedJudgePrompt(
+            prompt_id=f"prompt-{call.call_id}",
+            content=f"A={candidate_a.final_output}; B={candidate_b.final_output}",
+        )
+
+    def parse_judgment(
+        self,
+        call: JudgeCall,
+        response: JudgeResponse,
+        ctx: EvalScoreContext,
+    ) -> ParsedJudgment:
+        del ctx
+        return ParsedJudgment(label=response.raw_response.strip().lower(), details={"call_id": call.call_id})
+
+    def score_judgment(
+        self,
+        call: JudgeCall,
+        judgment: ParsedJudgment,
+        ctx: EvalScoreContext,
+    ) -> Score | None:
+        del ctx
+        winner_index = 0 if judgment.label == "a" else 1
+        return Score(
+            metric_id="metric/select",
+            value=float(winner_index),
+            details={"call_id": call.call_id, "winner": judgment.label},
+        )
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None:
+        del ctx, scores
+        labels = [judgment.label for judgment in judgments]
+        winner = max(sorted(set(labels)), key=labels.count)
+        return AggregationResult(method="majority_vote", value=winner, details={"winner": winner})
 
 
 class FixedJudgeModel:
@@ -50,45 +162,6 @@ class FixedJudgeModel:
         )
 
 
-class FanoutWorkflow:
-    component_id = "workflow/fanout"
-    version = "1.0"
-
-    def fingerprint(self) -> str:
-        return "workflow-fanout-fingerprint"
-
-    def steps(self) -> list[EvalStep]:
-        return [
-            EvalStep(step_type="render_prompt", config={"template": "Helpfulness {candidate_output}"}),
-            EvalStep(
-                step_type="model_call",
-                config={"judge_model": "judge/pass-a", "judge_index": 0, "dimension_id": "helpfulness"},
-            ),
-            EvalStep(step_type="parse_judgment", config={"label_scores": {"pass": 1.0, "fail": 0.0}}),
-            EvalStep(step_type="emit_score"),
-            EvalStep(step_type="render_prompt", config={"template": "Accuracy {candidate_output}"}),
-            EvalStep(
-                step_type="model_call",
-                config={"judge_model": "judge/fail", "judge_index": 1, "dimension_id": "accuracy"},
-            ),
-            EvalStep(step_type="parse_judgment", config={"label_scores": {"pass": 1.0, "fail": 0.0}}),
-            EvalStep(step_type="emit_score"),
-            EvalStep(step_type="render_prompt", config={"template": "Helpfulness repeat {candidate_output}"}),
-            EvalStep(
-                step_type="model_call",
-                config={
-                    "judge_model": "judge/pass-b",
-                    "judge_index": 0,
-                    "repeat_index": 1,
-                    "dimension_id": "helpfulness",
-                },
-            ),
-            EvalStep(step_type="parse_judgment", config={"label_scores": {"pass": 1.0, "fail": 0.0}}),
-            EvalStep(step_type="emit_score"),
-            EvalStep(step_type="aggregate_scores", config={"method": "majority_vote"}),
-        ]
-
-
 @pytest.mark.asyncio
 async def test_default_workflow_runner_executes_single_judge_workflow_and_persists_step_events() -> None:
     store = InMemoryRunStore()
@@ -104,7 +177,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
         run_id="run-1",
         case=Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
         parsed_output=ParsedOutput(value={"answer": "4"}),
-        judge_model_ref=component_ref_from_value("judge/demo"),
+        judge_model_refs=[component_ref_from_value("judge/demo")],
         judge_seed=11,
     )
 
@@ -138,45 +211,54 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
 
 
 @pytest.mark.asyncio
-async def test_default_workflow_runner_supports_fanout_and_majority_vote_with_deterministic_seeds() -> None:
+async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vote_with_deterministic_seeds() -> None:
     subject = CandidateSetSubject(
-        candidates=[GenerationResult(candidate_id="candidate-1", final_output={"answer": "4"})]
+        candidates=[
+            GenerationResult(candidate_id="candidate-a", final_output={"answer": "4"}),
+            GenerationResult(candidate_id="candidate-b", final_output={"answer": "5"}),
+        ]
     )
     ctx = EvalScoreContext(
         run_id="run-1",
         case=Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
         parsed_output=ParsedOutput(value={"answer": "4"}),
-        judge_model_ref=component_ref_from_value("judge/demo"),
+        judge_model_refs=[
+            component_ref_from_value("judge/demo"),
+            component_ref_from_value("judge/demo"),
+        ],
         judge_seed=11,
     )
     judge_models = [
-        FixedJudgeModel("judge/pass-a", "pass"),
-        FixedJudgeModel("judge/fail", "fail"),
-        FixedJudgeModel("judge/pass-b", "pass"),
+        FixedJudgeModel("judge/selector-a", "a"),
+        FixedJudgeModel("judge/selector-b", "a"),
     ]
 
     first_runner = DefaultWorkflowRunner(store=InMemoryRunStore(), judge_models=judge_models)
     second_runner = DefaultWorkflowRunner(store=InMemoryRunStore(), judge_models=judge_models)
 
     first = await first_runner.run_evaluation(
-        workflow=FanoutWorkflow(),
+        workflow=PairwiseSelectionWorkflow(),
         subject=subject,
-        metric_id="metric/judge",
+        metric_id="metric/select",
         ctx=ctx,
     )
     second = await second_runner.run_evaluation(
-        workflow=FanoutWorkflow(),
+        workflow=PairwiseSelectionWorkflow(),
         subject=subject,
-        metric_id="metric/judge",
+        metric_id="metric/select",
         ctx=ctx,
     )
 
-    assert len(first.scores) == 3
+    assert [prompt.content for prompt in first.rendered_prompts] == [
+        "A={'answer': '4'}; B={'answer': '5'}",
+        "A={'answer': '4'}; B={'answer': '5'}",
+    ]
+    assert len(first.scores) == 2
     assert first.aggregation_output is not None
     assert first.aggregation_output.method == "majority_vote"
-    assert first.aggregation_output.value == 1.0
-    assert first.aggregation_output.details["label"] == "pass"
+    assert first.aggregation_output.value == "a"
+    assert first.aggregation_output.details["winner"] == "a"
     assert [response.effective_seed for response in first.judge_responses] == [
         response.effective_seed for response in second.judge_responses
     ]
-    assert len({response.effective_seed for response in first.judge_responses}) == 3
+    assert len({response.effective_seed for response in first.judge_responses}) == 2

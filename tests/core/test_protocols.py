@@ -40,7 +40,14 @@ from themis.core.protocols import (
 )
 from themis.core.snapshot import ComponentRef
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
-from themis.core.workflows import AggregationResult, EvalStep, EvaluationExecution, JudgeResponse, ParsedJudgment, RenderedJudgePrompt
+from themis.core.workflows import (
+    AggregationResult,
+    EvaluationExecution,
+    JudgeCall,
+    JudgeResponse,
+    ParsedJudgment,
+    RenderedJudgePrompt,
+)
 
 
 class DummyWorkflow:
@@ -50,8 +57,29 @@ class DummyWorkflow:
     def fingerprint(self) -> str:
         return "workflow-fingerprint"
 
-    def steps(self) -> list[EvalStep]:
-        return [EvalStep(step_type="render_prompt", config={"template": "demo"})]
+    def judge_calls(self) -> list[JudgeCall]:
+        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+
+    def render_prompt(self, call: JudgeCall, subject: CandidateSetSubject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+        del call, subject, ctx
+        return RenderedJudgePrompt(prompt_id="prompt-0", content="demo")
+
+    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+        del call, ctx
+        return ParsedJudgment(label=response.raw_response)
+
+    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+        del call, ctx
+        return Score(metric_id="judge", value=float(judgment.label == "pass"))
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None:
+        del judgments, ctx
+        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
 
 
 class DummyGenerator:
@@ -240,11 +268,13 @@ def _score_context() -> EvalScoreContext:
         parsed_output=parsed,
         dataset_metadata={"split": "test"},
         seed=7,
-        judge_model_ref=ComponentRef(
-            component_id="judge/demo",
-            version="1.0",
-            fingerprint="judge-fingerprint",
-        ),
+        judge_model_refs=[
+            ComponentRef(
+                component_id="judge/demo",
+                version="1.0",
+                fingerprint="judge-fingerprint",
+            )
+        ],
         judge_seed=11,
         eval_workflow_config={"rubric": "pass_fail"},
     )
