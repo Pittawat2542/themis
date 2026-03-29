@@ -9,6 +9,21 @@ from themis.core.snapshot import RunSnapshot
 
 
 class Planner:
+    @staticmethod
+    def judge_seed_for_call(
+        *,
+        run_id: str,
+        case_id: str,
+        metric_id: str,
+        judge_index: int = 0,
+        repeat_index: int = 0,
+        dimension_id: str | None = None,
+    ) -> int:
+        digest = hashlib.sha256(
+            f"{run_id}:{case_id}:{metric_id}:{judge_index}:{repeat_index}:{dimension_id or ''}".encode("utf-8")
+        ).hexdigest()
+        return int(digest[:8], 16)
+
     def validate_snapshot(self, snapshot: RunSnapshot) -> None:
         candidate_policy = snapshot.identity.candidate_policy
         if candidate_policy.get("self_consistency") and "self_consistency_count" not in candidate_policy:

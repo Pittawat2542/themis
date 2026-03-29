@@ -154,6 +154,38 @@ def test_planner_requires_multiple_candidates_for_selection_metrics() -> None:
         planner.validate_snapshot(snapshot)
 
 
+def test_planner_judge_seed_is_deterministic_and_varies_by_fanout_axes() -> None:
+    planner = Planner()
+
+    first = planner.judge_seed_for_call(
+        run_id="run-1",
+        case_id="case-1",
+        metric_id="metric/llm",
+        judge_index=0,
+        repeat_index=0,
+        dimension_id="helpfulness",
+    )
+    second = planner.judge_seed_for_call(
+        run_id="run-1",
+        case_id="case-1",
+        metric_id="metric/llm",
+        judge_index=0,
+        repeat_index=0,
+        dimension_id="helpfulness",
+    )
+    different_repeat = planner.judge_seed_for_call(
+        run_id="run-1",
+        case_id="case-1",
+        metric_id="metric/llm",
+        judge_index=0,
+        repeat_index=1,
+        dimension_id="helpfulness",
+    )
+
+    assert first == second
+    assert first != different_repeat
+
+
 def test_planner_requires_self_consistency_count_when_enabled() -> None:
     planner = Planner()
     snapshot = _experiment(candidate_policy={"self_consistency": True}).compile()

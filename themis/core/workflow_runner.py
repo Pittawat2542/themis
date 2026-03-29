@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 
 from themis.core.contexts import EvalScoreContext
 from themis.core.events import StepCompletedEvent, StepFailedEvent, StepStartedEvent
 from themis.core.models import Score, TraceStep, WorkflowTrace
+from themis.core.planner import Planner
 from themis.core.protocols import EvaluationWorkflow, JudgeModel
 from themis.core.store import RunStore
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
@@ -26,9 +27,16 @@ class WorkflowBuildError(ValueError):
 class DefaultWorkflowRunner:
     """Sequential interpreter for Themis-owned evaluation workflows."""
 
-    def __init__(self, *, store: RunStore, judge_models: Iterable[JudgeModel]) -> None:
+    def __init__(
+        self,
+        *,
+        store: RunStore,
+        judge_models: Iterable[JudgeModel],
+        model_call_executor: Callable[[JudgeModel, str, int | None], Awaitable[JudgeResponse]] | None = None,
+    ) -> None:
         self.store = store
         self.judge_models = {model.component_id: model for model in judge_models}
+        self.model_call_executor = model_call_executor
 
     async def run_evaluation(
         self,
@@ -148,18 +156,30 @@ class DefaultWorkflowRunner:
             prompt = str(state["prompt"])
             judge_model_id = str(step_config.get("judge_model", ctx.judge_model_ref.component_id))
             judge_model = self.judge_models[judge_model_id]
-            response = await judge_model.judge(prompt, seed=ctx.judge_seed)
+            effective_seed = Planner.judge_seed_for_call(
+                run_id=ctx.run_id,
+                case_id=ctx.case.case_id,
+                metric_id=metric_id,
+                judge_index=int(step_config.get("judge_index", 0)),
+                repeat_index=int(step_config.get("repeat_index", 0)),
+                dimension_id=str(step_config["dimension_id"]) if "dimension_id" in step_config else None,
+            )
+            if self.model_call_executor is None:
+                response = await judge_model.judge(prompt, seed=effective_seed)
+            else:
+                response = await self.model_call_executor(judge_model, prompt, effective_seed)
+            response = response.model_copy(update={"effective_seed": effective_seed})
             judge_responses.append(response)
             state["response"] = response
             trace_steps.append(
                 TraceStep(
                     step_name=step_id,
                     step_type=step_type,
-                    input={"prompt": prompt, "judge_model": judge_model_id},
+                    input={"prompt": prompt, "judge_model": judge_model_id, "seed": effective_seed},
                     output={"raw_response": response.raw_response},
                 )
             )
-            return {"judge_model": judge_model_id}
+            return {"judge_model": judge_model_id, "effective_seed": effective_seed}
 
         if step_type == "parse_judgment":
             response = judge_responses[-1]
@@ -198,8 +218,20 @@ class DefaultWorkflowRunner:
         if step_type == "aggregate_scores":
             method = str(step_config.get("method", "mean"))
             values = [score.value for score in scores]
-            aggregate_value = sum(values) / len(values) if values else 0.0
-            aggregation_output = AggregationResult(method=method, value=aggregate_value)
+            if method == "majority_vote":
+                labels = [judgment.label for judgment in parsed_judgments]
+                winner = ""
+                if labels:
+                    winner = max(sorted(set(labels)), key=labels.count)
+                aggregate_value = 1.0 if winner == "pass" else 0.0
+                aggregation_output = AggregationResult(
+                    method=method,
+                    value=aggregate_value,
+                    details={"label": winner},
+                )
+            else:
+                aggregate_value = sum(values) / len(values) if values else 0.0
+                aggregation_output = AggregationResult(method=method, value=aggregate_value)
             trace_steps.append(
                 TraceStep(
                     step_name=step_id,

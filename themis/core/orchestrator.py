@@ -58,6 +58,7 @@ from themis.core.subjects import (
 )
 from themis.core.tracing import NoOpTracingProvider
 from themis.core.workflow_runner import DefaultWorkflowRunner, WorkflowBuildError
+from themis.core.workflows import JudgeResponse
 
 DEFAULT_PROVIDER_RATE_LIMIT = 60
 
@@ -158,6 +159,7 @@ class Orchestrator:
         self.workflow_runner = workflow_runner or DefaultWorkflowRunner(
             store=store,
             judge_models=self.judge_models,
+            model_call_executor=self._execute_judge_model_call,
         )
         self._provider_semaphores: dict[str, asyncio.Semaphore] = {}
         self._provider_limiters: dict[str, TokenBucketRateLimiter] = {}
@@ -200,16 +202,21 @@ class Orchestrator:
     async def _run_cases(self, snapshot: RunSnapshot, existing_state: ExecutionState):
         current_case_id: str | None = None
         current_items: list[GenerationWorkItem] = []
+        case_groups: list[list[GenerationWorkItem]] = []
         async for item in self.planner.iter_work_items(snapshot):
             if current_case_id is None:
                 current_case_id = item.case_id
             if item.case_id != current_case_id:
-                yield await self._run_case(snapshot, current_items, existing_state)
+                case_groups.append(current_items)
                 current_items = []
                 current_case_id = item.case_id
             current_items.append(item)
         if current_items:
-            yield await self._run_case(snapshot, current_items, existing_state)
+            case_groups.append(current_items)
+        for result in await asyncio.gather(
+            *(self._run_case(snapshot, items, existing_state) for items in case_groups)
+        ):
+            yield result
 
     async def _run_case(
         self,
@@ -591,11 +598,36 @@ class Orchestrator:
         metric_id: str,
         execution,
     ) -> Score:
+        if execution.aggregation_output is not None and isinstance(execution.aggregation_output.value, (int, float)):
+            return Score(
+                metric_id=metric_id,
+                value=float(execution.aggregation_output.value),
+                details=execution.aggregation_output.details,
+            )
         if execution.scores:
             return execution.scores[-1]
-        if execution.aggregation_output is not None and isinstance(execution.aggregation_output.value, (int, float)):
-            return Score(metric_id=metric_id, value=float(execution.aggregation_output.value))
         return Score(metric_id=metric_id, value=0.0)
+
+    async def _execute_judge_model_call(
+        self,
+        judge_model: JudgeModel,
+        prompt: str,
+        seed: int | None,
+    ) -> JudgeResponse:
+        async with self._global_semaphore:
+            async with self._stage_semaphores["evaluation"]:
+                provider_key = getattr(judge_model, "provider_key", None)
+                provider_semaphore = self._provider_semaphore(provider_key) if provider_key is not None else None
+                provider_limiter = self._provider_limiter(provider_key) if provider_key is not None else None
+                if provider_semaphore is not None:
+                    await provider_semaphore.acquire()
+                if provider_limiter is not None:
+                    await provider_limiter.acquire()
+                try:
+                    return await judge_model.judge(prompt, seed=seed)
+                finally:
+                    if provider_semaphore is not None:
+                        provider_semaphore.release()
 
     async def _persist_event(self, event) -> None:
         for attempt in range(self.runtime.store_retry_attempts):

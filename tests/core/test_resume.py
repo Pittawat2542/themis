@@ -200,6 +200,31 @@ class DemoWorkflow:
         ]
 
 
+class SlowJudgeModel:
+    component_id = "judge/slow"
+    version = "1.0"
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.max_active = 0
+
+    def fingerprint(self) -> str:
+        return "judge-slow"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del prompt, seed
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        await asyncio.sleep(0.01)
+        self.active -= 1
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response="pass",
+        )
+
+
 def _experiment(*, generator, reducer, parser, metric, num_samples=1) -> Experiment:
     return Experiment(
         generation=GenerationConfig(
@@ -654,3 +679,55 @@ async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metr
     assert reducer.calls == 0
     assert parser.calls == 0
     assert metric.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_respects_evaluation_concurrency_cap() -> None:
+    judge_model = SlowJudgeModel()
+    metric = CountingLLMMetric()
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator=generator,
+            candidate_policy={"num_samples": 1},
+            reducer=reducer,
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[metric],
+            parsers=[parser],
+            judge_models=[judge_model],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
+                    Case(case_id="case-2", input={"question": "3+3"}, expected_output={"answer": "6"}),
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metrics=[metric],
+        judge_models=[judge_model],
+        max_concurrent_tasks=4,
+        stage_concurrency={"evaluation": 1},
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert judge_model.max_active <= 1
