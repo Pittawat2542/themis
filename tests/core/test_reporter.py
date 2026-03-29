@@ -122,6 +122,35 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
     assert score_table == [{"case_id": "case-1", "metric_id": "builtin/exact_match", "value": 1.0, "candidate_id": "case-1-reduced"}]
 
 
+def test_reporter_escapes_latex_special_characters() -> None:
+    store, run_id = _store()
+    store._projections[(run_id, "benchmark_result")] = {
+        "run_id": run_id,
+        "dataset_ids": ["data_set%1"],
+        "metric_ids": ["builtin/exact_match"],
+        "total_cases": 1,
+        "completed_cases": 1,
+        "failed_cases": 0,
+        "score_rows": [
+            {
+                "case_id": r"case_1%&${}\path",
+                "metric_id": "metric_^~#",
+                "value": r"value_1%&${}\path",
+                "candidate_id": None,
+            }
+        ],
+        "metric_means": {"builtin/exact_match": 1.0},
+    }
+    reporter = Reporter(store)
+
+    exported_latex = reporter.export_latex(run_id)
+
+    assert r"case\_1\%\&\$\{\}\textbackslash{}path" in exported_latex
+    assert r"metric\_\textasciicircum{}\textasciitilde{}\#" in exported_latex
+    assert r"value\_1\%\&\$\{\}\textbackslash{}path" in exported_latex
+    assert " &  \\\\" in exported_latex
+
+
 def test_snapshot_report_includes_identity_and_provenance() -> None:
     snapshot = _snapshot()
 

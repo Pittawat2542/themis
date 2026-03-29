@@ -69,7 +69,15 @@ class Reporter:
         ]
         for row in self.export_score_table(run_id):
             lines.append(
-                f"{row['case_id']} & {row['metric_id']} & {row['value']} & {row['candidate_id']} \\\\"
+                " & ".join(
+                    [
+                        _latex_cell(row["case_id"]),
+                        _latex_cell(row["metric_id"]),
+                        _latex_cell(row["value"]),
+                        _latex_cell(row["candidate_id"]),
+                    ]
+                )
+                + r" \\"
             )
         lines.append(r"\end{tabular}")
         return "\n".join(lines) + "\n"
@@ -91,3 +99,24 @@ class Reporter:
         if projection is None or not isinstance(projection, dict):
             raise ValueError(f"Projection not found: {projection_name} for run_id={run_id}")
         return projection
+
+
+_LATEX_ESCAPES = {
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
+def _latex_cell(value: JSONValue) -> str:
+    if value is None:
+        return ""
+    rendered = str(value)
+    return "".join(_LATEX_ESCAPES.get(char, char) for char in rendered)
