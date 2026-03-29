@@ -12,6 +12,7 @@ from themis import (
     RunStatus,
     RuntimeConfig,
     SqliteRunStore,
+    StatsEngine,
     get_evaluation_execution,
     get_execution_state,
     quickcheck,
@@ -31,6 +32,7 @@ def test_root_package_exports_public_symbols() -> None:
         RunSnapshot,
         RunStatus,
         RuntimeConfig,
+        StatsEngine,
         export_evaluation_bundle,
         export_generation_bundle,
         get_evaluation_execution,
@@ -48,6 +50,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert RunSnapshot is not None
     assert RunStatus is not None
     assert RuntimeConfig is not None
+    assert StatsEngine is not None
     assert export_evaluation_bundle is not None
     assert export_generation_bundle is not None
     assert import_evaluation_bundle is not None

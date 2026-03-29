@@ -103,6 +103,7 @@ from themis.core.snapshot import (
     RunSnapshot,
     StoredRun,
 )
+from themis.core.stats import StatsEngine
 from themis.core.subjects import (
     CandidateSetSubject,
     ConversationSubject,
@@ -225,6 +226,7 @@ __all__ = [
     "StepStartedEvent",
     "StoredRun",
     "StorageConfig",
+    "StatsEngine",
     "TraceMetric",
     "TraceStep",
     "TraceSubject",
