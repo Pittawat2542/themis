@@ -10,6 +10,7 @@ Phase 2 keeps the immutable model layer from Phase 1 and adds a runnable executi
 - extension protocols for generators, reducers, parsers, metrics, and workflows
 - `Experiment.compile()` to a reproducible `RunSnapshot`
 - `Experiment.run()` / `Experiment.run_async()` for end-to-end execution
+- typed `RuntimeConfig` for concurrency, rate limiting, and store retry control
 - lazy planning plus event-backed resume state
 - in-memory and SQLite run stores
 - OpenAI, vLLM, and LangGraph generator adapters
@@ -33,11 +34,12 @@ These provenance fields do not affect `run_id`:
 - Python version
 - platform
 - storage backend configuration
+- runtime execution settings
 - environment metadata
 
 ## Component inputs
 
-Phase 1 accepts two component styles:
+Phase 2 accepts two component styles:
 
 1. Builtin string components, resolved through a canonical registry.
    Current demo entries used by tests and examples:
@@ -60,7 +62,7 @@ Run events use an additive, forward-compatible read model:
 Builtin component example:
 
 ```python
-from themis import Experiment, RunStatus
+from themis import Experiment, RunStatus, RuntimeConfig
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 
@@ -76,7 +78,12 @@ experiment = Experiment(
     ],
 )
 
-result = experiment.run()
+result = experiment.run(
+    runtime=RuntimeConfig(
+        max_concurrent_tasks=8,
+        stage_concurrency={"generation": 4},
+    )
+)
 assert result.status is RunStatus.COMPLETED
 ```
 
@@ -118,6 +125,71 @@ result = experiment.run()
 assert result.status is RunStatus.COMPLETED
 ```
 
+Adapter example:
+
+```python
+from openai import AsyncOpenAI
+
+from themis import Experiment, RunStatus
+from themis.adapters import openai
+from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.models import Case, Dataset
+
+experiment = Experiment(
+    generation=GenerationConfig(
+        generator=openai(
+            "gpt-5.4-mini",
+            client=AsyncOpenAI(),
+            instructions="Answer directly.",
+        )
+    ),
+    evaluation=EvaluationConfig(),
+    storage=StorageConfig(store="memory"),
+    datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input="2+2?")])],
+)
+
+result = experiment.run()
+assert result.status is RunStatus.COMPLETED
+```
+
+vLLM extra note:
+
+- `themis-eval[vllm]` targets Linux installs, where the `vllm` package is available and pulls in the OpenAI-compatible client path used by the adapter.
+- On macOS, use an injected client or a separate vLLM environment if you need to exercise the adapter locally.
+
+Generation bundle example:
+
+```python
+from themis import InMemoryRunStore
+from themis.core import export_generation_bundle, import_generation_bundle
+
+source_store = InMemoryRunStore()
+source_store.initialize()
+snapshot = experiment.compile()
+source_store.persist_snapshot(snapshot)
+bundle = export_generation_bundle(source_store, snapshot.run_id)
+
+target_store = InMemoryRunStore()
+target_store.initialize()
+import_generation_bundle(target_store, bundle)
+
+assert target_store.resume(snapshot.run_id) is not None
+```
+
+## Runtime controls
+
+- `RuntimeConfig.max_concurrent_tasks` bounds all in-flight work. Default: `32`.
+- `RuntimeConfig.stage_concurrency["generation"]` limits generation fan-out separately from the global cap.
+- `RuntimeConfig.provider_concurrency` limits concurrent requests per provider key.
+- `RuntimeConfig.provider_rate_limits` sets requests-per-minute token buckets. Default per provider: `60`.
+- `RuntimeConfig.store_retry_attempts` and `store_retry_delay` control event/blob persistence retries.
+
+## Resume and bundle behavior
+
+- Resume skips completed generation, reduction, parsing, and successful scoring work.
+- Failed scoring is retried on resume.
+- Generation bundle export/import round-trips `GenerationCompletedEvent` payloads without changing `run_id`.
+
 ## Not included yet
 
 - CLI
@@ -129,5 +201,5 @@ assert result.status is RunStatus.COMPLETED
 ## Optional extras
 
 - `pip install themis-eval[openai]`
-- `pip install themis-eval[vllm]`
+- `pip install themis-eval[vllm]` on Linux
 - `pip install themis-eval[langgraph]`
