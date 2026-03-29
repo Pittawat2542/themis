@@ -39,6 +39,15 @@ dev = [
     "ruff>=0.8.5",
     "mypy>=1.14.0",
 ]
+openai = [
+    "openai>=1.0",
+]
+vllm = [
+    "openai>=1.0",
+]
+langgraph = [
+    "langgraph>=0.2",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"
