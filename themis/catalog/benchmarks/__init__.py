@@ -19,8 +19,11 @@ class BenchmarkDefinition(FrozenModel):
     benchmark_id: str
     base_benchmark_id: str
     dataset_id: str
+    dataset_revision: str | None = None
     split: str
     variant: str | None = None
+    requires_code_execution: bool = False
+    supported_execution_backends: list[str] = Field(default_factory=list)
     metric_ids: list[str] = Field(default_factory=lambda: ["builtin/exact_match"])
     parser_ids: list[str] = Field(default_factory=lambda: ["builtin/json_identity"])
     judge_model_ids: list[str] = Field(default_factory=list)
@@ -49,8 +52,14 @@ class BenchmarkDefinition(FrozenModel):
             datasets=[
                 Dataset(
                     dataset_id=self.dataset_id,
-                    revision=self.variant or self.split,
-                    metadata={"split": self.split, "benchmark_id": self.benchmark_id},
+                    revision=self.variant or self.dataset_revision or self.split,
+                    metadata={
+                        "split": self.split,
+                        "benchmark_id": self.benchmark_id,
+                        "dataset_revision": self.dataset_revision or "",
+                        "requires_code_execution": str(self.requires_code_execution).lower(),
+                        "supported_execution_backends": ",".join(self.supported_execution_backends),
+                    },
                     cases=[
                         Case(
                             case_id=f"{self.base_benchmark_id}-sample-1",
@@ -87,8 +96,11 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         benchmark_id=benchmark_id,
         base_benchmark_id=base_name,
         dataset_id=str(spec["dataset_id"]),
+        dataset_revision=str(spec["dataset_revision"]) if spec.get("dataset_revision") is not None else None,
         split=str(spec["split"]),
         variant=resolved_variant,
+        requires_code_execution=bool(spec.get("requires_code_execution", False)),
+        supported_execution_backends=list(spec.get("supported_execution_backends", [])),
         metric_ids=list(spec.get("metric_ids", ["builtin/exact_match"])),
         parser_ids=list(spec.get("parser_ids", ["builtin/json_identity"])),
         judge_model_ids=list(spec.get("judge_model_ids", [])),

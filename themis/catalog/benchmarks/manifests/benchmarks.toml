@@ -8,7 +8,10 @@ split = "train"
 
 [benchmarks.aethercode]
 dataset_id = "m-a-p/AetherCode"
+dataset_revision = "v1_2024"
 split = "test"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
 
 [benchmarks.apex_2025]
 dataset_id = "MathArena/apex_2025"
@@ -55,11 +58,15 @@ split = "train"
 dataset_id = "evalplus/HumanEvalPlus"
 split = "test"
 variant_mode = "open"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
 
 [benchmarks.humaneval_plus]
 dataset_id = "evalplus/HumanEvalPlus"
 split = "test"
 variant_mode = "open"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
 
 [benchmarks.imo_answerbench]
 dataset_id = "Hwilner/imo-answerbench"
@@ -67,7 +74,10 @@ split = "train"
 
 [benchmarks.livecodebench]
 dataset_id = "livecodebench/code_generation_lite"
+dataset_revision = "release_v6"
 split = "test"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
 
 [benchmarks.lpfqa]
 dataset_id = "m-a-p/LPFQA"
@@ -84,7 +94,10 @@ variant_mode = "open"
 
 [benchmarks.codeforces]
 dataset_id = "open-r1/codeforces"
+dataset_revision = "verifiable-prompts"
 split = "test"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
 
 [benchmarks.phybench]
 dataset_id = "Eureka-Lab/PHYBench"
