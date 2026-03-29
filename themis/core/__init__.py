@@ -64,6 +64,8 @@ from themis.core.protocols import (
     TraceMetric,
     TracingProvider,
 )
+from themis.core.orchestrator import Orchestrator
+from themis.core.planner import Planner
 from themis.core.results import CaseResult, ExecutionState, GenerationBundle, GenerationWorkItem, ProgressSnapshot, RunResult, RunStatus
 from themis.core.store import RunStore
 from themis.core.snapshot import (
@@ -85,6 +87,7 @@ from themis.core.subjects import (
     validate_candidate_set_for_selection_metric,
 )
 from themis.core.stores import InMemoryRunStore, SqliteRunStore, sqlite_store
+from themis.core.tracing import NoOpTracingProvider
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
@@ -134,6 +137,8 @@ __all__ = [
     "LLMMetric",
     "LifecycleSubscriber",
     "Message",
+    "NoOpTracingProvider",
+    "Orchestrator",
     "AggregationResult",
     "OnEvent",
     "ParseCompletedEvent",
@@ -143,6 +148,7 @@ __all__ = [
     "ParsedJudgment",
     "Parser",
     "PureMetric",
+    "Planner",
     "RenderedJudgePrompt",
     "ReduceContext",
     "ReducedCandidate",

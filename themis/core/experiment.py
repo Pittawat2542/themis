@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from pydantic import Field
 
+from themis.core.builtins import (
+    resolve_generator_component,
+    resolve_metric_component,
+    resolve_parser_component,
+    resolve_reducer_component,
+)
 from themis.core.base import FrozenModel
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Dataset
+from themis.core.orchestrator import Orchestrator
 from themis.core.protocols import LLMMetric, PureMetric, SelectionMetric, TraceMetric
+from themis.core.stores.memory import InMemoryRunStore
+from themis.core.stores.sqlite import sqlite_store
+from themis.core.tracing import NoOpTracingProvider
 from themis.core.snapshot import (
     ComponentRefs,
     DatasetRef,
@@ -73,6 +85,29 @@ class Experiment(FrozenModel):
             metric_kinds=[self._metric_kind(metric) for metric in self.evaluation.metrics],
         )
 
+    async def run_async(self, *, subscribers: list[object] | None = None, tracing_provider=None):
+        snapshot = self.compile()
+        store = self._build_store()
+        store.initialize()
+        store.persist_snapshot(snapshot)
+        orchestrator = Orchestrator(
+            store=store,
+            generator=resolve_generator_component(self.generation.generator),
+            reducer=resolve_reducer_component(self.generation.reducer)
+            if self.generation.reducer is not None
+            else None,
+            parser=resolve_parser_component(self.evaluation.parsers[0]) if self.evaluation.parsers else None,
+            metrics=[resolve_metric_component(metric) for metric in self.evaluation.metrics],
+            subscribers=subscribers or [],
+            tracing_provider=tracing_provider or NoOpTracingProvider(),
+        )
+        return await orchestrator.run(snapshot)
+
+    def run(self, *, subscribers: list[object] | None = None, tracing_provider=None):
+        return asyncio.run(
+            self.run_async(subscribers=subscribers, tracing_provider=tracing_provider)
+        )
+
     def _metric_kind(self, metric: object) -> str:
         if isinstance(metric, str):
             if metric == "metric/demo":
@@ -87,3 +122,11 @@ class Experiment(FrozenModel):
         if isinstance(metric, TraceMetric):
             return "trace"
         raise TypeError("Metrics must satisfy a supported metric protocol.")
+
+    def _build_store(self):
+        if self.storage.store == "memory":
+            return InMemoryRunStore()
+        if self.storage.store == "sqlite":
+            path = self.storage.parameters.get("path", "runs/themis.sqlite3")
+            return sqlite_store(path)
+        raise ValueError(f"Unsupported store backend: {self.storage.store}")
