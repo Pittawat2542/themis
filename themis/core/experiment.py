@@ -206,9 +206,11 @@ class Experiment(FrozenModel):
         if metric_family in {"pure", "llm", "selection", "trace"}:
             return metric_family
         if isinstance(metric, str):
-            if metric == "metric/demo":
-                return "pure"
-            raise ValueError(f"Unknown builtin component: {metric}")
+            resolved_metric = resolve_metric_component(metric)
+            resolved_metric_family = getattr(resolved_metric, "metric_family", None)
+            if resolved_metric_family in {"pure", "llm", "selection", "trace"}:
+                return resolved_metric_family
+            raise ValueError(f"Unknown builtin metric family: {metric}")
         if isinstance(metric, PureMetric):
             return "pure"
         if isinstance(metric, LLMMetric):

@@ -29,13 +29,13 @@ class DummyJudgeModel:
 def test_experiment_compile_returns_snapshot() -> None:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
             judge_models=[DummyJudgeModel()],
         ),
@@ -59,7 +59,7 @@ def test_experiment_compile_returns_snapshot() -> None:
     assert isinstance(snapshot, RunSnapshot)
     assert snapshot.identity.dataset_refs[0].dataset_id == "dataset-1"
     assert snapshot.datasets[0].cases[0].case_id == "case-1"
-    assert snapshot.component_refs.generator.component_id == "generator/demo"
+    assert snapshot.component_refs.generator.component_id == "builtin/demo_generator"
     assert snapshot.component_refs.judge_models[0].component_id == "judge/custom"
     assert snapshot.identity.judge_model_refs[0].fingerprint == "judge-custom-fingerprint"
 
@@ -67,13 +67,13 @@ def test_experiment_compile_returns_snapshot() -> None:
 def test_rejudge_requires_explicit_store_for_memory_backed_runs() -> None:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
             judge_models=[DummyJudgeModel()],
         ),
         storage=StorageConfig(store="memory"),
@@ -93,13 +93,13 @@ def test_rejudge_requires_explicit_store_for_memory_backed_runs() -> None:
 def test_run_accepts_explicit_store_for_memory_backed_runs() -> None:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[

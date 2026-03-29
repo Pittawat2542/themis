@@ -13,13 +13,13 @@ from themis.core.stores.sqlite import SqliteRunStore
 def _snapshot():
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
         storage=StorageConfig(store="sqlite", parameters={"path": "runs/themis.sqlite3"}),

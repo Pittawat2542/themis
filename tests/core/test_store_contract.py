@@ -17,13 +17,13 @@ from tests.core.store_fakes import fake_psycopg_module, fake_pymongo_module
 def _snapshot() -> RunSnapshot:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
         storage=StorageConfig(store="memory", parameters={"path": ":memory:"}),

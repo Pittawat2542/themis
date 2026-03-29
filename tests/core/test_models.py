@@ -146,7 +146,7 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
         seed=7,
         judge_model_refs=[
             ComponentRef(
-                component_id="judge/demo",
+                component_id="builtin/demo_judge",
                 version="1.0",
                 fingerprint="abc123",
             )

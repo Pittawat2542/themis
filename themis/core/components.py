@@ -1,9 +1,10 @@
-"""Component reference models and builtin registry."""
+"""Component reference models and manifest-backed builtin registry."""
 
 from __future__ import annotations
 
 from typing import Any
 
+from themis.catalog.registry import component_specs
 from themis.core.base import HashableModel
 
 
@@ -14,31 +15,12 @@ class ComponentRef(HashableModel):
 
 
 BUILTIN_COMPONENT_REFS: dict[str, ComponentRef] = {
-    "generator/demo": ComponentRef(
-        component_id="generator/demo",
-        version="1.0",
-        fingerprint="builtin-generator-demo-fingerprint",
-    ),
-    "reducer/demo": ComponentRef(
-        component_id="reducer/demo",
-        version="1.0",
-        fingerprint="builtin-reducer-demo-fingerprint",
-    ),
-    "parser/demo": ComponentRef(
-        component_id="parser/demo",
-        version="1.0",
-        fingerprint="builtin-parser-demo-fingerprint",
-    ),
-    "metric/demo": ComponentRef(
-        component_id="metric/demo",
-        version="1.0",
-        fingerprint="builtin-metric-demo-fingerprint",
-    ),
-    "judge/demo": ComponentRef(
-        component_id="judge/demo",
-        version="1.0",
-        fingerprint="builtin-judge-demo-fingerprint",
-    ),
+    component_id: ComponentRef(
+        component_id=component_id,
+        version=spec.version,
+        fingerprint=spec.fingerprint,
+    )
+    for component_id, spec in component_specs().items()
 }
 
 
@@ -49,7 +31,9 @@ def component_ref_from_value(value: Any) -> ComponentRef:
         try:
             return BUILTIN_COMPONENT_REFS[value]
         except KeyError as exc:
-            raise ValueError(f"Unknown builtin component: {value}") from exc
+            from themis.catalog.registry import _unknown_component_message
+
+            raise ValueError(_unknown_component_message(value)) from exc
 
     try:
         component_id = getattr(value, "component_id")

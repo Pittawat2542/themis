@@ -36,7 +36,7 @@ class DummySelectionMetric:
 
 
 class DummyJudgeModel:
-    component_id = "judge/demo"
+    component_id = "builtin/demo_judge"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -55,7 +55,7 @@ class DummyJudgeModel:
 def _experiment(
     *,
     candidate_policy=None,
-    reducer="reducer/demo",
+    reducer="builtin/majority_vote",
     parsers=None,
     metrics=None,
     seeds=None,
@@ -63,13 +63,13 @@ def _experiment(
 ):
     return Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy=candidate_policy or {"num_samples": 1},
             reducer=reducer,
         ),
         evaluation=EvaluationConfig(
-            metrics=metrics or ["metric/demo"],
-            parsers=parsers or ["parser/demo"],
+            metrics=metrics or ["builtin/exact_match"],
+            parsers=parsers or ["builtin/json_identity"],
             judge_models=judge_models or [],
         ),
         storage=StorageConfig(store="memory"),
@@ -117,7 +117,7 @@ async def test_planner_honors_explicit_seeds_per_candidate() -> None:
 
 def test_planner_rejects_multiple_parsers_for_phase_2() -> None:
     planner = Planner()
-    snapshot = _experiment(parsers=["parser/demo", "parser/demo"]).compile()
+    snapshot = _experiment(parsers=["builtin/json_identity", "builtin/json_identity"]).compile()
 
     with pytest.raises(ValueError, match="Phase 2 supports at most one parser"):
         planner.validate_snapshot(snapshot)

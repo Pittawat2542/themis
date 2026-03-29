@@ -15,7 +15,7 @@ from themis.core.protocols import Generator, Parser, PureMetric
 
 @pytest.mark.asyncio
 async def test_builtin_generator_component_is_executable() -> None:
-    generator = resolve_generator_component("generator/demo")
+    generator = resolve_generator_component("builtin/demo_generator")
     case = Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})
 
     result = await generator.generate(case, GenerateContext(run_id="run-1", case_id="case-1", seed=7))
@@ -29,9 +29,9 @@ async def test_builtin_generator_component_is_executable() -> None:
 
 @pytest.mark.asyncio
 async def test_builtin_reducer_parser_and_metric_components_are_executable() -> None:
-    reducer = resolve_reducer_component("reducer/demo")
-    parser = resolve_parser_component("parser/demo")
-    metric = resolve_metric_component("metric/demo")
+    reducer = resolve_reducer_component("builtin/majority_vote")
+    parser = resolve_parser_component("builtin/json_identity")
+    metric = resolve_metric_component("builtin/exact_match")
     case = Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})
     candidates = [
         GenerationResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
@@ -63,7 +63,7 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
     assert isinstance(parser, Parser)
     assert parsed == ParsedOutput(value={"answer": "4"}, format="json")
     assert not isinstance(score, ScoreError)
-    assert score.metric_id == "metric/demo"
+    assert score.metric_id == "builtin/exact_match"
     assert score.value == 1.0
 
 

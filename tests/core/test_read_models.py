@@ -26,14 +26,14 @@ from themis.core.workflows import EvaluationExecution
 def _snapshot():
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 2},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
-            judge_models=["judge/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+            judge_models=["builtin/demo_judge"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -113,11 +113,11 @@ def _events(run_id: str):
             execution={
                 "execution_id": "execution-1",
                 "subject_kind": "candidate_set",
-                "judge_calls": [{"call_id": "call-1", "judge_model_id": "judge/demo"}],
+                "judge_calls": [{"call_id": "call-1", "judge_model_id": "builtin/demo_judge"}],
                 "rendered_prompts": [{"prompt_id": "prompt-1", "content": "grade"}],
                 "judge_responses": [
                     {
-                        "judge_model_id": "judge/demo",
+                        "judge_model_id": "builtin/demo_judge",
                         "judge_model_version": "1.0",
                         "judge_model_fingerprint": "builtin-judge-demo-fingerprint",
                         "raw_response": "pass",
@@ -145,8 +145,8 @@ def _events(run_id: str):
             run_id=run_id,
             case_id="case-1",
             candidate_id="case-1-reduced",
-            metric_id="metric/demo",
-            score={"metric_id": "metric/demo", "value": 1.0, "details": {"matched": True}},
+            metric_id="builtin/exact_match",
+            score={"metric_id": "builtin/exact_match", "value": 1.0, "details": {"matched": True}},
         ),
         RunCompletedEvent(run_id=run_id),
     ]
@@ -176,7 +176,7 @@ def test_build_run_result_projects_case_drill_down_from_events() -> None:
     assert case.evaluation_executions[0].execution_id == "execution-1"
     assert case.evaluation_execution_blob_refs == {"metric/judge": "sha256:evaluation-1"}
     assert case.evaluation_failures == {"metric/trace": "judge unavailable"}
-    assert case.scores[0].metric_id == "metric/demo"
+    assert case.scores[0].metric_id == "builtin/exact_match"
 
 
 def test_build_benchmark_result_aggregates_scores_from_run_result() -> None:
@@ -186,15 +186,15 @@ def test_build_benchmark_result_aggregates_scores_from_run_result() -> None:
 
     assert result.run_id == snapshot.run_id
     assert result.dataset_ids == ["dataset-1"]
-    assert result.metric_ids == ["metric/demo"]
+    assert result.metric_ids == ["builtin/exact_match"]
     assert result.total_cases == 1
     assert result.completed_cases == 0
     assert result.failed_cases == 1
     assert len(result.score_rows) == 1
     assert result.score_rows[0].case_id == "case-1"
-    assert result.score_rows[0].metric_id == "metric/demo"
+    assert result.score_rows[0].metric_id == "builtin/exact_match"
     assert result.score_rows[0].value == 1.0
-    assert result.metric_means == {"metric/demo": 1.0}
+    assert result.metric_means == {"builtin/exact_match": 1.0}
 
 
 def test_build_timeline_view_preserves_event_order_and_case_scope() -> None:

@@ -1,27 +1,27 @@
 {
   "component_refs": {
     "generator": {
-      "component_id": "generator/demo",
+      "component_id": "builtin/demo_generator",
       "fingerprint": "generator-fingerprint",
       "version": "1.0"
     },
     "judge_models": [],
     "metrics": [
       {
-        "component_id": "metric/demo",
+        "component_id": "builtin/exact_match",
         "fingerprint": "metric-fingerprint",
         "version": "1.0"
       }
     ],
     "parsers": [
       {
-        "component_id": "parser/demo",
+        "component_id": "builtin/json_identity",
         "fingerprint": "parser-fingerprint",
         "version": "1.0"
       }
     ],
     "reducer": {
-      "component_id": "reducer/demo",
+      "component_id": "builtin/majority_vote",
       "fingerprint": "reducer-fingerprint",
       "version": "1.0"
     }
@@ -57,7 +57,7 @@
       }
     ],
     "generator_ref": {
-      "component_id": "generator/demo",
+      "component_id": "builtin/demo_generator",
       "fingerprint": "generator-fingerprint",
       "version": "1.0"
     },
@@ -67,20 +67,20 @@
     "judge_model_refs": [],
     "metric_refs": [
       {
-        "component_id": "metric/demo",
+        "component_id": "builtin/exact_match",
         "fingerprint": "metric-fingerprint",
         "version": "1.0"
       }
     ],
     "parser_refs": [
       {
-        "component_id": "parser/demo",
+        "component_id": "builtin/json_identity",
         "fingerprint": "parser-fingerprint",
         "version": "1.0"
       }
     ],
     "reducer_ref": {
-      "component_id": "reducer/demo",
+      "component_id": "builtin/majority_vote",
       "fingerprint": "reducer-fingerprint",
       "version": "1.0"
     },
@@ -121,5 +121,5 @@
     },
     "themis_version": "4.0.0a0"
   },
-  "run_id": "574fedbb7a4ad65c85d9a86488b1db22d2cba6b600449c741208d815f66eeaf3"
+  "run_id": "e9cec0a66ee776a25673b8b2eebd3547032d0422fbe9f58acb94f939d7eb29e0"
 }

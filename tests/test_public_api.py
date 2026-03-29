@@ -65,13 +65,13 @@ def test_root_package_exports_public_symbols() -> None:
 def test_public_surface_compiles_and_persists_runs(tmp_path) -> None:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
         storage=StorageConfig(
@@ -121,13 +121,13 @@ def test_public_surface_compiles_and_persists_runs(tmp_path) -> None:
 def test_public_surface_runs_experiment_end_to_end() -> None:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -153,13 +153,13 @@ def test_package_includes_py_typed_marker() -> None:
 def test_public_inspection_helpers_return_execution_state_and_evaluation_execution() -> None:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[

@@ -12,13 +12,13 @@ from themis.core.stores import create_run_store, jsonl_store
 def _snapshot():
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(store="jsonl"),
         datasets=[

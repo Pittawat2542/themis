@@ -27,7 +27,7 @@ class DemoEvaluationWorkflow:
         return "workflow-demo-eval-fingerprint"
 
     def judge_calls(self) -> list[JudgeCall]:
-        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+        return [JudgeCall(call_id="call-0", judge_model_id="builtin/demo_judge")]
 
     def render_prompt(
         self,
@@ -168,7 +168,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
     store.initialize()
     runner = DefaultWorkflowRunner(
         store=store,
-        judge_models=[resolve_judge_model_component("judge/demo")],
+        judge_models=[resolve_judge_model_component("builtin/demo_judge")],
     )
     subject = CandidateSetSubject(
         candidates=[GenerationResult(candidate_id="candidate-1", final_output={"answer": "4"})]
@@ -177,7 +177,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
         run_id="run-1",
         case=Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
         parsed_output=ParsedOutput(value={"answer": "4"}),
-        judge_model_refs=[component_ref_from_value("judge/demo")],
+        judge_model_refs=[component_ref_from_value("builtin/demo_judge")],
         judge_seed=11,
     )
 
@@ -189,7 +189,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
     )
 
     assert execution.rendered_prompts
-    assert execution.judge_responses[0].judge_model_id == "judge/demo"
+    assert execution.judge_responses[0].judge_model_id == "builtin/demo_judge"
     assert execution.parsed_judgments
     assert execution.scores
     assert execution.trace.steps
@@ -223,8 +223,8 @@ async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vo
         case=Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
         parsed_output=ParsedOutput(value={"answer": "4"}),
         judge_model_refs=[
-            component_ref_from_value("judge/demo"),
-            component_ref_from_value("judge/demo"),
+            component_ref_from_value("builtin/demo_judge"),
+            component_ref_from_value("builtin/demo_judge"),
         ],
         judge_seed=11,
     )

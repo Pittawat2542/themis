@@ -58,7 +58,7 @@ class DummyWorkflow:
         return "workflow-fingerprint"
 
     def judge_calls(self) -> list[JudgeCall]:
-        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+        return [JudgeCall(call_id="call-0", judge_model_id="builtin/demo_judge")]
 
     def render_prompt(self, call: JudgeCall, subject: CandidateSetSubject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
         del call, subject, ctx
@@ -83,7 +83,7 @@ class DummyWorkflow:
 
 
 class DummyGenerator:
-    component_id = "generator/demo"
+    component_id = "builtin/demo_generator"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -94,7 +94,7 @@ class DummyGenerator:
 
 
 class DummyParser:
-    component_id = "parser/demo"
+    component_id = "builtin/json_identity"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -105,7 +105,7 @@ class DummyParser:
 
 
 class DummyReducer:
-    component_id = "reducer/demo"
+    component_id = "builtin/majority_vote"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -184,7 +184,7 @@ class DummyTraceMetric:
 
 
 class DummyJudgeModel:
-    component_id = "judge/demo"
+    component_id = "builtin/demo_judge"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -270,7 +270,7 @@ def _score_context() -> EvalScoreContext:
         seed=7,
         judge_model_refs=[
             ComponentRef(
-                component_id="judge/demo",
+                component_id="builtin/demo_judge",
                 version="1.0",
                 fingerprint="judge-fingerprint",
             )

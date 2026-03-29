@@ -31,8 +31,8 @@ class CustomGenerator:
 
 def test_readme_builtin_component_example_compiles_and_persists() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store="memory"),
         datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
     )
@@ -48,8 +48,8 @@ def test_readme_builtin_component_example_compiles_and_persists() -> None:
 
 def test_readme_builtin_component_example_runs_end_to_end() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store="memory"),
         datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"}, expected_output={"answer": "4"})])],
     )
@@ -96,8 +96,8 @@ def test_readme_custom_component_example_runs_end_to_end() -> None:
 
 def test_readme_generation_bundle_example_round_trips() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
@@ -134,8 +134,8 @@ def test_readme_generation_bundle_example_round_trips() -> None:
 
 def test_readme_evaluation_bundle_example_round_trips() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
@@ -173,8 +173,8 @@ def test_readme_evaluation_bundle_example_round_trips() -> None:
 
 def test_readme_inspection_example_reads_execution_state() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(

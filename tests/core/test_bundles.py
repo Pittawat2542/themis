@@ -19,11 +19,11 @@ from themis.core.stores.memory import InMemoryRunStore
 def _snapshot():
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 2},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(

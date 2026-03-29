@@ -14,7 +14,7 @@ from themis.core.snapshot import BUILTIN_COMPONENT_REFS, ComponentRef
 
 
 class DummyGenerator:
-    component_id = "generator/demo"
+    component_id = "builtin/demo_generator"
     version = "1.0"
 
     def __init__(self, fingerprint_value: str) -> None:
@@ -28,7 +28,7 @@ class DummyGenerator:
 
 
 class DummyReducer:
-    component_id = "reducer/demo"
+    component_id = "builtin/majority_vote"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -47,7 +47,7 @@ class DummyReducer:
 
 
 class DummyParser:
-    component_id = "parser/demo"
+    component_id = "builtin/json_identity"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -58,7 +58,7 @@ class DummyParser:
 
 
 class DummyMetric:
-    component_id = "metric/demo"
+    component_id = "builtin/exact_match"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -66,7 +66,7 @@ class DummyMetric:
 
     def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
         del ctx
-        return Score(metric_id="metric/demo", value=float(parsed.value == case.expected_output))
+        return Score(metric_id="builtin/exact_match", value=float(parsed.value == case.expected_output))
 
 
 def _experiment(
@@ -174,13 +174,13 @@ def test_snapshot_serialization_matches_golden_file() -> None:
 def test_builtin_component_strings_resolve_to_registry_entries() -> None:
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
         storage=StorageConfig(store="memory", parameters={"path": ":memory:"}),
@@ -189,16 +189,16 @@ def test_builtin_component_strings_resolve_to_registry_entries() -> None:
 
     snapshot = experiment.compile()
 
-    assert snapshot.component_refs.generator == BUILTIN_COMPONENT_REFS["generator/demo"]
-    assert snapshot.component_refs.reducer == BUILTIN_COMPONENT_REFS["reducer/demo"]
-    assert snapshot.component_refs.parsers == [BUILTIN_COMPONENT_REFS["parser/demo"]]
-    assert snapshot.component_refs.metrics == [BUILTIN_COMPONENT_REFS["metric/demo"]]
+    assert snapshot.component_refs.generator == BUILTIN_COMPONENT_REFS["builtin/demo_generator"]
+    assert snapshot.component_refs.reducer == BUILTIN_COMPONENT_REFS["builtin/majority_vote"]
+    assert snapshot.component_refs.parsers == [BUILTIN_COMPONENT_REFS["builtin/json_identity"]]
+    assert snapshot.component_refs.metrics == [BUILTIN_COMPONENT_REFS["builtin/exact_match"]]
 
 
 def test_unknown_builtin_component_strings_fail_fast() -> None:
     experiment = Experiment(
         generation=GenerationConfig(generator="generator/unknown"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"]),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
         storage=StorageConfig(store="memory"),
         datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
     )
@@ -210,17 +210,17 @@ def test_unknown_builtin_component_strings_fail_fast() -> None:
 def test_builtin_registry_changes_alter_component_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original = BUILTIN_COMPONENT_REFS["generator/demo"]
+    original = BUILTIN_COMPONENT_REFS["builtin/demo_generator"]
     first = Experiment(
-        generation=GenerationConfig(generator="generator/demo"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"]),
+        generation=GenerationConfig(generator="builtin/demo_generator"),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
         storage=StorageConfig(store="memory"),
         datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
     ).compile()
 
     monkeypatch.setitem(
         BUILTIN_COMPONENT_REFS,
-        "generator/demo",
+        "builtin/demo_generator",
         ComponentRef(
             component_id=original.component_id,
             version="2.0",
@@ -229,8 +229,8 @@ def test_builtin_registry_changes_alter_component_identity(
     )
 
     second = Experiment(
-        generation=GenerationConfig(generator="generator/demo"),
-        evaluation=EvaluationConfig(metrics=["metric/demo"]),
+        generation=GenerationConfig(generator="builtin/demo_generator"),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
         storage=StorageConfig(store="memory"),
         datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
     ).compile()

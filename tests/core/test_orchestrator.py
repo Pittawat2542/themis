@@ -151,7 +151,7 @@ class DemoJudgeWorkflow:
         return "workflow-demo"
 
     def judge_calls(self) -> list[JudgeCall]:
-        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+        return [JudgeCall(call_id="call-0", judge_model_id="builtin/demo_judge")]
 
     def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
         del call, ctx
@@ -193,7 +193,7 @@ class PairwiseSelectionWorkflow:
         return [
             JudgeCall(
                 call_id="call-a-vs-b",
-                judge_model_id="judge/demo",
+                judge_model_id="builtin/demo_judge",
                 dimension_id="winner",
                 candidate_indices=[0, 1],
             )
@@ -300,13 +300,13 @@ class AwaitedReducer:
 def _experiment() -> Experiment:
     return Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 2},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -486,12 +486,12 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         generation=GenerationConfig(
             generator=TracedGenerator(),
             candidate_policy={"num_samples": 2},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo", llm_metric, selection_metric, trace_metric],
-            parsers=["parser/demo"],
-            judge_models=["judge/demo", "judge/demo"],
+            metrics=["builtin/exact_match", llm_metric, selection_metric, trace_metric],
+            parsers=["builtin/json_identity"],
+            judge_models=["builtin/demo_judge", "builtin/demo_judge"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -516,8 +516,8 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
         metrics=[resolve_metric_component(metric) for metric in experiment.evaluation.metrics],
         judge_models=[
-            resolve_judge_model_component("judge/demo"),
-            resolve_judge_model_component("judge/demo"),
+            resolve_judge_model_component("builtin/demo_judge"),
+            resolve_judge_model_component("builtin/demo_judge"),
         ],
         subscribers=[subscriber],
     )
@@ -527,7 +527,7 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
 
     assert result.status is RunStatus.COMPLETED
     assert sorted(score.metric_id for score in result.cases[0].scores) == [
-        "metric/demo",
+        "builtin/exact_match",
         "metric/llm",
         "metric/select",
         "metric/trace",
@@ -543,7 +543,7 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         "case-1-candidate-11",
     ]
     assert trace_metric.subject.trace.steps[0].output["seed"] == 7
-    assert [ref.component_id for ref in llm_metric.ctx.judge_model_refs] == ["judge/demo", "judge/demo"]
+    assert [ref.component_id for ref in llm_metric.ctx.judge_model_refs] == ["builtin/demo_judge", "builtin/demo_judge"]
     assert "before_judge" in subscriber.calls
     assert "after_judge" in subscriber.calls
     assert any(isinstance(event, EvaluationCompletedEvent) for event in events)
@@ -554,14 +554,14 @@ async def test_orchestrator_persists_workflow_events_through_orchestrator_event_
     llm_metric = RecordingLLMMetric()
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
             metrics=[llm_metric],
-            parsers=["parser/demo"],
-            judge_models=["judge/demo"],
+            parsers=["builtin/json_identity"],
+            judge_models=["builtin/demo_judge"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -585,7 +585,7 @@ async def test_orchestrator_persists_workflow_events_through_orchestrator_event_
         reducer=resolve_reducer_component(experiment.generation.reducer),
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
         metrics=[llm_metric],
-        judge_models=[resolve_judge_model_component("judge/demo")],
+        judge_models=[resolve_judge_model_component("builtin/demo_judge")],
         subscribers=[subscriber],
     )
 

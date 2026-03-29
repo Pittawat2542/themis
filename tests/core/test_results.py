@@ -19,13 +19,13 @@ from themis.core.models import Case, Dataset
 def _snapshot():
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["metric/demo"],
-            parsers=["parser/demo"],
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -81,8 +81,8 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
                 run_id="run-1",
                 case_id="case-1",
                 candidate_id="case-1-reduced",
-                metric_id="metric/demo",
-                score={"metric_id": "metric/demo", "value": 1.0, "details": {"matched": True}},
+                metric_id="builtin/exact_match",
+                score={"metric_id": "builtin/exact_match", "value": 1.0, "details": {"matched": True}},
             ),
             RunCompletedEvent(run_id="run-1"),
         ],
@@ -93,7 +93,7 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
     assert state.case_states["case-1"].reduced_candidate is not None
     assert state.case_states["case-1"].parsed_output is not None
     assert state.case_states["case-1"].evaluation_executions["metric/judge"].execution_id == "execution-1"
-    assert state.case_states["case-1"].successful_scores["metric/demo"].value == 1.0
+    assert state.case_states["case-1"].successful_scores["builtin/exact_match"].value == 1.0
 
 
 def test_stored_run_exposes_execution_state() -> None:

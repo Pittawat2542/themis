@@ -12,11 +12,11 @@ from tests.core.store_fakes import fake_pymongo_module
 def _snapshot():
     experiment = Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store="mongodb"),
         datasets=[
             Dataset(

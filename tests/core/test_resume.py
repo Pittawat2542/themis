@@ -75,7 +75,7 @@ class CountingReducer:
     def fingerprint(self) -> str:
         return "reducer-counting"
 
-    def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
+    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
         self.calls += 1
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
@@ -177,7 +177,7 @@ class CountingLLMMetric:
 
 
 class DemoJudgeModel:
-    component_id = "judge/demo"
+    component_id = "builtin/demo_judge"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -201,7 +201,7 @@ class DemoWorkflow:
         return "workflow-demo"
 
     def judge_calls(self) -> list[JudgeCall]:
-        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+        return [JudgeCall(call_id="call-0", judge_model_id="builtin/demo_judge")]
 
     def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
         del call, ctx

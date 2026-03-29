@@ -18,11 +18,11 @@ from tests.core.store_fakes import fake_psycopg_module, fake_pymongo_module
 def _experiment(store: str, parameters: dict[str, object] | None = None) -> Experiment:
     return Experiment(
         generation=GenerationConfig(
-            generator="generator/demo",
+            generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
-            reducer="reducer/demo",
+            reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
         storage=StorageConfig(store=store, parameters=parameters or {}),
         datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input="hi", expected_output="hi")])],
     )

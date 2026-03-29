@@ -1,0 +1,29 @@
+[components."builtin/demo_generator"]
+kind = "generator"
+target = "themis.core.builtins:DemoGenerator"
+version = "1.0"
+fingerprint = "builtin-demo-generator-fingerprint"
+
+[components."builtin/majority_vote"]
+kind = "reducer"
+target = "themis.core.builtins:DemoReducer"
+version = "1.0"
+fingerprint = "builtin-majority-vote-fingerprint"
+
+[components."builtin/json_identity"]
+kind = "parser"
+target = "themis.core.builtins:DemoParser"
+version = "1.0"
+fingerprint = "builtin-json-identity-fingerprint"
+
+[components."builtin/exact_match"]
+kind = "metric"
+target = "themis.core.builtins:DemoMetric"
+version = "1.0"
+fingerprint = "builtin-exact-match-fingerprint"
+
+[components."builtin/demo_judge"]
+kind = "judge_model"
+target = "themis.core.builtins:DemoJudgeModel"
+version = "1.0"
+fingerprint = "builtin-demo-judge-fingerprint"
