@@ -55,7 +55,7 @@ class RunSnapshot(FrozenModel):
     provenance: RunProvenance
     component_refs: ComponentRefs
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def run_id(self) -> str:
         return self.identity.compute_hash()

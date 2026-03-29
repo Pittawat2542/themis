@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import runtime_checkable
-
 from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
 from themis.core.models import (
     Case,

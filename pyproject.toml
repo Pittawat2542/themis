@@ -29,6 +29,9 @@ Issues = "https://github.com/Pittawat2542/themis/issues"
 [tool.setuptools.packages.find]
 include = ["themis*"]
 
+[tool.setuptools.package-data]
+"themis" = ["py.typed"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
