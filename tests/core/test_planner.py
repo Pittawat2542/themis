@@ -6,11 +6,13 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.planner import Planner
+from themis.core.workflows import JudgeResponse
 
 
 class DummyLLMMetric:
     component_id = "metric/llm"
     version = "1.0"
+    metric_family = "llm"
 
     def fingerprint(self) -> str:
         return "metric-llm-fingerprint"
@@ -20,7 +22,45 @@ class DummyLLMMetric:
         raise NotImplementedError
 
 
-def _experiment(*, candidate_policy=None, reducer="reducer/demo", parsers=None, metrics=None, seeds=None):
+class DummySelectionMetric:
+    component_id = "metric/select"
+    version = "1.0"
+    metric_family = "selection"
+
+    def fingerprint(self) -> str:
+        return "metric-select-fingerprint"
+
+    def build_workflow(self, subject, ctx):
+        del subject, ctx
+        raise NotImplementedError
+
+
+class DummyJudgeModel:
+    component_id = "judge/demo"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "judge-demo-fingerprint"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del seed
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response=prompt,
+        )
+
+
+def _experiment(
+    *,
+    candidate_policy=None,
+    reducer="reducer/demo",
+    parsers=None,
+    metrics=None,
+    seeds=None,
+    judge_models=None,
+):
     return Experiment(
         generation=GenerationConfig(
             generator="generator/demo",
@@ -30,6 +70,7 @@ def _experiment(*, candidate_policy=None, reducer="reducer/demo", parsers=None, 
         evaluation=EvaluationConfig(
             metrics=metrics or ["metric/demo"],
             parsers=parsers or ["parser/demo"],
+            judge_models=judge_models or [],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
@@ -90,11 +131,26 @@ def test_planner_requires_reducer_for_multi_candidate_runs() -> None:
         planner.validate_snapshot(snapshot)
 
 
-def test_planner_rejects_non_pure_metrics_for_phase_2() -> None:
+def test_planner_allows_workflow_backed_metrics_when_judge_models_are_present() -> None:
+    planner = Planner()
+    snapshot = _experiment(metrics=[DummyLLMMetric()], judge_models=[DummyJudgeModel()]).compile()
+
+    planner.validate_snapshot(snapshot)
+
+
+def test_planner_requires_judge_models_for_workflow_backed_metrics() -> None:
     planner = Planner()
     snapshot = _experiment(metrics=[DummyLLMMetric()]).compile()
 
-    with pytest.raises(ValueError, match="Phase 2 only supports PureMetric scoring"):
+    with pytest.raises(ValueError, match="judge model"):
+        planner.validate_snapshot(snapshot)
+
+
+def test_planner_requires_multiple_candidates_for_selection_metrics() -> None:
+    planner = Planner()
+    snapshot = _experiment(metrics=[DummySelectionMetric()], judge_models=[DummyJudgeModel()]).compile()
+
+    with pytest.raises(ValueError, match="Selection metrics require at least two candidates"):
         planner.validate_snapshot(snapshot)
 
 

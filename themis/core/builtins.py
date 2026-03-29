@@ -61,6 +61,7 @@ class DemoParser:
 class DemoMetric:
     component_id = "metric/demo"
     version = "1.0"
+    metric_family = "pure"
 
     def fingerprint(self) -> str:
         return "builtin-metric-demo-fingerprint"

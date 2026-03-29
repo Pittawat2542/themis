@@ -8,8 +8,10 @@ from time import monotonic
 from collections.abc import Mapping
 
 from themis.core.config import RuntimeConfig
-from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
 from themis.core.events import (
+    EvaluationCompletedEvent,
+    EvaluationFailedEvent,
     GenerationCompletedEvent,
     GenerationFailedEvent,
     ParseCompletedEvent,
@@ -22,20 +24,40 @@ from themis.core.events import (
     ScoreCompletedEvent,
     ScoreFailedEvent,
 )
-from themis.core.models import GenerationResult, ParsedOutput, ReducedCandidate, ScoreError
+from themis.core.models import (
+    ConversationTrace,
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    Score,
+    ScoreError,
+    WorkflowTrace,
+)
 from themis.core.planner import Planner
 from themis.core.protocols import (
     CandidateReducer,
     Generator,
+    JudgeModel,
     LifecycleSubscriber,
+    LLMMetric,
     Parser,
     PureMetric,
+    SelectionMetric,
+    TraceMetric,
     TracingProvider,
+    WorkflowRunner,
 )
 from themis.core.results import CaseExecutionState, CaseResult, ExecutionState, GenerationWorkItem, ProgressSnapshot, RunResult, RunStatus
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
+from themis.core.subjects import (
+    ConversationSubject,
+    TraceSubject,
+    candidate_set_subject_for_llm_metric,
+    candidate_set_subject_for_selection_metric,
+)
 from themis.core.tracing import NoOpTracingProvider
+from themis.core.workflow_runner import DefaultWorkflowRunner, WorkflowBuildError
 
 DEFAULT_PROVIDER_RATE_LIMIT = 60
 
@@ -85,7 +107,9 @@ class Orchestrator:
         generator: Generator,
         reducer: CandidateReducer | None = None,
         parser: Parser | None = None,
-        metrics: list[PureMetric] | None = None,
+        metrics: list[PureMetric | LLMMetric | SelectionMetric | TraceMetric] | None = None,
+        judge_models: list[JudgeModel] | None = None,
+        workflow_runner: WorkflowRunner | None = None,
         planner: Planner | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
@@ -103,6 +127,7 @@ class Orchestrator:
         self.reducer = reducer
         self.parser = parser
         self.metrics = list(metrics or [])
+        self.judge_models = list(judge_models or [])
         self.planner = planner or Planner()
         self.subscribers = list(subscribers or [])
         self.tracing_provider = tracing_provider or NoOpTracingProvider()
@@ -122,8 +147,18 @@ class Orchestrator:
                     1,
                     self.runtime.stage_concurrency.get("generation", self.runtime.max_concurrent_tasks),
                 )
-            )
+            ),
+            "evaluation": asyncio.Semaphore(
+                max(
+                    1,
+                    self.runtime.stage_concurrency.get("evaluation", self.runtime.max_concurrent_tasks),
+                )
+            ),
         }
+        self.workflow_runner = workflow_runner or DefaultWorkflowRunner(
+            store=store,
+            judge_models=self.judge_models,
+        )
         self._provider_semaphores: dict[str, asyncio.Semaphore] = {}
         self._provider_limiters: dict[str, TokenBucketRateLimiter] = {}
 
@@ -185,6 +220,8 @@ class Orchestrator:
         case = items[0].case
         prior_case_state = existing_state.case_states.get(case.case_id, CaseExecutionState())
         generated_by_index = dict(prior_case_state.generated_candidates_by_index)
+        workflow_executions = dict(prior_case_state.evaluation_executions)
+        evaluation_failures = dict(prior_case_state.evaluation_failures)
         successful_scores = dict(prior_case_state.successful_scores)
         score_failures = dict(prior_case_state.score_failures)
         had_failure = False
@@ -273,49 +310,122 @@ class Orchestrator:
                     True,
                 )
 
-        for metric in self.metrics:
-            if metric.component_id in successful_scores:
+        for metric, metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False):
+            if metric_kind != "pure" and metric.component_id in successful_scores and metric.component_id in workflow_executions:
                 continue
-            score_ctx = ScoreContext(run_id=snapshot.run_id, case=case, parsed_output=parsed, seed=items[0].seed)
-            self._notify("before_score", parsed, score_ctx)
-            span = self.tracing_provider.start_span(
-                "score",
-                {"case_id": case.case_id, "metric_id": metric.component_id},
-            )
-            try:
-                score = metric.score(parsed, case, score_ctx)
-                self._notify("after_score", score, score_ctx)
-                if isinstance(score, ScoreError):
-                    score_failures[metric.component_id] = score
+            if metric_kind == "pure" and metric.component_id in successful_scores:
+                continue
+            if metric_kind == "pure":
+                score_ctx = ScoreContext(run_id=snapshot.run_id, case=case, parsed_output=parsed, seed=items[0].seed)
+                self._notify("before_score", parsed, score_ctx)
+                span = self.tracing_provider.start_span(
+                    "score",
+                    {"case_id": case.case_id, "metric_id": metric.component_id},
+                )
+                try:
+                    score = metric.score(parsed, case, score_ctx)
+                    self._notify("after_score", score, score_ctx)
+                    if isinstance(score, ScoreError):
+                        score_failures[metric.component_id] = score
+                        successful_scores.pop(metric.component_id, None)
+                        await self._persist_event(
+                            ScoreFailedEvent(
+                                run_id=snapshot.run_id,
+                                case_id=case.case_id,
+                                candidate_id=reduced.candidate_id,
+                                metric_id=score.metric_id,
+                                error=score.model_dump(mode="json"),
+                            )
+                        )
+                        had_failure = True
+                        self.tracing_provider.end_span(span, "error")
+                        continue
+                    successful_scores[metric.component_id] = score
+                    score_failures.pop(metric.component_id, None)
+                    await self._persist_event(
+                        ScoreCompletedEvent(
+                            run_id=snapshot.run_id,
+                            case_id=case.case_id,
+                            candidate_id=reduced.candidate_id,
+                            metric_id=score.metric_id,
+                            score=score.model_dump(mode="json"),
+                        )
+                    )
+                    self.tracing_provider.end_span(span, "ok")
+                except Exception as exc:
+                    score_error = ScoreError(metric_id=metric.component_id, reason=str(exc))
+                    score_failures[metric.component_id] = score_error
                     successful_scores.pop(metric.component_id, None)
                     await self._persist_event(
                         ScoreFailedEvent(
                             run_id=snapshot.run_id,
                             case_id=case.case_id,
                             candidate_id=reduced.candidate_id,
-                            metric_id=score.metric_id,
-                            error=score.model_dump(mode="json"),
+                            metric_id=metric.component_id,
+                            error=score_error.model_dump(mode="json"),
                         )
                     )
-                    had_failure = True
                     self.tracing_provider.end_span(span, "error")
-                    continue
-                successful_scores[metric.component_id] = score
+                    had_failure = True
+                continue
+
+            eval_ctx = self._evaluation_context(snapshot, case, parsed, items[0].seed)
+            subject = self._evaluation_subject(
+                metric_kind=metric_kind,
+                generated_candidates=generated_candidates,
+                reduced=reduced,
+            )
+            self._notify("before_judge", subject, eval_ctx)
+            span = self.tracing_provider.start_span(
+                "judge",
+                {"case_id": case.case_id, "metric_id": metric.component_id},
+            )
+            try:
+                workflow = metric.build_workflow(subject, eval_ctx)
+                execution = await self.workflow_runner.run_evaluation(
+                    workflow=workflow,
+                    subject=subject,
+                    metric_id=metric.component_id,
+                    ctx=eval_ctx,
+                )
+                self._notify("after_judge", execution, eval_ctx)
+                workflow_executions[metric.component_id] = execution
+                evaluation_failures.pop(metric.component_id, None)
+                await self._persist_event(
+                    EvaluationCompletedEvent(
+                        run_id=snapshot.run_id,
+                        case_id=case.case_id,
+                        metric_id=metric.component_id,
+                        execution=execution.model_dump(mode="json"),
+                    )
+                )
+                final_score = self._final_workflow_score(metric.component_id, execution)
+                successful_scores[metric.component_id] = final_score
                 score_failures.pop(metric.component_id, None)
                 await self._persist_event(
                     ScoreCompletedEvent(
                         run_id=snapshot.run_id,
                         case_id=case.case_id,
                         candidate_id=reduced.candidate_id,
-                        metric_id=score.metric_id,
-                        score=score.model_dump(mode="json"),
+                        metric_id=final_score.metric_id,
+                        score=final_score.model_dump(mode="json"),
                     )
                 )
                 self.tracing_provider.end_span(span, "ok")
-            except Exception as exc:
+            except (WorkflowBuildError, Exception) as exc:
+                workflow_executions.pop(metric.component_id, None)
+                evaluation_failures[metric.component_id] = str(exc)
                 score_error = ScoreError(metric_id=metric.component_id, reason=str(exc))
-                score_failures[metric.component_id] = score_error
                 successful_scores.pop(metric.component_id, None)
+                score_failures[metric.component_id] = score_error
+                await self._persist_event(
+                    EvaluationFailedEvent(
+                        run_id=snapshot.run_id,
+                        case_id=case.case_id,
+                        metric_id=metric.component_id,
+                        error_message=str(exc),
+                    )
+                )
                 await self._persist_event(
                     ScoreFailedEvent(
                         run_id=snapshot.run_id,
@@ -334,9 +444,14 @@ class Orchestrator:
                 generated_candidates=generated_candidates,
                 reduced_candidate=reduced,
                 parsed_output=parsed,
+                evaluation_executions=[
+                    workflow_executions[metric.component_id]
+                    for metric, metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False)
+                    if metric_kind != "pure" and metric.component_id in workflow_executions
+                ],
                 scores=[
                     score
-                    for metric in self.metrics
+                    for metric, _metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False)
                     for score in [successful_scores.get(metric.component_id) or score_failures.get(metric.component_id)]
                     if score is not None
                 ],
@@ -418,6 +533,69 @@ class Orchestrator:
         if self.parser is None:
             return ParsedOutput(value=reduced.final_output)
         return self.parser.parse(reduced, parse_ctx)
+
+    def _evaluation_context(
+        self,
+        snapshot: RunSnapshot,
+        case,
+        parsed: ParsedOutput,
+        seed: int | None,
+    ) -> EvalScoreContext:
+        if not snapshot.identity.judge_model_refs:
+            raise WorkflowBuildError("Workflow-backed metrics require at least one judge model")
+        return EvalScoreContext(
+            run_id=snapshot.run_id,
+            case=case,
+            parsed_output=parsed,
+            seed=seed,
+            judge_model_ref=snapshot.identity.judge_model_refs[0],
+            judge_seed=seed,
+            eval_workflow_config=snapshot.identity.workflow_overrides,
+        )
+
+    def _evaluation_subject(
+        self,
+        *,
+        metric_kind: str,
+        generated_candidates: list[GenerationResult],
+        reduced: ReducedCandidate,
+    ):
+        if metric_kind == "llm":
+            reduced_candidate = GenerationResult(
+                candidate_id=reduced.candidate_id,
+                final_output=reduced.final_output,
+            )
+            return candidate_set_subject_for_llm_metric([reduced_candidate])
+        if metric_kind == "selection":
+            return candidate_set_subject_for_selection_metric(generated_candidates)
+        if metric_kind == "trace":
+            winner_id = reduced.source_candidate_ids[0] if reduced.source_candidate_ids else generated_candidates[0].candidate_id
+            winner = next(
+                (candidate for candidate in generated_candidates if candidate.candidate_id == winner_id),
+                generated_candidates[0],
+            )
+            if winner.trace is not None:
+                return TraceSubject(trace=WorkflowTrace(trace_id=f"{winner.candidate_id}:trace", steps=winner.trace))
+            if winner.conversation is not None:
+                return ConversationSubject(
+                    conversation=ConversationTrace(
+                        trace_id=f"{winner.candidate_id}:conversation",
+                        messages=winner.conversation,
+                    )
+                )
+            raise WorkflowBuildError("Trace metrics require a trace or conversation on the winning candidate")
+        raise WorkflowBuildError(f"Unsupported metric kind: {metric_kind}")
+
+    def _final_workflow_score(
+        self,
+        metric_id: str,
+        execution,
+    ) -> Score:
+        if execution.scores:
+            return execution.scores[-1]
+        if execution.aggregation_output is not None and isinstance(execution.aggregation_output.value, (int, float)):
+            return Score(metric_id=metric_id, value=float(execution.aggregation_output.value))
+        return Score(metric_id=metric_id, value=0.0)
 
     async def _persist_event(self, event) -> None:
         for attempt in range(self.runtime.store_retry_attempts):

@@ -8,6 +8,7 @@ from pydantic import Field
 
 from themis.core.builtins import (
     resolve_generator_component,
+    resolve_judge_model_component,
     resolve_metric_component,
     resolve_parser_component,
     resolve_reducer_component,
@@ -112,6 +113,7 @@ class Experiment(FrozenModel):
             else None,
             parser=resolve_parser_component(self.evaluation.parsers[0]) if self.evaluation.parsers else None,
             metrics=[resolve_metric_component(metric) for metric in self.evaluation.metrics],
+            judge_models=[resolve_judge_model_component(judge_model) for judge_model in self.evaluation.judge_models],
             subscribers=subscribers or [],
             tracing_provider=tracing_provider or NoOpTracingProvider(),
             runtime=effective_runtime,
@@ -130,6 +132,9 @@ class Experiment(FrozenModel):
         )
 
     def _metric_kind(self, metric: object) -> str:
+        metric_family = getattr(metric, "metric_family", None)
+        if metric_family in {"pure", "llm", "selection", "trace"}:
+            return metric_family
         if isinstance(metric, str):
             if metric == "metric/demo":
                 return "pure"

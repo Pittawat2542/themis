@@ -7,16 +7,19 @@ import pytest
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
 from themis.core.events import (
+    EvaluationCompletedEvent,
     GenerationCompletedEvent,
     ParseCompletedEvent,
     ReductionCompletedEvent,
     RunStartedEvent,
+    ScoreCompletedEvent,
     ScoreFailedEvent,
 )
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
 from themis.core.orchestrator import Orchestrator
 from themis.core.stores.memory import InMemoryRunStore
+from themis.core.workflows import EvalStep, JudgeResponse
 
 
 class ConcurrencyTrackingGenerator:
@@ -145,6 +148,56 @@ class FlakyStore(InMemoryRunStore):
             self.fail_next_persist = False
             raise RuntimeError("temporary store outage")
         super().persist_event(event)
+
+
+class CountingLLMMetric:
+    component_id = "metric/llm"
+    version = "1.0"
+    metric_family = "llm"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def fingerprint(self) -> str:
+        return "metric-llm"
+
+    def build_workflow(self, subject, ctx):
+        del subject, ctx
+        self.calls += 1
+        return DemoWorkflow()
+
+
+class DemoJudgeModel:
+    component_id = "judge/demo"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "judge-demo"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del seed
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response=prompt,
+        )
+
+
+class DemoWorkflow:
+    component_id = "workflow/demo"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "workflow-demo"
+
+    def steps(self) -> list[EvalStep]:
+        return [
+            EvalStep(step_type="render_prompt", config={"template": "Grade {candidate_output}"}),
+            EvalStep(step_type="model_call"),
+            EvalStep(step_type="parse_judgment", config={"label_scores": {"pass": 1.0}}),
+            EvalStep(step_type="emit_score"),
+        ]
 
 
 def _experiment(*, generator, reducer, parser, metric, num_samples=1) -> Experiment:
@@ -498,3 +551,106 @@ async def test_orchestrator_updates_provider_rate_limit_from_generation_artifact
         monkeypatch.undo()
 
     assert generator.timestamps == [0.0, 0.5, 1.0]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metrics() -> None:
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingLLMMetric()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator=generator,
+            candidate_policy={"num_samples": 1},
+            reducer=reducer,
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[metric],
+            parsers=[parser],
+            judge_models=[DemoJudgeModel()],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-candidate-7",
+            candidate_index=0,
+            seed=7,
+            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+        )
+    )
+    store.persist_event(
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["case-1-candidate-7"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["case-1-candidate-7"],
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    store.persist_event(
+        ParseCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            result={"value": {"answer": "4"}, "format": "json"},
+        )
+    )
+    store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            metric_id=metric.component_id,
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": metric.component_id, "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+    store.persist_event(
+        ScoreCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id=metric.component_id,
+            score={"metric_id": metric.component_id, "value": 1.0},
+        )
+    )
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metrics=[metric],
+        judge_models=[DemoJudgeModel()],
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert generator.calls == 0
+    assert reducer.calls == 0
+    assert parser.calls == 0
+    assert metric.calls == 0
