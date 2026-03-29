@@ -7,6 +7,7 @@ from pydantic import Field
 from themis.core.base import FrozenModel
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Dataset
+from themis.core.protocols import LLMMetric, PureMetric, SelectionMetric, TraceMetric
 from themis.core.snapshot import (
     ComponentRefs,
     DatasetRef,
@@ -68,4 +69,21 @@ class Experiment(FrozenModel):
             identity=identity,
             provenance=provenance,
             component_refs=component_refs,
+            datasets=self.datasets,
+            metric_kinds=[self._metric_kind(metric) for metric in self.evaluation.metrics],
         )
+
+    def _metric_kind(self, metric: object) -> str:
+        if isinstance(metric, str):
+            if metric == "metric/demo":
+                return "pure"
+            raise ValueError(f"Unknown builtin component: {metric}")
+        if isinstance(metric, PureMetric):
+            return "pure"
+        if isinstance(metric, LLMMetric):
+            return "llm"
+        if isinstance(metric, SelectionMetric):
+            return "selection"
+        if isinstance(metric, TraceMetric):
+            return "trace"
+        raise TypeError("Metrics must satisfy a supported metric protocol.")

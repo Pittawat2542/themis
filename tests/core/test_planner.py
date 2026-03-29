@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+import pytest
+
+from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.experiment import Experiment
+from themis.core.models import Case, Dataset
+from themis.core.planner import Planner
+
+
+class DummyLLMMetric:
+    component_id = "metric/llm"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "metric-llm-fingerprint"
+
+    def build_workflow(self, subject, ctx):
+        del subject, ctx
+        raise NotImplementedError
+
+
+def _experiment(*, candidate_policy=None, reducer="reducer/demo", parsers=None, metrics=None, seeds=None):
+    return Experiment(
+        generation=GenerationConfig(
+            generator="generator/demo",
+            candidate_policy=candidate_policy or {"num_samples": 1},
+            reducer=reducer,
+        ),
+        evaluation=EvaluationConfig(
+            metrics=metrics or ["metric/demo"],
+            parsers=parsers or ["parser/demo"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
+                    Case(case_id="case-2", input={"question": "3+3"}, expected_output={"answer": "6"}),
+                ],
+            )
+        ],
+        seeds=seeds or [],
+    )
+
+
+@pytest.mark.asyncio
+async def test_planner_generates_lazy_candidate_work_items_with_deterministic_seeds() -> None:
+    planner = Planner()
+    snapshot = _experiment(candidate_policy={"num_samples": 2}).compile()
+
+    first_pass = [item async for item in planner.iter_work_items(snapshot)]
+    second_pass = [item async for item in planner.iter_work_items(snapshot)]
+
+    assert [(item.case_id, item.candidate_index, item.seed) for item in first_pass] == [
+        ("case-1", 0, first_pass[0].seed),
+        ("case-1", 1, first_pass[1].seed),
+        ("case-2", 0, first_pass[2].seed),
+        ("case-2", 1, first_pass[3].seed),
+    ]
+    assert [item.seed for item in first_pass] == [item.seed for item in second_pass]
+    assert len(first_pass) == 4
+
+
+@pytest.mark.asyncio
+async def test_planner_honors_explicit_seeds_per_candidate() -> None:
+    planner = Planner()
+    snapshot = _experiment(candidate_policy={"num_samples": 2}, seeds=[7, 11]).compile()
+
+    items = [item async for item in planner.iter_work_items(snapshot)]
+
+    assert [item.seed for item in items[:2]] == [7, 11]
+    assert [item.seed for item in items[2:]] == [7, 11]
+
+
+def test_planner_rejects_multiple_parsers_for_phase_2() -> None:
+    planner = Planner()
+    snapshot = _experiment(parsers=["parser/demo", "parser/demo"]).compile()
+
+    with pytest.raises(ValueError, match="Phase 2 supports at most one parser"):
+        planner.validate_snapshot(snapshot)
+
+
+def test_planner_requires_reducer_for_multi_candidate_runs() -> None:
+    planner = Planner()
+    snapshot = _experiment(candidate_policy={"num_samples": 2}, reducer=None, parsers=[]).compile()
+
+    with pytest.raises(ValueError, match="Multi-candidate runs require an explicit reducer"):
+        planner.validate_snapshot(snapshot)
+
+
+def test_planner_rejects_non_pure_metrics_for_phase_2() -> None:
+    planner = Planner()
+    snapshot = _experiment(metrics=[DummyLLMMetric()]).compile()
+
+    with pytest.raises(ValueError, match="Phase 2 only supports PureMetric scoring"):
+        planner.validate_snapshot(snapshot)
+
+
+def test_planner_requires_self_consistency_count_when_enabled() -> None:
+    planner = Planner()
+    snapshot = _experiment(candidate_policy={"self_consistency": True}).compile()
+
+    with pytest.raises(ValueError, match="self_consistency_count"):
+        planner.validate_snapshot(snapshot)

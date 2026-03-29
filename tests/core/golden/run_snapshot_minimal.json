@@ -25,6 +25,25 @@
       "version": "1.0"
     }
   },
+  "datasets": [
+    {
+      "cases": [
+        {
+          "case_id": "case-1",
+          "expected_output": "4",
+          "input": {
+            "question": "2+2"
+          },
+          "metadata": {}
+        }
+      ],
+      "dataset_id": "dataset-1",
+      "metadata": {
+        "owner": "tests"
+      },
+      "revision": "r1"
+    }
+  ],
   "identity": {
     "candidate_policy": {
       "num_samples": 2
@@ -69,6 +88,9 @@
     ],
     "workflow_overrides": {}
   },
+  "metric_kinds": [
+    "pure"
+  ],
   "provenance": {
     "environment_metadata": {
       "env": "test"

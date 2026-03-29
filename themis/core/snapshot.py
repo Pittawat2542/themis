@@ -14,6 +14,7 @@ from themis.core.components import (
 )
 from themis.core.config import StorageConfig
 from themis.core.events import RunEvent
+from themis.core.models import Dataset
 
 
 class DatasetRef(HashableModel):
@@ -53,6 +54,8 @@ class RunSnapshot(FrozenModel):
     identity: RunIdentity
     provenance: RunProvenance
     component_refs: ComponentRefs
+    datasets: list[Dataset] = Field(default_factory=list)
+    metric_kinds: list[str] = Field(default_factory=list)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -63,6 +66,13 @@ class RunSnapshot(FrozenModel):
 class StoredRun(FrozenModel):
     snapshot: RunSnapshot
     events: list[RunEvent] = Field(default_factory=list)
+
+    @computed_field(return_type=object)  # type: ignore[prop-decorator]
+    @property
+    def execution_state(self) -> object:
+        from themis.core.results import ExecutionState
+
+        return ExecutionState.from_events(self.snapshot.run_id, self.events)
 
 
 def snapshot_from_dict(payload: dict[str, Any]) -> RunSnapshot:

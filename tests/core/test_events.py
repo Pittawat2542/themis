@@ -5,11 +5,15 @@ from pydantic import ValidationError
 
 from themis.core.events import (
     GenerationCompletedEvent,
+    GenerationFailedEvent,
+    ParseFailedEvent,
+    ReductionFailedEvent,
     RunCompletedEvent,
     RunEvent,
     RunFailedEvent,
     RunStartedEvent,
     ScoreCompletedEvent,
+    ScoreFailedEvent,
     StepCompletedEvent,
     StepFailedEvent,
     StepStartedEvent,
@@ -50,12 +54,41 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
             run_id="run-1",
             case_id="case-1",
             candidate_id="candidate-1",
+            candidate_index=0,
+            seed=7,
+            result={"candidate_id": "candidate-1", "final_output": {"answer": "4"}},
+            result_blob_ref="sha256:abc123",
         ),
         ScoreCompletedEvent(
             run_id="run-1",
             case_id="case-1",
             candidate_id="candidate-1",
             metric_id="exact_match",
+            score={"metric_id": "exact_match", "value": 1.0, "details": {"matched": True}},
+        ),
+        GenerationFailedEvent(
+            run_id="run-1",
+            case_id="case-1",
+            candidate_id="candidate-2",
+            error_message="provider timeout",
+        ),
+        ReductionFailedEvent(
+            run_id="run-1",
+            case_id="case-1",
+            error_message="no candidates",
+        ),
+        ParseFailedEvent(
+            run_id="run-1",
+            case_id="case-1",
+            candidate_id="candidate-1",
+            error_message="invalid json",
+        ),
+        ScoreFailedEvent(
+            run_id="run-1",
+            case_id="case-1",
+            candidate_id="candidate-1",
+            metric_id="exact_match",
+            error={"metric_id": "exact_match", "reason": "missing expected output"},
         ),
         StepStartedEvent(
             run_id="run-1",
@@ -111,6 +144,30 @@ def test_known_event_type_accepts_newer_schema_version() -> None:
     )
 
     assert restored.schema_version == "2"
+
+
+def test_generation_event_payloads_round_trip_runtime_data() -> None:
+    event = GenerationCompletedEvent(
+        run_id="run-1",
+        case_id="case-1",
+        candidate_id="candidate-1",
+        candidate_index=1,
+        seed=11,
+        result={
+            "candidate_id": "candidate-1",
+            "final_output": {"answer": "4"},
+            "conversation": [{"role": "assistant", "content": "4"}],
+        },
+        result_blob_ref="sha256:payload",
+        provider_key="openai:gpt-5.4-mini",
+    )
+
+    restored = event_from_dict(event.model_dump(mode="json"))
+
+    assert isinstance(restored, GenerationCompletedEvent)
+    assert restored.result_blob_ref == "sha256:payload"
+    assert restored.provider_key == "openai:gpt-5.4-mini"
+    assert restored.result == event.result
 
 
 def test_malformed_known_event_payload_still_fails_validation() -> None:

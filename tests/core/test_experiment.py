@@ -36,4 +36,5 @@ def test_experiment_compile_returns_snapshot() -> None:
 
     assert isinstance(snapshot, RunSnapshot)
     assert snapshot.identity.dataset_refs[0].dataset_id == "dataset-1"
+    assert snapshot.datasets[0].cases[0].case_id == "case-1"
     assert snapshot.component_refs.generator.component_id == "generator/demo"

@@ -40,18 +40,46 @@ class GenerationCompletedEvent(RunEvent):
     event_type: Literal["generation_completed"] = "generation_completed"
     case_id: str
     candidate_id: str
+    candidate_index: int | None = None
+    seed: int | None = None
+    provider_key: str | None = None
+    result: dict[str, JSONValue] | None = None
+    result_blob_ref: str | None = None
+
+
+class GenerationFailedEvent(RunEvent):
+    event_type: Literal["generation_failed"] = "generation_failed"
+    case_id: str
+    candidate_id: str
+    error_message: str
 
 
 class ReductionCompletedEvent(RunEvent):
     event_type: Literal["reduction_completed"] = "reduction_completed"
     case_id: str
     candidate_id: str
+    source_candidate_ids: list[str] = Field(default_factory=list)
+    result: dict[str, JSONValue] | None = None
+
+
+class ReductionFailedEvent(RunEvent):
+    event_type: Literal["reduction_failed"] = "reduction_failed"
+    case_id: str
+    error_message: str
 
 
 class ParseCompletedEvent(RunEvent):
     event_type: Literal["parse_completed"] = "parse_completed"
     case_id: str
     candidate_id: str
+    result: dict[str, JSONValue] | None = None
+
+
+class ParseFailedEvent(RunEvent):
+    event_type: Literal["parse_failed"] = "parse_failed"
+    case_id: str
+    candidate_id: str
+    error_message: str
 
 
 class ScoreCompletedEvent(RunEvent):
@@ -59,6 +87,15 @@ class ScoreCompletedEvent(RunEvent):
     case_id: str
     candidate_id: str
     metric_id: str
+    score: dict[str, JSONValue] | None = None
+
+
+class ScoreFailedEvent(RunEvent):
+    event_type: Literal["score_failed"] = "score_failed"
+    case_id: str
+    candidate_id: str
+    metric_id: str
+    error: dict[str, JSONValue] | None = None
 
 
 class StepStartedEvent(RunEvent):
@@ -89,9 +126,13 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
     "run_completed": RunCompletedEvent,
     "run_failed": RunFailedEvent,
     "generation_completed": GenerationCompletedEvent,
+    "generation_failed": GenerationFailedEvent,
     "reduction_completed": ReductionCompletedEvent,
+    "reduction_failed": ReductionFailedEvent,
     "parse_completed": ParseCompletedEvent,
+    "parse_failed": ParseFailedEvent,
     "score_completed": ScoreCompletedEvent,
+    "score_failed": ScoreFailedEvent,
     "step_started": StepStartedEvent,
     "step_completed": StepCompletedEvent,
     "step_failed": StepFailedEvent,
