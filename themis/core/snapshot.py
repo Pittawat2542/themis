@@ -39,6 +39,7 @@ class ComponentRefs(FrozenModel):
     reducer: ComponentRef | None = None
     parsers: list[ComponentRef] = Field(default_factory=list)
     metrics: list[ComponentRef] = Field(default_factory=list)
+    judge_models: list[ComponentRef] = Field(default_factory=list)
 
 
 class RunIdentity(HashableModel):
@@ -47,6 +48,7 @@ class RunIdentity(HashableModel):
     reducer_ref: ComponentRef | None = None
     parser_refs: list[ComponentRef] = Field(default_factory=list)
     metric_refs: list[ComponentRef] = Field(default_factory=list)
+    judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from themis.core.events import (
+    EvaluationCompletedEvent,
     GenerationCompletedEvent,
     ParseCompletedEvent,
     ReductionCompletedEvent,
@@ -65,6 +66,17 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
                 candidate_id="case-1-reduced",
                 result={"value": {"answer": "4"}, "format": "json"},
             ),
+            EvaluationCompletedEvent(
+                run_id="run-1",
+                case_id="case-1",
+                metric_id="metric/judge",
+                execution={
+                    "execution_id": "execution-1",
+                    "subject_kind": "candidate_set",
+                    "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                    "trace": {"trace_id": "trace-1", "steps": []},
+                },
+            ),
             ScoreCompletedEvent(
                 run_id="run-1",
                 case_id="case-1",
@@ -80,6 +92,7 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
     assert state.case_states["case-1"].generated_candidates["candidate-1"].final_output == {"answer": "4"}
     assert state.case_states["case-1"].reduced_candidate is not None
     assert state.case_states["case-1"].parsed_output is not None
+    assert state.case_states["case-1"].evaluation_executions["metric/judge"].execution_id == "execution-1"
     assert state.case_states["case-1"].scores["metric/demo"].value == 1.0
 
 

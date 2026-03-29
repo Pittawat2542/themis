@@ -11,6 +11,8 @@ from themis.core.contexts import (
     ScoreContext,
 )
 from themis.core.events import (
+    EvaluationCompletedEvent,
+    EvaluationFailedEvent,
     GenerationCompletedEvent,
     GenerationFailedEvent,
     ParseCompletedEvent,
@@ -56,6 +58,7 @@ from themis.core.protocols import (
     CandidateReducer,
     EvaluationWorkflow,
     Generator,
+    JudgeModel,
     LLMMetric,
     LifecycleSubscriber,
     OnEvent,
@@ -64,6 +67,7 @@ from themis.core.protocols import (
     SelectionMetric,
     TraceMetric,
     TracingProvider,
+    WorkflowRunner,
 )
 from themis.core.orchestrator import Orchestrator
 from themis.core.planner import Planner
@@ -98,6 +102,7 @@ from themis.core.subjects import (
 )
 from themis.core.stores import InMemoryRunStore, SqliteRunStore, sqlite_store
 from themis.core.tracing import NoOpTracingProvider
+from themis.core.workflow_runner import WorkflowBuildError
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
@@ -130,6 +135,8 @@ __all__ = [
     "EvalStep",
     "EvalScoreContext",
     "EvaluationExecution",
+    "EvaluationCompletedEvent",
+    "EvaluationFailedEvent",
     "EvaluationConfig",
     "EvaluationWorkflow",
     "Experiment",
@@ -142,6 +149,7 @@ __all__ = [
     "GenerationResult",
     "GenerationWorkItem",
     "HashableModel",
+    "JudgeModel",
     "JudgeResponse",
     "JSONValue",
     "LLMMetric",
@@ -197,6 +205,8 @@ __all__ = [
     "TraceStep",
     "TraceSubject",
     "TracingProvider",
+    "WorkflowBuildError",
+    "WorkflowRunner",
     "WorkflowTrace",
     "candidate_set_subject_for_llm_metric",
     "candidate_set_subject_for_selection_metric",

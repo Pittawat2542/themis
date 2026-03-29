@@ -10,6 +10,7 @@ from themis.core.base import HashableModel, JSONValue
 from themis.core.protocols import (
     CandidateReducer,
     Generator,
+    JudgeModel,
     LLMMetric,
     Parser,
     PureMetric,
@@ -20,6 +21,7 @@ from themis.core.protocols import (
 GeneratorComponent: TypeAlias = Generator | str
 ReducerComponent: TypeAlias = CandidateReducer | str
 ParserComponent: TypeAlias = Parser | str
+JudgeModelComponent: TypeAlias = JudgeModel | str
 MetricComponent: TypeAlias = PureMetric | LLMMetric | SelectionMetric | TraceMetric | str
 
 
@@ -32,6 +34,7 @@ class GenerationConfig(HashableModel):
 class EvaluationConfig(HashableModel):
     metrics: list[MetricComponent] = Field(default_factory=list)
     parsers: list[ParserComponent] = Field(default_factory=list)
+    judge_models: list[JudgeModelComponent] = Field(default_factory=list)
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
 

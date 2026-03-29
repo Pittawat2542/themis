@@ -82,6 +82,21 @@ class ParseFailedEvent(RunEvent):
     error_message: str
 
 
+class EvaluationCompletedEvent(RunEvent):
+    event_type: Literal["evaluation_completed"] = "evaluation_completed"
+    case_id: str
+    metric_id: str
+    execution: dict[str, JSONValue] | None = None
+    execution_blob_ref: str | None = None
+
+
+class EvaluationFailedEvent(RunEvent):
+    event_type: Literal["evaluation_failed"] = "evaluation_failed"
+    case_id: str
+    metric_id: str
+    error_message: str
+
+
 class ScoreCompletedEvent(RunEvent):
     event_type: Literal["score_completed"] = "score_completed"
     case_id: str
@@ -131,6 +146,8 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
     "reduction_failed": ReductionFailedEvent,
     "parse_completed": ParseCompletedEvent,
     "parse_failed": ParseFailedEvent,
+    "evaluation_completed": EvaluationCompletedEvent,
+    "evaluation_failed": EvaluationFailedEvent,
     "score_completed": ScoreCompletedEvent,
     "score_failed": ScoreFailedEvent,
     "step_started": StepStartedEvent,

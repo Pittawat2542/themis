@@ -55,6 +55,7 @@ class Experiment(FrozenModel):
             else None,
             parsers=[component_ref_from_value(parser) for parser in self.evaluation.parsers],
             metrics=[component_ref_from_value(metric) for metric in self.evaluation.metrics],
+            judge_models=[component_ref_from_value(judge_model) for judge_model in self.evaluation.judge_models],
         )
         identity = RunIdentity(
             dataset_refs=[
@@ -69,6 +70,7 @@ class Experiment(FrozenModel):
             reducer_ref=component_refs.reducer,
             parser_refs=component_refs.parsers,
             metric_refs=component_refs.metrics,
+            judge_model_refs=component_refs.judge_models,
             candidate_policy=self.generation.candidate_policy,
             judge_config=self.evaluation.judge_config,
             workflow_overrides=self.evaluation.workflow_overrides,

@@ -4,6 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from themis.core.events import (
+    EvaluationCompletedEvent,
+    EvaluationFailedEvent,
     GenerationCompletedEvent,
     GenerationFailedEvent,
     ParseFailedEvent,
@@ -59,6 +61,16 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
             result={"candidate_id": "candidate-1", "final_output": {"answer": "4"}},
             result_blob_ref="sha256:abc123",
         ),
+        EvaluationCompletedEvent(
+            run_id="run-1",
+            case_id="case-1",
+            metric_id="metric/judge",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        ),
         ScoreCompletedEvent(
             run_id="run-1",
             case_id="case-1",
@@ -89,6 +101,12 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
             candidate_id="candidate-1",
             metric_id="exact_match",
             error={"metric_id": "exact_match", "reason": "missing expected output"},
+        ),
+        EvaluationFailedEvent(
+            run_id="run-1",
+            case_id="case-1",
+            metric_id="metric/judge",
+            error_message="judge unavailable",
         ),
         StepStartedEvent(
             run_id="run-1",
@@ -168,6 +186,27 @@ def test_generation_event_payloads_round_trip_runtime_data() -> None:
     assert restored.result_blob_ref == "sha256:payload"
     assert restored.provider_key == "openai:gpt-5.4-mini"
     assert restored.result == event.result
+
+
+def test_evaluation_event_payloads_round_trip_runtime_data() -> None:
+    event = EvaluationCompletedEvent(
+        run_id="run-1",
+        case_id="case-1",
+        metric_id="metric/judge",
+        execution={
+            "execution_id": "execution-1",
+            "subject_kind": "candidate_set",
+            "rendered_prompts": [{"prompt_id": "prompt-1", "content": "grade"}],
+            "trace": {"trace_id": "trace-1", "steps": []},
+        },
+        execution_blob_ref="sha256:evaluation",
+    )
+
+    restored = event_from_dict(event.model_dump(mode="json"))
+
+    assert isinstance(restored, EvaluationCompletedEvent)
+    assert restored.execution_blob_ref == "sha256:evaluation"
+    assert restored.execution == event.execution
 
 
 def test_malformed_known_event_payload_still_fails_validation() -> None:

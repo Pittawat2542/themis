@@ -8,6 +8,8 @@ from pydantic import Field
 
 from themis.core.base import FrozenModel
 from themis.core.events import (
+    EvaluationCompletedEvent,
+    EvaluationFailedEvent,
     GenerationCompletedEvent,
     GenerationFailedEvent,
     ParseCompletedEvent,
@@ -23,6 +25,7 @@ from themis.core.events import (
 )
 from themis.core.models import Case, GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
 from themis.core.snapshot import RunSnapshot
+from themis.core.workflows import EvaluationExecution
 
 CaseStageEvent = (
     GenerationCompletedEvent
@@ -31,6 +34,8 @@ CaseStageEvent = (
     | ReductionFailedEvent
     | ParseCompletedEvent
     | ParseFailedEvent
+    | EvaluationCompletedEvent
+    | EvaluationFailedEvent
     | ScoreCompletedEvent
     | ScoreFailedEvent
 )
@@ -58,6 +63,8 @@ class CaseExecutionState(FrozenModel):
     reduction_error: str | None = None
     parsed_output: ParsedOutput | None = None
     parse_error: str | None = None
+    evaluation_executions: dict[str, EvaluationExecution] = Field(default_factory=dict)
+    evaluation_failures: dict[str, str] = Field(default_factory=dict)
     successful_scores: dict[str, Score] = Field(default_factory=dict)
     score_failures: dict[str, ScoreError] = Field(default_factory=dict)
 
@@ -126,6 +133,29 @@ class ExecutionState(FrozenModel):
             elif isinstance(event, ParseFailedEvent):
                 updated = current.model_copy(update={"parse_error": event.error_message})
                 saw_failures = True
+            elif isinstance(event, EvaluationCompletedEvent) and event.execution is not None:
+                evaluation_executions = dict(current.evaluation_executions)
+                evaluation_failures = dict(current.evaluation_failures)
+                evaluation_executions[event.metric_id] = EvaluationExecution.model_validate(event.execution)
+                evaluation_failures.pop(event.metric_id, None)
+                updated = current.model_copy(
+                    update={
+                        "evaluation_executions": evaluation_executions,
+                        "evaluation_failures": evaluation_failures,
+                    }
+                )
+            elif isinstance(event, EvaluationFailedEvent):
+                evaluation_executions = dict(current.evaluation_executions)
+                evaluation_failures = dict(current.evaluation_failures)
+                evaluation_executions.pop(event.metric_id, None)
+                evaluation_failures[event.metric_id] = event.error_message
+                updated = current.model_copy(
+                    update={
+                        "evaluation_executions": evaluation_executions,
+                        "evaluation_failures": evaluation_failures,
+                    }
+                )
+                saw_failures = True
             elif isinstance(event, ScoreCompletedEvent) and event.score is not None:
                 successful_scores = dict(current.successful_scores)
                 score_failures = dict(current.score_failures)
@@ -170,6 +200,7 @@ class CaseResult(FrozenModel):
     generated_candidates: list[GenerationResult] = Field(default_factory=list)
     reduced_candidate: ReducedCandidate | None = None
     parsed_output: ParsedOutput | None = None
+    evaluation_executions: list[EvaluationExecution] = Field(default_factory=list)
     scores: list[Score | ScoreError] = Field(default_factory=list)
 
 

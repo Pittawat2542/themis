@@ -27,6 +27,7 @@ from themis.core.protocols import (
     CandidateReducer,
     EvaluationWorkflow,
     Generator,
+    JudgeModel,
     LLMMetric,
     LifecycleSubscriber,
     OnEvent,
@@ -35,6 +36,7 @@ from themis.core.protocols import (
     SelectionMetric,
     TraceMetric,
     TracingProvider,
+    WorkflowRunner,
 )
 from themis.core.snapshot import ComponentRef
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
@@ -153,6 +155,39 @@ class DummyTraceMetric:
         return DummyWorkflow()
 
 
+class DummyJudgeModel:
+    component_id = "judge/demo"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "judge-model-fingerprint"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del seed
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response=prompt,
+        )
+
+
+class DummyWorkflowRunner:
+    async def run_evaluation(
+        self,
+        workflow: EvaluationWorkflow,
+        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        metric_id: str,
+        ctx: EvalScoreContext,
+    ) -> EvaluationExecution:
+        del workflow, subject, metric_id, ctx
+        return EvaluationExecution(
+            execution_id="execution-1",
+            subject_kind="candidate_set",
+            trace=WorkflowTrace(trace_id="trace-1"),
+        )
+
+
 class DummySubscriber:
     def before_generate(self, case: Case, ctx: GenerateContext) -> None:
         del case, ctx
@@ -220,10 +255,12 @@ def test_protocol_dummy_implementations_satisfy_runtime_protocols() -> None:
     assert isinstance(DummyParser(), Parser)
     assert isinstance(DummyReducer(), CandidateReducer)
     assert isinstance(DummyWorkflow(), EvaluationWorkflow)
+    assert isinstance(DummyJudgeModel(), JudgeModel)
     assert isinstance(DummyPureMetric(), PureMetric)
     assert isinstance(DummyLLMMetric(), LLMMetric)
     assert isinstance(DummySelectionMetric(), SelectionMetric)
     assert isinstance(DummyTraceMetric(), TraceMetric)
+    assert isinstance(DummyWorkflowRunner(), WorkflowRunner)
     assert isinstance(DummySubscriber(), BeforeGenerate)
     assert isinstance(DummySubscriber(), AfterGenerate)
     assert isinstance(DummySubscriber(), BeforeReduce)

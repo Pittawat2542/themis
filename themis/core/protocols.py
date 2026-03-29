@@ -21,7 +21,7 @@ from themis.core.models import (
     ScoreError,
 )
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
-from themis.core.workflows import EvalStep, EvaluationExecution
+from themis.core.workflows import EvalStep, EvaluationExecution, JudgeResponse
 
 
 @runtime_checkable
@@ -66,6 +66,16 @@ class EvaluationWorkflow(Protocol):
     def fingerprint(self) -> str: ...
 
     def steps(self) -> list[EvalStep]: ...
+
+
+@runtime_checkable
+class JudgeModel(Protocol):
+    component_id: str
+    version: str
+
+    def fingerprint(self) -> str: ...
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse: ...
 
 
 @runtime_checkable
@@ -118,6 +128,17 @@ class TraceMetric(Protocol):
         subject: TraceSubject | ConversationSubject,
         ctx: EvalScoreContext,
     ) -> EvaluationWorkflow: ...
+
+
+@runtime_checkable
+class WorkflowRunner(Protocol):
+    async def run_evaluation(
+        self,
+        workflow: EvaluationWorkflow,
+        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        metric_id: str,
+        ctx: EvalScoreContext,
+    ) -> EvaluationExecution: ...
 
 
 @runtime_checkable
