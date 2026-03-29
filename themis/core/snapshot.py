@@ -88,3 +88,9 @@ def component_ref_from_value(value: Any) -> ComponentRef:
         version=version,
         fingerprint=fingerprint,
     )
+
+
+def snapshot_from_dict(payload: dict[str, Any]) -> RunSnapshot:
+    normalized = dict(payload)
+    normalized.pop("run_id", None)
+    return RunSnapshot.model_validate(normalized)

@@ -1,0 +1,47 @@
+"""In-memory run store implementation."""
+
+from __future__ import annotations
+
+import hashlib
+
+from themis.core.base import JSONValue
+from themis.core.events import RunEvent
+from themis.core.snapshot import RunSnapshot, StoredRun
+
+
+class InMemoryRunStore:
+    """Simple in-memory store used by tests and local development."""
+
+    def __init__(self) -> None:
+        self._snapshots: dict[str, RunSnapshot] = {}
+        self._events: dict[str, list[RunEvent]] = {}
+        self._blobs: dict[str, tuple[str, bytes]] = {}
+        self._projections: dict[tuple[str, str], JSONValue] = {}
+
+    def initialize(self) -> None:
+        return None
+
+    def persist_snapshot(self, snapshot: RunSnapshot) -> None:
+        self._snapshots[snapshot.run_id] = snapshot
+        self._projections[(snapshot.run_id, "snapshot")] = snapshot.model_dump(mode="json")
+
+    def persist_event(self, event: RunEvent) -> None:
+        self._events.setdefault(event.run_id, []).append(event)
+
+    def query_events(self, run_id: str) -> list[RunEvent]:
+        return list(self._events.get(run_id, []))
+
+    def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
+        return self._projections.get((run_id, projection_name))
+
+    def store_blob(self, blob: bytes, media_type: str) -> str:
+        digest = hashlib.sha256(blob).hexdigest()
+        ref = f"sha256:{digest}"
+        self._blobs.setdefault(ref, (media_type, blob))
+        return ref
+
+    def resume(self, run_id: str) -> StoredRun | None:
+        snapshot = self._snapshots.get(run_id)
+        if snapshot is None:
+            return None
+        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))

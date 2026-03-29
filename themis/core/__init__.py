@@ -60,6 +60,7 @@ from themis.core.protocols import (
     TraceMetric,
     TracingProvider,
 )
+from themis.core.store import RunStore
 from themis.core.snapshot import (
     ComponentRef,
     ComponentRefs,
@@ -76,7 +77,7 @@ from themis.core.subjects import (
     validate_candidate_set_for_llm_metric,
     validate_candidate_set_for_selection_metric,
 )
-from themis.core.stores.sqlite import sqlite_store
+from themis.core.stores import InMemoryRunStore, SqliteRunStore, sqlite_store
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
@@ -132,12 +133,14 @@ __all__ = [
     "RunProvenance",
     "RunSnapshot",
     "RunStartedEvent",
+    "RunStore",
     "Score",
     "Score",
     "ScoreCompletedEvent",
     "ScoreContext",
     "ScoreError",
     "SelectionMetric",
+    "SqliteRunStore",
     "StepCompletedEvent",
     "StepFailedEvent",
     "StepStartedEvent",
@@ -149,6 +152,7 @@ __all__ = [
     "TracingProvider",
     "WorkflowTrace",
     "event_from_dict",
+    "InMemoryRunStore",
     "sqlite_store",
     "validate_candidate_set_for_llm_metric",
     "validate_candidate_set_for_selection_metric",
