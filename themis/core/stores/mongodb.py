@@ -30,7 +30,7 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             {"run_id": snapshot.run_id, "snapshot_json": snapshot.model_dump(mode="json")},
             upsert=True,
         )
-        self._refresh_projections(snapshot.run_id)
+        self._bootstrap_projections(snapshot)
 
     def persist_event(self, event: RunEvent) -> None:
         sequence = len(self.query_events(event.run_id))
@@ -42,7 +42,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
                 "event_json": event.model_dump(mode="json"),
             }
         )
-        self._refresh_projections(event.run_id)
+        snapshot = self._load_snapshot(event.run_id)
+        if snapshot is not None:
+            self._refresh_projections_for_event(snapshot, event)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         rows = sorted(self._db()["run_events"].find({"run_id": run_id}), key=lambda row: row["sequence"])
@@ -55,6 +57,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         return events
 
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
+        return self._get_projection_with_backfill(run_id, projection_name)
+
+    def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         row = self._db()["run_projections"].find_one({"run_id": run_id, "projection_name": projection_name})
         if row is None:
             return None
@@ -80,13 +85,16 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         return json.loads(meta_path.read_text(encoding="utf-8"))["media_type"], blob_path.read_bytes()
 
     def resume(self, run_id: str) -> StoredRun | None:
+        snapshot = self._load_snapshot(run_id)
+        if snapshot is None:
+            return None
+        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+
+    def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         row = self._db()["run_snapshots"].find_one({"run_id": run_id})
         if row is None:
             return None
-        return StoredRun(
-            snapshot=snapshot_from_dict(dict(row["snapshot_json"])),
-            events=self.query_events(run_id),
-        )
+        return snapshot_from_dict(dict(row["snapshot_json"]))
 
     def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
         self._db()["run_projections"].replace_one(

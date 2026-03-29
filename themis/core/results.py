@@ -85,117 +85,129 @@ class ExecutionState(FrozenModel):
 
     @classmethod
     def from_events(cls, run_id: str, events: list[RunEvent]) -> ExecutionState:
-        case_states: dict[str, CaseExecutionState] = {}
-        status = RunStatus.PENDING
-        saw_failures = False
+        state = cls(run_id=run_id)
         for event in events:
-            if isinstance(event, RunStartedEvent):
-                status = RunStatus.RUNNING
-                continue
-            if isinstance(event, RunCompletedEvent):
-                status = RunStatus.COMPLETED if not saw_failures else RunStatus.PARTIAL_FAILURE
-                continue
-            if isinstance(event, RunFailedEvent):
-                status = RunStatus.FAILED
-                continue
+            state = state.apply_event(event)
+        return state
 
-            if not isinstance(event, CaseStageEvent):
-                continue
+    def apply_event(self, event: RunEvent) -> ExecutionState:
+        saw_failures = self.status in {RunStatus.FAILED, RunStatus.PARTIAL_FAILURE} or any(
+            _case_state_has_failures(case_state) for case_state in self.case_states.values()
+        )
 
-            case_id = event.case_id
-            current = case_states.get(case_id, CaseExecutionState())
-            updated = current
+        if isinstance(event, RunStartedEvent):
+            return self.model_copy(update={"status": RunStatus.RUNNING})
+        if isinstance(event, RunCompletedEvent):
+            status = RunStatus.COMPLETED if not saw_failures else RunStatus.PARTIAL_FAILURE
+            return self.model_copy(update={"status": status})
+        if isinstance(event, RunFailedEvent):
+            return self.model_copy(update={"status": RunStatus.FAILED})
+        if not isinstance(event, CaseStageEvent):
+            return self
 
-            if isinstance(event, GenerationCompletedEvent) and event.result is not None:
-                generated = dict(current.generated_candidates)
-                generated[event.candidate_id] = GenerationResult.model_validate(event.result)
-                generated_by_index = dict(current.generated_candidates_by_index)
-                generated_blob_refs = dict(current.generated_candidate_blob_refs)
-                if event.candidate_index is not None:
-                    generated_by_index[event.candidate_index] = generated[event.candidate_id]
-                if event.result_blob_ref is not None:
-                    generated_blob_refs[event.candidate_id] = event.result_blob_ref
-                updated = current.model_copy(
-                    update={
-                        "generated_candidates": generated,
-                        "generated_candidates_by_index": generated_by_index,
-                        "generated_candidate_blob_refs": generated_blob_refs,
-                    }
-                )
-            elif isinstance(event, GenerationFailedEvent):
-                failures = dict(current.generation_failures)
-                failures[event.candidate_id] = event.error_message
-                updated = current.model_copy(update={"generation_failures": failures})
-                saw_failures = True
-            elif isinstance(event, ReductionCompletedEvent) and event.result is not None:
-                updated = current.model_copy(
-                    update={"reduced_candidate": ReducedCandidate.model_validate(event.result)}
-                )
-            elif isinstance(event, ReductionFailedEvent):
-                updated = current.model_copy(update={"reduction_error": event.error_message})
-                saw_failures = True
-            elif isinstance(event, ParseCompletedEvent) and event.result is not None:
-                updated = current.model_copy(update={"parsed_output": ParsedOutput.model_validate(event.result)})
-            elif isinstance(event, ParseFailedEvent):
-                updated = current.model_copy(update={"parse_error": event.error_message})
-                saw_failures = True
-            elif isinstance(event, EvaluationCompletedEvent) and event.execution is not None:
-                evaluation_executions = dict(current.evaluation_executions)
-                evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
-                evaluation_failures = dict(current.evaluation_failures)
-                evaluation_executions[event.metric_id] = EvaluationExecution.model_validate(event.execution)
-                if event.execution_blob_ref is not None:
-                    evaluation_execution_blob_refs[event.metric_id] = event.execution_blob_ref
-                evaluation_failures.pop(event.metric_id, None)
-                updated = current.model_copy(
-                    update={
-                        "evaluation_executions": evaluation_executions,
-                        "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
-                        "evaluation_failures": evaluation_failures,
-                    }
-                )
-            elif isinstance(event, EvaluationFailedEvent):
-                evaluation_executions = dict(current.evaluation_executions)
-                evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
-                evaluation_failures = dict(current.evaluation_failures)
-                evaluation_executions.pop(event.metric_id, None)
-                evaluation_execution_blob_refs.pop(event.metric_id, None)
-                evaluation_failures[event.metric_id] = event.error_message
-                updated = current.model_copy(
-                    update={
-                        "evaluation_executions": evaluation_executions,
-                        "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
-                        "evaluation_failures": evaluation_failures,
-                    }
-                )
-                saw_failures = True
-            elif isinstance(event, ScoreCompletedEvent) and event.score is not None:
-                successful_scores = dict(current.successful_scores)
-                score_failures = dict(current.score_failures)
-                successful_scores[event.metric_id] = Score.model_validate(event.score)
-                score_failures.pop(event.metric_id, None)
-                updated = current.model_copy(
-                    update={
-                        "successful_scores": successful_scores,
-                        "score_failures": score_failures,
-                    }
-                )
-            elif isinstance(event, ScoreFailedEvent) and event.error is not None:
-                successful_scores = dict(current.successful_scores)
-                score_failures = dict(current.score_failures)
-                successful_scores.pop(event.metric_id, None)
-                score_failures[event.metric_id] = ScoreError.model_validate(event.error)
-                updated = current.model_copy(
-                    update={
-                        "successful_scores": successful_scores,
-                        "score_failures": score_failures,
-                    }
-                )
-                saw_failures = True
+        case_states = dict(self.case_states)
+        current = case_states.get(event.case_id, CaseExecutionState())
+        updated = current
 
-            case_states[case_id] = updated
+        if isinstance(event, GenerationCompletedEvent) and event.result is not None:
+            generated = dict(current.generated_candidates)
+            generated[event.candidate_id] = GenerationResult.model_validate(event.result)
+            generated_by_index = dict(current.generated_candidates_by_index)
+            generated_blob_refs = dict(current.generated_candidate_blob_refs)
+            if event.candidate_index is not None:
+                generated_by_index[event.candidate_index] = generated[event.candidate_id]
+            if event.result_blob_ref is not None:
+                generated_blob_refs[event.candidate_id] = event.result_blob_ref
+            updated = current.model_copy(
+                update={
+                    "generated_candidates": generated,
+                    "generated_candidates_by_index": generated_by_index,
+                    "generated_candidate_blob_refs": generated_blob_refs,
+                }
+            )
+        elif isinstance(event, GenerationFailedEvent):
+            failures = dict(current.generation_failures)
+            failures[event.candidate_id] = event.error_message
+            updated = current.model_copy(update={"generation_failures": failures})
+        elif isinstance(event, ReductionCompletedEvent) and event.result is not None:
+            updated = current.model_copy(
+                update={"reduced_candidate": ReducedCandidate.model_validate(event.result)}
+            )
+        elif isinstance(event, ReductionFailedEvent):
+            updated = current.model_copy(update={"reduction_error": event.error_message})
+        elif isinstance(event, ParseCompletedEvent) and event.result is not None:
+            updated = current.model_copy(update={"parsed_output": ParsedOutput.model_validate(event.result)})
+        elif isinstance(event, ParseFailedEvent):
+            updated = current.model_copy(update={"parse_error": event.error_message})
+        elif isinstance(event, EvaluationCompletedEvent) and event.execution is not None:
+            evaluation_executions = dict(current.evaluation_executions)
+            evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
+            evaluation_failures = dict(current.evaluation_failures)
+            evaluation_executions[event.metric_id] = EvaluationExecution.model_validate(event.execution)
+            if event.execution_blob_ref is not None:
+                evaluation_execution_blob_refs[event.metric_id] = event.execution_blob_ref
+            evaluation_failures.pop(event.metric_id, None)
+            updated = current.model_copy(
+                update={
+                    "evaluation_executions": evaluation_executions,
+                    "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
+                    "evaluation_failures": evaluation_failures,
+                }
+            )
+        elif isinstance(event, EvaluationFailedEvent):
+            evaluation_executions = dict(current.evaluation_executions)
+            evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
+            evaluation_failures = dict(current.evaluation_failures)
+            evaluation_executions.pop(event.metric_id, None)
+            evaluation_execution_blob_refs.pop(event.metric_id, None)
+            evaluation_failures[event.metric_id] = event.error_message
+            updated = current.model_copy(
+                update={
+                    "evaluation_executions": evaluation_executions,
+                    "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
+                    "evaluation_failures": evaluation_failures,
+                }
+            )
+        elif isinstance(event, ScoreCompletedEvent) and event.score is not None:
+            successful_scores = dict(current.successful_scores)
+            score_failures = dict(current.score_failures)
+            successful_scores[event.metric_id] = Score.model_validate(event.score)
+            score_failures.pop(event.metric_id, None)
+            updated = current.model_copy(
+                update={
+                    "successful_scores": successful_scores,
+                    "score_failures": score_failures,
+                }
+            )
+        elif isinstance(event, ScoreFailedEvent) and event.error is not None:
+            successful_scores = dict(current.successful_scores)
+            score_failures = dict(current.score_failures)
+            successful_scores.pop(event.metric_id, None)
+            score_failures[event.metric_id] = ScoreError.model_validate(event.error)
+            updated = current.model_copy(
+                update={
+                    "successful_scores": successful_scores,
+                    "score_failures": score_failures,
+                }
+            )
 
-        return cls(run_id=run_id, status=status, case_states=case_states)
+        case_states[event.case_id] = updated
+        status = self.status
+        if status is RunStatus.COMPLETED and _case_state_has_failures(updated):
+            status = RunStatus.PARTIAL_FAILURE
+        return self.model_copy(update={"status": status, "case_states": case_states})
+
+
+def _case_state_has_failures(case_state: CaseExecutionState) -> bool:
+    return any(
+        (
+            case_state.generation_failures,
+            case_state.reduction_error is not None,
+            case_state.parse_error is not None,
+            case_state.evaluation_failures,
+            case_state.score_failures,
+        )
+    )
 
 
 class GenerationWorkItem(FrozenModel):

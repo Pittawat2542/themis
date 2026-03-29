@@ -71,3 +71,41 @@ def test_sqlite_store_skips_unknown_event_types_on_read(tmp_path) -> None:
     events = store.query_events(snapshot.run_id)
 
     assert [event.event_type for event in events] == ["run_started"]
+
+
+def test_sqlite_store_backfills_missing_projection_from_snapshot_and_events(tmp_path) -> None:
+    path = tmp_path / "run_store.sqlite3"
+    store = SqliteRunStore(path)
+    snapshot = _snapshot()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            DELETE FROM run_projections
+            WHERE run_id = ? AND projection_name = ?
+            """,
+            (snapshot.run_id, "run_result"),
+        )
+        connection.commit()
+
+    projection = store.get_projection(snapshot.run_id, "run_result")
+
+    assert projection is not None
+    assert projection["run_id"] == snapshot.run_id
+    assert projection["status"] == "running"
+
+    with sqlite3.connect(path) as connection:
+        row = connection.execute(
+            """
+            SELECT projection_json
+            FROM run_projections
+            WHERE run_id = ? AND projection_name = ?
+            """,
+            (snapshot.run_id, "run_result"),
+        ).fetchone()
+
+    assert row is not None

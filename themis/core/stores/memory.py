@@ -24,17 +24,19 @@ class InMemoryRunStore(ProjectionRefreshingStore):
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
         self._snapshots[snapshot.run_id] = snapshot
-        self._refresh_projections(snapshot.run_id)
+        self._bootstrap_projections(snapshot)
 
     def persist_event(self, event: RunEvent) -> None:
         self._events.setdefault(event.run_id, []).append(event)
-        self._refresh_projections(event.run_id)
+        snapshot = self._load_snapshot(event.run_id)
+        if snapshot is not None:
+            self._refresh_projections_for_event(snapshot, event)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         return list(self._events.get(run_id, []))
 
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
-        return self._projections.get((run_id, projection_name))
+        return self._get_projection_with_backfill(run_id, projection_name)
 
     def store_blob(self, blob: bytes, media_type: str) -> str:
         digest = hashlib.sha256(blob).hexdigest()
@@ -50,6 +52,12 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         if snapshot is None:
             return None
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+
+    def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
+        return self._projections.get((run_id, projection_name))
+
+    def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
+        return self._snapshots.get(run_id)
 
     def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
         self._projections[(run_id, projection_name)] = payload

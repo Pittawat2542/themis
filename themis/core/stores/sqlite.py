@@ -80,7 +80,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
                 (snapshot.run_id, "snapshot", snapshot_json),
             )
             connection.commit()
-        self._refresh_projections(snapshot.run_id)
+        self._bootstrap_projections(snapshot)
 
     def persist_event(self, event: RunEvent) -> None:
         event_json = json.dumps(event.model_dump(mode="json"), sort_keys=True)
@@ -93,7 +93,9 @@ class SqliteRunStore(ProjectionRefreshingStore):
                 (event.run_id, event.event_type, event_json),
             )
             connection.commit()
-        self._refresh_projections(event.run_id)
+        snapshot = self._load_snapshot(event.run_id)
+        if snapshot is not None:
+            self._refresh_projections_for_event(snapshot, event)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         with sqlite3.connect(self.path) as connection:
@@ -116,6 +118,9 @@ class SqliteRunStore(ProjectionRefreshingStore):
         return events
 
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
+        return self._get_projection_with_backfill(run_id, projection_name)
+
+    def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         with sqlite3.connect(self.path) as connection:
             row = connection.execute(
                 """
@@ -159,6 +164,12 @@ class SqliteRunStore(ProjectionRefreshingStore):
         return media_type, bytes(payload)
 
     def resume(self, run_id: str) -> StoredRun | None:
+        snapshot = self._load_snapshot(run_id)
+        if snapshot is None:
+            return None
+        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+
+    def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         with sqlite3.connect(self.path) as connection:
             row = connection.execute(
                 """
@@ -170,8 +181,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
             ).fetchone()
         if row is None:
             return None
-        snapshot = snapshot_from_dict(json.loads(row[0]))
-        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+        return snapshot_from_dict(json.loads(row[0]))
 
     def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
         with sqlite3.connect(self.path) as connection:

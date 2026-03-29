@@ -150,3 +150,22 @@ def test_run_store_refreshes_read_model_projections_after_event_writes(label: st
     assert [entry["event_type"] for entry in timeline_view["entries"]] == ["run_started", "run_completed"]
     assert trace_view is not None
     assert trace_view["generation_traces"] == []
+
+
+def test_in_memory_store_updates_projections_without_resume_replay() -> None:
+    class NoReplayInMemoryRunStore(InMemoryRunStore):
+        def resume(self, run_id: str):
+            raise AssertionError(f"resume should not be used while persisting projections for {run_id}")
+
+    store = NoReplayInMemoryRunStore()
+    snapshot = _snapshot()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+
+    run_result = store.get_projection(snapshot.run_id, "run_result")
+
+    assert run_result is not None
+    assert run_result["status"] == "completed"
