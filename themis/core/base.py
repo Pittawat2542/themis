@@ -1,0 +1,57 @@
+"""Shared immutable model and hashing helpers for Themis v4."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from datetime import datetime
+from enum import Enum
+from typing import Any, TypeAlias
+
+from pydantic import BaseModel, ConfigDict
+
+JSONValue: TypeAlias = Any
+
+
+def _canonicalize(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, BaseModel):
+        if isinstance(value, HashableModel):
+            return value.canonical_data()
+        return {key: _canonicalize(item) for key, item in value.model_dump().items()}
+    if isinstance(value, dict):
+        return {key: _canonicalize(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_canonicalize(item) for item in value]
+    return value
+
+
+class FrozenModel(BaseModel):
+    """Base Pydantic model used by the Phase 1 immutable core."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class HashableModel(FrozenModel):
+    """Immutable model with stable content-addressable hashing."""
+
+    def canonical_data(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        for field_name, field_info in self.__class__.model_fields.items():
+            if field_info.exclude:
+                continue
+            value = getattr(self, field_name)
+            data[field_name] = _canonicalize(value)
+        return data
+
+    def compute_hash(self) -> str:
+        payload = json.dumps(
+            self.canonical_data(),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
