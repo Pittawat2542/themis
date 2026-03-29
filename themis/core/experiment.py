@@ -20,8 +20,7 @@ from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
 from themis.core.protocols import LLMMetric, LifecycleSubscriber, PureMetric, SelectionMetric, TraceMetric, TracingProvider
 from themis.core.store import RunStore
-from themis.core.stores.memory import InMemoryRunStore
-from themis.core.stores.sqlite import sqlite_store
+from themis.core.stores.factory import create_run_store
 from themis.core.tracing import NoOpTracingProvider
 from themis.core.snapshot import (
     ComponentRefs,
@@ -221,9 +220,4 @@ class Experiment(FrozenModel):
         raise TypeError("Metrics must satisfy a supported metric protocol.")
 
     def _build_store(self):
-        if self.storage.store == "memory":
-            return InMemoryRunStore()
-        if self.storage.store == "sqlite":
-            path = self.storage.parameters.get("path", "runs/themis.sqlite3")
-            return sqlite_store(path)
-        raise ValueError(f"Unsupported store backend: {self.storage.store}")
+        return create_run_store(self.storage)

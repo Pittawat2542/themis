@@ -9,11 +9,11 @@ from pathlib import Path
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
-from themis.core.projections import build_projection_payloads
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
+from themis.core.stores.base import ProjectionRefreshingStore
 
 
-class SqliteRunStore:
+class SqliteRunStore(ProjectionRefreshingStore):
     """Small SQLite-backed run store for Phase 1."""
 
     def __init__(self, path: str | Path) -> None:
@@ -173,20 +173,15 @@ class SqliteRunStore:
         snapshot = snapshot_from_dict(json.loads(row[0]))
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
 
-    def _refresh_projections(self, run_id: str) -> None:
-        stored = self.resume(run_id)
-        if stored is None:
-            return
-        projection_payloads = build_projection_payloads(stored.snapshot, stored.events)
+    def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
         with sqlite3.connect(self.path) as connection:
-            for projection_name, payload in projection_payloads.items():
-                connection.execute(
-                    """
-                    INSERT OR REPLACE INTO run_projections (run_id, projection_name, projection_json)
-                    VALUES (?, ?, ?)
-                    """,
-                    (run_id, projection_name, json.dumps(payload, sort_keys=True)),
-                )
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO run_projections (run_id, projection_name, projection_json)
+                VALUES (?, ?, ?)
+                """,
+                (run_id, projection_name, json.dumps(payload, sort_keys=True)),
+            )
             connection.commit()
 
 

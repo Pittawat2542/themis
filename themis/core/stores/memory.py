@@ -6,11 +6,11 @@ import hashlib
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
-from themis.core.projections import build_projection_payloads
 from themis.core.snapshot import RunSnapshot, StoredRun
+from themis.core.stores.base import ProjectionRefreshingStore
 
 
-class InMemoryRunStore:
+class InMemoryRunStore(ProjectionRefreshingStore):
     """Simple in-memory store used by tests and local development."""
 
     def __init__(self) -> None:
@@ -51,9 +51,5 @@ class InMemoryRunStore:
             return None
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
 
-    def _refresh_projections(self, run_id: str) -> None:
-        snapshot = self._snapshots.get(run_id)
-        if snapshot is None:
-            return
-        for projection_name, payload in build_projection_payloads(snapshot, self.query_events(run_id)).items():
-            self._projections[(run_id, projection_name)] = payload
+    def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
+        self._projections[(run_id, projection_name)] = payload
