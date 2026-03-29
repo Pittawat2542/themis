@@ -1,29 +1,41 @@
 [components."builtin/demo_generator"]
 kind = "generator"
-target = "themis.core.builtins:DemoGenerator"
+target = "themis.catalog.builtins.generators:DemoGenerator"
 version = "1.0"
 fingerprint = "builtin-demo-generator-fingerprint"
 
 [components."builtin/majority_vote"]
 kind = "reducer"
-target = "themis.core.builtins:DemoReducer"
+target = "themis.catalog.builtins.reducers:MajorityVoteReducer"
 version = "1.0"
 fingerprint = "builtin-majority-vote-fingerprint"
 
 [components."builtin/json_identity"]
 kind = "parser"
-target = "themis.core.builtins:DemoParser"
+target = "themis.catalog.builtins.parsers:JsonIdentityParser"
 version = "1.0"
 fingerprint = "builtin-json-identity-fingerprint"
 
 [components."builtin/exact_match"]
 kind = "metric"
-target = "themis.core.builtins:DemoMetric"
+target = "themis.catalog.builtins.metrics:ExactMatchMetric"
 version = "1.0"
 fingerprint = "builtin-exact-match-fingerprint"
 
+[components."builtin/f1"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:F1Metric"
+version = "1.0"
+fingerprint = "builtin-f1-fingerprint"
+
+[components."builtin/bleu"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:BleuMetric"
+version = "1.0"
+fingerprint = "builtin-bleu-fingerprint"
+
 [components."builtin/demo_judge"]
 kind = "judge_model"
-target = "themis.core.builtins:DemoJudgeModel"
+target = "themis.catalog.builtins.generators:DemoJudgeModel"
 version = "1.0"
 fingerprint = "builtin-demo-judge-fingerprint"
