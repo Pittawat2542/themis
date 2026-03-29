@@ -2,6 +2,7 @@
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
 from themis.core.bundles import export_generation_bundle, import_generation_bundle
+from themis.core.builtins import resolve_judge_model_component
 from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.contexts import (
     EvalScoreContext,
@@ -103,6 +104,7 @@ from themis.core.subjects import (
 from themis.core.stores import InMemoryRunStore, SqliteRunStore, sqlite_store
 from themis.core.tracing import NoOpTracingProvider
 from themis.core.workflow_runner import WorkflowBuildError
+from themis.core.workflow_runner import DefaultWorkflowRunner
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
@@ -114,6 +116,7 @@ from themis.core.workflows import (
 
 __all__ = [
     "Case",
+    "DefaultWorkflowRunner",
     "BeforeGenerate",
     "AfterGenerate",
     "BeforeReduce",
@@ -213,6 +216,7 @@ __all__ = [
     "event_from_dict",
     "InMemoryRunStore",
     "import_generation_bundle",
+    "resolve_judge_model_component",
     "sqlite_store",
     "validate_candidate_set_for_llm_metric",
     "validate_candidate_set_for_selection_metric",

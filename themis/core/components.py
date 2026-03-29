@@ -34,6 +34,11 @@ BUILTIN_COMPONENT_REFS: dict[str, ComponentRef] = {
         version="1.0",
         fingerprint="builtin-metric-demo-fingerprint",
     ),
+    "judge/demo": ComponentRef(
+        component_id="judge/demo",
+        version="1.0",
+        fingerprint="builtin-judge-demo-fingerprint",
+    ),
 }
 
 

@@ -7,7 +7,8 @@ from typing import cast
 
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
 from themis.core.models import Case, GenerationResult, Message, ParsedOutput, ReducedCandidate, Score
-from themis.core.protocols import CandidateReducer, Generator, Parser, PureMetric
+from themis.core.protocols import CandidateReducer, Generator, JudgeModel, Parser, PureMetric
+from themis.core.workflows import JudgeResponse
 
 
 class DemoGenerator:
@@ -69,10 +70,30 @@ class DemoMetric:
         return Score(metric_id=self.component_id, value=float(parsed.value == case.expected_output))
 
 
+class DemoJudgeModel:
+    component_id = "judge/demo"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "builtin-judge-demo-fingerprint"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del seed
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response="pass" if prompt else "fail",
+            token_usage={"prompt_tokens": 1, "completion_tokens": 1},
+            latency_ms=1.0,
+        )
+
+
 _BUILTIN_GENERATORS: dict[str, Generator] = {"generator/demo": DemoGenerator()}
 _BUILTIN_REDUCERS: dict[str, CandidateReducer] = {"reducer/demo": DemoReducer()}
 _BUILTIN_PARSERS: dict[str, Parser] = {"parser/demo": DemoParser()}
 _BUILTIN_METRICS: dict[str, PureMetric] = {"metric/demo": DemoMetric()}
+_BUILTIN_JUDGE_MODELS: dict[str, JudgeModel] = {"judge/demo": DemoJudgeModel()}
 
 
 def _resolve(mapping: Mapping[str, object], value: object) -> object:
@@ -98,3 +119,7 @@ def resolve_parser_component(value: object) -> Parser:
 
 def resolve_metric_component(value: object) -> PureMetric:
     return cast(PureMetric, _resolve(_BUILTIN_METRICS, value))
+
+
+def resolve_judge_model_component(value: object) -> JudgeModel:
+    return cast(JudgeModel, _resolve(_BUILTIN_JUDGE_MODELS, value))
