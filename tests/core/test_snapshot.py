@@ -3,9 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset
+from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score
+from themis.core.snapshot import BUILTIN_COMPONENT_REFS, ComponentRef
 
 
 class DummyGenerator:
@@ -18,6 +22,9 @@ class DummyGenerator:
     def fingerprint(self) -> str:
         return self.fingerprint_value
 
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        return GenerationResult(candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed})
+
 
 class DummyReducer:
     component_id = "reducer/demo"
@@ -25,6 +32,17 @@ class DummyReducer:
 
     def fingerprint(self) -> str:
         return "reducer-fingerprint"
+
+    def reduce(
+        self,
+        candidates: list[GenerationResult],
+        ctx: ReduceContext,
+    ) -> ReducedCandidate:
+        return ReducedCandidate(
+            candidate_id=f"{ctx.case_id}-reduced",
+            source_candidate_ids=[candidate.candidate_id for candidate in candidates],
+            final_output=candidates[0].final_output,
+        )
 
 
 class DummyParser:
@@ -34,6 +52,9 @@ class DummyParser:
     def fingerprint(self) -> str:
         return "parser-fingerprint"
 
+    def parse(self, candidate: ReducedCandidate, ctx: ParseContext) -> ParsedOutput:
+        return ParsedOutput(value={"candidate_id": candidate.candidate_id, "run_id": ctx.run_id})
+
 
 class DummyMetric:
     component_id = "metric/demo"
@@ -42,8 +63,17 @@ class DummyMetric:
     def fingerprint(self) -> str:
         return "metric-fingerprint"
 
+    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+        del ctx
+        return Score(metric_id="metric/demo", value=float(parsed.value == case.expected_output))
 
-def _experiment(*, revision: str = "r1", generator: DummyGenerator | None = None) -> Experiment:
+
+def _experiment(
+    *,
+    revision: str = "r1",
+    generator: DummyGenerator | None = None,
+    workflow_overrides: dict[str, object] | None = None,
+) -> Experiment:
     return Experiment(
         generation=GenerationConfig(
             generator=generator or DummyGenerator("generator-fingerprint"),
@@ -54,6 +84,7 @@ def _experiment(*, revision: str = "r1", generator: DummyGenerator | None = None
             metrics=[DummyMetric()],
             parsers=[DummyParser()],
             judge_config={"panel_size": 1},
+            workflow_overrides=workflow_overrides or {},
         ),
         storage=StorageConfig(store="sqlite", parameters={"path": "runs/themis.sqlite3"}),
         datasets=[
@@ -92,6 +123,13 @@ def test_identity_changes_alter_run_id() -> None:
     assert first.run_id != second.run_id
 
 
+def test_workflow_overrides_change_run_id() -> None:
+    first = _experiment(workflow_overrides={"timeout": 10}).compile()
+    second = _experiment(workflow_overrides={"timeout": 20}).compile()
+
+    assert first.run_id != second.run_id
+
+
 def test_component_fingerprints_are_frozen_at_compile_time() -> None:
     generator = DummyGenerator("fingerprint-before")
     compiled = _experiment(generator=generator).compile()
@@ -108,3 +146,71 @@ def test_snapshot_serialization_matches_golden_file() -> None:
     expected = json.loads(golden_path.read_text())
 
     assert compiled.model_dump(mode="json") == expected
+
+
+def test_builtin_component_strings_resolve_to_registry_entries() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="generator/demo",
+            candidate_policy={"num_samples": 1},
+            reducer="reducer/demo",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["metric/demo"],
+            parsers=["parser/demo"],
+            judge_config={"panel_size": 1},
+        ),
+        storage=StorageConfig(store="memory", parameters={"path": ":memory:"}),
+        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+    )
+
+    snapshot = experiment.compile()
+
+    assert snapshot.component_refs.generator == BUILTIN_COMPONENT_REFS["generator/demo"]
+    assert snapshot.component_refs.reducer == BUILTIN_COMPONENT_REFS["reducer/demo"]
+    assert snapshot.component_refs.parsers == [BUILTIN_COMPONENT_REFS["parser/demo"]]
+    assert snapshot.component_refs.metrics == [BUILTIN_COMPONENT_REFS["metric/demo"]]
+
+
+def test_unknown_builtin_component_strings_fail_fast() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(generator="generator/unknown"),
+        evaluation=EvaluationConfig(metrics=["metric/demo"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+    )
+
+    with pytest.raises(ValueError, match="Unknown builtin component"):
+        experiment.compile()
+
+
+def test_builtin_registry_changes_alter_component_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = BUILTIN_COMPONENT_REFS["generator/demo"]
+    first = Experiment(
+        generation=GenerationConfig(generator="generator/demo"),
+        evaluation=EvaluationConfig(metrics=["metric/demo"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+    ).compile()
+
+    monkeypatch.setitem(
+        BUILTIN_COMPONENT_REFS,
+        "generator/demo",
+        ComponentRef(
+            component_id=original.component_id,
+            version="2.0",
+            fingerprint="generator-demo-fingerprint-v2",
+        ),
+    )
+
+    second = Experiment(
+        generation=GenerationConfig(generator="generator/demo"),
+        evaluation=EvaluationConfig(metrics=["metric/demo"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+    ).compile()
+
+    assert first.component_refs.generator != second.component_refs.generator
+    assert first.run_id != second.run_id

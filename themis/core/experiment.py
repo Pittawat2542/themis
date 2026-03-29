@@ -54,6 +54,7 @@ class Experiment(FrozenModel):
             metric_refs=component_refs.metrics,
             candidate_policy=self.generation.candidate_policy,
             judge_config=self.evaluation.judge_config,
+            workflow_overrides=self.evaluation.workflow_overrides,
             seeds=self.seeds,
         )
         provenance = RunProvenance(

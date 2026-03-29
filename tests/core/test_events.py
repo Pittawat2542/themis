@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from themis.core.events import (
     GenerationCompletedEvent,
     RunCompletedEvent,
@@ -78,3 +81,44 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
     restored = [event_from_dict(event.model_dump(mode="json")) for event in events]
 
     assert restored == events
+
+
+def test_known_event_type_accepts_additive_fields_and_preserves_them() -> None:
+    payload = {
+        "schema_version": "2",
+        "event_type": "run_started",
+        "run_id": "run-1",
+        "new_field": {"added_in": "future"},
+    }
+
+    restored = event_from_dict(payload)
+
+    dumped = restored.model_dump(mode="json")
+
+    assert dumped["schema_version"] == "2"
+    assert dumped["event_type"] == "run_started"
+    assert dumped["run_id"] == "run-1"
+    assert dumped["new_field"] == {"added_in": "future"}
+
+
+def test_known_event_type_accepts_newer_schema_version() -> None:
+    restored = event_from_dict(
+        {
+            "schema_version": "2",
+            "event_type": "run_completed",
+            "run_id": "run-1",
+        }
+    )
+
+    assert restored.schema_version == "2"
+
+
+def test_malformed_known_event_payload_still_fails_validation() -> None:
+    with pytest.raises(ValidationError):
+        event_from_dict(
+            {
+                "schema_version": "2",
+                "event_type": "run_failed",
+                "run_id": "run-1",
+            }
+        )

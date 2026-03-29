@@ -60,7 +60,7 @@ class CandidateReducer(Protocol):
 
 @runtime_checkable
 class EvaluationWorkflow(Protocol):
-    workflow_id: str
+    component_id: str
     version: str
 
     def fingerprint(self) -> str: ...
@@ -176,7 +176,7 @@ class AfterJudge(Protocol):
 
 @runtime_checkable
 class OnEvent(Protocol):
-    def on_event(self, event: RunEvent | object) -> None: ...
+    def on_event(self, event: RunEvent) -> None: ...
 
 
 @runtime_checkable

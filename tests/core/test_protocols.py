@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.events import RunEvent
 from themis.core.models import (
     Case,
     ConversationTrace,
@@ -35,12 +36,13 @@ from themis.core.protocols import (
     TraceMetric,
     TracingProvider,
 )
+from themis.core.snapshot import ComponentRef
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.workflows import AggregationResult, EvalStep, EvaluationExecution, JudgeResponse, ParsedJudgment, RenderedJudgePrompt
 
 
 class DummyWorkflow:
-    workflow_id = "workflow/demo"
+    component_id = "workflow/demo"
     version = "1.0"
 
     def fingerprint(self) -> str:
@@ -182,7 +184,7 @@ class DummySubscriber:
     def after_judge(self, execution: EvaluationExecution, ctx: EvalScoreContext) -> None:
         del execution, ctx
 
-    def on_event(self, event: object) -> None:
+    def on_event(self, event: RunEvent) -> None:
         del event
 
 
@@ -203,7 +205,11 @@ def _score_context() -> EvalScoreContext:
         parsed_output=parsed,
         dataset_metadata={"split": "test"},
         seed=7,
-        judge_model_ref={"component_id": "judge/demo", "version": "1.0", "fingerprint": "judge-fingerprint"},
+        judge_model_ref=ComponentRef(
+            component_id="judge/demo",
+            version="1.0",
+            fingerprint="judge-fingerprint",
+        ),
         judge_seed=11,
         eval_workflow_config={"rubric": "pass_fail"},
     )
@@ -301,7 +307,7 @@ def test_metric_protocols_accept_expected_subject_shapes() -> None:
     )
     ctx = _score_context()
 
-    assert llm_metric.build_workflow(single, ctx).workflow_id == "workflow/demo"
-    assert selection_metric.build_workflow(pair, ctx).workflow_id == "workflow/demo"
-    assert trace_metric.build_workflow(trace, ctx).workflow_id == "workflow/demo"
-    assert trace_metric.build_workflow(conversation, ctx).workflow_id == "workflow/demo"
+    assert llm_metric.build_workflow(single, ctx).component_id == "workflow/demo"
+    assert selection_metric.build_workflow(pair, ctx).component_id == "workflow/demo"
+    assert trace_metric.build_workflow(trace, ctx).component_id == "workflow/demo"
+    assert trace_metric.build_workflow(conversation, ctx).component_id == "workflow/demo"

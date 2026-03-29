@@ -2,22 +2,36 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TypeAlias
 
 from pydantic import Field
 
 from themis.core.base import HashableModel, JSONValue
+from themis.core.protocols import (
+    CandidateReducer,
+    Generator,
+    LLMMetric,
+    Parser,
+    PureMetric,
+    SelectionMetric,
+    TraceMetric,
+)
+
+GeneratorComponent: TypeAlias = Generator | str
+ReducerComponent: TypeAlias = CandidateReducer | str
+ParserComponent: TypeAlias = Parser | str
+MetricComponent: TypeAlias = PureMetric | LLMMetric | SelectionMetric | TraceMetric | str
 
 
 class GenerationConfig(HashableModel):
-    generator: Any
+    generator: GeneratorComponent
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
-    reducer: Any | None = None
+    reducer: ReducerComponent | None = None
 
 
 class EvaluationConfig(HashableModel):
-    metrics: list[Any] = Field(default_factory=list)
-    parsers: list[Any] = Field(default_factory=list)
+    metrics: list[MetricComponent] = Field(default_factory=list)
+    parsers: list[ParserComponent] = Field(default_factory=list)
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
 

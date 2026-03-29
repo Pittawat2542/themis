@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from themis.core.base import HashableModel, JSONValue
+from themis.core.components import ComponentRef
 from themis.core.models import Case, ParsedOutput
 
 
@@ -39,6 +40,6 @@ class ScoreContext(HashableModel):
 
 
 class EvalScoreContext(ScoreContext):
-    judge_model_ref: dict[str, str]
+    judge_model_ref: ComponentRef
     judge_seed: int | None = None
     eval_workflow_config: dict[str, JSONValue] = Field(default_factory=dict)

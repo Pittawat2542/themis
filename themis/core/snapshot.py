@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
 from pydantic import Field, computed_field
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
+from themis.core.components import (
+    BUILTIN_COMPONENT_REFS,
+    ComponentRef,
+    component_ref_from_value,
+)
 from themis.core.config import StorageConfig
 from themis.core.events import RunEvent
-
-
-class ComponentRef(HashableModel):
-    component_id: str
-    version: str
-    fingerprint: str
 
 
 class DatasetRef(HashableModel):
@@ -39,6 +37,7 @@ class RunIdentity(HashableModel):
     metric_refs: list[ComponentRef] = Field(default_factory=list)
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
+    workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
     seeds: list[int] = Field(default_factory=list)
 
 
@@ -64,30 +63,6 @@ class RunSnapshot(FrozenModel):
 class StoredRun(FrozenModel):
     snapshot: RunSnapshot
     events: list[RunEvent] = Field(default_factory=list)
-
-
-def _string_component_fingerprint(component_id: str) -> str:
-    return hashlib.sha256(component_id.encode("utf-8")).hexdigest()
-
-
-def component_ref_from_value(value: Any) -> ComponentRef:
-    if isinstance(value, ComponentRef):
-        return value
-    if isinstance(value, str):
-        return ComponentRef(
-            component_id=value,
-            version="builtin",
-            fingerprint=_string_component_fingerprint(value),
-        )
-
-    component_id = getattr(value, "component_id")
-    version = getattr(value, "version")
-    fingerprint = value.fingerprint()
-    return ComponentRef(
-        component_id=component_id,
-        version=version,
-        fingerprint=fingerprint,
-    )
 
 
 def snapshot_from_dict(payload: dict[str, Any]) -> RunSnapshot:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from themis.core.base import HashableModel, JSONValue
 
@@ -15,6 +15,8 @@ def _now_utc() -> datetime:
 
 
 class RunEvent(HashableModel):
+    model_config = ConfigDict(frozen=True, extra="allow", arbitrary_types_allowed=True)
+
     schema_version: str = "1"
     event_type: str
     run_id: str
