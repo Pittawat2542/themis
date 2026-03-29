@@ -27,7 +27,8 @@ async def test_builtin_generator_component_is_executable() -> None:
     assert result.token_usage == {"prompt_tokens": 1, "completion_tokens": 1}
 
 
-def test_builtin_reducer_parser_and_metric_components_are_executable() -> None:
+@pytest.mark.asyncio
+async def test_builtin_reducer_parser_and_metric_components_are_executable() -> None:
     reducer = resolve_reducer_component("reducer/demo")
     parser = resolve_parser_component("parser/demo")
     metric = resolve_metric_component("metric/demo")
@@ -37,7 +38,7 @@ def test_builtin_reducer_parser_and_metric_components_are_executable() -> None:
         GenerationResult(candidate_id="case-1-candidate-1", final_output={"answer": "4"}),
     ]
 
-    reduced = reducer.reduce(
+    reduced = await reducer.reduce(
         candidates,
         ReduceContext(
             run_id="run-1",

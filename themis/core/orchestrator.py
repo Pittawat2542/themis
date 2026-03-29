@@ -49,7 +49,7 @@ from themis.core.protocols import (
     TracingProvider,
     WorkflowRunner,
 )
-from themis.core.results import CaseExecutionState, CaseResult, ExecutionState, GenerationWorkItem, ProgressSnapshot, RunResult, RunStatus
+from themis.core.results import CaseExecutionState, CaseResult, ExecutionState, GenerationWorkItem, RunResult, RunStatus
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
 from themis.core.subjects import (
@@ -272,7 +272,7 @@ class Orchestrator:
             self._notify("before_reduce", generated_candidates, reduce_ctx)
             span = self.tracing_provider.start_span("reduction", {"case_id": case.case_id})
             try:
-                reduced = self._reduce_candidates(generated_candidates, reduce_ctx)
+                reduced = await self._reduce_candidates(generated_candidates, reduce_ctx)
                 self._notify("after_reduce", reduced, reduce_ctx)
                 await self._persist_event(
                     ReductionCompletedEvent(
@@ -552,7 +552,7 @@ class Orchestrator:
                     if provider_semaphore is not None:
                         provider_semaphore.release()
 
-    def _reduce_candidates(
+    async def _reduce_candidates(
         self,
         generated_candidates: list[GenerationResult],
         reduce_ctx: ReduceContext,
@@ -564,7 +564,7 @@ class Orchestrator:
                 source_candidate_ids=[candidate.candidate_id],
                 final_output=candidate.final_output,
             )
-        return self.reducer.reduce(generated_candidates, reduce_ctx)
+        return await self.reducer.reduce(generated_candidates, reduce_ctx)
 
     def _parse_candidate(self, reduced: ReducedCandidate, parse_ctx: ParseContext) -> ParsedOutput:
         if self.parser is None:

@@ -111,7 +111,7 @@ class DummyReducer:
     def fingerprint(self) -> str:
         return "reducer-fingerprint"
 
-    def reduce(
+    async def reduce(
         self,
         candidates: list[GenerationResult],
         ctx: ReduceContext,

@@ -58,7 +58,7 @@ class CandidateReducer(Protocol):
 
     def fingerprint(self) -> str: ...
 
-    def reduce(
+    async def reduce(
         self,
         candidates: list[GenerationResult],
         ctx: ReduceContext,

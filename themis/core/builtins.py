@@ -46,7 +46,7 @@ class DemoReducer:
     def fingerprint(self) -> str:
         return "builtin-reducer-demo-fingerprint"
 
-    def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
+    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
             source_candidate_ids=[candidate.candidate_id for candidate in candidates],

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from themis.core.builtins import (
@@ -29,6 +31,7 @@ from themis.core.models import (
     GenerationResult,
     Message,
     ParsedOutput,
+    ReducedCandidate,
     Score,
     ScoreError,
     TraceStep,
@@ -274,6 +277,26 @@ class RecordingTraceMetric:
         return DemoJudgeWorkflow()
 
 
+class AwaitedReducer:
+    component_id = "reducer/awaited"
+    version = "1.0"
+
+    def __init__(self) -> None:
+        self.awaited = False
+
+    def fingerprint(self) -> str:
+        return "reducer-awaited"
+
+    async def reduce(self, candidates: list[GenerationResult], ctx) -> ReducedCandidate:
+        await asyncio.sleep(0)
+        self.awaited = True
+        return ReducedCandidate(
+            candidate_id=f"{ctx.case_id}-judge-selected",
+            source_candidate_ids=[candidate.candidate_id for candidate in candidates],
+            final_output=candidates[-1].final_output,
+        )
+
+
 def _experiment() -> Experiment:
     return Experiment(
         generation=GenerationConfig(
@@ -427,6 +450,31 @@ async def test_orchestrator_marks_score_errors_as_partial_failures_and_error_spa
     assert result.progress.failed_cases == 1
     assert ("score", "error") in tracer.ended
     assert ("run", "error") in tracer.ended
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_awaits_async_reducers() -> None:
+    experiment = _experiment()
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    reducer = AwaitedReducer()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component(experiment.generation.generator),
+        reducer=reducer,
+        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        metrics=[resolve_metric_component(metric) for metric in experiment.evaluation.metrics],
+    )
+
+    result = await orchestrator.run(snapshot)
+
+    assert reducer.awaited is True
+    assert result.cases[0].reduced_candidate is not None
+    assert result.cases[0].reduced_candidate.candidate_id == "case-1-judge-selected"
 
 
 @pytest.mark.asyncio
