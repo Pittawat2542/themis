@@ -5,6 +5,7 @@ from pathlib import Path
 from themis import (
     Experiment,
     InMemoryRunStore,
+    RuntimeConfig,
     RunResult,
     RunStore,
     RunSnapshot,
@@ -18,12 +19,13 @@ from themis.core.models import Case, Dataset
 
 
 def test_root_package_exports_public_symbols() -> None:
-    from themis import Experiment, RunResult, RunSnapshot, RunStatus, sqlite_store
+    from themis import Experiment, RunResult, RunSnapshot, RunStatus, RuntimeConfig, sqlite_store
 
     assert Experiment is not None
     assert RunResult is not None
     assert RunSnapshot is not None
     assert RunStatus is not None
+    assert RuntimeConfig is not None
     assert sqlite_store is not None
 
 
@@ -103,7 +105,7 @@ def test_public_surface_runs_experiment_end_to_end() -> None:
         ],
     )
 
-    result = experiment.run()
+    result = experiment.run(runtime=RuntimeConfig(max_concurrent_tasks=4))
 
     assert isinstance(result, RunResult)
     assert result.status is RunStatus.COMPLETED

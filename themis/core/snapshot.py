@@ -1,20 +1,31 @@
-"""Run snapshot models for Themis v4 Phase 1."""
+"""Run snapshot models for Themis v4 Phase 2."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, computed_field
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
-from themis.core.components import (
-    BUILTIN_COMPONENT_REFS,
-    ComponentRef,
-    component_ref_from_value,
-)
-from themis.core.config import StorageConfig
+from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef
+from themis.core.config import RuntimeConfig, StorageConfig
 from themis.core.events import RunEvent
 from themis.core.models import Dataset
+
+if TYPE_CHECKING:
+    from themis.core.results import ExecutionState
+
+__all__ = [
+    "BUILTIN_COMPONENT_REFS",
+    "ComponentRef",
+    "ComponentRefs",
+    "DatasetRef",
+    "RunIdentity",
+    "RunProvenance",
+    "RunSnapshot",
+    "StoredRun",
+    "snapshot_from_dict",
+]
 
 
 class DatasetRef(HashableModel):
@@ -47,6 +58,7 @@ class RunProvenance(FrozenModel):
     python_version: str
     platform: str
     storage: StorageConfig
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
 
 
@@ -69,7 +81,7 @@ class StoredRun(FrozenModel):
 
     @computed_field(return_type=object)  # type: ignore[prop-decorator]
     @property
-    def execution_state(self) -> object:
+    def execution_state(self) -> ExecutionState:
         from themis.core.results import ExecutionState
 
         return ExecutionState.from_events(self.snapshot.run_id, self.events)

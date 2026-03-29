@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import cast
+
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
-from themis.core.models import Case, GenerationResult, ParsedOutput, ReducedCandidate, Score
+from themis.core.models import Case, GenerationResult, Message, ParsedOutput, ReducedCandidate, Score
+from themis.core.protocols import CandidateReducer, Generator, Parser, PureMetric
 
 
 class DemoGenerator:
@@ -19,7 +23,7 @@ class DemoGenerator:
         return GenerationResult(
             candidate_id=f"{case.case_id}-candidate-{candidate_suffix}",
             final_output=answer,
-            conversation=[{"role": "assistant", "content": answer}],
+            conversation=[Message(role="assistant", content=answer)],
             token_usage={"prompt_tokens": 1, "completion_tokens": 1},
             latency_ms=1.0,
         )
@@ -65,13 +69,13 @@ class DemoMetric:
         return Score(metric_id=self.component_id, value=float(parsed.value == case.expected_output))
 
 
-_BUILTIN_GENERATORS = {"generator/demo": DemoGenerator()}
-_BUILTIN_REDUCERS = {"reducer/demo": DemoReducer()}
-_BUILTIN_PARSERS = {"parser/demo": DemoParser()}
-_BUILTIN_METRICS = {"metric/demo": DemoMetric()}
+_BUILTIN_GENERATORS: dict[str, Generator] = {"generator/demo": DemoGenerator()}
+_BUILTIN_REDUCERS: dict[str, CandidateReducer] = {"reducer/demo": DemoReducer()}
+_BUILTIN_PARSERS: dict[str, Parser] = {"parser/demo": DemoParser()}
+_BUILTIN_METRICS: dict[str, PureMetric] = {"metric/demo": DemoMetric()}
 
 
-def _resolve(mapping: dict[str, object], value: object) -> object:
+def _resolve(mapping: Mapping[str, object], value: object) -> object:
     if isinstance(value, str):
         try:
             return mapping[value]
@@ -80,17 +84,17 @@ def _resolve(mapping: dict[str, object], value: object) -> object:
     return value
 
 
-def resolve_generator_component(value: object) -> object:
-    return _resolve(_BUILTIN_GENERATORS, value)
+def resolve_generator_component(value: object) -> Generator:
+    return cast(Generator, _resolve(_BUILTIN_GENERATORS, value))
 
 
-def resolve_reducer_component(value: object) -> object:
-    return _resolve(_BUILTIN_REDUCERS, value)
+def resolve_reducer_component(value: object) -> CandidateReducer:
+    return cast(CandidateReducer, _resolve(_BUILTIN_REDUCERS, value))
 
 
-def resolve_parser_component(value: object) -> object:
-    return _resolve(_BUILTIN_PARSERS, value)
+def resolve_parser_component(value: object) -> Parser:
+    return cast(Parser, _resolve(_BUILTIN_PARSERS, value))
 
 
-def resolve_metric_component(value: object) -> object:
-    return _resolve(_BUILTIN_METRICS, value)
+def resolve_metric_component(value: object) -> PureMetric:
+    return cast(PureMetric, _resolve(_BUILTIN_METRICS, value))

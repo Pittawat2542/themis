@@ -6,9 +6,15 @@ import pytest
 
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
-from themis.core.events import GenerationCompletedEvent, ParseCompletedEvent, ReductionCompletedEvent, RunStartedEvent
+from themis.core.events import (
+    GenerationCompletedEvent,
+    ParseCompletedEvent,
+    ReductionCompletedEvent,
+    RunStartedEvent,
+    ScoreFailedEvent,
+)
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score
+from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
 from themis.core.orchestrator import Orchestrator
 from themis.core.stores.memory import InMemoryRunStore
 
@@ -95,6 +101,38 @@ class CountingMetric:
         del ctx
         self.calls += 1
         return Score(metric_id=self.component_id, value=float(parsed.value == case.expected_output))
+
+
+class RateLimitedGenerator:
+    component_id = "generator/rate-limited"
+    version = "1.0"
+    provider_key = "openai:https://api.openai.com/v1"
+
+    def __init__(self, *, updated_rate_limit: int | None = None) -> None:
+        self.timestamps: list[float] = []
+        self.updated_rate_limit = updated_rate_limit
+        self.calls = 0
+
+    def fingerprint(self) -> str:
+        return "generator-rate-limited"
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        import themis.core.orchestrator as orchestrator_module
+
+        self.calls += 1
+        self.timestamps.append(orchestrator_module.monotonic())
+        artifacts: dict[str, object] | None = None
+        if self.calls == 1 and self.updated_rate_limit is not None:
+            artifacts = {
+                "rate_limit": {
+                    "requests_per_minute": self.updated_rate_limit,
+                }
+            }
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
+            final_output=case.expected_output,
+            artifacts=artifacts,
+        )
 
 
 class FlakyStore(InMemoryRunStore):
@@ -292,3 +330,171 @@ async def test_orchestrator_rescores_without_regeneration_or_reparse() -> None:
     assert reducer.calls == 0
     assert parser.calls == 0
     assert metric.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retries_failed_scores_on_resume() -> None:
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = _experiment(generator=generator, reducer=reducer, parser=parser, metric=metric)
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-candidate-7",
+            candidate_index=0,
+            seed=7,
+            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+        )
+    )
+    store.persist_event(
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["case-1-candidate-7"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["case-1-candidate-7"],
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    store.persist_event(
+        ParseCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            result={"value": {"answer": "4"}, "format": "json"},
+        )
+    )
+    store.persist_event(
+        ScoreFailedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id=metric.component_id,
+            error=ScoreError(metric_id=metric.component_id, reason="temporary", retryable=True).model_dump(mode="json"),
+        )
+    )
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metrics=[metric],
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert generator.calls == 0
+    assert reducer.calls == 0
+    assert parser.calls == 0
+    assert metric.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_applies_default_provider_rate_limit() -> None:
+    generator = RateLimitedGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = _experiment(
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metric=metric,
+        num_samples=2,
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    current_time = {"value": 0.0}
+
+    def fake_monotonic() -> float:
+        return current_time["value"]
+
+    async def fake_sleep(delay: float) -> None:
+        current_time["value"] += delay
+
+    import themis.core.orchestrator as orchestrator_module
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(orchestrator_module, "monotonic", fake_monotonic)
+    monkeypatch.setattr(orchestrator_module.asyncio, "sleep", fake_sleep)
+
+    try:
+        store.initialize()
+        store.persist_snapshot(snapshot)
+        orchestrator = Orchestrator(
+            store=store,
+            generator=generator,
+            reducer=reducer,
+            parser=parser,
+            metrics=[metric],
+            max_concurrent_tasks=2,
+            stage_concurrency={"generation": 2},
+        )
+
+        await orchestrator.run(snapshot)
+    finally:
+        monkeypatch.undo()
+
+    assert generator.timestamps == [0.0, 1.0]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_updates_provider_rate_limit_from_generation_artifacts() -> None:
+    generator = RateLimitedGenerator(updated_rate_limit=120)
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = _experiment(
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metric=metric,
+        num_samples=3,
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    current_time = {"value": 0.0}
+
+    def fake_monotonic() -> float:
+        return current_time["value"]
+
+    async def fake_sleep(delay: float) -> None:
+        current_time["value"] += delay
+
+    import themis.core.orchestrator as orchestrator_module
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(orchestrator_module, "monotonic", fake_monotonic)
+    monkeypatch.setattr(orchestrator_module.asyncio, "sleep", fake_sleep)
+
+    try:
+        store.initialize()
+        store.persist_snapshot(snapshot)
+        orchestrator = Orchestrator(
+            store=store,
+            generator=generator,
+            reducer=reducer,
+            parser=parser,
+            metrics=[metric],
+            max_concurrent_tasks=3,
+            stage_concurrency={"generation": 3},
+        )
+
+        await orchestrator.run(snapshot)
+    finally:
+        monkeypatch.undo()
+
+    assert generator.timestamps == [0.0, 0.5, 1.0]

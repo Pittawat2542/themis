@@ -9,6 +9,7 @@ from themis.core.builtins import (
     resolve_reducer_component,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.contexts import ScoreContext
 from themis.core.events import (
     GenerationCompletedEvent,
     ParseCompletedEvent,
@@ -18,7 +19,7 @@ from themis.core.events import (
     ScoreCompletedEvent,
 )
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset
+from themis.core.models import Case, Dataset, ParsedOutput, ScoreError
 from themis.core.orchestrator import Orchestrator
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
@@ -78,6 +79,18 @@ class RecordingTracer(NoOpTracingProvider):
 
     def end_span(self, span: object, status: str) -> None:
         self.ended.append((str(span), status))
+
+
+class ErrorMetric:
+    component_id = "metric/error"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "metric-error"
+
+    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> ScoreError:
+        del parsed, case, ctx
+        return ScoreError(metric_id=self.component_id, reason="judge unavailable", retryable=True)
 
 
 def _experiment() -> Experiment:
@@ -205,3 +218,31 @@ async def test_orchestrator_emits_tracing_spans_for_each_stage() -> None:
         ("score", "ok"),
         ("run", "ok"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_marks_score_errors_as_partial_failures_and_error_spans() -> None:
+    experiment = _experiment()
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    tracer = RecordingTracer()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component(experiment.generation.generator),
+        reducer=resolve_reducer_component(experiment.generation.reducer),
+        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        metrics=[ErrorMetric()],
+        tracing_provider=tracer,
+    )
+
+    result = await orchestrator.run(snapshot)
+
+    assert result.status is RunStatus.PARTIAL_FAILURE
+    assert result.progress.completed_cases == 0
+    assert result.progress.failed_cases == 1
+    assert ("score", "error") in tracer.ended
+    assert ("run", "error") in tracer.ended

@@ -39,3 +39,12 @@ class EvaluationConfig(HashableModel):
 class StorageConfig(HashableModel):
     store: str
     parameters: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class RuntimeConfig(HashableModel):
+    max_concurrent_tasks: int = 32
+    stage_concurrency: dict[str, int] = Field(default_factory=dict)
+    provider_concurrency: dict[str, int] = Field(default_factory=dict)
+    provider_rate_limits: dict[str, int] = Field(default_factory=dict)
+    store_retry_attempts: int = 5
+    store_retry_delay: float = 0.01

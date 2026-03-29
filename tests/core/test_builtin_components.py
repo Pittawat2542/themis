@@ -9,7 +9,7 @@ from themis.core.builtins import (
     resolve_reducer_component,
 )
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
-from themis.core.models import Case, GenerationResult, ParsedOutput, ReducedCandidate
+from themis.core.models import Case, GenerationResult, ParsedOutput
 from themis.core.protocols import Generator, Parser, PureMetric
 
 

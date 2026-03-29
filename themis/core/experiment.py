@@ -1,4 +1,4 @@
-"""Experiment authoring model and snapshot compilation for Phase 1."""
+"""Experiment authoring model and snapshot compilation for Phase 2."""
 
 from __future__ import annotations
 
@@ -13,10 +13,11 @@ from themis.core.builtins import (
     resolve_reducer_component,
 )
 from themis.core.base import FrozenModel
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.components import component_ref_from_value
+from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
-from themis.core.protocols import LLMMetric, PureMetric, SelectionMetric, TraceMetric
+from themis.core.protocols import LLMMetric, LifecycleSubscriber, PureMetric, SelectionMetric, TraceMetric, TracingProvider
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.stores.sqlite import sqlite_store
 from themis.core.tracing import NoOpTracingProvider
@@ -26,7 +27,6 @@ from themis.core.snapshot import (
     RunIdentity,
     RunProvenance,
     RunSnapshot,
-    component_ref_from_value,
 )
 
 
@@ -36,6 +36,7 @@ class Experiment(FrozenModel):
     generation: GenerationConfig
     evaluation: EvaluationConfig
     storage: StorageConfig
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     datasets: list[Dataset] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
@@ -44,6 +45,9 @@ class Experiment(FrozenModel):
     platform: str = "unknown"
 
     def compile(self) -> RunSnapshot:
+        return self._compile_with_runtime(self.runtime)
+
+    def _compile_with_runtime(self, runtime: RuntimeConfig) -> RunSnapshot:
         component_refs = ComponentRefs(
             generator=component_ref_from_value(self.generation.generator),
             reducer=component_ref_from_value(self.generation.reducer)
@@ -75,6 +79,7 @@ class Experiment(FrozenModel):
             python_version=self.python_version,
             platform=self.platform,
             storage=self.storage,
+            runtime=runtime,
             environment_metadata=self.environment_metadata,
         )
         return RunSnapshot(
@@ -85,8 +90,15 @@ class Experiment(FrozenModel):
             metric_kinds=[self._metric_kind(metric) for metric in self.evaluation.metrics],
         )
 
-    async def run_async(self, *, subscribers: list[object] | None = None, tracing_provider=None):
-        snapshot = self.compile()
+    async def run_async(
+        self,
+        *,
+        runtime: RuntimeConfig | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
+        effective_runtime = runtime or self.runtime
+        snapshot = self._compile_with_runtime(effective_runtime)
         store = self._build_store()
         store.initialize()
         store.persist_snapshot(snapshot)
@@ -100,12 +112,19 @@ class Experiment(FrozenModel):
             metrics=[resolve_metric_component(metric) for metric in self.evaluation.metrics],
             subscribers=subscribers or [],
             tracing_provider=tracing_provider or NoOpTracingProvider(),
+            runtime=effective_runtime,
         )
         return await orchestrator.run(snapshot)
 
-    def run(self, *, subscribers: list[object] | None = None, tracing_provider=None):
+    def run(
+        self,
+        *,
+        runtime: RuntimeConfig | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
         return asyncio.run(
-            self.run_async(subscribers=subscribers, tracing_provider=tracing_provider)
+            self.run_async(runtime=runtime, subscribers=subscribers, tracing_provider=tracing_provider)
         )
 
     def _metric_kind(self, metric: object) -> str:

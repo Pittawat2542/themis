@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
+from typing import Any
 
-from themis.adapters._utils import stable_fingerprint
+from themis.adapters._utils import normalize_json_value, stable_fingerprint
+from themis.core.contexts import GenerateContext
 from themis.core.models import Case, GenerationResult, TraceStep
 
 
@@ -18,7 +21,7 @@ class LangGraphGenerator:
         *,
         graph_id: str,
         graph_version: str = "1.0",
-        input_builder=None,
+        input_builder: Any | None = None,
         output_key: str | None = None,
     ) -> None:
         self.graph = graph
@@ -38,26 +41,30 @@ class LangGraphGenerator:
             }
         )
 
-    async def generate(self, case: Case, ctx) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         payload = self.input_builder(case) if self.input_builder is not None else case.input
         trace = await self._collect_trace(payload)
         output = await self._invoke(payload)
-        final_output = output[self.output_key] if self.output_key is not None else output
+        final_output = output
+        if self.output_key is not None:
+            if not isinstance(output, Mapping):
+                raise TypeError("LangGraph adapter expected mapping output when output_key is provided.")
+            final_output = output[self.output_key]
         return GenerationResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
-            final_output=final_output,
+            final_output=normalize_json_value(final_output),
             trace=trace or None,
             artifacts={"graph_id": self.graph_id},
         )
 
-    async def _invoke(self, payload):
+    async def _invoke(self, payload: object) -> object:
         if hasattr(self.graph, "ainvoke"):
             return await self.graph.ainvoke(payload)
         if hasattr(self.graph, "invoke"):
             return await asyncio.to_thread(self.graph.invoke, payload)
         raise TypeError("LangGraph adapter requires a graph with ainvoke() or invoke().")
 
-    async def _collect_trace(self, payload) -> list[TraceStep]:
+    async def _collect_trace(self, payload: object) -> list[TraceStep]:
         if not hasattr(self.graph, "astream_events"):
             return []
         steps: list[TraceStep] = []

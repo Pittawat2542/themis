@@ -3,6 +3,7 @@
 from themis.core import (
     Experiment,
     InMemoryRunStore,
+    RuntimeConfig,
     RunResult,
     RunSnapshot,
     RunStatus,
@@ -14,6 +15,7 @@ from themis.core import (
 __all__ = [
     "Experiment",
     "InMemoryRunStore",
+    "RuntimeConfig",
     "RunResult",
     "RunSnapshot",
     "RunStatus",

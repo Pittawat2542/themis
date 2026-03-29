@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.experiment import Experiment
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
 from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score
@@ -87,6 +87,14 @@ def _experiment(
             workflow_overrides=workflow_overrides or {},
         ),
         storage=StorageConfig(store="sqlite", parameters={"path": "runs/themis.sqlite3"}),
+        runtime=RuntimeConfig(
+            max_concurrent_tasks=16,
+            stage_concurrency={"generation": 8},
+            provider_concurrency={"openai:https://api.openai.com/v1": 4},
+            provider_rate_limits={"openai:https://api.openai.com/v1": 120},
+            store_retry_attempts=7,
+            store_retry_delay=0.25,
+        ),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
@@ -108,7 +116,11 @@ def test_run_id_uses_identity_fields_only() -> None:
     changed_provenance = compiled.model_copy(
         update={
             "provenance": compiled.provenance.model_copy(
-                update={"platform": "linux", "environment_metadata": {"env": "prod"}}
+                update={
+                    "platform": "linux",
+                    "environment_metadata": {"env": "prod"},
+                    "runtime": RuntimeConfig(max_concurrent_tasks=64),
+                }
             )
         }
     )
@@ -137,6 +149,16 @@ def test_component_fingerprints_are_frozen_at_compile_time() -> None:
     generator.fingerprint_value = "fingerprint-after"
 
     assert compiled.component_refs.generator.fingerprint == "fingerprint-before"
+
+
+def test_runtime_config_is_recorded_in_snapshot_provenance() -> None:
+    compiled = _experiment().compile()
+
+    assert compiled.provenance.runtime.max_concurrent_tasks == 16
+    assert compiled.provenance.runtime.stage_concurrency == {"generation": 8}
+    assert compiled.provenance.runtime.provider_rate_limits == {
+        "openai:https://api.openai.com/v1": 120
+    }
 
 
 def test_snapshot_serialization_matches_golden_file() -> None:

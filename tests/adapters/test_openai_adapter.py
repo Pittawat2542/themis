@@ -48,11 +48,17 @@ async def test_openai_adapter_generates_results_from_responses_api() -> None:
     assert isinstance(result, GenerationResult)
     assert result.candidate_id == "case-1-candidate-7"
     assert result.final_output == "4"
+    assert [(message.role, message.content) for message in result.conversation or []] == [
+        ("system", "Answer directly."),
+        ("user", "What is 2+2?"),
+        ("assistant", "4"),
+    ]
     assert result.token_usage == {"prompt_tokens": 12, "completion_tokens": 3}
     assert result.artifacts == {
         "provider_request_id": "resp_123",
         "raw_response": {"id": "resp_123", "output_text": "4"},
         "response_headers": {"x-ratelimit-limit-requests": "60"},
+        "rate_limit": {"requests_per_minute": 60},
     }
     assert client.responses.calls == [
         {

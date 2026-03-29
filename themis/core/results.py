@@ -22,6 +22,18 @@ from themis.core.events import (
     ScoreFailedEvent,
 )
 from themis.core.models import Case, GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
+from themis.core.snapshot import RunSnapshot
+
+CaseStageEvent = (
+    GenerationCompletedEvent
+    | GenerationFailedEvent
+    | ReductionCompletedEvent
+    | ReductionFailedEvent
+    | ParseCompletedEvent
+    | ParseFailedEvent
+    | ScoreCompletedEvent
+    | ScoreFailedEvent
+)
 
 
 class RunStatus(StrEnum):
@@ -46,7 +58,15 @@ class CaseExecutionState(FrozenModel):
     reduction_error: str | None = None
     parsed_output: ParsedOutput | None = None
     parse_error: str | None = None
-    scores: dict[str, Score | ScoreError] = Field(default_factory=dict)
+    successful_scores: dict[str, Score] = Field(default_factory=dict)
+    score_failures: dict[str, ScoreError] = Field(default_factory=dict)
+
+    @property
+    def scores(self) -> dict[str, Score | ScoreError]:
+        return {
+            **self.score_failures,
+            **self.successful_scores,
+        }
 
 
 class ExecutionState(FrozenModel):
@@ -70,7 +90,7 @@ class ExecutionState(FrozenModel):
                 status = RunStatus.FAILED
                 continue
 
-            if not hasattr(event, "case_id"):
+            if not isinstance(event, CaseStageEvent):
                 continue
 
             case_id = event.case_id
@@ -107,13 +127,27 @@ class ExecutionState(FrozenModel):
                 updated = current.model_copy(update={"parse_error": event.error_message})
                 saw_failures = True
             elif isinstance(event, ScoreCompletedEvent) and event.score is not None:
-                scores = dict(current.scores)
-                scores[event.metric_id] = Score.model_validate(event.score)
-                updated = current.model_copy(update={"scores": scores})
+                successful_scores = dict(current.successful_scores)
+                score_failures = dict(current.score_failures)
+                successful_scores[event.metric_id] = Score.model_validate(event.score)
+                score_failures.pop(event.metric_id, None)
+                updated = current.model_copy(
+                    update={
+                        "successful_scores": successful_scores,
+                        "score_failures": score_failures,
+                    }
+                )
             elif isinstance(event, ScoreFailedEvent) and event.error is not None:
-                scores = dict(current.scores)
-                scores[event.metric_id] = ScoreError.model_validate(event.error)
-                updated = current.model_copy(update={"scores": scores})
+                successful_scores = dict(current.successful_scores)
+                score_failures = dict(current.score_failures)
+                successful_scores.pop(event.metric_id, None)
+                score_failures[event.metric_id] = ScoreError.model_validate(event.error)
+                updated = current.model_copy(
+                    update={
+                        "successful_scores": successful_scores,
+                        "score_failures": score_failures,
+                    }
+                )
                 saw_failures = True
 
             case_states[case_id] = updated
@@ -157,5 +191,5 @@ class GenerationBundleRecord(FrozenModel):
 class GenerationBundle(FrozenModel):
     schema_version: str = "1"
     run_id: str
-    snapshot: object
+    snapshot: RunSnapshot
     records: list[GenerationBundleRecord] = Field(default_factory=list)

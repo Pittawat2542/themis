@@ -1,8 +1,8 @@
-"""Core namespace for Themis v4 Phase 1."""
+"""Core namespace for Themis v4 Phase 2."""
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
 from themis.core.bundles import export_generation_bundle, import_generation_bundle
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.contexts import (
     EvalScoreContext,
     GenerateContext,
@@ -174,6 +174,7 @@ __all__ = [
     "RunStartedEvent",
     "RunStatus",
     "RunStore",
+    "RuntimeConfig",
     "CaseResult",
     "ExecutionState",
     "export_generation_bundle",
