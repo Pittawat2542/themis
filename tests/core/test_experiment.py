@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from themis import Experiment, RunSnapshot
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
+from themis.core.stores.memory import InMemoryRunStore
 from themis.core.workflows import JudgeResponse
 
 
@@ -59,3 +62,57 @@ def test_experiment_compile_returns_snapshot() -> None:
     assert snapshot.component_refs.generator.component_id == "generator/demo"
     assert snapshot.component_refs.judge_models[0].component_id == "judge/custom"
     assert snapshot.identity.judge_model_refs[0].fingerprint == "judge-custom-fingerprint"
+
+
+def test_rejudge_requires_explicit_store_for_memory_backed_runs() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="generator/demo",
+            candidate_policy={"num_samples": 1},
+            reducer="reducer/demo",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["metric/demo"],
+            parsers=["parser/demo"],
+            judge_models=[DummyJudgeModel()],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+            )
+        ],
+        seeds=[7],
+    )
+
+    with pytest.raises(ValueError, match="original store instance"):
+        experiment.rejudge()
+
+
+def test_run_accepts_explicit_store_for_memory_backed_runs() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="generator/demo",
+            candidate_policy={"num_samples": 1},
+            reducer="reducer/demo",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["metric/demo"],
+            parsers=["parser/demo"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+            )
+        ],
+        seeds=[7],
+    )
+    store = InMemoryRunStore()
+
+    result = experiment.run(store=store)
+
+    assert result.status.value == "completed"
+    assert store.resume(experiment.compile().run_id) is not None

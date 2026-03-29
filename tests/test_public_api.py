@@ -5,17 +5,18 @@ from pathlib import Path
 from themis import (
     Experiment,
     InMemoryRunStore,
-    RuntimeConfig,
     RunResult,
     RunStore,
     RunSnapshot,
     RunStatus,
+    RuntimeConfig,
     SqliteRunStore,
-    export_evaluation_bundle,
+    get_evaluation_execution,
+    get_execution_state,
     sqlite_store,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.events import RunStartedEvent
+from themis.core.events import EvaluationCompletedEvent, RunStartedEvent
 from themis.core.models import Case, Dataset
 
 
@@ -27,6 +28,11 @@ def test_root_package_exports_public_symbols() -> None:
         RunStatus,
         RuntimeConfig,
         export_evaluation_bundle,
+        export_generation_bundle,
+        get_evaluation_execution,
+        get_execution_state,
+        import_evaluation_bundle,
+        import_generation_bundle,
         sqlite_store,
     )
 
@@ -36,6 +42,11 @@ def test_root_package_exports_public_symbols() -> None:
     assert RunStatus is not None
     assert RuntimeConfig is not None
     assert export_evaluation_bundle is not None
+    assert export_generation_bundle is not None
+    assert import_evaluation_bundle is not None
+    assert import_generation_bundle is not None
+    assert get_execution_state is not None
+    assert get_evaluation_execution is not None
     assert sqlite_store is not None
 
 
@@ -125,3 +136,51 @@ def test_package_includes_py_typed_marker() -> None:
     import themis
 
     assert Path(themis.__file__).with_name("py.typed").is_file()
+
+
+def test_public_inspection_helpers_return_execution_state_and_evaluation_execution() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="generator/demo",
+            candidate_policy={"num_samples": 1},
+            reducer="reducer/demo",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["metric/demo"],
+            parsers=["parser/demo"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/judge",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+
+    state = get_execution_state(store, snapshot.run_id)
+    execution = get_evaluation_execution(store, snapshot.run_id, "case-1", "metric/judge")
+
+    assert state.run_id == snapshot.run_id
+    assert execution is not None
+    assert execution.execution_id == "execution-1"

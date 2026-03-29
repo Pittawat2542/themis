@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+
+from themis.core.base import JSONValue
 from themis.core.bundles import (
     export_evaluation_bundle,
     export_generation_bundle,
@@ -95,6 +98,8 @@ def test_import_generation_bundle_round_trips_generation_events() -> None:
     assert resumed is not None
     assert resumed.snapshot == snapshot
     assert [event.event_type for event in resumed.events] == ["generation_completed"]
+    assert isinstance(resumed.events[0], GenerationCompletedEvent)
+    assert resumed.events[0].result_blob_ref is not None
 
 
 def test_export_evaluation_bundle_collects_evaluation_executions_from_store() -> None:
@@ -102,18 +107,23 @@ def test_export_evaluation_bundle_collects_evaluation_executions_from_store() ->
     store = InMemoryRunStore()
     store.initialize()
     store.persist_snapshot(snapshot)
+    execution_payload: dict[str, JSONValue] = {
+        "execution_id": "execution-1",
+        "subject_kind": "candidate_set",
+        "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+        "trace": {"trace_id": "trace-1", "steps": []},
+    }
     store.persist_event(
         EvaluationCompletedEvent(
             run_id=snapshot.run_id,
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id="metric/judge",
-            execution={
-                "execution_id": "execution-1",
-                "subject_kind": "candidate_set",
-                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
-                "trace": {"trace_id": "trace-1", "steps": []},
-            },
+            execution=execution_payload,
+            execution_blob_ref=store.store_blob(
+                json.dumps(execution_payload, sort_keys=True).encode("utf-8"),
+                "application/json",
+            ),
         )
     )
 
@@ -123,6 +133,7 @@ def test_export_evaluation_bundle_collects_evaluation_executions_from_store() ->
     assert bundle.snapshot == snapshot
     assert bundle.records[0].metric_id == "metric/judge"
     assert bundle.records[0].candidate_id == "case-1-reduced"
+    assert bundle.records[0].execution_blob_ref is not None
 
 
 def test_import_evaluation_bundle_round_trips_evaluation_events() -> None:
@@ -130,18 +141,23 @@ def test_import_evaluation_bundle_round_trips_evaluation_events() -> None:
     source_store = InMemoryRunStore()
     source_store.initialize()
     source_store.persist_snapshot(snapshot)
+    execution_payload: dict[str, JSONValue] = {
+        "execution_id": "execution-1",
+        "subject_kind": "candidate_set",
+        "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+        "trace": {"trace_id": "trace-1", "steps": []},
+    }
     source_store.persist_event(
         EvaluationCompletedEvent(
             run_id=snapshot.run_id,
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id="metric/judge",
-            execution={
-                "execution_id": "execution-1",
-                "subject_kind": "candidate_set",
-                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
-                "trace": {"trace_id": "trace-1", "steps": []},
-            },
+            execution=execution_payload,
+            execution_blob_ref=source_store.store_blob(
+                json.dumps(execution_payload, sort_keys=True).encode("utf-8"),
+                "application/json",
+            ),
         )
     )
     bundle = export_evaluation_bundle(source_store, snapshot.run_id)
@@ -158,3 +174,5 @@ def test_import_evaluation_bundle_round_trips_evaluation_events() -> None:
         "evaluation_completed",
         "score_completed",
     ]
+    assert isinstance(resumed.events[0], EvaluationCompletedEvent)
+    assert resumed.events[0].execution_blob_ref == bundle.records[0].execution_blob_ref

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import hashlib
+
 from themis.core.events import EvaluationCompletedEvent, GenerationCompletedEvent, ScoreCompletedEvent
 from themis.core.models import GenerationResult, Score
 from themis.core.results import (
@@ -28,6 +31,7 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
                     candidate_id=event.candidate_id,
                     candidate_index=event.candidate_index,
                     seed=event.seed,
+                    result_blob_ref=_blob_ref(GenerationResult.model_validate(event.result).model_dump(mode="json")),
                     result=GenerationResult.model_validate(event.result),
                 )
             )
@@ -45,6 +49,13 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
     for record in bundle.records:
         if record.case_id not in valid_case_ids:
             raise ValueError(f"Unknown case_id in generation bundle: {record.case_id}")
+        result_payload = record.result.model_dump(mode="json")
+        blob_ref = store.store_blob(
+            json.dumps(result_payload, sort_keys=True).encode("utf-8"),
+            "application/json",
+        )
+        if record.result_blob_ref is not None and blob_ref != record.result_blob_ref:
+            raise ValueError("Generation bundle blob ref does not match serialized result payload")
         store.persist_event(
             GenerationCompletedEvent(
                 run_id=bundle.run_id,
@@ -52,7 +63,8 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
                 candidate_id=record.candidate_id,
                 candidate_index=record.candidate_index,
                 seed=record.seed,
-                result=record.result.model_dump(mode="json"),
+                result=result_payload,
+                result_blob_ref=record.result_blob_ref or blob_ref,
             )
         )
 
@@ -70,6 +82,7 @@ def export_evaluation_bundle(store: RunStore, run_id: str) -> EvaluationBundle:
                     case_id=event.case_id,
                     metric_id=event.metric_id,
                     candidate_id=event.candidate_id,
+                    execution_blob_ref=_blob_ref(EvaluationExecution.model_validate(event.execution).model_dump(mode="json")),
                     execution=EvaluationExecution.model_validate(event.execution),
                 )
             )
@@ -87,13 +100,21 @@ def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
     for record in bundle.records:
         if record.case_id not in valid_case_ids:
             raise ValueError(f"Unknown case_id in evaluation bundle: {record.case_id}")
+        execution_payload = record.execution.model_dump(mode="json")
+        blob_ref = store.store_blob(
+            json.dumps(execution_payload, sort_keys=True).encode("utf-8"),
+            "application/json",
+        )
+        if record.execution_blob_ref is not None and blob_ref != record.execution_blob_ref:
+            raise ValueError("Evaluation bundle blob ref does not match serialized execution payload")
         store.persist_event(
             EvaluationCompletedEvent(
                 run_id=bundle.run_id,
                 case_id=record.case_id,
                 candidate_id=record.candidate_id,
                 metric_id=record.metric_id,
-                execution=record.execution.model_dump(mode="json"),
+                execution=execution_payload,
+                execution_blob_ref=record.execution_blob_ref or blob_ref,
             )
         )
         if record.candidate_id is not None:
@@ -118,3 +139,8 @@ def _final_score(metric_id: str, execution: EvaluationExecution) -> Score:
     if execution.scores:
         return execution.scores[-1]
     return Score(metric_id=metric_id, value=0.0)
+
+
+def _blob_ref(payload: dict[str, object]) -> str:
+    blob = json.dumps(payload, sort_keys=True).encode("utf-8")
+    return f"sha256:{hashlib.sha256(blob).hexdigest()}"

@@ -1,4 +1,4 @@
-"""Runtime result, work-item, and resume state models for Phase 2."""
+"""Runtime result, work-item, and resume state models for Phase 3."""
 
 from __future__ import annotations
 
@@ -216,6 +216,7 @@ class GenerationBundleRecord(FrozenModel):
     candidate_id: str
     candidate_index: int | None = None
     seed: int | None = None
+    result_blob_ref: str | None = None
     result: GenerationResult
 
 
@@ -230,6 +231,7 @@ class EvaluationBundleRecord(FrozenModel):
     case_id: str
     metric_id: str
     candidate_id: str | None = None
+    execution_blob_ref: str | None = None
     execution: EvaluationExecution
 
 

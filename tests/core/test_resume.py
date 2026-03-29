@@ -4,8 +4,9 @@ import asyncio
 
 import pytest
 
+from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
@@ -21,7 +22,13 @@ from themis.core.orchestrator import Orchestrator
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.stores.sqlite import SqliteRunStore
-from themis.core.workflows import EvalStep, JudgeResponse
+from themis.core.workflows import (
+    AggregationResult,
+    JudgeCall,
+    JudgeResponse,
+    ParsedJudgment,
+    RenderedJudgePrompt,
+)
 
 
 class ConcurrencyTrackingGenerator:
@@ -126,7 +133,7 @@ class RateLimitedGenerator:
 
         self.calls += 1
         self.timestamps.append(orchestrator_module.monotonic())
-        artifacts: dict[str, object] | None = None
+        artifacts: dict[str, JSONValue] | None = None
         if self.calls == 1 and self.updated_rate_limit is not None:
             artifacts = {
                 "rate_limit": {
@@ -193,13 +200,30 @@ class DemoWorkflow:
     def fingerprint(self) -> str:
         return "workflow-demo"
 
-    def steps(self) -> list[EvalStep]:
-        return [
-            EvalStep(step_type="render_prompt", config={"template": "Grade {candidate_output}"}),
-            EvalStep(step_type="model_call"),
-            EvalStep(step_type="parse_judgment", config={"label_scores": {"pass": 1.0}}),
-            EvalStep(step_type="emit_score"),
-        ]
+    def judge_calls(self) -> list[JudgeCall]:
+        return [JudgeCall(call_id="call-0", judge_model_id="judge/demo")]
+
+    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+        del call, ctx
+        return RenderedJudgePrompt(prompt_id="prompt-0", content=f"Grade {subject.candidates[0].final_output}")
+
+    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+        del call, ctx
+        label = response.raw_response.strip().split()[0].lower()
+        return ParsedJudgment(label=label, score=1.0 if label == "pass" else 0.0)
+
+    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+        del call, ctx
+        return Score(metric_id="metric/llm", value=float(judgment.score or 0.0))
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None:
+        del judgments, ctx
+        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
 
 
 class SlowJudgeModel:
@@ -763,15 +787,16 @@ async def test_experiment_rejudge_async_reruns_workflow_metrics_without_regenera
         seeds=[7],
     )
 
-    await experiment.run_async()
+    store = SqliteRunStore(tmp_path / "run_store.sqlite3")
+
+    await experiment.run_async(store=store)
 
     generator.calls = 0
     reducer.calls = 0
     parser.calls = 0
     metric.calls = 0
 
-    result = await experiment.rejudge_async(metric_ids=[metric.component_id])
-    store = SqliteRunStore(tmp_path / "run_store.sqlite3")
+    result = await experiment.rejudge_async(metric_ids=[metric.component_id], store=store)
     events = store.query_events(experiment.compile().run_id)
 
     assert result.status is RunStatus.COMPLETED

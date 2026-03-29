@@ -93,7 +93,7 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
     assert state.case_states["case-1"].reduced_candidate is not None
     assert state.case_states["case-1"].parsed_output is not None
     assert state.case_states["case-1"].evaluation_executions["metric/judge"].execution_id == "execution-1"
-    assert state.case_states["case-1"].scores["metric/demo"].value == 1.0
+    assert state.case_states["case-1"].successful_scores["metric/demo"].value == 1.0
 
 
 def test_stored_run_exposes_execution_state() -> None:

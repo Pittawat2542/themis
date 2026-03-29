@@ -1,4 +1,4 @@
-"""Run store protocol for Themis v4 Phase 2."""
+"""Run store protocol for Themis v4 Phase 3."""
 
 from __future__ import annotations
 

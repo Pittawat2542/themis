@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from themis import InMemoryRunStore, RunStatus, RuntimeConfig
-from themis.core import (
+from themis import (
+    InMemoryRunStore,
+    RunStatus,
+    RuntimeConfig,
     export_evaluation_bundle,
     export_generation_bundle,
+    get_evaluation_execution,
+    get_execution_state,
     import_evaluation_bundle,
     import_generation_bundle,
 )
@@ -165,3 +169,27 @@ def test_readme_evaluation_bundle_example_round_trips() -> None:
     import_evaluation_bundle(target_store, bundle)
 
     assert target_store.resume(snapshot.run_id) is not None
+
+
+def test_readme_inspection_example_reads_execution_state() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
+        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    store = InMemoryRunStore()
+
+    experiment.run(store=store)
+
+    state = get_execution_state(store, experiment.compile().run_id)
+    execution = get_evaluation_execution(store, experiment.compile().run_id, "case-1", "metric/judge")
+
+    assert state.run_id == experiment.compile().run_id
+    assert execution is None

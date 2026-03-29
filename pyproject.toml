@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "themis-eval"
 version = "4.0.0a0"
-description = "Themis v4 Phase 2 execution engine"
+description = "Themis v4 Phase 3 execution engine"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Pittawat Taveekitworachai" }]

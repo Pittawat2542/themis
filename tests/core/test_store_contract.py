@@ -8,12 +8,13 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import RunCompletedEvent, RunStartedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
+from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.stores.sqlite import SqliteRunStore
 
 
-def _snapshot() -> object:
+def _snapshot() -> RunSnapshot:
     experiment = Experiment(
         generation=GenerationConfig(
             generator="generator/demo",

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.experiment import Experiment
 from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
@@ -72,7 +73,7 @@ def _experiment(
     *,
     revision: str = "r1",
     generator: DummyGenerator | None = None,
-    workflow_overrides: dict[str, object] | None = None,
+    workflow_overrides: dict[str, JSONValue] | None = None,
 ) -> Experiment:
     return Experiment(
         generation=GenerationConfig(

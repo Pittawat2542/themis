@@ -1,4 +1,4 @@
-"""Core namespace for Themis v4 Phase 2."""
+"""Core namespace for Themis v4 Phase 3."""
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
 from themis.core.bundles import (
@@ -37,6 +37,7 @@ from themis.core.events import (
     event_from_dict,
 )
 from themis.core.experiment import Experiment
+from themis.core.inspection import get_evaluation_execution, get_execution_state
 from themis.core.models import (
     Case,
     ConversationTrace,
@@ -115,10 +116,11 @@ from themis.core.workflow_runner import DefaultWorkflowRunner
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
-    EvalStep,
+    JudgeCall,
     JudgeResponse,
     ParsedJudgment,
     RenderedJudgePrompt,
+    build_prompt_template_context,
 )
 
 __all__ = [
@@ -142,7 +144,6 @@ __all__ = [
     "ConversationSubject",
     "Dataset",
     "DatasetRef",
-    "EvalStep",
     "EvalScoreContext",
     "EvaluationExecution",
     "EvaluationCompletedEvent",
@@ -160,6 +161,7 @@ __all__ = [
     "GenerationWorkItem",
     "HashableModel",
     "JudgeModel",
+    "JudgeCall",
     "JudgeResponse",
     "JSONValue",
     "LLMMetric",
@@ -201,6 +203,8 @@ __all__ = [
     "export_generation_bundle",
     "GenerationBundle",
     "GenerationBundleRecord",
+    "get_evaluation_execution",
+    "get_execution_state",
     "ProgressSnapshot",
     "Score",
     "ScoreCompletedEvent",
@@ -221,6 +225,7 @@ __all__ = [
     "WorkflowBuildError",
     "WorkflowRunner",
     "WorkflowTrace",
+    "build_prompt_template_context",
     "candidate_set_subject_for_llm_metric",
     "candidate_set_subject_for_selection_metric",
     "event_from_dict",

@@ -1,4 +1,4 @@
-"""Experiment authoring model and snapshot compilation for Phase 2."""
+"""Experiment authoring model and snapshot compilation for Phase 3."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig
 from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
 from themis.core.protocols import LLMMetric, LifecycleSubscriber, PureMetric, SelectionMetric, TraceMetric, TracingProvider
+from themis.core.store import RunStore
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.stores.sqlite import sqlite_store
 from themis.core.tracing import NoOpTracingProvider
@@ -97,16 +98,17 @@ class Experiment(FrozenModel):
         self,
         *,
         runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         effective_runtime = runtime or self.runtime
         snapshot = self._compile_with_runtime(effective_runtime)
-        store = self._build_store()
-        store.initialize()
-        store.persist_snapshot(snapshot)
+        run_store = store or self._build_store()
+        run_store.initialize()
+        run_store.persist_snapshot(snapshot)
         orchestrator = Orchestrator(
-            store=store,
+            store=run_store,
             generator=resolve_generator_component(self.generation.generator),
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
@@ -125,14 +127,19 @@ class Experiment(FrozenModel):
         *,
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         effective_runtime = runtime or self.runtime
         snapshot = self._compile_with_runtime(effective_runtime)
-        store = self._build_store()
-        store.initialize()
-        if store.resume(snapshot.run_id) is None:
+        if store is None and self.storage.store == "memory":
+            raise ValueError(
+                "Memory-backed rejudge requires the original store instance; pass store=... or use sqlite storage."
+            )
+        run_store = store or self._build_store()
+        run_store.initialize()
+        if run_store.resume(snapshot.run_id) is None:
             raise ValueError(f"No stored run found for rejudge: {snapshot.run_id}")
 
         requested_metric_ids = set(metric_ids or [])
@@ -144,7 +151,7 @@ class Experiment(FrozenModel):
             }
 
         orchestrator = Orchestrator(
-            store=store,
+            store=run_store,
             generator=resolve_generator_component(self.generation.generator),
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
@@ -163,11 +170,17 @@ class Experiment(FrozenModel):
         self,
         *,
         runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         return asyncio.run(
-            self.run_async(runtime=runtime, subscribers=subscribers, tracing_provider=tracing_provider)
+            self.run_async(
+                runtime=runtime,
+                store=store,
+                subscribers=subscribers,
+                tracing_provider=tracing_provider,
+            )
         )
 
     def rejudge(
@@ -175,6 +188,7 @@ class Experiment(FrozenModel):
         *,
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
@@ -182,6 +196,7 @@ class Experiment(FrozenModel):
             self.rejudge_async(
                 metric_ids=metric_ids,
                 runtime=runtime,
+                store=store,
                 subscribers=subscribers,
                 tracing_provider=tracing_provider,
             )

@@ -10,6 +10,11 @@ from themis.core import (
     RunStore,
     SqliteRunStore,
     export_evaluation_bundle,
+    export_generation_bundle,
+    get_evaluation_execution,
+    get_execution_state,
+    import_evaluation_bundle,
+    import_generation_bundle,
     sqlite_store,
 )
 
@@ -23,5 +28,10 @@ __all__ = [
     "RunStore",
     "SqliteRunStore",
     "export_evaluation_bundle",
+    "export_generation_bundle",
+    "get_evaluation_execution",
+    "get_execution_state",
+    "import_evaluation_bundle",
+    "import_generation_bundle",
     "sqlite_store",
 ]
