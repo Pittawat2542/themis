@@ -1,15 +1,19 @@
 # Themis v4
 
-This repository contains the clean-slate Phase 1 foundation for Themis v4.
+This repository contains the clean-slate Phase 2 execution engine for Themis v4.
 
-Phase 1 gives you the immutable model layer, extension contracts, snapshot compilation, and the first run-store backends. It is intentionally narrow, but the core contracts are now strict enough to support the execution work that follows in Phase 2.
+Phase 2 keeps the immutable model layer from Phase 1 and adds a runnable execution engine: planning, generation fan-out, reduction, parsing, pure-metric scoring, tracing hooks, resume, and generation bundle export/import.
 
 ## Current scope
 
 - immutable core domain models and typed execution contexts
 - extension protocols for generators, reducers, parsers, metrics, and workflows
 - `Experiment.compile()` to a reproducible `RunSnapshot`
+- `Experiment.run()` / `Experiment.run_async()` for end-to-end execution
+- lazy planning plus event-backed resume state
 - in-memory and SQLite run stores
+- OpenAI, vLLM, and LangGraph generator adapters
+- generation bundle export/import helpers
 - typed package distribution via `py.typed`
 
 ## What affects `run_id`
@@ -56,10 +60,8 @@ Run events use an additive, forward-compatible read model:
 Builtin component example:
 
 ```python
-from themis import InMemoryRunStore
-from themis.core import Experiment
+from themis import Experiment, RunStatus
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.events import RunStartedEvent
 from themis.core.models import Case, Dataset
 
 experiment = Experiment(
@@ -74,20 +76,15 @@ experiment = Experiment(
     ],
 )
 
-store = InMemoryRunStore()
-snapshot = experiment.compile()
-store.initialize()
-store.persist_snapshot(snapshot)
-store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+result = experiment.run()
+assert result.status is RunStatus.COMPLETED
 ```
 
 Custom component example:
 
 ```python
-from themis import InMemoryRunStore
-from themis.core import Experiment
+from themis import Experiment, RunStatus
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.events import RunStartedEvent
 from themis.core.models import Case, Dataset, GenerationResult
 
 
@@ -117,17 +114,20 @@ experiment = Experiment(
     ],
 )
 
-store = InMemoryRunStore()
-snapshot = experiment.compile()
-store.initialize()
-store.persist_snapshot(snapshot)
-store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+result = experiment.run()
+assert result.status is RunStatus.COMPLETED
 ```
 
 ## Not included yet
 
 - CLI
-- execution engine
-- provider adapters
-- reporting and read models beyond the snapshot projection
+- LLM-backed evaluation workflows
+- judge orchestration and workflow-runner execution
+- reporting and read models beyond the execution snapshot and generation bundles
 - rebuilt end-user documentation
+
+## Optional extras
+
+- `pip install themis-eval[openai]`
+- `pip install themis-eval[vllm]`
+- `pip install themis-eval[langgraph]`
