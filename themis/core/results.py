@@ -146,6 +146,16 @@ class RunResult(FrozenModel):
     cases: list[CaseResult] = Field(default_factory=list)
 
 
+class GenerationBundleRecord(FrozenModel):
+    case_id: str
+    candidate_id: str
+    candidate_index: int | None = None
+    seed: int | None = None
+    result: GenerationResult
+
+
 class GenerationBundle(FrozenModel):
+    schema_version: str = "1"
     run_id: str
-    generated_cases: dict[str, list[GenerationResult]] = Field(default_factory=dict)
+    snapshot: object
+    records: list[GenerationBundleRecord] = Field(default_factory=list)

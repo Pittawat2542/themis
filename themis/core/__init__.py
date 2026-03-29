@@ -1,6 +1,7 @@
 """Core namespace for Themis v4 Phase 1."""
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
+from themis.core.bundles import export_generation_bundle, import_generation_bundle
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import (
     EvalScoreContext,
@@ -66,7 +67,16 @@ from themis.core.protocols import (
 )
 from themis.core.orchestrator import Orchestrator
 from themis.core.planner import Planner
-from themis.core.results import CaseResult, ExecutionState, GenerationBundle, GenerationWorkItem, ProgressSnapshot, RunResult, RunStatus
+from themis.core.results import (
+    CaseResult,
+    ExecutionState,
+    GenerationBundle,
+    GenerationBundleRecord,
+    GenerationWorkItem,
+    ProgressSnapshot,
+    RunResult,
+    RunStatus,
+)
 from themis.core.store import RunStore
 from themis.core.snapshot import (
     ComponentRef,
@@ -166,7 +176,9 @@ __all__ = [
     "RunStore",
     "CaseResult",
     "ExecutionState",
+    "export_generation_bundle",
     "GenerationBundle",
+    "GenerationBundleRecord",
     "ProgressSnapshot",
     "Score",
     "ScoreCompletedEvent",
@@ -189,6 +201,7 @@ __all__ = [
     "candidate_set_subject_for_selection_metric",
     "event_from_dict",
     "InMemoryRunStore",
+    "import_generation_bundle",
     "sqlite_store",
     "validate_candidate_set_for_llm_metric",
     "validate_candidate_set_for_selection_metric",

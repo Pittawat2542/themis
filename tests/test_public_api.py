@@ -5,8 +5,10 @@ from pathlib import Path
 from themis import (
     Experiment,
     InMemoryRunStore,
+    RunResult,
     RunStore,
     RunSnapshot,
+    RunStatus,
     SqliteRunStore,
     sqlite_store,
 )
@@ -16,10 +18,12 @@ from themis.core.models import Case, Dataset
 
 
 def test_root_package_exports_public_symbols() -> None:
-    from themis import Experiment, RunSnapshot, sqlite_store
+    from themis import Experiment, RunResult, RunSnapshot, RunStatus, sqlite_store
 
     assert Experiment is not None
+    assert RunResult is not None
     assert RunSnapshot is not None
+    assert RunStatus is not None
     assert sqlite_store is not None
 
 
@@ -77,6 +81,32 @@ def test_public_surface_compiles_and_persists_runs(tmp_path) -> None:
 
     assert memory_store.resume(snapshot.run_id) is not None
     assert sqlite.resume(snapshot.run_id) is not None
+
+
+def test_public_surface_runs_experiment_end_to_end() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="generator/demo",
+            candidate_policy={"num_samples": 1},
+            reducer="reducer/demo",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["metric/demo"],
+            parsers=["parser/demo"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+    )
+
+    result = experiment.run()
+
+    assert isinstance(result, RunResult)
+    assert result.status is RunStatus.COMPLETED
 
 
 def test_package_includes_py_typed_marker() -> None:
