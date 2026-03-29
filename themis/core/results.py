@@ -40,6 +40,7 @@ class ProgressSnapshot(FrozenModel):
 
 class CaseExecutionState(FrozenModel):
     generated_candidates: dict[str, GenerationResult] = Field(default_factory=dict)
+    generated_candidates_by_index: dict[int, GenerationResult] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
     reduced_candidate: ReducedCandidate | None = None
     reduction_error: str | None = None
@@ -79,7 +80,15 @@ class ExecutionState(FrozenModel):
             if isinstance(event, GenerationCompletedEvent) and event.result is not None:
                 generated = dict(current.generated_candidates)
                 generated[event.candidate_id] = GenerationResult.model_validate(event.result)
-                updated = current.model_copy(update={"generated_candidates": generated})
+                generated_by_index = dict(current.generated_candidates_by_index)
+                if event.candidate_index is not None:
+                    generated_by_index[event.candidate_index] = generated[event.candidate_id]
+                updated = current.model_copy(
+                    update={
+                        "generated_candidates": generated,
+                        "generated_candidates_by_index": generated_by_index,
+                    }
+                )
             elif isinstance(event, GenerationFailedEvent):
                 failures = dict(current.generation_failures)
                 failures[event.candidate_id] = event.error_message
