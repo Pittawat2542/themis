@@ -48,6 +48,7 @@ adapter = "rubric_qa"
 dataset_id = "cais/hle"
 split = "test"
 variant_mode = "open"
+adapter = "hle"
 
 [benchmarks.hmmt_feb_2025]
 dataset_id = "MathArena/hmmt_feb_2025"
@@ -98,6 +99,7 @@ split = "test"
 dataset_id = "openai/MMMLU"
 split = "test"
 variant_mode = "open"
+adapter = "mmmlu"
 
 [benchmarks.codeforces]
 dataset_id = "open-r1/codeforces"
@@ -115,11 +117,13 @@ split = "train"
 dataset_id = "ifujisawa/procbench"
 split = "train"
 variant_mode = "open"
+adapter = "procbench"
 
 [benchmarks.rolebench]
 dataset_id = "ZenMoore/RoleBench"
 split = "test"
 variants = ["instruction_generalization_eng", "role_generalization_eng"]
+adapter = "rolebench"
 
 [benchmarks.simpleqa_verified]
 dataset_id = "google/simpleqa-verified"
@@ -130,6 +134,7 @@ adapter = "panel_qa"
 dataset_id = "ZehuaZhao/SUPERChem"
 split = "train"
 variants = ["en", "zh"]
+adapter = "superchem"
 
 [benchmarks.supergpqa]
 dataset_id = "m-a-p/SuperGPQA"
