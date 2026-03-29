@@ -12,7 +12,7 @@ from themis.core.stores import (
     create_run_store,
     register_store_backend,
 )
-from tests.core.store_fakes import fake_psycopg_module, fake_pymongo_module
+from tests.core.store_fakes import fake_pymongo_module
 
 
 def _experiment(store: str, parameters: dict[str, object] | None = None) -> Experiment:
@@ -29,7 +29,6 @@ def _experiment(store: str, parameters: dict[str, object] | None = None) -> Expe
 
 
 def test_create_run_store_supports_builtin_backends(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("themis.core.stores.postgres.importlib.import_module", lambda name: fake_psycopg_module())
     monkeypatch.setattr("themis.core.stores.mongodb.importlib.import_module", lambda name: fake_pymongo_module())
 
     memory_store = create_run_store(StorageConfig(store="memory"))

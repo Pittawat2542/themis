@@ -10,8 +10,8 @@ from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
-from themis.core.stores import InMemoryRunStore, jsonl_store, mongodb_store, postgres_store, sqlite_store
-from tests.core.store_fakes import fake_psycopg_module, fake_pymongo_module
+from themis.core.stores import InMemoryRunStore, jsonl_store, mongodb_store, sqlite_store
+from tests.core.store_fakes import fake_pymongo_module
 
 
 def _snapshot() -> RunSnapshot:
@@ -50,9 +50,6 @@ def _store(label: str, tmp_path: Path, monkeypatch) -> RunStore:
         return sqlite_store(tmp_path / "run_store.sqlite3")
     if label == "jsonl":
         return jsonl_store(tmp_path / "jsonl-store")
-    if label == "postgres":
-        monkeypatch.setattr("themis.core.stores.postgres.importlib.import_module", lambda name: fake_psycopg_module())
-        return postgres_store(str(tmp_path / "postgres.sqlite3"), tmp_path / "postgres-blobs")
     if label == "mongodb":
         monkeypatch.setattr("themis.core.stores.mongodb.importlib.import_module", lambda name: fake_pymongo_module())
         return mongodb_store("mongodb://example", "themis_test", tmp_path / "mongodb-blobs")
@@ -61,7 +58,7 @@ def _store(label: str, tmp_path: Path, monkeypatch) -> RunStore:
 
 @pytest.mark.parametrize(
     "label",
-    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
+    ["memory", "sqlite", "jsonl", "mongodb"],
 )
 def test_run_store_contract_round_trips_snapshot_and_events(label: str, tmp_path: Path, monkeypatch) -> None:
     store = _store(label, tmp_path, monkeypatch)
@@ -82,7 +79,7 @@ def test_run_store_contract_round_trips_snapshot_and_events(label: str, tmp_path
 
 @pytest.mark.parametrize(
     "label",
-    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
+    ["memory", "sqlite", "jsonl", "mongodb"],
 )
 def test_run_store_contract_deduplicates_blob_content(label: str, tmp_path: Path, monkeypatch) -> None:
     store = _store(label, tmp_path, monkeypatch)
@@ -96,7 +93,7 @@ def test_run_store_contract_deduplicates_blob_content(label: str, tmp_path: Path
 
 @pytest.mark.parametrize(
     "label",
-    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
+    ["memory", "sqlite", "jsonl", "mongodb"],
 )
 def test_run_store_contract_loads_blob_content(label: str, tmp_path: Path, monkeypatch) -> None:
     store = _store(label, tmp_path, monkeypatch)
@@ -109,7 +106,7 @@ def test_run_store_contract_loads_blob_content(label: str, tmp_path: Path, monke
 
 @pytest.mark.parametrize(
     "label",
-    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
+    ["memory", "sqlite", "jsonl", "mongodb"],
 )
 def test_run_store_exposes_snapshot_projection(label: str, tmp_path: Path, monkeypatch) -> None:
     store = _store(label, tmp_path, monkeypatch)
@@ -125,7 +122,7 @@ def test_run_store_exposes_snapshot_projection(label: str, tmp_path: Path, monke
 
 @pytest.mark.parametrize(
     "label",
-    ["memory", "sqlite", "jsonl", "postgres", "mongodb"],
+    ["memory", "sqlite", "jsonl", "mongodb"],
 )
 def test_run_store_refreshes_read_model_projections_after_event_writes(label: str, tmp_path: Path, monkeypatch) -> None:
     store = _store(label, tmp_path, monkeypatch)
