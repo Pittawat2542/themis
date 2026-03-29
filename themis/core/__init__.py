@@ -60,7 +60,15 @@ from themis.core.protocols import (
     TraceMetric,
     TracingProvider,
 )
-from themis.core.snapshot import RunSnapshot
+from themis.core.snapshot import (
+    ComponentRef,
+    ComponentRefs,
+    DatasetRef,
+    RunIdentity,
+    RunProvenance,
+    RunSnapshot,
+    StoredRun,
+)
 from themis.core.subjects import (
     CandidateSetSubject,
     ConversationSubject,
@@ -82,9 +90,12 @@ __all__ = [
     "Case",
     "CandidateReducer",
     "CandidateSetSubject",
+    "ComponentRef",
+    "ComponentRefs",
     "ConversationTrace",
     "ConversationSubject",
     "Dataset",
+    "DatasetRef",
     "EvalStep",
     "EvalScoreContext",
     "EvaluationExecution",
@@ -117,6 +128,8 @@ __all__ = [
     "RunCompletedEvent",
     "RunEvent",
     "RunFailedEvent",
+    "RunIdentity",
+    "RunProvenance",
     "RunSnapshot",
     "RunStartedEvent",
     "Score",
@@ -128,6 +141,7 @@ __all__ = [
     "StepCompletedEvent",
     "StepFailedEvent",
     "StepStartedEvent",
+    "StoredRun",
     "StorageConfig",
     "TraceMetric",
     "TraceStep",

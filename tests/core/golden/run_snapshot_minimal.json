@@ -1,0 +1,86 @@
+{
+  "component_refs": {
+    "generator": {
+      "component_id": "generator/demo",
+      "fingerprint": "generator-fingerprint",
+      "version": "1.0"
+    },
+    "metrics": [
+      {
+        "component_id": "metric/demo",
+        "fingerprint": "metric-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "parsers": [
+      {
+        "component_id": "parser/demo",
+        "fingerprint": "parser-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "reducer": {
+      "component_id": "reducer/demo",
+      "fingerprint": "reducer-fingerprint",
+      "version": "1.0"
+    }
+  },
+  "identity": {
+    "candidate_policy": {
+      "num_samples": 2
+    },
+    "dataset_refs": [
+      {
+        "dataset_id": "dataset-1",
+        "fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+        "revision": "r1"
+      }
+    ],
+    "generator_ref": {
+      "component_id": "generator/demo",
+      "fingerprint": "generator-fingerprint",
+      "version": "1.0"
+    },
+    "judge_config": {
+      "panel_size": 1
+    },
+    "metric_refs": [
+      {
+        "component_id": "metric/demo",
+        "fingerprint": "metric-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "parser_refs": [
+      {
+        "component_id": "parser/demo",
+        "fingerprint": "parser-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "reducer_ref": {
+      "component_id": "reducer/demo",
+      "fingerprint": "reducer-fingerprint",
+      "version": "1.0"
+    },
+    "seeds": [
+      7,
+      11
+    ]
+  },
+  "provenance": {
+    "environment_metadata": {
+      "env": "test"
+    },
+    "platform": "macos",
+    "python_version": "3.12.9",
+    "storage": {
+      "parameters": {
+        "path": "runs/themis.sqlite3"
+      },
+      "store": "sqlite"
+    },
+    "themis_version": "4.0.0a0"
+  },
+  "run_id": "a9a91cb9d59042c0ead3c9c3a960411b5894b157d2cdd719683b04a72970c6c7"
+}

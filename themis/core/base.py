@@ -18,6 +18,15 @@ def _canonicalize(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, Enum):
         return value.value
+    if all(hasattr(value, attr) for attr in ("component_id", "version")) and hasattr(
+        value, "fingerprint"
+    ):
+        fingerprint = value.fingerprint() if callable(value.fingerprint) else value.fingerprint
+        return {
+            "component_id": value.component_id,
+            "version": value.version,
+            "fingerprint": fingerprint,
+        }
     if isinstance(value, BaseModel):
         if isinstance(value, HashableModel):
             return value.canonical_data()
@@ -32,7 +41,7 @@ def _canonicalize(value: Any) -> Any:
 class FrozenModel(BaseModel):
     """Base Pydantic model used by the Phase 1 immutable core."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
 
 class HashableModel(FrozenModel):
