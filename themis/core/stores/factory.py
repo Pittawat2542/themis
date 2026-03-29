@@ -9,6 +9,7 @@ from themis.core.config import StorageConfig
 from themis.core.store import RunStore
 from themis.core.stores.jsonl import jsonl_store
 from themis.core.stores.memory import InMemoryRunStore
+from themis.core.stores.mongodb import mongodb_store
 from themis.core.stores.postgres import postgres_store
 from themis.core.stores.sqlite import sqlite_store
 
@@ -22,6 +23,11 @@ def memory_store() -> InMemoryRunStore:
 _STORE_BUILDERS: dict[str, StoreBuilder] = {
     "memory": lambda config: memory_store(),
     "jsonl": lambda config: jsonl_store(Path(str(config.parameters.get("root", "runs/jsonl")))),
+    "mongodb": lambda config: mongodb_store(
+        str(config.parameters.get("url", "mongodb://localhost:27017")),
+        str(config.parameters.get("database", "themis")),
+        Path(str(config.parameters.get("blob_root", "runs/mongodb-blobs"))),
+    ),
     "postgres": lambda config: postgres_store(
         str(config.parameters.get("url", "postgresql://localhost/themis")),
         Path(str(config.parameters.get("blob_root", "runs/postgres-blobs"))),
