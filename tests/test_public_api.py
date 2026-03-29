@@ -5,6 +5,7 @@ from pathlib import Path
 from themis import (
     Experiment,
     InMemoryRunStore,
+    Reporter,
     RunResult,
     RunStore,
     RunSnapshot,
@@ -13,7 +14,9 @@ from themis import (
     SqliteRunStore,
     get_evaluation_execution,
     get_execution_state,
+    quickcheck,
     sqlite_store,
+    snapshot_report,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import EvaluationCompletedEvent, RunStartedEvent
@@ -23,6 +26,7 @@ from themis.core.models import Case, Dataset
 def test_root_package_exports_public_symbols() -> None:
     from themis import (
         Experiment,
+        Reporter,
         RunResult,
         RunSnapshot,
         RunStatus,
@@ -33,10 +37,13 @@ def test_root_package_exports_public_symbols() -> None:
         get_execution_state,
         import_evaluation_bundle,
         import_generation_bundle,
+        quickcheck,
+        snapshot_report,
         sqlite_store,
     )
 
     assert Experiment is not None
+    assert Reporter is not None
     assert RunResult is not None
     assert RunSnapshot is not None
     assert RunStatus is not None
@@ -47,6 +54,8 @@ def test_root_package_exports_public_symbols() -> None:
     assert import_generation_bundle is not None
     assert get_execution_state is not None
     assert get_evaluation_execution is not None
+    assert quickcheck is not None
+    assert snapshot_report is not None
     assert sqlite_store is not None
 
 

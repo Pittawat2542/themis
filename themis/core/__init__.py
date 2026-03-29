@@ -38,6 +38,9 @@ from themis.core.events import (
 )
 from themis.core.experiment import Experiment
 from themis.core.inspection import get_evaluation_execution, get_execution_state
+from themis.core.quickcheck import quickcheck
+from themis.core.read_models import BenchmarkResult, TimelineView, TraceView
+from themis.core.reporter import Reporter, snapshot_report
 from themis.core.models import (
     Case,
     ConversationTrace,
@@ -136,6 +139,7 @@ __all__ = [
     "AfterScore",
     "BeforeJudge",
     "AfterJudge",
+    "BenchmarkResult",
     "CandidateReducer",
     "CandidateSetSubject",
     "ComponentRef",
@@ -195,6 +199,7 @@ __all__ = [
     "RunStatus",
     "RunStore",
     "RuntimeConfig",
+    "snapshot_report",
     "CaseResult",
     "EvaluationBundle",
     "EvaluationBundleRecord",
@@ -206,6 +211,8 @@ __all__ = [
     "get_evaluation_execution",
     "get_execution_state",
     "ProgressSnapshot",
+    "quickcheck",
+    "Reporter",
     "Score",
     "ScoreCompletedEvent",
     "ScoreContext",
@@ -221,7 +228,9 @@ __all__ = [
     "TraceMetric",
     "TraceStep",
     "TraceSubject",
+    "TimelineView",
     "TracingProvider",
+    "TraceView",
     "WorkflowBuildError",
     "WorkflowRunner",
     "WorkflowTrace",

@@ -3,6 +3,7 @@
 from themis.core import (
     Experiment,
     InMemoryRunStore,
+    Reporter,
     RuntimeConfig,
     RunResult,
     RunSnapshot,
@@ -15,12 +16,15 @@ from themis.core import (
     get_execution_state,
     import_evaluation_bundle,
     import_generation_bundle,
+    quickcheck,
+    snapshot_report,
     sqlite_store,
 )
 
 __all__ = [
     "Experiment",
     "InMemoryRunStore",
+    "Reporter",
     "RuntimeConfig",
     "RunResult",
     "RunSnapshot",
@@ -33,5 +37,7 @@ __all__ = [
     "get_execution_state",
     "import_evaluation_bundle",
     "import_generation_bundle",
+    "quickcheck",
+    "snapshot_report",
     "sqlite_store",
 ]
