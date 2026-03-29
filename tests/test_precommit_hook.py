@@ -94,3 +94,5 @@ def test_check_staged_python_uses_staged_snapshot_not_worktree(tmp_path: Path) -
     logged = log_path.read_text(encoding="utf-8")
     assert "ruff check" in logged
     assert "py_compile" in logged
+    assert "mypy" in logged
+    assert "sample.py" in logged

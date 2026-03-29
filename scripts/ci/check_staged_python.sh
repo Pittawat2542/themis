@@ -24,9 +24,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-checkout_paths=("${staged_python[@]}")
+checkout_paths=()
+while IFS= read -r path; do
+  checkout_paths+=("$path")
+done < <(git ls-files -- '*.py')
 if git ls-files --error-unmatch pyproject.toml >/dev/null 2>&1; then
   checkout_paths+=("pyproject.toml")
+fi
+if git ls-files --error-unmatch uv.lock >/dev/null 2>&1; then
+  checkout_paths+=("uv.lock")
 fi
 git checkout-index --prefix="$tmp_root/" -- "${checkout_paths[@]}"
 
@@ -37,3 +43,5 @@ done
 
 uv run ruff check --config "$repo_root/pyproject.toml" --force-exclude -- "${staged_snapshot_paths[@]}"
 uv run python -m py_compile "${staged_snapshot_paths[@]}"
+MYPYPATH="$tmp_root${MYPYPATH:+:$MYPYPATH}" \
+  uv run --project "$repo_root" mypy "${staged_snapshot_paths[@]}"
