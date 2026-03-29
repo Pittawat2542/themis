@@ -10,6 +10,12 @@ target = "themis.catalog.builtins.reducers:MajorityVoteReducer"
 version = "1.0"
 fingerprint = "builtin-majority-vote-fingerprint"
 
+[components."builtin/best_of_n"]
+kind = "reducer"
+target = "themis.catalog.builtins.reducers:BestOfNReducer"
+version = "1.0"
+fingerprint = "builtin-best-of-n-fingerprint"
+
 [components."builtin/json_identity"]
 kind = "parser"
 target = "themis.catalog.builtins.parsers:JsonIdentityParser"
@@ -39,3 +45,27 @@ kind = "judge_model"
 target = "themis.catalog.builtins.generators:DemoJudgeModel"
 version = "1.0"
 fingerprint = "builtin-demo-judge-fingerprint"
+
+[components."builtin/llm_rubric"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:LLMRubricMetric"
+version = "1.0"
+fingerprint = "builtin-llm-rubric-fingerprint"
+
+[components."builtin/pairwise_judge"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:PairwiseJudgeMetric"
+version = "1.0"
+fingerprint = "builtin-pairwise-judge-fingerprint"
+
+[components."builtin/panel_of_judges"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:PanelOfJudgesMetric"
+version = "1.0"
+fingerprint = "builtin-panel-of-judges-fingerprint"
+
+[components."builtin/majority_vote_judge"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:MajorityVoteJudgeMetric"
+version = "1.0"
+fingerprint = "builtin-majority-vote-judge-fingerprint"

@@ -268,6 +268,7 @@ class Orchestrator:
                 case_id=case.case_id,
                 candidate_ids=[candidate.candidate_id for candidate in generated_candidates],
                 seed=items[0].seed,
+                judge_models=list(self.judge_models),
             )
             self._notify("before_reduce", generated_candidates, reduce_ctx)
             span = self.tracing_provider.start_span("reduction", {"case_id": case.case_id})

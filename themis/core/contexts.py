@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import Field
 
 from themis.core.base import HashableModel, JSONValue
@@ -22,6 +24,7 @@ class ReduceContext(HashableModel):
     candidate_ids: list[str] = Field(default_factory=list)
     seed: int | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
+    judge_models: list[Any] = Field(default_factory=list, exclude=True)
 
 
 class ParseContext(HashableModel):
