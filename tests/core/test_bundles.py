@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from themis.core.bundles import export_generation_bundle, import_generation_bundle
+from themis.core.bundles import (
+    export_evaluation_bundle,
+    export_generation_bundle,
+    import_evaluation_bundle,
+    import_generation_bundle,
+)
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.events import GenerationCompletedEvent
+from themis.core.events import EvaluationCompletedEvent, GenerationCompletedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.stores.memory import InMemoryRunStore
@@ -90,3 +95,66 @@ def test_import_generation_bundle_round_trips_generation_events() -> None:
     assert resumed is not None
     assert resumed.snapshot == snapshot
     assert [event.event_type for event in resumed.events] == ["generation_completed"]
+
+
+def test_export_evaluation_bundle_collects_evaluation_executions_from_store() -> None:
+    snapshot = _snapshot()
+    store = InMemoryRunStore()
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/judge",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+
+    bundle = export_evaluation_bundle(store, snapshot.run_id)
+
+    assert bundle.run_id == snapshot.run_id
+    assert bundle.snapshot == snapshot
+    assert bundle.records[0].metric_id == "metric/judge"
+    assert bundle.records[0].candidate_id == "case-1-reduced"
+
+
+def test_import_evaluation_bundle_round_trips_evaluation_events() -> None:
+    snapshot = _snapshot()
+    source_store = InMemoryRunStore()
+    source_store.initialize()
+    source_store.persist_snapshot(snapshot)
+    source_store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/judge",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+    bundle = export_evaluation_bundle(source_store, snapshot.run_id)
+
+    target_store = InMemoryRunStore()
+    target_store.initialize()
+    import_evaluation_bundle(target_store, bundle)
+
+    resumed = target_store.resume(snapshot.run_id)
+
+    assert resumed is not None
+    assert resumed.snapshot == snapshot
+    assert [event.event_type for event in resumed.events] == [
+        "evaluation_completed",
+        "score_completed",
+    ]

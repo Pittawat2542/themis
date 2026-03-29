@@ -224,3 +224,17 @@ class GenerationBundle(FrozenModel):
     run_id: str
     snapshot: RunSnapshot
     records: list[GenerationBundleRecord] = Field(default_factory=list)
+
+
+class EvaluationBundleRecord(FrozenModel):
+    case_id: str
+    metric_id: str
+    candidate_id: str | None = None
+    execution: EvaluationExecution
+
+
+class EvaluationBundle(FrozenModel):
+    schema_version: str = "1"
+    run_id: str
+    snapshot: RunSnapshot
+    records: list[EvaluationBundleRecord] = Field(default_factory=list)

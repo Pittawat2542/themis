@@ -85,6 +85,7 @@ class ParseFailedEvent(RunEvent):
 class EvaluationCompletedEvent(RunEvent):
     event_type: Literal["evaluation_completed"] = "evaluation_completed"
     case_id: str
+    candidate_id: str | None = None
     metric_id: str
     execution: dict[str, JSONValue] | None = None
     execution_blob_ref: str | None = None
@@ -93,6 +94,7 @@ class EvaluationCompletedEvent(RunEvent):
 class EvaluationFailedEvent(RunEvent):
     event_type: Literal["evaluation_failed"] = "evaluation_failed"
     case_id: str
+    candidate_id: str | None = None
     metric_id: str
     error_message: str
 

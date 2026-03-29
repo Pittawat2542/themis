@@ -1,7 +1,12 @@
 """Core namespace for Themis v4 Phase 2."""
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
-from themis.core.bundles import export_generation_bundle, import_generation_bundle
+from themis.core.bundles import (
+    export_evaluation_bundle,
+    export_generation_bundle,
+    import_evaluation_bundle,
+    import_generation_bundle,
+)
 from themis.core.builtins import resolve_judge_model_component
 from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.contexts import (
@@ -74,6 +79,8 @@ from themis.core.orchestrator import Orchestrator
 from themis.core.planner import Planner
 from themis.core.results import (
     CaseResult,
+    EvaluationBundle,
+    EvaluationBundleRecord,
     ExecutionState,
     GenerationBundle,
     GenerationBundleRecord,
@@ -187,7 +194,10 @@ __all__ = [
     "RunStore",
     "RuntimeConfig",
     "CaseResult",
+    "EvaluationBundle",
+    "EvaluationBundleRecord",
     "ExecutionState",
+    "export_evaluation_bundle",
     "export_generation_bundle",
     "GenerationBundle",
     "GenerationBundleRecord",
@@ -215,6 +225,7 @@ __all__ = [
     "candidate_set_subject_for_selection_metric",
     "event_from_dict",
     "InMemoryRunStore",
+    "import_evaluation_bundle",
     "import_generation_bundle",
     "resolve_judge_model_component",
     "sqlite_store",

@@ -120,6 +120,45 @@ class Experiment(FrozenModel):
         )
         return await orchestrator.run(snapshot)
 
+    async def rejudge_async(
+        self,
+        *,
+        metric_ids: list[str] | None = None,
+        runtime: RuntimeConfig | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
+        effective_runtime = runtime or self.runtime
+        snapshot = self._compile_with_runtime(effective_runtime)
+        store = self._build_store()
+        store.initialize()
+        if store.resume(snapshot.run_id) is None:
+            raise ValueError(f"No stored run found for rejudge: {snapshot.run_id}")
+
+        requested_metric_ids = set(metric_ids or [])
+        if not requested_metric_ids:
+            requested_metric_ids = {
+                component_ref.component_id
+                for component_ref, metric_kind in zip(snapshot.component_refs.metrics, snapshot.metric_kinds, strict=False)
+                if metric_kind != "pure"
+            }
+
+        orchestrator = Orchestrator(
+            store=store,
+            generator=resolve_generator_component(self.generation.generator),
+            reducer=resolve_reducer_component(self.generation.reducer)
+            if self.generation.reducer is not None
+            else None,
+            parser=resolve_parser_component(self.evaluation.parsers[0]) if self.evaluation.parsers else None,
+            metrics=[resolve_metric_component(metric) for metric in self.evaluation.metrics],
+            judge_models=[resolve_judge_model_component(judge_model) for judge_model in self.evaluation.judge_models],
+            subscribers=subscribers or [],
+            tracing_provider=tracing_provider or NoOpTracingProvider(),
+            runtime=effective_runtime,
+            force_workflow_metrics=requested_metric_ids,
+        )
+        return await orchestrator.run(snapshot)
+
     def run(
         self,
         *,
@@ -129,6 +168,23 @@ class Experiment(FrozenModel):
     ):
         return asyncio.run(
             self.run_async(runtime=runtime, subscribers=subscribers, tracing_provider=tracing_provider)
+        )
+
+    def rejudge(
+        self,
+        *,
+        metric_ids: list[str] | None = None,
+        runtime: RuntimeConfig | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
+        return asyncio.run(
+            self.rejudge_async(
+                metric_ids=metric_ids,
+                runtime=runtime,
+                subscribers=subscribers,
+                tracing_provider=tracing_provider,
+            )
         )
 
     def _metric_kind(self, metric: object) -> str:

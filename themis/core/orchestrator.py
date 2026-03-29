@@ -122,6 +122,7 @@ class Orchestrator:
         provider_rate_limits: dict[str, int] | None = None,
         store_retry_delay: float | None = None,
         store_retry_attempts: int | None = None,
+        force_workflow_metrics: set[str] | None = None,
     ) -> None:
         self.store = store
         self.generator = generator
@@ -129,6 +130,7 @@ class Orchestrator:
         self.parser = parser
         self.metrics = list(metrics or [])
         self.judge_models = list(judge_models or [])
+        self.force_workflow_metrics = set(force_workflow_metrics or set())
         self.planner = planner or Planner()
         self.subscribers = list(subscribers or [])
         self.tracing_provider = tracing_provider or NoOpTracingProvider()
@@ -318,7 +320,12 @@ class Orchestrator:
                 )
 
         for metric, metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False):
-            if metric_kind != "pure" and metric.component_id in successful_scores and metric.component_id in workflow_executions:
+            if (
+                metric_kind != "pure"
+                and metric.component_id not in self.force_workflow_metrics
+                and metric.component_id in successful_scores
+                and metric.component_id in workflow_executions
+            ):
                 continue
             if metric_kind == "pure" and metric.component_id in successful_scores:
                 continue
@@ -402,6 +409,7 @@ class Orchestrator:
                     EvaluationCompletedEvent(
                         run_id=snapshot.run_id,
                         case_id=case.case_id,
+                        candidate_id=reduced.candidate_id,
                         metric_id=metric.component_id,
                         execution=execution.model_dump(mode="json"),
                     )
@@ -429,6 +437,7 @@ class Orchestrator:
                     EvaluationFailedEvent(
                         run_id=snapshot.run_id,
                         case_id=case.case_id,
+                        candidate_id=reduced.candidate_id,
                         metric_id=metric.component_id,
                         error_message=str(exc),
                     )

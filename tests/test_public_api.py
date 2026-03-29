@@ -11,6 +11,7 @@ from themis import (
     RunSnapshot,
     RunStatus,
     SqliteRunStore,
+    export_evaluation_bundle,
     sqlite_store,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
@@ -19,13 +20,22 @@ from themis.core.models import Case, Dataset
 
 
 def test_root_package_exports_public_symbols() -> None:
-    from themis import Experiment, RunResult, RunSnapshot, RunStatus, RuntimeConfig, sqlite_store
+    from themis import (
+        Experiment,
+        RunResult,
+        RunSnapshot,
+        RunStatus,
+        RuntimeConfig,
+        export_evaluation_bundle,
+        sqlite_store,
+    )
 
     assert Experiment is not None
     assert RunResult is not None
     assert RunSnapshot is not None
     assert RunStatus is not None
     assert RuntimeConfig is not None
+    assert export_evaluation_bundle is not None
     assert sqlite_store is not None
 
 

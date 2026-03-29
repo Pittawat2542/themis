@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from themis import InMemoryRunStore, RunStatus, RuntimeConfig
-from themis.core import export_generation_bundle, import_generation_bundle
+from themis.core import (
+    export_evaluation_bundle,
+    export_generation_bundle,
+    import_evaluation_bundle,
+    import_generation_bundle,
+)
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.events import GenerationCompletedEvent, RunStartedEvent
+from themis.core.events import EvaluationCompletedEvent, GenerationCompletedEvent, RunStartedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset, GenerationResult
 
@@ -119,5 +124,44 @@ def test_readme_generation_bundle_example_round_trips() -> None:
     target_store.initialize()
     bundle = export_generation_bundle(source_store, snapshot.run_id)
     import_generation_bundle(target_store, bundle)
+
+    assert target_store.resume(snapshot.run_id) is not None
+
+
+def test_readme_evaluation_bundle_example_round_trips() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
+        evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+    )
+    source_store = InMemoryRunStore()
+    source_store.initialize()
+    snapshot = experiment.compile()
+    source_store.persist_snapshot(snapshot)
+    source_store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/judge",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+
+    target_store = InMemoryRunStore()
+    target_store.initialize()
+    bundle = export_evaluation_bundle(source_store, snapshot.run_id)
+    import_evaluation_bundle(target_store, bundle)
 
     assert target_store.resume(snapshot.run_id) is not None

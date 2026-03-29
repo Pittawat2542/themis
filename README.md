@@ -1,8 +1,8 @@
 # Themis v4
 
-This repository contains the clean-slate Phase 2 execution engine for Themis v4.
+This repository contains the clean-slate Phase 3 execution engine for Themis v4.
 
-Phase 2 keeps the immutable model layer from Phase 1 and adds a runnable execution engine: planning, generation fan-out, reduction, parsing, pure-metric scoring, tracing hooks, resume, and generation bundle export/import.
+Phase 3 keeps the immutable model layer from Phase 1 and extends the Phase 2 engine with workflow-backed evaluation: planning, generation fan-out, reduction, parsing, pure-metric scoring, LLM-backed metrics, judge fan-out, resume, rejudge, and bundle export/import for both generation and evaluation.
 
 ## Current scope
 
@@ -12,6 +12,8 @@ Phase 2 keeps the immutable model layer from Phase 1 and adds a runnable executi
 - `Experiment.run()` / `Experiment.run_async()` for end-to-end execution
 - typed `RuntimeConfig` for concurrency, rate limiting, and store retry control
 - lazy planning plus event-backed resume state
+- workflow-backed evaluation with persisted judge artifacts
+- evaluation bundle export/import and `Experiment.rejudge()` / `rejudge_async()`
 - in-memory and SQLite run stores
 - OpenAI, vLLM, and LangGraph generator adapters
 - generation bundle export/import helpers
@@ -189,13 +191,13 @@ assert target_store.resume(snapshot.run_id) is not None
 - Resume skips completed generation, reduction, parsing, and successful scoring work.
 - Failed scoring is retried on resume.
 - Generation bundle export/import round-trips `GenerationCompletedEvent` payloads without changing `run_id`.
+- Evaluation bundle export/import round-trips `EvaluationCompletedEvent` payloads and restores inspectable scores when a candidate id is available.
+- `Experiment.rejudge()` and `rejudge_async()` re-run workflow-backed metrics from stored upstream artifacts without regenerating candidates.
 
 ## Not included yet
 
 - CLI
-- LLM-backed evaluation workflows
-- judge orchestration and workflow-runner execution
-- reporting and read models beyond the execution snapshot and generation bundles
+- reporting and read models beyond the execution snapshot and bundle helpers
 - rebuilt end-user documentation
 
 ## Optional extras

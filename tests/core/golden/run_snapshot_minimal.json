@@ -5,6 +5,7 @@
       "fingerprint": "generator-fingerprint",
       "version": "1.0"
     },
+    "judge_models": [],
     "metrics": [
       {
         "component_id": "metric/demo",
@@ -63,6 +64,7 @@
     "judge_config": {
       "panel_size": 1
     },
+    "judge_model_refs": [],
     "metric_refs": [
       {
         "component_id": "metric/demo",
@@ -119,5 +121,5 @@
     },
     "themis_version": "4.0.0a0"
   },
-  "run_id": "47b31fd55109e0827782dc50acedfeca6d548eb296d563a3307a34c9f1422e3d"
+  "run_id": "574fedbb7a4ad65c85d9a86488b1db22d2cba6b600449c741208d815f66eeaf3"
 }

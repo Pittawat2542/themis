@@ -18,7 +18,9 @@ from themis.core.events import (
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
 from themis.core.orchestrator import Orchestrator
+from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
+from themis.core.stores.sqlite import SqliteRunStore
 from themis.core.workflows import EvalStep, JudgeResponse
 
 
@@ -731,3 +733,50 @@ async def test_orchestrator_respects_evaluation_concurrency_cap() -> None:
     await orchestrator.run(snapshot)
 
     assert judge_model.max_active <= 1
+
+
+@pytest.mark.asyncio
+async def test_experiment_rejudge_async_reruns_workflow_metrics_without_regeneration(tmp_path) -> None:
+    metric = CountingLLMMetric()
+    judge_model = DemoJudgeModel()
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator=generator,
+            candidate_policy={"num_samples": 1},
+            reducer=reducer,
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[metric],
+            parsers=[parser],
+            judge_models=[judge_model],
+        ),
+        storage=StorageConfig(store="sqlite", parameters={"path": str(tmp_path / "run_store.sqlite3")}),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+
+    await experiment.run_async()
+
+    generator.calls = 0
+    reducer.calls = 0
+    parser.calls = 0
+    metric.calls = 0
+
+    result = await experiment.rejudge_async(metric_ids=[metric.component_id])
+    store = SqliteRunStore(tmp_path / "run_store.sqlite3")
+    events = store.query_events(experiment.compile().run_id)
+
+    assert result.status is RunStatus.COMPLETED
+    assert generator.calls == 0
+    assert reducer.calls == 0
+    assert parser.calls == 0
+    assert metric.calls == 1
+    assert [event.event_type for event in events].count("evaluation_completed") == 2
