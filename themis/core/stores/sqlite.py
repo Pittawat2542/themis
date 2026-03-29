@@ -9,6 +9,7 @@ from pathlib import Path
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
+from themis.core.projections import build_projection_payloads
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
 
 
@@ -79,6 +80,7 @@ class SqliteRunStore:
                 (snapshot.run_id, "snapshot", snapshot_json),
             )
             connection.commit()
+        self._refresh_projections(snapshot.run_id)
 
     def persist_event(self, event: RunEvent) -> None:
         event_json = json.dumps(event.model_dump(mode="json"), sort_keys=True)
@@ -91,6 +93,7 @@ class SqliteRunStore:
                 (event.run_id, event.event_type, event_json),
             )
             connection.commit()
+        self._refresh_projections(event.run_id)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         with sqlite3.connect(self.path) as connection:
@@ -140,6 +143,21 @@ class SqliteRunStore:
             connection.commit()
         return ref
 
+    def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT media_type, payload
+                FROM run_blobs
+                WHERE blob_ref = ?
+                """,
+                (blob_ref,),
+            ).fetchone()
+        if row is None:
+            return None
+        media_type, payload = row
+        return media_type, bytes(payload)
+
     def resume(self, run_id: str) -> StoredRun | None:
         with sqlite3.connect(self.path) as connection:
             row = connection.execute(
@@ -154,6 +172,22 @@ class SqliteRunStore:
             return None
         snapshot = snapshot_from_dict(json.loads(row[0]))
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+
+    def _refresh_projections(self, run_id: str) -> None:
+        stored = self.resume(run_id)
+        if stored is None:
+            return
+        projection_payloads = build_projection_payloads(stored.snapshot, stored.events)
+        with sqlite3.connect(self.path) as connection:
+            for projection_name, payload in projection_payloads.items():
+                connection.execute(
+                    """
+                    INSERT OR REPLACE INTO run_projections (run_id, projection_name, projection_json)
+                    VALUES (?, ?, ?)
+                    """,
+                    (run_id, projection_name, json.dumps(payload, sort_keys=True)),
+                )
+            connection.commit()
 
 
 def sqlite_store(path: str | Path) -> SqliteRunStore:

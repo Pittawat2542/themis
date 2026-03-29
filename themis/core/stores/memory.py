@@ -6,6 +6,7 @@ import hashlib
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
+from themis.core.projections import build_projection_payloads
 from themis.core.snapshot import RunSnapshot, StoredRun
 
 
@@ -23,10 +24,11 @@ class InMemoryRunStore:
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
         self._snapshots[snapshot.run_id] = snapshot
-        self._projections[(snapshot.run_id, "snapshot")] = snapshot.model_dump(mode="json")
+        self._refresh_projections(snapshot.run_id)
 
     def persist_event(self, event: RunEvent) -> None:
         self._events.setdefault(event.run_id, []).append(event)
+        self._refresh_projections(event.run_id)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         return list(self._events.get(run_id, []))
@@ -40,8 +42,18 @@ class InMemoryRunStore:
         self._blobs.setdefault(ref, (media_type, blob))
         return ref
 
+    def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
+        return self._blobs.get(blob_ref)
+
     def resume(self, run_id: str) -> StoredRun | None:
         snapshot = self._snapshots.get(run_id)
         if snapshot is None:
             return None
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+
+    def _refresh_projections(self, run_id: str) -> None:
+        snapshot = self._snapshots.get(run_id)
+        if snapshot is None:
+            return
+        for projection_name, payload in build_projection_payloads(snapshot, self.query_events(run_id)).items():
+            self._projections[(run_id, projection_name)] = payload

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from themis.core.base import JSONValue
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
@@ -23,6 +24,14 @@ from themis.core.read_models import (
 from themis.core.results import CaseResult, ExecutionState, ProgressSnapshot, RunResult
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import EvaluationExecution
+
+PROJECTION_NAMES = (
+    "snapshot",
+    "run_result",
+    "benchmark_result",
+    "timeline_view",
+    "trace_view",
+)
 
 
 def build_run_result(snapshot: RunSnapshot, events: list[RunEvent]) -> RunResult:
@@ -179,3 +188,13 @@ def build_trace_view(snapshot: RunSnapshot, events: list[RunEvent]) -> TraceView
         conversation_traces=conversation_traces,
         evaluation_traces=evaluation_traces,
     )
+
+
+def build_projection_payloads(snapshot: RunSnapshot, events: list[RunEvent]) -> dict[str, JSONValue]:
+    return {
+        "snapshot": snapshot.model_dump(mode="json"),
+        "run_result": build_run_result(snapshot, events).model_dump(mode="json"),
+        "benchmark_result": build_benchmark_result(snapshot, events).model_dump(mode="json"),
+        "timeline_view": build_timeline_view(snapshot, events).model_dump(mode="json"),
+        "trace_view": build_trace_view(snapshot, events).model_dump(mode="json"),
+    }

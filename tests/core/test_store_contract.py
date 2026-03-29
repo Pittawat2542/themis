@@ -93,6 +93,23 @@ def test_run_store_contract_deduplicates_blob_content(label: str, factory, tmp_p
         ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
     ],
 )
+def test_run_store_contract_loads_blob_content(label: str, factory, tmp_path: Path) -> None:
+    del label
+    store: RunStore = factory(tmp_path)
+
+    store.initialize()
+    ref = store.store_blob(b'{"answer":"4"}', "application/json")
+
+    assert store.load_blob(ref) == ("application/json", b'{"answer":"4"}')
+
+
+@pytest.mark.parametrize(
+    ("label", "factory"),
+    [
+        ("memory", lambda tmp_path: InMemoryRunStore()),
+        ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
+    ],
+)
 def test_run_store_exposes_snapshot_projection(label: str, factory, tmp_path: Path) -> None:
     del label
     store: RunStore = factory(tmp_path)
@@ -104,3 +121,36 @@ def test_run_store_exposes_snapshot_projection(label: str, factory, tmp_path: Pa
     projection = store.get_projection(snapshot.run_id, "snapshot")
 
     assert projection == snapshot.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    ("label", "factory"),
+    [
+        ("memory", lambda tmp_path: InMemoryRunStore()),
+        ("sqlite", lambda tmp_path: SqliteRunStore(tmp_path / "run_store.sqlite3")),
+    ],
+)
+def test_run_store_refreshes_read_model_projections_after_event_writes(label: str, factory, tmp_path: Path) -> None:
+    del label
+    store: RunStore = factory(tmp_path)
+    snapshot = _snapshot()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+
+    run_result = store.get_projection(snapshot.run_id, "run_result")
+    benchmark_result = store.get_projection(snapshot.run_id, "benchmark_result")
+    timeline_view = store.get_projection(snapshot.run_id, "timeline_view")
+    trace_view = store.get_projection(snapshot.run_id, "trace_view")
+
+    assert run_result is not None
+    assert run_result["run_id"] == snapshot.run_id
+    assert run_result["status"] == "completed"
+    assert benchmark_result is not None
+    assert benchmark_result["run_id"] == snapshot.run_id
+    assert timeline_view is not None
+    assert [entry["event_type"] for entry in timeline_view["entries"]] == ["run_started", "run_completed"]
+    assert trace_view is not None
+    assert trace_view["generation_traces"] == []
