@@ -58,12 +58,14 @@ class ProgressSnapshot(FrozenModel):
 class CaseExecutionState(FrozenModel):
     generated_candidates: dict[str, GenerationResult] = Field(default_factory=dict)
     generated_candidates_by_index: dict[int, GenerationResult] = Field(default_factory=dict)
+    generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
     reduced_candidate: ReducedCandidate | None = None
     reduction_error: str | None = None
     parsed_output: ParsedOutput | None = None
     parse_error: str | None = None
     evaluation_executions: dict[str, EvaluationExecution] = Field(default_factory=dict)
+    evaluation_execution_blob_refs: dict[str, str] = Field(default_factory=dict)
     evaluation_failures: dict[str, str] = Field(default_factory=dict)
     successful_scores: dict[str, Score] = Field(default_factory=dict)
     score_failures: dict[str, ScoreError] = Field(default_factory=dict)
@@ -108,12 +110,16 @@ class ExecutionState(FrozenModel):
                 generated = dict(current.generated_candidates)
                 generated[event.candidate_id] = GenerationResult.model_validate(event.result)
                 generated_by_index = dict(current.generated_candidates_by_index)
+                generated_blob_refs = dict(current.generated_candidate_blob_refs)
                 if event.candidate_index is not None:
                     generated_by_index[event.candidate_index] = generated[event.candidate_id]
+                if event.result_blob_ref is not None:
+                    generated_blob_refs[event.candidate_id] = event.result_blob_ref
                 updated = current.model_copy(
                     update={
                         "generated_candidates": generated,
                         "generated_candidates_by_index": generated_by_index,
+                        "generated_candidate_blob_refs": generated_blob_refs,
                     }
                 )
             elif isinstance(event, GenerationFailedEvent):
@@ -135,23 +141,30 @@ class ExecutionState(FrozenModel):
                 saw_failures = True
             elif isinstance(event, EvaluationCompletedEvent) and event.execution is not None:
                 evaluation_executions = dict(current.evaluation_executions)
+                evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
                 evaluation_failures = dict(current.evaluation_failures)
                 evaluation_executions[event.metric_id] = EvaluationExecution.model_validate(event.execution)
+                if event.execution_blob_ref is not None:
+                    evaluation_execution_blob_refs[event.metric_id] = event.execution_blob_ref
                 evaluation_failures.pop(event.metric_id, None)
                 updated = current.model_copy(
                     update={
                         "evaluation_executions": evaluation_executions,
+                        "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
                         "evaluation_failures": evaluation_failures,
                     }
                 )
             elif isinstance(event, EvaluationFailedEvent):
                 evaluation_executions = dict(current.evaluation_executions)
+                evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
                 evaluation_failures = dict(current.evaluation_failures)
                 evaluation_executions.pop(event.metric_id, None)
+                evaluation_execution_blob_refs.pop(event.metric_id, None)
                 evaluation_failures[event.metric_id] = event.error_message
                 updated = current.model_copy(
                     update={
                         "evaluation_executions": evaluation_executions,
+                        "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
                         "evaluation_failures": evaluation_failures,
                     }
                 )
@@ -198,9 +211,15 @@ class GenerationWorkItem(FrozenModel):
 class CaseResult(FrozenModel):
     case_id: str
     generated_candidates: list[GenerationResult] = Field(default_factory=list)
+    generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
+    generation_failures: dict[str, str] = Field(default_factory=dict)
     reduced_candidate: ReducedCandidate | None = None
+    reduction_error: str | None = None
     parsed_output: ParsedOutput | None = None
+    parse_error: str | None = None
     evaluation_executions: list[EvaluationExecution] = Field(default_factory=list)
+    evaluation_execution_blob_refs: dict[str, str] = Field(default_factory=dict)
+    evaluation_failures: dict[str, str] = Field(default_factory=dict)
     scores: list[Score | ScoreError] = Field(default_factory=list)
 
 

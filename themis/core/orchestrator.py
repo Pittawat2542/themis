@@ -35,6 +35,7 @@ from themis.core.models import (
     WorkflowTrace,
 )
 from themis.core.planner import Planner
+from themis.core.projections import build_run_result
 from themis.core.protocols import (
     CandidateReducer,
     Generator,
@@ -202,16 +203,11 @@ class Orchestrator:
             status = RunStatus.PARTIAL_FAILURE if any(case_failures) else RunStatus.COMPLETED
             await self._persist_event(RunCompletedEvent(run_id=snapshot.run_id))
             self.tracing_provider.end_span(run_span, "error" if status is RunStatus.PARTIAL_FAILURE else "ok")
-            return RunResult(
-                run_id=snapshot.run_id,
-                status=status,
-                progress=ProgressSnapshot(
-                    total_cases=sum(len(dataset.cases) for dataset in snapshot.datasets),
-                    completed_cases=sum(1 for failed in case_failures if not failed),
-                    failed_cases=sum(1 for failed in case_failures if failed),
-                ),
-                cases=case_results,
-            )
+            del status, case_results, case_failures
+            stored_run = self.store.resume(snapshot.run_id)
+            if stored_run is None:
+                raise RuntimeError(f"Run disappeared from store: {snapshot.run_id}")
+            return build_run_result(stored_run.snapshot, stored_run.events)
         except Exception as exc:
             await self._persist_event(RunFailedEvent(run_id=snapshot.run_id, error_message=str(exc)))
             self.tracing_provider.end_span(run_span, "error")
