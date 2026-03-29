@@ -12,6 +12,7 @@ dataset_revision = "v1_2024"
 split = "test"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
 
 [benchmarks.apex_2025]
 dataset_id = "MathArena/apex_2025"
@@ -32,6 +33,7 @@ split = "test"
 [benchmarks.frontierscience]
 dataset_id = "openai/frontierscience"
 split = "test"
+adapter = "rubric_qa"
 
 [benchmarks.gpqa_diamond]
 dataset_id = "fingertap/GPQA-Diamond"
@@ -40,6 +42,7 @@ split = "test"
 [benchmarks.healthbench]
 dataset_id = "openai/healthbench"
 split = "test"
+adapter = "rubric_qa"
 
 [benchmarks.hle]
 dataset_id = "cais/hle"
@@ -60,6 +63,7 @@ split = "test"
 variant_mode = "open"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
 
 [benchmarks.humaneval_plus]
 dataset_id = "evalplus/HumanEvalPlus"
@@ -67,6 +71,7 @@ split = "test"
 variant_mode = "open"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
 
 [benchmarks.imo_answerbench]
 dataset_id = "Hwilner/imo-answerbench"
@@ -78,10 +83,12 @@ dataset_revision = "release_v6"
 split = "test"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
 
 [benchmarks.lpfqa]
 dataset_id = "m-a-p/LPFQA"
 split = "train"
+adapter = "rubric_qa"
 
 [benchmarks.mmlu_pro]
 dataset_id = "TIGER-Lab/MMLU-Pro"
@@ -98,6 +105,7 @@ dataset_revision = "verifiable-prompts"
 split = "test"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
 
 [benchmarks.phybench]
 dataset_id = "Eureka-Lab/PHYBench"
@@ -116,6 +124,7 @@ variants = ["instruction_generalization_eng", "role_generalization_eng"]
 [benchmarks.simpleqa_verified]
 dataset_id = "google/simpleqa-verified"
 split = "eval"
+adapter = "panel_qa"
 
 [benchmarks.superchem]
 dataset_id = "ZehuaZhao/SUPERChem"
