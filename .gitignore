@@ -100,3 +100,4 @@ coverage.json
 plan.md
 pytest.log
 /runs
+/queue

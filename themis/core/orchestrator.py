@@ -1,4 +1,4 @@
-"""Async execution orchestrator for Themis Phase 3."""
+"""Async execution orchestrator for the Themis v4 Phase 5 runtime."""
 
 from __future__ import annotations
 

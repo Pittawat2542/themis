@@ -1,4 +1,4 @@
-"""Run snapshot models for Themis v4 Phase 3."""
+"""Run snapshot models for the Themis v4 Phase 5 runtime."""
 
 from __future__ import annotations
 

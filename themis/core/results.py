@@ -1,4 +1,4 @@
-"""Runtime result, work-item, and resume state models for Phase 3."""
+"""Runtime result, work-item, and resume state models for Phase 5."""
 
 from __future__ import annotations
 
