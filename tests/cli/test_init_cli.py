@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-def test_init_scaffolds_minimal_phase5_project(tmp_path: Path) -> None:
+def test_init_scaffolds_minimal_project(tmp_path: Path) -> None:
     project_root = tmp_path / "demo-project"
 
     result = subprocess.run(

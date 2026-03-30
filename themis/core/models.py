@@ -1,4 +1,4 @@
-"""Core immutable domain models for Themis v4 Phase 1."""
+"""Core immutable domain models for Themis v4."""
 
 from __future__ import annotations
 

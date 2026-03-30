@@ -1,4 +1,4 @@
-"""Phase 5 command-line surface for Themis."""
+"""Command-line surface for Themis."""
 
 from __future__ import annotations
 

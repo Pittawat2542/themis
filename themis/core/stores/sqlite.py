@@ -14,7 +14,7 @@ from themis.core.stores.base import ProjectionRefreshingStore
 
 
 class SqliteRunStore(ProjectionRefreshingStore):
-    """Small SQLite-backed run store for Phase 1."""
+    """Small SQLite-backed run store."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)

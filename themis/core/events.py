@@ -1,4 +1,4 @@
-"""Versioned event models for the Phase 1 run store."""
+"""Versioned event models for the run store."""
 
 from __future__ import annotations
 

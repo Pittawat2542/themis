@@ -3,7 +3,9 @@ from __future__ import annotations
 import csv
 import json
 from io import StringIO
+from typing import cast
 
+from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import (
     GenerationCompletedEvent,
@@ -41,7 +43,7 @@ def _snapshot():
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0a0",
+        themis_version="4.0.0rc1",
         python_version="3.12.9",
         platform="macos",
     )
@@ -155,10 +157,14 @@ def test_snapshot_report_includes_identity_and_provenance() -> None:
     snapshot = _snapshot()
 
     report = snapshot_report(snapshot, {"stored_events": 6})
+    identity = cast(dict[str, JSONValue], report["identity"])
+    dataset_refs = cast(list[JSONValue], identity["dataset_refs"])
+    first_dataset_ref = cast(dict[str, JSONValue], dataset_refs[0])
+    provenance = cast(dict[str, JSONValue], report["provenance"])
 
     assert report["run_id"] == snapshot.run_id
-    assert report["identity"]["dataset_refs"][0]["dataset_id"] == "dataset-1"
-    assert report["provenance"]["themis_version"] == "4.0.0a0"
+    assert first_dataset_ref["dataset_id"] == "dataset-1"
+    assert provenance["themis_version"] == "4.0.0rc1"
     assert report["run_metadata"] == {"stored_events": 6}
 
 

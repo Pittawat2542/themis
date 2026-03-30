@@ -18,7 +18,7 @@ def evaluate(
     runtime: RuntimeConfig | None = None,
     seeds: list[int] | None = None,
     environment_metadata: dict[str, str] | None = None,
-    themis_version: str = "4.0.0a0",
+    themis_version: str = "4.0.0rc1",
     python_version: str = "3.12",
     platform: str = "unknown",
     store: RunStore | None = None,

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from cyclopts import App
 
 from themis import InMemoryRunStore
 from themis.catalog import run as run_catalog_benchmark
+from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.dataset_inputs import (
     MissingOptionalDependencyError,
@@ -52,9 +54,7 @@ def _run_dataset(dataset) -> str:
         store=store,
     )
     benchmark = store.get_projection(result.run_id, "benchmark_result")
-    metric_means = {}
-    if isinstance(benchmark, dict):
-        metric_means = dict(benchmark.get("metric_means", {}))
+    metric_means = _metric_means_from_projection(benchmark)
     return _result_payload(run_id=result.run_id, status=result.status.value, metric_means=metric_means)
 
 
@@ -103,8 +103,19 @@ def benchmark(*, name: str) -> int:
     store = InMemoryRunStore()
     result = run_catalog_benchmark(name, store=store)
     benchmark_result = store.get_projection(result.run_id, "benchmark_result")
-    metric_means = {}
-    if isinstance(benchmark_result, dict):
-        metric_means = dict(benchmark_result.get("metric_means", {}))
+    metric_means = _metric_means_from_projection(benchmark_result)
     print(_result_payload(run_id=result.run_id, status=result.status.value, metric_means=metric_means))
     return 0
+
+
+def _metric_means_from_projection(projection: JSONValue | None) -> dict[str, float]:
+    if not isinstance(projection, dict):
+        return {}
+    metric_means = projection.get("metric_means")
+    if not isinstance(metric_means, dict):
+        return {}
+    cleaned: dict[str, float] = {}
+    for key, value in metric_means.items():
+        if isinstance(key, str) and isinstance(value, (int, float)):
+            cleaned[key] = float(value)
+    return cast(dict[str, float], cleaned)

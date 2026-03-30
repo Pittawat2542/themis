@@ -53,7 +53,7 @@ seeds: [{seed}]
     )
 
 
-def test_phase5_acceptance_covers_quick_eval_report_export_and_resume(tmp_path: Path) -> None:
+def test_acceptance_covers_quick_eval_report_export_and_resume(tmp_path: Path) -> None:
     config_path = tmp_path / "experiment.yaml"
     store_path = tmp_path / "runs.sqlite3"
     queue_root = tmp_path / "queue"
@@ -109,7 +109,7 @@ def load_dataset(dataset_name, *, split):
     assert json.loads(export_generation.stdout)["run_id"] == json.loads(run.stdout)["run_id"]
 
 
-def test_phase5_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> None:
+def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> None:
     worker_config = tmp_path / "worker.yaml"
     batch_config = tmp_path / "batch.yaml"
     store_path = tmp_path / "runs.sqlite3"

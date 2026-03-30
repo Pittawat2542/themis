@@ -5,19 +5,15 @@ from pathlib import Path
 from themis import (
     Experiment,
     InMemoryRunStore,
-    Reporter,
     RunResult,
     RunStore,
     RunSnapshot,
     RunStatus,
     RuntimeConfig,
     SqliteRunStore,
-    StatsEngine,
     get_evaluation_execution,
     get_execution_state,
-    quickcheck,
     sqlite_store,
-    snapshot_report,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import EvaluationCompletedEvent, RunStartedEvent
@@ -93,7 +89,7 @@ def test_public_surface_compiles_and_persists_runs(tmp_path) -> None:
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0a0",
+        themis_version="4.0.0rc1",
         python_version="3.12.9",
         platform="macos",
     )

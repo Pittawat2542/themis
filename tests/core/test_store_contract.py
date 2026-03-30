@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 
+from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import RunCompletedEvent, RunStartedEvent
 from themis.core.experiment import Experiment
@@ -36,7 +38,7 @@ def _snapshot() -> RunSnapshot:
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0a0",
+        themis_version="4.0.0rc1",
         python_version="3.12.9",
         platform="macos",
     )
@@ -138,14 +140,18 @@ def test_run_store_refreshes_read_model_projections_after_event_writes(label: st
     timeline_view = store.get_projection(snapshot.run_id, "timeline_view")
     trace_view = store.get_projection(snapshot.run_id, "trace_view")
 
-    assert run_result is not None
+    assert isinstance(run_result, dict)
     assert run_result["run_id"] == snapshot.run_id
     assert run_result["status"] == "completed"
-    assert benchmark_result is not None
+    assert isinstance(benchmark_result, dict)
     assert benchmark_result["run_id"] == snapshot.run_id
-    assert timeline_view is not None
-    assert [entry["event_type"] for entry in timeline_view["entries"]] == ["run_started", "run_completed"]
-    assert trace_view is not None
+    assert isinstance(timeline_view, dict)
+    entries = cast(list[JSONValue], timeline_view["entries"])
+    assert [cast(dict[str, JSONValue], entry)["event_type"] for entry in entries] == [
+        "run_started",
+        "run_completed",
+    ]
+    assert isinstance(trace_view, dict)
     assert trace_view["generation_traces"] == []
 
 
@@ -164,5 +170,5 @@ def test_in_memory_store_updates_projections_without_resume_replay() -> None:
 
     run_result = store.get_projection(snapshot.run_id, "run_result")
 
-    assert run_result is not None
+    assert isinstance(run_result, dict)
     assert run_result["status"] == "completed"

@@ -32,7 +32,7 @@ def _snapshot():
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0a0",
+        themis_version="4.0.0rc1",
         python_version="3.12.9",
         platform="macos",
     )
@@ -94,7 +94,7 @@ def test_sqlite_store_backfills_missing_projection_from_snapshot_and_events(tmp_
 
     projection = store.get_projection(snapshot.run_id, "run_result")
 
-    assert projection is not None
+    assert isinstance(projection, dict)
     assert projection["run_id"] == snapshot.run_id
     assert projection["status"] == "running"
 

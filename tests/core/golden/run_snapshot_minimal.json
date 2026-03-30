@@ -121,7 +121,7 @@
       },
       "store": "sqlite"
     },
-    "themis_version": "4.0.0a0"
+    "themis_version": "4.0.0rc1"
   },
   "run_id": "e9cec0a66ee776a25673b8b2eebd3547032d0422fbe9f58acb94f939d7eb29e0"
 }

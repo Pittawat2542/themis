@@ -1,8 +1,8 @@
 # Themis v4
 
-This repository contains the clean-slate Phase 5 CLI and integration runtime for Themis v4.
+This repository contains the Themis v4 CLI and evaluation runtime.
 
-The current build keeps the immutable model layer from Phase 1, the workflow-backed execution engine from Phases 2-4, and now adds config-driven execution, a rebuilt CLI, quick-eval entrypoints, and single-host worker-pool and batch submission flows.
+The current build combines the immutable model layer, workflow-backed execution engine, config-driven execution, a rebuilt CLI, quick-eval entrypoints, and single-host worker-pool and batch submission flows.
 
 ## Current scope
 

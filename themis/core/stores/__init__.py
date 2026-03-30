@@ -1,4 +1,4 @@
-"""Concrete run store backends for Themis v4 Phase 1."""
+"""Concrete run store backends for Themis v4."""
 
 from themis.core.stores.factory import available_store_backends, create_run_store, memory_store, register_store_backend
 from themis.core.stores.jsonl import JsonlRunStore, jsonl_store

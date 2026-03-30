@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "themis-eval"
-version = "4.0.0a0"
-description = "Themis v4 Phase 5 CLI and integration runtime"
+version = "4.0.0rc1"
+description = "Themis v4 CLI and evaluation runtime"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Pittawat Taveekitworachai" }]
 license = "MIT"
 keywords = ["llm", "evaluation", "benchmark", "ai"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",

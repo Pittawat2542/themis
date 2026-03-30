@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 
-def test_cli_help_lists_phase5_command_groups() -> None:
+def test_cli_help_lists_command_groups() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "themis.cli", "--help"],
         capture_output=True,
