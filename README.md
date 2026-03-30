@@ -74,6 +74,9 @@ themis quickcheck --config experiment.yaml
 themis report --config experiment.yaml --format json
 ```
 
+Relative paths in `experiment.yaml` are resolved relative to the config file location.
+Commands that inspect stored runs across processes (`resume`, `report`, `compare`, and `export`) require a persistent store such as SQLite rather than `memory`.
+
 YAML config example:
 
 ```yaml
@@ -105,7 +108,7 @@ Worker-pool example:
 
 ```bash
 themis submit --config experiment.yaml --mode worker-pool
-themis worker run --queue-root runs/queue --once
+themis worker run --queue-root runs/queue
 ```
 
 Judge workflow example:
@@ -157,8 +160,8 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 
 experiment = Experiment(
-    generation=GenerationConfig(generator="generator/demo", reducer="reducer/demo"),
-    evaluation=EvaluationConfig(metrics=["metric/demo"], parsers=["parser/demo"]),
+    generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+    evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
     storage=StorageConfig(store="memory"),
     datasets=[
         Dataset(
