@@ -11,8 +11,7 @@ worker_app = App(name="worker", help="Worker-pool operations.")
 
 
 @worker_app.command
-def run(*, queue_root: str = "runs/queue", once: bool = False) -> int:
-    del once
+def run(*, queue_root: str = "runs/queue") -> int:
     result = run_worker_once(queue_root)
     if result is None:
         print(dump_json({"status": "idle"}))

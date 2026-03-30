@@ -85,7 +85,7 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(tmp_
     cli_run = _run_cli("run", "--config", str(config_path))
     cli_quick_eval = _run_cli("quick-eval", "file", "--path", str(cases_path))
     worker_submit = _run_cli("submit", "--config", str(config_path), "--mode", "worker-pool")
-    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root), "--once")
+    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root))
     batch_submit = _run_cli("submit", "--config", str(config_path), "--mode", "batch")
     batch_manifest = json.loads(batch_submit.stdout)["manifest_path"]
     batch_run = _run_cli("batch", "run", "--request", batch_manifest)

@@ -35,11 +35,13 @@ seeds: [7]
     )
     (root / "run.py").write_text(
         """
+from pathlib import Path
+
 from themis import Experiment
 
 
 if __name__ == "__main__":
-    result = Experiment.from_config("experiment.yaml").run()
+    result = Experiment.from_config(Path(__file__).with_name("experiment.yaml")).run()
     print(result.run_id)
 """.strip()
         + "\n"

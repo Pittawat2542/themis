@@ -121,7 +121,7 @@ def test_phase5_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path
     worker_submit = _run_cli("submit", "--config", str(worker_config), "--mode", "worker-pool")
     assert worker_submit.returncode == 0, worker_submit.stderr
     assert json.loads(_run_cli("resume", "--config", str(worker_config)).stdout)["status"] == "pending"
-    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root), "--once")
+    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root))
     assert worker_run.returncode == 0, worker_run.stderr
     assert json.loads(worker_run.stdout)["status"] == "completed"
 

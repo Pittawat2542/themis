@@ -64,7 +64,7 @@ def test_worker_pool_submit_resume_and_run(tmp_path: Path) -> None:
     assert resume_pending.returncode == 0, resume_pending.stderr
     assert json.loads(resume_pending.stdout)["status"] == "pending"
 
-    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root), "--once")
+    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root))
     assert worker_run.returncode == 0, worker_run.stderr
     assert json.loads(worker_run.stdout)["status"] == "completed"
 
@@ -88,3 +88,18 @@ def test_batch_submit_resume_and_run_request(tmp_path: Path) -> None:
     batch_run = _run_cli("batch", "run", "--request", submit_payload["manifest_path"])
     assert batch_run.returncode == 0, batch_run.stderr
     assert json.loads(batch_run.stdout)["status"] == "completed"
+
+
+def test_submit_rejects_invalid_mode_without_traceback(tmp_path: Path) -> None:
+    config_path = tmp_path / "experiment.yaml"
+    store_path = tmp_path / "run.sqlite3"
+    queue_root = tmp_path / "queue"
+    batch_root = tmp_path / "batch"
+    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+
+    result = _run_cli("submit", "--config", str(config_path), "--mode", "typo")
+
+    assert result.returncode != 0
+    assert "Traceback" not in result.stderr
+    assert "worker-pool" in result.stderr
+    assert "batch" in result.stderr

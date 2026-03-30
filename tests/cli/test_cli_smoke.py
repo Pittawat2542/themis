@@ -28,3 +28,16 @@ def test_cli_help_lists_phase5_command_groups() -> None:
         "batch",
     ):
         assert command in result.stdout
+
+
+def test_worker_run_help_is_single_shot_without_once_flag() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "themis.cli", "worker", "run", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--queue-root" in result.stdout
+    assert "--once" not in result.stdout

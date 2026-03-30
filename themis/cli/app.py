@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal, cast
+
 from cyclopts import App
 
 from themis.cli.commands.batch import batch_app
@@ -19,9 +21,9 @@ app = App(name="themis", help="Themis v4 CLI")
 
 
 @app.command
-def submit(*, config: str, mode: str) -> int:
+def submit(*, config: str, mode: Literal["worker-pool", "batch"]) -> int:
     experiment = load_experiment(config)
-    normalized_mode = mode.replace("-", "_")
+    normalized_mode = cast(Literal["worker_pool", "batch"], mode.replace("-", "_"))
     manifest = submit_experiment(experiment, config_path=config, mode=normalized_mode)
     print(
         dump_json(
