@@ -6,6 +6,7 @@ from collections import Counter
 
 from themis.core.contexts import ReduceContext
 from themis.core.models import GenerationResult, ReducedCandidate
+from themis.core.protocols import JudgeModel
 
 
 class MajorityVoteReducer:
@@ -55,7 +56,10 @@ class BestOfNReducer:
         )
 
 
-async def _select_best_candidate(candidates: list[GenerationResult], judge_models: list[object]) -> GenerationResult:
+async def _select_best_candidate(
+    candidates: list[GenerationResult],
+    judge_models: list[JudgeModel],
+) -> GenerationResult:
     winner = candidates[0]
     for challenger in candidates[1:]:
         votes_for_challenger = 0

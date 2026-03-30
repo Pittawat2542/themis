@@ -34,7 +34,7 @@ class DummyReducer:
     def fingerprint(self) -> str:
         return "reducer-fingerprint"
 
-    def reduce(
+    async def reduce(
         self,
         candidates: list[GenerationResult],
         ctx: ReduceContext,
@@ -106,7 +106,7 @@ def _experiment(
         ],
         seeds=[7, 11],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0a0",
+        themis_version="4.0.0rc1",
         python_version="3.12.9",
         platform="macos",
     )
@@ -160,6 +160,27 @@ def test_runtime_config_is_recorded_in_snapshot_provenance() -> None:
     assert compiled.provenance.runtime.provider_rate_limits == {
         "openai:https://api.openai.com/v1": 120
     }
+
+
+def test_storage_dsn_credentials_are_redacted_in_snapshot_provenance() -> None:
+    compiled = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(
+            store="postgres",
+            parameters={"url": "postgresql://themis:swordfish@db.example.com:5432/themis"},
+        ),
+        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+    ).compile()
+
+    assert compiled.provenance.storage.parameters["url"] == "postgresql://themis:<redacted>@db.example.com:5432/themis"
 
 
 def test_snapshot_serialization_matches_golden_file() -> None:

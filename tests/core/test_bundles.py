@@ -176,3 +176,50 @@ def test_import_evaluation_bundle_round_trips_evaluation_events() -> None:
     ]
     assert isinstance(resumed.events[0], EvaluationCompletedEvent)
     assert resumed.events[0].execution_blob_ref == bundle.records[0].execution_blob_ref
+
+
+def test_import_evaluation_bundle_preserves_partial_failures() -> None:
+    snapshot = _snapshot()
+    source_store = InMemoryRunStore()
+    source_store.initialize()
+    source_store.persist_snapshot(snapshot)
+    execution_payload: dict[str, JSONValue] = {
+        "execution_id": "execution-1",
+        "subject_kind": "candidate_set",
+        "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+        "failures": [
+            {
+                "call_id": "call-2",
+                "step_id": "call-2:model_call",
+                "step_type": "model_call",
+                "error_message": "judge timeout",
+            }
+        ],
+        "status": "partial_failure",
+        "trace": {"trace_id": "trace-1", "steps": []},
+    }
+    source_store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/judge",
+            execution=execution_payload,
+            execution_blob_ref=source_store.store_blob(
+                json.dumps(execution_payload, sort_keys=True).encode("utf-8"),
+                "application/json",
+            ),
+        )
+    )
+    bundle = export_evaluation_bundle(source_store, snapshot.run_id)
+
+    target_store = InMemoryRunStore()
+    target_store.initialize()
+    import_evaluation_bundle(target_store, bundle)
+
+    resumed = target_store.resume(snapshot.run_id)
+
+    assert resumed is not None
+    execution = resumed.execution_state.case_states["case-1"].evaluation_executions["metric/judge"]
+    assert execution.status == "partial_failure"
+    assert execution.failures[0].error_message == "judge timeout"

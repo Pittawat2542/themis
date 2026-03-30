@@ -1,4 +1,4 @@
-"""Run snapshot models for the Themis v4 Phase 5 runtime."""
+"""Run snapshot models for the Themis v4 runtime."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef
 from themis.core.config import RuntimeConfig, StorageConfig
 from themis.core.events import RunEvent
 from themis.core.models import Dataset
+from themis.core.security import sanitize_persisted_json_value, sanitize_persisted_string_mapping
 
 if TYPE_CHECKING:
     from themis.core.results import ExecutionState
@@ -54,6 +55,24 @@ class RunIdentity(HashableModel):
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
     seeds: list[int] = Field(default_factory=list)
 
+    def sanitized(self) -> RunIdentity:
+        return self.model_copy(
+            update={
+                "candidate_policy": sanitize_persisted_json_value(
+                    self.candidate_policy,
+                    field_path="identity.candidate_policy",
+                ),
+                "judge_config": sanitize_persisted_json_value(
+                    self.judge_config,
+                    field_path="identity.judge_config",
+                ),
+                "workflow_overrides": sanitize_persisted_json_value(
+                    self.workflow_overrides,
+                    field_path="identity.workflow_overrides",
+                ),
+            }
+        )
+
 
 class RunProvenance(FrozenModel):
     themis_version: str
@@ -62,6 +81,22 @@ class RunProvenance(FrozenModel):
     storage: StorageConfig
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
+
+    def sanitized(self) -> RunProvenance:
+        storage_parameters = sanitize_persisted_json_value(
+            self.storage.parameters,
+            field_path="provenance.storage.parameters",
+        )
+        environment_metadata = sanitize_persisted_string_mapping(
+            self.environment_metadata,
+            field_path="provenance.environment_metadata",
+        )
+        return self.model_copy(
+            update={
+                "storage": self.storage.model_copy(update={"parameters": storage_parameters}),
+                "environment_metadata": environment_metadata,
+            }
+        )
 
 
 class RunSnapshot(FrozenModel):

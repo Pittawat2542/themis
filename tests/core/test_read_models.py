@@ -51,7 +51,7 @@ def _snapshot():
         ],
         seeds=[7, 11],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0a0",
+        themis_version="4.0.0rc1",
         python_version="3.12.9",
         platform="macos",
     )
@@ -237,3 +237,36 @@ def test_build_trace_view_collects_generation_and_evaluation_traces() -> None:
     assert view.evaluation_traces[0].case_id == "case-1"
     assert view.evaluation_traces[0].metric_id == "metric/judge"
     assert isinstance(view.evaluation_traces[0].execution, EvaluationExecution)
+
+
+def test_build_run_result_marks_partial_workflow_execution_failures() -> None:
+    snapshot = _snapshot()
+    events = _events(snapshot.run_id)
+    events[5] = EvaluationCompletedEvent(
+        run_id=snapshot.run_id,
+        case_id="case-1",
+        candidate_id="case-1-reduced",
+        metric_id="metric/judge",
+        execution={
+            "execution_id": "execution-1",
+            "subject_kind": "candidate_set",
+            "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+            "failures": [
+                {
+                    "call_id": "call-2",
+                    "step_id": "call-2:model_call",
+                    "step_type": "model_call",
+                    "error_message": "judge timeout",
+                }
+            ],
+            "status": "partial_failure",
+            "trace": {"trace_id": "trace-1", "steps": []},
+        },
+    )
+
+    result = build_run_result(snapshot, events)
+
+    assert result.status.value == "partial_failure"
+    execution = result.cases[0].evaluation_executions[0]
+    assert execution.status == "partial_failure"
+    assert execution.failures[0].call_id == "call-2"

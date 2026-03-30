@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from themis.core.base import JSONValue
+from collections.abc import Iterable
 
 
 def apply_benchmark_adapter(
@@ -81,7 +81,7 @@ def _code_generation_adapter(
     spec: dict[str, object],
     variant: str | None,
 ) -> dict[str, object]:
-    backends = ",".join(list(spec.get("supported_execution_backends", [])))
+    backends = ",".join(_coerce_string_list(spec.get("supported_execution_backends")))
     return {
         "candidate_policy": {"num_samples": 2},
         "reducer_id": "builtin/best_of_n",
@@ -177,3 +177,14 @@ def _hle_adapter(base_name: str, benchmark_id: str, variant: str | None) -> dict
         "sample_case_expected_output": {"answer": f"sample expert answer for {base_name}"},
         "sample_case_metadata": {"domains": domains},
     }
+
+
+def _coerce_string_list(value: object | None) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, Iterable) or isinstance(value, (str, bytes, dict)):
+        raise ValueError(f"Expected iterable of strings, got {type(value).__name__}")
+    items = list(value)
+    if any(not isinstance(item, str) for item in items):
+        raise ValueError("Expected iterable of strings")
+    return items

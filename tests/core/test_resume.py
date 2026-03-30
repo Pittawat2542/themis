@@ -176,6 +176,13 @@ class CountingLLMMetric:
         return DemoWorkflow()
 
 
+class ResumePartialLLMMetric(CountingLLMMetric):
+    component_id = "metric/partial"
+
+    def fingerprint(self) -> str:
+        return "metric-partial"
+
+
 class DemoJudgeModel:
     component_id = "builtin/demo_judge"
     version = "1.0"
@@ -249,6 +256,22 @@ class SlowJudgeModel:
             judge_model_fingerprint=self.fingerprint(),
             raw_response="pass",
         )
+
+
+class CaseTrackingOrchestrator(Orchestrator):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.active_cases = 0
+        self.max_active_cases = 0
+
+    async def _run_case(self, snapshot, items, existing_state):
+        self.active_cases += 1
+        self.max_active_cases = max(self.max_active_cases, self.active_cases)
+        try:
+            await asyncio.sleep(0)
+            return await super()._run_case(snapshot, items, existing_state)
+        finally:
+            self.active_cases -= 1
 
 
 def _experiment(*, generator, reducer, parser, metric, num_samples=1) -> Experiment:
@@ -757,6 +780,167 @@ async def test_orchestrator_respects_evaluation_concurrency_cap() -> None:
     await orchestrator.run(snapshot)
 
     assert judge_model.max_active <= 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_limits_in_flight_case_tasks() -> None:
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator=generator,
+            candidate_policy={"num_samples": 1},
+            reducer=reducer,
+        ),
+        evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id=f"case-{index}",
+                        input={"question": f"{index}+{index}"},
+                        expected_output={"answer": str(index * 2)},
+                    )
+                    for index in range(12)
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = CaseTrackingOrchestrator(
+        store=store,
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metrics=[metric],
+        max_concurrent_tasks=3,
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert orchestrator.max_active_cases <= 3
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume() -> None:
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = ResumePartialLLMMetric()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator=generator,
+            candidate_policy={"num_samples": 1},
+            reducer=reducer,
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[metric],
+            parsers=[parser],
+            judge_models=[DemoJudgeModel()],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-candidate-7",
+            candidate_index=0,
+            seed=7,
+            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+        )
+    )
+    store.persist_event(
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["case-1-candidate-7"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["case-1-candidate-7"],
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    store.persist_event(
+        ParseCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            result={"value": {"answer": "4"}, "format": "json"},
+        )
+    )
+    store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            metric_id=metric.component_id,
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": metric.component_id, "value": 1.0}],
+                "failures": [
+                    {
+                        "call_id": "call-1",
+                        "step_id": "call-1:model_call",
+                        "step_type": "model_call",
+                        "error_message": "judge timeout",
+                    }
+                ],
+                "status": "partial_failure",
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+    store.persist_event(
+        ScoreCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id=metric.component_id,
+            score={"metric_id": metric.component_id, "value": 1.0},
+        )
+    )
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metrics=[metric],
+        judge_models=[DemoJudgeModel()],
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert generator.calls == 0
+    assert reducer.calls == 0
+    assert parser.calls == 0
+    assert metric.calls == 1
 
 
 @pytest.mark.asyncio

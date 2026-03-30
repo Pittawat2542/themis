@@ -56,14 +56,23 @@ class JudgeResponse(HashableModel):
     conversation_trace: ConversationTrace | None = None
 
 
+class WorkflowFailure(HashableModel):
+    call_id: str | None = None
+    step_id: str
+    step_type: str
+    error_message: str
+
+
 class EvaluationExecution(HashableModel):
     execution_id: str
     subject_kind: str
+    status: str = "completed"
     judge_calls: list[JudgeCall] = Field(default_factory=list)
     rendered_prompts: list[RenderedJudgePrompt] = Field(default_factory=list)
     judge_responses: list[JudgeResponse] = Field(default_factory=list)
     parsed_judgments: list[ParsedJudgment] = Field(default_factory=list)
     scores: list[Score] = Field(default_factory=list)
+    failures: list[WorkflowFailure] = Field(default_factory=list)
     aggregation_output: AggregationResult | None = None
     trace: WorkflowTrace
 

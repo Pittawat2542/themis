@@ -1,4 +1,4 @@
-"""Experiment authoring model and snapshot compilation for Phase 5."""
+"""Experiment authoring model and snapshot compilation."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class Experiment(FrozenModel):
     datasets: list[Dataset] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
-    themis_version: str = "4.0.0a0"
+    themis_version: str = "4.0.0rc1"
     python_version: str = "3.12"
     platform: str = "unknown"
     _config_metadata: ExperimentConfigMetadata | None = PrivateAttr(default=None)
@@ -88,7 +88,7 @@ class Experiment(FrozenModel):
             judge_config=self.evaluation.judge_config,
             workflow_overrides=self.evaluation.workflow_overrides,
             seeds=self.seeds,
-        )
+        ).sanitized()
         provenance = RunProvenance(
             themis_version=self.themis_version,
             python_version=self.python_version,
@@ -96,7 +96,7 @@ class Experiment(FrozenModel):
             storage=self.storage,
             runtime=runtime,
             environment_metadata=self.environment_metadata,
-        )
+        ).sanitized()
         return RunSnapshot(
             identity=identity,
             provenance=provenance,

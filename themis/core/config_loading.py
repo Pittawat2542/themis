@@ -11,6 +11,7 @@ from pydantic import Field
 
 from themis.catalog.loaders import load_symbol, load_toml, load_yaml
 from themis.core.base import FrozenModel
+from themis.core.security import is_secret_reference
 
 _SINGLE_COMPONENT_FIELDS = (
     ("generation", "generator"),
@@ -106,6 +107,8 @@ def _normalize_paths(payload: dict[str, Any], *, base_dir: Path) -> dict[str, An
 
 def _normalize_path_value(value: Any, *, base_dir: Path) -> Any:
     if not isinstance(value, str):
+        return value
+    if is_secret_reference(value):
         return value
     path = Path(value).expanduser()
     if path.is_absolute():

@@ -117,28 +117,29 @@ def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
                 execution_blob_ref=record.execution_blob_ref or blob_ref,
             )
         )
-        if record.candidate_id is not None:
+        final_score = _final_score(record.metric_id, record.execution)
+        if record.candidate_id is not None and final_score is not None:
             store.persist_event(
                 ScoreCompletedEvent(
                     run_id=bundle.run_id,
                     case_id=record.case_id,
                     candidate_id=record.candidate_id,
                     metric_id=record.metric_id,
-                    score=_final_score(record.metric_id, record.execution).model_dump(mode="json"),
+                    score=final_score.model_dump(mode="json"),
                 )
             )
 
 
-def _final_score(metric_id: str, execution: EvaluationExecution) -> Score:
+def _final_score(metric_id: str, execution: EvaluationExecution) -> Score | None:
     if execution.aggregation_output is not None and isinstance(execution.aggregation_output.value, (int, float)):
         return Score(
             metric_id=metric_id,
             value=float(execution.aggregation_output.value),
             details=execution.aggregation_output.details,
         )
-    if execution.scores:
+    if not execution.failures and len(execution.scores) == 1:
         return execution.scores[-1]
-    return Score(metric_id=metric_id, value=0.0)
+    return None
 
 
 def _blob_ref(payload: dict[str, object]) -> str:

@@ -53,6 +53,10 @@ def build_run_result_from_state(snapshot: RunSnapshot, state: ExecutionState) ->
                     case_state.reduction_error is not None,
                     case_state.parse_error is not None,
                     case_state.evaluation_failures,
+                    any(
+                        execution.status == "partial_failure" or bool(execution.failures)
+                        for execution in case_state.evaluation_executions.values()
+                    ),
                     case_state.score_failures,
                 )
             )
@@ -168,8 +172,9 @@ def build_store_projection_payloads(snapshot: RunSnapshot, events: list[RunEvent
     benchmark_result = build_benchmark_result_from_run_result(run_result).model_copy(
         update={"dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets]}
     )
+    snapshot_payload = snapshot.model_dump(mode="json")
     return {
-        "snapshot": snapshot.model_dump(mode="json"),
+        "snapshot": snapshot_payload,
         "execution_state": state.model_dump(mode="json"),
         "run_result": run_result.model_dump(mode="json"),
         "benchmark_result": benchmark_result.model_dump(mode="json"),
@@ -192,6 +197,7 @@ def apply_event_to_store_projection_payloads(
     benchmark_result = build_benchmark_result_from_run_result(run_result).model_copy(
         update={"dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets]}
     )
+    snapshot_payload = _current_snapshot_payload(snapshot, projections.get("snapshot"))
     timeline_view = _apply_event_to_timeline_view(snapshot, projections.get("timeline_view"), event)
     trace_view = _apply_event_to_trace_view(
         snapshot,
@@ -199,7 +205,7 @@ def apply_event_to_store_projection_payloads(
         event,
     )
     return {
-        "snapshot": snapshot.model_dump(mode="json"),
+        "snapshot": snapshot_payload,
         "execution_state": state.model_dump(mode="json"),
         "run_result": run_result.model_dump(mode="json"),
         "benchmark_result": benchmark_result.model_dump(mode="json"),
@@ -213,6 +219,12 @@ def _current_execution_state(snapshot: RunSnapshot, projections: dict[str, JSONV
     if isinstance(payload, dict):
         return ExecutionState.model_validate(payload)
     return ExecutionState(run_id=snapshot.run_id)
+
+
+def _current_snapshot_payload(snapshot: RunSnapshot, payload: JSONValue | None) -> JSONValue:
+    if isinstance(payload, dict):
+        return payload
+    return snapshot.model_dump(mode="json")
 
 
 def _current_trace_view(snapshot: RunSnapshot, payload: JSONValue | None) -> TraceView:

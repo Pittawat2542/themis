@@ -1,8 +1,9 @@
-"""Workflow-runner support types for Phase 5 evaluation."""
+"""Workflow-runner support types for evaluation."""
 
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from collections.abc import Awaitable, Callable, Iterable
 
 from themis.core.contexts import EvalScoreContext
@@ -20,11 +21,21 @@ from themis.core.workflows import (
     JudgeResponse,
     ParsedJudgment,
     RenderedJudgePrompt,
+    WorkflowFailure,
 )
 
 
 class WorkflowBuildError(ValueError):
     """Raised when a metric cannot build a valid evaluation workflow."""
+
+
+@dataclass
+class _CallExecutionResult:
+    response: JudgeResponse | None
+    judgment: ParsedJudgment | None
+    score: Score | None
+    trace_steps: list[TraceStep]
+    failure: WorkflowFailure | None = None
 
 
 class DefaultWorkflowRunner:
@@ -121,12 +132,13 @@ class DefaultWorkflowRunner:
             ]
         )
 
-        judge_responses = [result[0] for result in call_results]
-        parsed_judgments = [result[1] for result in call_results]
-        scores = [result[2] for result in call_results if result[2] is not None]
+        judge_responses = [result.response for result in call_results if result.response is not None]
+        parsed_judgments = [result.judgment for result in call_results if result.judgment is not None]
+        scores = [result.score for result in call_results if result.score is not None]
+        failures = [result.failure for result in call_results if result.failure is not None]
         trace_steps = list(render_trace_steps)
-        for _, _, _, call_trace_steps in call_results:
-            trace_steps.extend(call_trace_steps)
+        for result in call_results:
+            trace_steps.extend(result.trace_steps)
 
         aggregate_step_id = "aggregate_scores"
         aggregation_output: AggregationResult | None = None
@@ -165,6 +177,13 @@ class DefaultWorkflowRunner:
                 )
             )
         except Exception as exc:
+            failures.append(
+                WorkflowFailure(
+                    step_id=aggregate_step_id,
+                    step_type="aggregate_scores",
+                    error_message=str(exc),
+                )
+            )
             await self._persist_event(
                 StepFailedEvent(
                     run_id=ctx.run_id,
@@ -174,16 +193,18 @@ class DefaultWorkflowRunner:
                     error_message=str(exc),
                 )
             )
-            raise
+        status = "partial_failure" if failures else "completed"
 
         return EvaluationExecution(
             execution_id=f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:{workflow.fingerprint()}",
             subject_kind=self._subject_kind(subject),
+            status=status,
             judge_calls=planned_calls,
             rendered_prompts=rendered_prompts,
             judge_responses=judge_responses,
             parsed_judgments=parsed_judgments,
             scores=scores,
+            failures=failures,
             aggregation_output=aggregation_output,
             trace=WorkflowTrace(trace_id=f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:trace", steps=trace_steps),
         )
@@ -197,7 +218,7 @@ class DefaultWorkflowRunner:
         prompt: RenderedJudgePrompt,
         metric_id: str,
         ctx: EvalScoreContext,
-    ) -> tuple[JudgeResponse, ParsedJudgment, Score | None, list[TraceStep]]:
+    ) -> _CallExecutionResult:
         trace_steps: list[TraceStep] = []
         model_step_id = f"{call.call_id}:model_call"
         parse_step_id = f"{call.call_id}:parse_judgment"
@@ -245,7 +266,18 @@ class DefaultWorkflowRunner:
                     error_message=str(exc),
                 )
             )
-            raise
+            return _CallExecutionResult(
+                response=None,
+                judgment=None,
+                score=None,
+                trace_steps=trace_steps,
+                failure=WorkflowFailure(
+                    call_id=call.call_id,
+                    step_id=model_step_id,
+                    step_type="model_call",
+                    error_message=str(exc),
+                ),
+            )
 
         await self._persist_event(
             StepStartedEvent(
@@ -284,7 +316,18 @@ class DefaultWorkflowRunner:
                     error_message=str(exc),
                 )
             )
-            raise
+            return _CallExecutionResult(
+                response=response,
+                judgment=None,
+                score=None,
+                trace_steps=trace_steps,
+                failure=WorkflowFailure(
+                    call_id=call.call_id,
+                    step_id=parse_step_id,
+                    step_type="parse_judgment",
+                    error_message=str(exc),
+                ),
+            )
 
         await self._persist_event(
             StepStartedEvent(
@@ -326,9 +369,25 @@ class DefaultWorkflowRunner:
                     error_message=str(exc),
                 )
             )
-            raise
+            return _CallExecutionResult(
+                response=response,
+                judgment=judgment,
+                score=None,
+                trace_steps=trace_steps,
+                failure=WorkflowFailure(
+                    call_id=call.call_id,
+                    step_id=score_step_id,
+                    step_type="emit_score",
+                    error_message=str(exc),
+                ),
+            )
 
-        return response, judgment, score, trace_steps
+        return _CallExecutionResult(
+            response=response,
+            judgment=judgment,
+            score=score,
+            trace_steps=trace_steps,
+        )
 
     async def _persist_event(self, event: RunEvent) -> None:
         if self.persist_event is not None:

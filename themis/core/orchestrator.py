@@ -1,4 +1,4 @@
-"""Async execution orchestrator for the Themis v4 Phase 5 runtime."""
+"""Async execution orchestrator for the Themis v4 runtime."""
 
 from __future__ import annotations
 
@@ -214,23 +214,36 @@ class Orchestrator:
             raise
 
     async def _run_cases(self, snapshot: RunSnapshot, existing_state: ExecutionState):
+        max_in_flight_cases = max(1, self.runtime.max_concurrent_tasks)
+        pending: set[asyncio.Task[tuple[CaseResult, bool]]] = set()
+
+        async for items in self._iter_case_groups(snapshot):
+            if not items:
+                continue
+            while len(pending) >= max_in_flight_cases:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    yield task.result()
+            pending.add(asyncio.create_task(self._run_case(snapshot, items, existing_state)))
+
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                yield task.result()
+
+    async def _iter_case_groups(self, snapshot: RunSnapshot):
         current_case_id: str | None = None
         current_items: list[GenerationWorkItem] = []
-        case_groups: list[list[GenerationWorkItem]] = []
         async for item in self.planner.iter_work_items(snapshot):
             if current_case_id is None:
                 current_case_id = item.case_id
             if item.case_id != current_case_id:
-                case_groups.append(current_items)
+                yield current_items
                 current_items = []
                 current_case_id = item.case_id
             current_items.append(item)
         if current_items:
-            case_groups.append(current_items)
-        for result in await asyncio.gather(
-            *(self._run_case(snapshot, items, existing_state) for items in case_groups)
-        ):
-            yield result
+            yield current_items
 
     async def _run_case(
         self,
@@ -338,6 +351,8 @@ class Orchestrator:
                 and metric.component_id not in self.force_workflow_metrics
                 and metric.component_id in successful_scores
                 and metric.component_id in workflow_executions
+                and workflow_executions[metric.component_id].status == "completed"
+                and not workflow_executions[metric.component_id].failures
             ):
                 continue
             if metric_kind == "pure" and metric.component_id in successful_scores:
@@ -437,17 +452,36 @@ class Orchestrator:
                     )
                 )
                 final_score = self._final_workflow_score(metric.component_id, execution)
-                successful_scores[metric.component_id] = final_score
-                score_failures.pop(metric.component_id, None)
-                await self._persist_event(
-                    ScoreCompletedEvent(
-                        run_id=snapshot.run_id,
-                        case_id=case.case_id,
-                        candidate_id=reduced.candidate_id,
-                        metric_id=final_score.metric_id,
-                        score=final_score.model_dump(mode="json"),
+                had_failure = had_failure or execution.status == "partial_failure" or bool(execution.failures)
+                if final_score is not None:
+                    successful_scores[metric.component_id] = final_score
+                    score_failures.pop(metric.component_id, None)
+                    await self._persist_event(
+                        ScoreCompletedEvent(
+                            run_id=snapshot.run_id,
+                            case_id=case.case_id,
+                            candidate_id=reduced.candidate_id,
+                            metric_id=final_score.metric_id,
+                            score=final_score.model_dump(mode="json"),
+                        )
                     )
-                )
+                else:
+                    score_error = ScoreError(
+                        metric_id=metric.component_id,
+                        reason="workflow execution completed without a usable final score",
+                    )
+                    successful_scores.pop(metric.component_id, None)
+                    score_failures[metric.component_id] = score_error
+                    await self._persist_event(
+                        ScoreFailedEvent(
+                            run_id=snapshot.run_id,
+                            case_id=case.case_id,
+                            candidate_id=reduced.candidate_id,
+                            metric_id=metric.component_id,
+                            error=score_error.model_dump(mode="json"),
+                        )
+                    )
+                    had_failure = True
                 self.tracing_provider.end_span(span, "ok")
             except (WorkflowBuildError, Exception) as exc:
                 workflow_executions.pop(metric.component_id, None)
@@ -628,16 +662,16 @@ class Orchestrator:
         self,
         metric_id: str,
         execution,
-    ) -> Score:
+    ) -> Score | None:
         if execution.aggregation_output is not None and isinstance(execution.aggregation_output.value, (int, float)):
             return Score(
                 metric_id=metric_id,
                 value=float(execution.aggregation_output.value),
                 details=execution.aggregation_output.details,
             )
-        if execution.scores:
+        if not execution.failures and len(execution.scores) == 1:
             return execution.scores[-1]
-        return Score(metric_id=metric_id, value=0.0)
+        return None
 
     async def _execute_judge_model_call(
         self,

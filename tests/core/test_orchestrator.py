@@ -277,6 +277,82 @@ class RecordingTraceMetric:
         return DemoJudgeWorkflow()
 
 
+class FlakyJudgeModel:
+    version = "1.0"
+
+    def __init__(self, component_id: str, *, fail: bool = False) -> None:
+        self.component_id = component_id
+        self._fail = fail
+
+    def fingerprint(self) -> str:
+        return f"{self.component_id}-fingerprint"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del prompt, seed
+        if self._fail:
+            raise ValueError(f"{self.component_id} timeout")
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response="pass",
+        )
+
+
+class PartialFailureWorkflow:
+    component_id = "workflow/partial"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "workflow-partial"
+
+    def judge_calls(self) -> list[JudgeCall]:
+        return [
+            JudgeCall(call_id="call-ok", judge_model_id="judge/ok"),
+            JudgeCall(call_id="call-fail", judge_model_id="judge/fail"),
+        ]
+
+    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+        del subject, ctx
+        return RenderedJudgePrompt(prompt_id=f"prompt-{call.call_id}", content=call.call_id)
+
+    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+        del call, ctx
+        return ParsedJudgment(label=response.raw_response, score=1.0)
+
+    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+        del call, ctx
+        return Score(metric_id="metric/partial", value=float(judgment.score or 0.0))
+
+    def aggregate(
+        self,
+        judgments: list[ParsedJudgment],
+        scores: list[Score],
+        ctx: EvalScoreContext,
+    ) -> AggregationResult | None:
+        del judgments, ctx
+        if not scores:
+            return None
+        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+
+
+class PartialFailureMetric:
+    component_id = "metric/partial"
+    version = "1.0"
+    metric_family = "llm"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def fingerprint(self) -> str:
+        return "metric-partial"
+
+    def build_workflow(self, subject, ctx: EvalScoreContext):
+        del subject, ctx
+        self.calls += 1
+        return PartialFailureWorkflow()
+
+
 class AwaitedReducer:
     component_id = "reducer/awaited"
     version = "1.0"
@@ -595,3 +671,56 @@ async def test_orchestrator_persists_workflow_events_through_orchestrator_event_
     assert any(isinstance(event, StepStartedEvent) for event in events)
     assert any(isinstance(event, StepCompletedEvent) for event in events)
     assert subscriber.calls.count("on_event") >= len(events)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_persists_partial_workflow_failures_without_dropping_successful_calls() -> None:
+    metric = PartialFailureMetric()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[metric],
+            parsers=["builtin/json_identity"],
+            judge_models=[FlakyJudgeModel("judge/ok"), FlakyJudgeModel("judge/fail", fail=True)],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component(experiment.generation.generator),
+        reducer=resolve_reducer_component(experiment.generation.reducer),
+        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        metrics=[metric],
+        judge_models=[FlakyJudgeModel("judge/ok"), FlakyJudgeModel("judge/fail", fail=True)],
+    )
+
+    result = await orchestrator.run(snapshot)
+    events = store.query_events(snapshot.run_id)
+    case = result.cases[0]
+
+    assert result.status is RunStatus.PARTIAL_FAILURE
+    assert case.evaluation_executions[0].status == "partial_failure"
+    assert case.evaluation_executions[0].aggregation_output is not None
+    assert case.evaluation_executions[0].aggregation_output.value == 1.0
+    assert len(case.evaluation_executions[0].judge_responses) == 1
+    assert len(case.evaluation_executions[0].failures) == 1
+    assert case.evaluation_executions[0].failures[0].call_id == "call-fail"
+    assert case.scores[0].metric_id == "metric/partial"
+    assert any(isinstance(event, EvaluationCompletedEvent) for event in events)

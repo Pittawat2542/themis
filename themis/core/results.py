@@ -1,4 +1,4 @@
-"""Runtime result, work-item, and resume state models for Phase 5."""
+"""Runtime result, work-item, and resume state models."""
 
 from __future__ import annotations
 
@@ -205,6 +205,10 @@ def _case_state_has_failures(case_state: CaseExecutionState) -> bool:
             case_state.reduction_error is not None,
             case_state.parse_error is not None,
             case_state.evaluation_failures,
+            any(
+                execution.status == "partial_failure" or bool(execution.failures)
+                for execution in case_state.evaluation_executions.values()
+            ),
             case_state.score_failures,
         )
     )
