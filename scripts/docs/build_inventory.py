@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import json
+import tomllib
+from pathlib import Path
+
+import themis
+from themis.cli.app import app
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _cli_commands() -> list[str]:
+    root_commands = sorted(
+        name for name in app.resolved_commands() if not name.startswith("-")
+    )
+    commands: list[str] = []
+    for command in root_commands:
+        commands.append(command)
+        if command == "quick-eval":
+            commands.extend(f"{command} {sub}" for sub in ("inline", "file", "huggingface", "benchmark"))
+        elif command == "export":
+            commands.extend(f"{command} {sub}" for sub in ("generation", "evaluation"))
+        elif command == "worker":
+            commands.append("worker run")
+        elif command == "batch":
+            commands.append("batch run")
+    return commands
+
+
+def _manifest_table(path: Path, key: str) -> list[str]:
+    payload = tomllib.loads(path.read_text(encoding="utf-8"))
+    return sorted(payload[key])
+
+
+def main() -> None:
+    payload = {
+        "public_exports": sorted(themis.__all__),
+        "cli_commands": _cli_commands(),
+        "builtin_components": _manifest_table(
+            REPO_ROOT / "themis" / "catalog" / "manifests" / "components.toml",
+            "components",
+        ),
+        "benchmarks": _manifest_table(
+            REPO_ROOT / "themis" / "catalog" / "benchmarks" / "manifests" / "benchmarks.toml",
+            "benchmarks",
+        ),
+        "docs_destinations": {
+            "home": "docs/index.md",
+            "start-here": "docs/start-here/index.md",
+            "tutorials": "docs/tutorials",
+            "how-to": "docs/how-to",
+            "reference": "docs/reference/index.md",
+            "explanation": "docs/explanation/index.md",
+            "glossary": "docs/glossary.md",
+            "faq": "docs/faq.md",
+            "project": "docs/project/index.md",
+        },
+    }
+    print(json.dumps(payload, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

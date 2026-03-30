@@ -1,0 +1,109 @@
+site_name: Themis v4
+site_description: Python-first evaluation runtime documentation for Themis v4.
+repo_url: https://github.com/Pittawat2542/themis
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path:
+        - .
+      check_paths: true
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: false
+            separate_signature: true
+            show_signature_annotations: true
+            docstring_style: google
+nav:
+  - Home: index.md
+  - Start Here:
+      - Overview: start-here/index.md
+      - Installation: start-here/installation.md
+      - Choose Your API Layer: start-here/choose-your-api-layer.md
+      - Choose Your Storage Backend: start-here/choose-your-storage-backend.md
+      - Route By Goal: start-here/route-by-goal.md
+      - Troubleshooting: start-here/troubleshooting.md
+      - Docs Review Checklist: start-here/docs-review-checklist.md
+  - Tutorials:
+      - First evaluate(...): tutorials/first-evaluate.md
+      - First Experiment(...): tutorials/first-experiment.md
+      - First persisted run: tutorials/first-persisted-run.md
+      - First LLM-judged evaluation: tutorials/first-llm-judged-evaluation.md
+      - First advanced run: tutorials/first-advanced-run.md
+      - First custom component: tutorials/first-custom-component.md
+      - First external execution: tutorials/first-external-execution.md
+  - How-To:
+      - Choose the right API layer: how-to/choose-the-right-api-layer.md
+      - Choose the right store backend: how-to/choose-the-right-store-backend.md
+      - Install extras and configure providers: how-to/install-extras-and-configure-providers.md
+      - Run from Python vs config and CLI: how-to/run-from-python-vs-config-and-cli.md
+      - Configure generators: how-to/configure-generators.md
+      - Author custom components: how-to/author-custom-components.md
+      - Capture traces and conversations: how-to/capture-traces-and-conversations.md
+      - Use reduction strategies: how-to/use-reduction-strategies.md
+      - Use pure metrics: how-to/use-pure-metrics.md
+      - Use workflow-backed metrics: how-to/use-workflow-backed-metrics.md
+      - Resume and inspect runs: how-to/resume-and-inspect-runs.md
+      - Reproduce and rejudge runs: how-to/reproduce-and-rejudge-runs.md
+      - Compare, export, and report: how-to/compare-export-and-report.md
+      - Tune runtime controls: how-to/tune-runtime-controls.md
+      - Use submit, worker, and batch: how-to/use-submit-worker-and-batch.md
+      - Run benchmarks: how-to/run-benchmarks.md
+  - Reference:
+      - Overview: reference/index.md
+      - Python API: reference/python-api.md
+      - Root package API: reference/root-package-api.md
+      - Experiment lifecycle: reference/experiment-lifecycle.md
+      - Stores and inspection: reference/stores-and-inspection.md
+      - Adapters: reference/adapters.md
+      - CLI: reference/cli.md
+      - Config schema: reference/config-schema.md
+      - Protocols: reference/protocols.md
+      - Data models: reference/data-models.md
+      - Builtins and adapters: reference/builtins-and-adapters.md
+      - Benchmark catalog: reference/benchmark-catalog.md
+  - Explanation:
+      - Overview: explanation/index.md
+      - Case lifecycle: explanation/case-lifecycle.md
+      - RunSnapshot: explanation/run-snapshot.md
+      - Identity vs provenance: explanation/identity-vs-provenance.md
+      - Compile vs run: explanation/compile-vs-run.md
+      - Generation vs evaluation: explanation/generation-vs-evaluation.md
+      - Fan-out, reduction, parsing, and scoring: explanation/fanout-reduction-parsing-scoring.md
+      - Reducer vs parser vs metric: explanation/reducer-parser-metric-boundaries.md
+      - Events, stores, and read models: explanation/events-stores-and-read-models.md
+      - Artifacts and inspection: explanation/artifacts-and-inspection.md
+      - Reproducibility and rejudge: explanation/reproducibility-and-rejudge.md
+      - Failure, retry, and resume: explanation/failure-retry-and-resume.md
+      - Extension boundaries: explanation/extension-boundaries.md
+      - API layer model: explanation/api-layer-model.md
+      - Metric families and subjects: explanation/metric-families-and-subjects.md
+      - Store backend model: explanation/store-backend-model.md
+      - Benchmark adapters: explanation/benchmark-adapters.md
+      - Reporting and read models: explanation/reporting-and-read-models.md
+      - Determinism and reproducibility: explanation/determinism-and-reproducibility.md
+  - Glossary: glossary.md
+  - FAQ: faq.md
+  - Project:
+      - Overview: project/index.md
+      - Docs architecture: project/docs-architecture.md
+      - Writing guide: project/writing-guide.md
+      - Example authoring: project/example-authoring.md
+      - Adding docs coverage: project/adding-new-docs-coverage.md
+      - Release and versioning: project/release-and-versioning.md
