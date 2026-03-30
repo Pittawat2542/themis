@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypeAlias
+from typing import Literal, TypeAlias
 
 from pydantic import Field
 
@@ -51,3 +51,6 @@ class RuntimeConfig(HashableModel):
     provider_rate_limits: dict[str, int] = Field(default_factory=dict)
     store_retry_attempts: int = 5
     store_retry_delay: float = 0.01
+    execution_mode: Literal["local", "worker_pool", "batch"] = "local"
+    queue_root: str | None = None
+    batch_root: str | None = None

@@ -36,6 +36,7 @@ from themis.core.events import (
     StepStartedEvent,
     event_from_dict,
 )
+from themis.core.evaluate import evaluate
 from themis.core.experiment import Experiment
 from themis.core.inspection import get_evaluation_execution, get_execution_state
 from themis.core.quickcheck import quickcheck
@@ -90,6 +91,7 @@ from themis.core.results import (
     GenerationBundleRecord,
     GenerationWorkItem,
     ProgressSnapshot,
+    RunEstimate,
     RunResult,
     RunStatus,
 )
@@ -155,6 +157,7 @@ __all__ = [
     "EvaluationFailedEvent",
     "EvaluationConfig",
     "EvaluationWorkflow",
+    "evaluate",
     "Experiment",
     "FrozenModel",
     "Generator",
@@ -214,6 +217,7 @@ __all__ = [
     "ProgressSnapshot",
     "quickcheck",
     "Reporter",
+    "RunEstimate",
     "Score",
     "ScoreCompletedEvent",
     "ScoreContext",

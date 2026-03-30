@@ -100,6 +100,8 @@
     "platform": "macos",
     "python_version": "3.12.9",
     "runtime": {
+      "batch_root": null,
+      "execution_mode": "local",
       "max_concurrent_tasks": 16,
       "provider_concurrency": {
         "openai:https://api.openai.com/v1": 4
@@ -107,6 +109,7 @@
       "provider_rate_limits": {
         "openai:https://api.openai.com/v1": 120
       },
+      "queue_root": null,
       "stage_concurrency": {
         "generation": 8
       },

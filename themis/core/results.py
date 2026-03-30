@@ -242,6 +242,19 @@ class RunResult(FrozenModel):
     cases: list[CaseResult] = Field(default_factory=list)
 
 
+class RunEstimate(FrozenModel):
+    run_id: str
+    total_cases: int
+    candidate_count: int
+    metric_count: int
+    pure_metric_count: int
+    workflow_metric_count: int
+    planned_generation_tasks: int
+    planned_reduction_tasks: int
+    planned_parse_tasks: int
+    planned_score_tasks: int
+
+
 class GenerationBundleRecord(FrozenModel):
     case_id: str
     candidate_id: str

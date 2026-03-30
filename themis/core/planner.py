@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 
-from themis.core.results import GenerationWorkItem
+from themis.core.results import GenerationWorkItem, RunEstimate
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import JudgeCall
 
@@ -100,6 +100,26 @@ class Planner:
             if isinstance(value, int) and value > 0:
                 values.append(value)
         return max(values)
+
+    def estimate(self, snapshot: RunSnapshot) -> RunEstimate:
+        self.validate_snapshot(snapshot)
+        total_cases = sum(len(dataset.cases) for dataset in snapshot.datasets)
+        candidate_count = self.candidate_count(snapshot)
+        metric_count = len(snapshot.component_refs.metrics)
+        pure_metric_count = sum(1 for kind in snapshot.metric_kinds if kind == "pure")
+        workflow_metric_count = metric_count - pure_metric_count
+        return RunEstimate(
+            run_id=snapshot.run_id,
+            total_cases=total_cases,
+            candidate_count=candidate_count,
+            metric_count=metric_count,
+            pure_metric_count=pure_metric_count,
+            workflow_metric_count=workflow_metric_count,
+            planned_generation_tasks=total_cases * candidate_count,
+            planned_reduction_tasks=total_cases if candidate_count > 1 else 0,
+            planned_parse_tasks=total_cases if snapshot.component_refs.parsers else 0,
+            planned_score_tasks=total_cases * metric_count,
+        )
 
     async def iter_work_items(self, snapshot: RunSnapshot):
         self.validate_snapshot(snapshot)

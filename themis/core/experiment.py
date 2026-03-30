@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from pydantic import Field
 
@@ -44,6 +45,13 @@ class Experiment(FrozenModel):
     themis_version: str = "4.0.0a0"
     python_version: str = "3.12"
     platform: str = "unknown"
+
+    @classmethod
+    def from_config(cls, path: str | Path, *, overrides: list[str] | None = None) -> Experiment:
+        from themis.core.config_loading import load_experiment_payload
+
+        payload = load_experiment_payload(path, overrides=overrides)
+        return cls.model_validate(payload)
 
     def compile(self) -> RunSnapshot:
         return self._compile_with_runtime(self.runtime)
@@ -105,7 +113,8 @@ class Experiment(FrozenModel):
         snapshot = self._compile_with_runtime(effective_runtime)
         run_store = store or self._build_store()
         run_store.initialize()
-        run_store.persist_snapshot(snapshot)
+        if run_store.resume(snapshot.run_id) is None:
+            run_store.persist_snapshot(snapshot)
         orchestrator = Orchestrator(
             store=run_store,
             generator=resolve_generator_component(self.generation.generator),
