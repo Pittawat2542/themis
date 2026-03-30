@@ -8,6 +8,8 @@ from themis.core.workflows import EvaluationExecution
 
 
 def get_execution_state(store: RunStore, run_id: str) -> ExecutionState:
+    """Return the persisted execution state for a run."""
+
     stored = store.resume(run_id)
     if stored is None:
         raise ValueError(f"Unknown run_id: {run_id}")
@@ -20,6 +22,8 @@ def get_evaluation_execution(
     case_id: str,
     metric_id: str,
 ) -> EvaluationExecution | None:
+    """Return one stored workflow execution for a case and metric."""
+
     state = get_execution_state(store, run_id)
     case_state = state.case_states.get(case_id)
     if case_state is None:

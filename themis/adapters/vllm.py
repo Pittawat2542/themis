@@ -37,6 +37,8 @@ class _VLLMClient(Protocol):
 
 
 class VLLMGenerator:
+    """Generator adapter for vLLM's OpenAI-compatible endpoints."""
+
     component_id = "generator/vllm"
     version = "1.0"
 
@@ -115,4 +117,6 @@ class VLLMGenerator:
 
 
 def vllm(model_id: str, **kwargs: Any) -> VLLMGenerator:
+    """Construct a `VLLMGenerator`."""
+
     return VLLMGenerator(model_id, **kwargs)

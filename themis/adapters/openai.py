@@ -25,6 +25,8 @@ class _OpenAIResponsesClient(Protocol):
 
 
 class OpenAIGenerator:
+    """Generator adapter for the OpenAI Responses API."""
+
     component_id = "generator/openai"
     version = "1.0"
 
@@ -109,4 +111,6 @@ class OpenAIGenerator:
 
 
 def openai(model_id: str, **kwargs: Any) -> OpenAIGenerator:
+    """Construct an `OpenAIGenerator`."""
+
     return OpenAIGenerator(model_id, **kwargs)

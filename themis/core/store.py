@@ -11,6 +11,8 @@ from themis.core.snapshot import RunSnapshot, StoredRun
 
 @runtime_checkable
 class RunStore(Protocol):
+    """Persistence contract used by Themis runtime components."""
+
     def initialize(self) -> None: ...
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None: ...

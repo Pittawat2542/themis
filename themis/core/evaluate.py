@@ -25,6 +25,27 @@ def evaluate(
     subscribers: list[LifecycleSubscriber] | None = None,
     tracing_provider: TracingProvider | None = None,
 ):
+    """Compile and run a Themis experiment through the Layer 1 API.
+
+    Args:
+        generation: Generation configuration for the run.
+        evaluation: Evaluation configuration for the run.
+        storage: Store configuration used to build a store when `store` is not passed.
+        datasets: Datasets to evaluate.
+        runtime: Optional runtime overrides for execution controls.
+        seeds: Optional seed list captured in snapshot identity.
+        environment_metadata: Optional non-secret metadata stored in provenance.
+        themis_version: Version string persisted in provenance.
+        python_version: Python version persisted in provenance.
+        platform: Platform label persisted in provenance.
+        store: Optional prebuilt store instance.
+        subscribers: Optional lifecycle subscribers.
+        tracing_provider: Optional tracing provider.
+
+    Returns:
+        The completed run result returned by `Experiment.run()`.
+    """
+
     experiment = Experiment(
         generation=generation,
         evaluation=evaluation,

@@ -30,12 +30,16 @@ __all__ = [
 
 
 class DatasetRef(HashableModel):
+    """Identity-bearing reference to one dataset."""
+
     dataset_id: str
     revision: str | None = None
     fingerprint: str
 
 
 class ComponentRefs(FrozenModel):
+    """Resolved component refs stored with the snapshot."""
+
     generator: ComponentRef
     reducer: ComponentRef | None = None
     parsers: list[ComponentRef] = Field(default_factory=list)
@@ -44,6 +48,8 @@ class ComponentRefs(FrozenModel):
 
 
 class RunIdentity(HashableModel):
+    """Inputs that determine the logical identity and `run_id` of a run."""
+
     dataset_refs: list[DatasetRef] = Field(default_factory=list)
     generator_ref: ComponentRef
     reducer_ref: ComponentRef | None = None
@@ -75,6 +81,8 @@ class RunIdentity(HashableModel):
 
 
 class RunProvenance(FrozenModel):
+    """Environment metadata recorded with a run but excluded from `run_id`."""
+
     themis_version: str
     python_version: str
     platform: str
@@ -100,6 +108,8 @@ class RunProvenance(FrozenModel):
 
 
 class RunSnapshot(FrozenModel):
+    """Immutable executable artifact produced by `Experiment.compile()`."""
+
     identity: RunIdentity
     provenance: RunProvenance
     component_refs: ComponentRefs
@@ -113,6 +123,8 @@ class RunSnapshot(FrozenModel):
 
 
 class StoredRun(FrozenModel):
+    """Snapshot plus stored events loaded back from a run store."""
+
     snapshot: RunSnapshot
     events: list[RunEvent] = Field(default_factory=list)
 
@@ -125,6 +137,8 @@ class StoredRun(FrozenModel):
 
 
 def snapshot_from_dict(payload: dict[str, Any]) -> RunSnapshot:
+    """Load a stored snapshot payload and ignore any cached `run_id` field."""
+
     normalized = dict(payload)
     normalized.pop("run_id", None)
     return RunSnapshot.model_validate(normalized)

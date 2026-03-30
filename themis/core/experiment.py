@@ -34,7 +34,11 @@ from themis.core.snapshot import (
 
 
 class Experiment(FrozenModel):
-    """Compiled-input experiment definition for Themis v4."""
+    """Authoring model for a Themis v4 experiment.
+
+    An experiment owns the compile-time inputs required to build a `RunSnapshot`
+    and provides sync and async helpers for running or rejudging that snapshot.
+    """
 
     generation: GenerationConfig
     evaluation: EvaluationConfig
@@ -50,6 +54,8 @@ class Experiment(FrozenModel):
 
     @classmethod
     def from_config(cls, path: str | Path, *, overrides: list[str] | None = None) -> Experiment:
+        """Load an experiment definition from YAML or TOML configuration."""
+
         from themis.core.config_loading import load_experiment_definition
 
         loaded = load_experiment_definition(path, overrides=overrides)
@@ -58,6 +64,8 @@ class Experiment(FrozenModel):
         return experiment
 
     def compile(self) -> RunSnapshot:
+        """Compile the experiment into an immutable `RunSnapshot`."""
+
         return self._compile_with_runtime(self.runtime)
 
     def _compile_with_runtime(self, runtime: RuntimeConfig) -> RunSnapshot:
@@ -113,6 +121,8 @@ class Experiment(FrozenModel):
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
+        """Run the compiled snapshot asynchronously."""
+
         effective_runtime = runtime or self.runtime
         snapshot = self._compile_with_runtime(effective_runtime)
         run_store = store or self._build_store()
@@ -143,6 +153,8 @@ class Experiment(FrozenModel):
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
+        """Re-run workflow-backed metrics from stored upstream artifacts."""
+
         effective_runtime = runtime or self.runtime
         snapshot = self._compile_with_runtime(effective_runtime)
         if store is None and self.storage.store == "memory":
@@ -186,6 +198,8 @@ class Experiment(FrozenModel):
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
+        """Run the compiled snapshot synchronously."""
+
         return asyncio.run(
             self.run_async(
                 runtime=runtime,
@@ -204,6 +218,8 @@ class Experiment(FrozenModel):
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
+        """Re-run workflow-backed metrics synchronously."""
+
         return asyncio.run(
             self.rejudge_async(
                 metric_ids=metric_ids,

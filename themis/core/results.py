@@ -42,6 +42,8 @@ CaseStageEvent = (
 
 
 class RunStatus(StrEnum):
+    """User-facing run status values."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -50,12 +52,16 @@ class RunStatus(StrEnum):
 
 
 class ProgressSnapshot(FrozenModel):
+    """Aggregate case progress for a run."""
+
     total_cases: int = 0
     completed_cases: int = 0
     failed_cases: int = 0
 
 
 class CaseExecutionState(FrozenModel):
+    """Persisted per-case execution state derived from stored events."""
+
     generated_candidates: dict[str, GenerationResult] = Field(default_factory=dict)
     generated_candidates_by_index: dict[int, GenerationResult] = Field(default_factory=dict)
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
@@ -79,6 +85,8 @@ class CaseExecutionState(FrozenModel):
 
 
 class ExecutionState(FrozenModel):
+    """Persisted run state rebuilt from the run event stream."""
+
     run_id: str
     status: RunStatus = RunStatus.PENDING
     case_states: dict[str, CaseExecutionState] = Field(default_factory=dict)
@@ -215,6 +223,8 @@ def _case_state_has_failures(case_state: CaseExecutionState) -> bool:
 
 
 class GenerationWorkItem(FrozenModel):
+    """Planner output for one generation task."""
+
     run_id: str
     dataset_id: str
     case: Case
@@ -225,6 +235,8 @@ class GenerationWorkItem(FrozenModel):
 
 
 class CaseResult(FrozenModel):
+    """Final case-level result returned from a run."""
+
     case_id: str
     generated_candidates: list[GenerationResult] = Field(default_factory=list)
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
@@ -240,6 +252,8 @@ class CaseResult(FrozenModel):
 
 
 class RunResult(FrozenModel):
+    """Final run-level result returned from execution."""
+
     run_id: str
     status: RunStatus
     progress: ProgressSnapshot = Field(default_factory=ProgressSnapshot)
@@ -247,6 +261,8 @@ class RunResult(FrozenModel):
 
 
 class RunEstimate(FrozenModel):
+    """Planner estimate for the work implied by a compiled run."""
+
     run_id: str
     total_cases: int
     candidate_count: int
@@ -260,6 +276,8 @@ class RunEstimate(FrozenModel):
 
 
 class GenerationBundleRecord(FrozenModel):
+    """One portable generation artifact record."""
+
     case_id: str
     candidate_id: str
     candidate_index: int | None = None
@@ -269,6 +287,8 @@ class GenerationBundleRecord(FrozenModel):
 
 
 class GenerationBundle(FrozenModel):
+    """Portable bundle of generation artifacts for a run."""
+
     schema_version: str = "1"
     run_id: str
     snapshot: RunSnapshot
@@ -276,6 +296,8 @@ class GenerationBundle(FrozenModel):
 
 
 class EvaluationBundleRecord(FrozenModel):
+    """One portable evaluation execution record."""
+
     case_id: str
     metric_id: str
     candidate_id: str | None = None
@@ -284,6 +306,8 @@ class EvaluationBundleRecord(FrozenModel):
 
 
 class EvaluationBundle(FrozenModel):
+    """Portable bundle of evaluation artifacts for a run."""
+
     schema_version: str = "1"
     run_id: str
     snapshot: RunSnapshot

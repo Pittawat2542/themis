@@ -12,6 +12,8 @@ from themis.core.models import Case, GenerationResult, TraceStep
 
 
 class LangGraphGenerator:
+    """Generator adapter for LangGraph graphs."""
+
     component_id = "generator/langgraph"
     version = "1.0"
 
@@ -83,4 +85,6 @@ class LangGraphGenerator:
 
 
 def langgraph(graph: object, **kwargs) -> LangGraphGenerator:
+    """Construct a `LangGraphGenerator`."""
+
     return LangGraphGenerator(graph, **kwargs)

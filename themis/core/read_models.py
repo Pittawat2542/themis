@@ -11,6 +11,8 @@ from themis.core.workflows import EvaluationExecution
 
 
 class BenchmarkScoreRow(FrozenModel):
+    """One score row in the benchmark projection."""
+
     case_id: str
     metric_id: str
     value: float
@@ -18,6 +20,8 @@ class BenchmarkScoreRow(FrozenModel):
 
 
 class BenchmarkResult(FrozenModel):
+    """Aggregate benchmark-style projection for a run."""
+
     run_id: str
     dataset_ids: list[str] = Field(default_factory=list)
     metric_ids: list[str] = Field(default_factory=list)
@@ -29,6 +33,8 @@ class BenchmarkResult(FrozenModel):
 
 
 class TimelineEntry(FrozenModel):
+    """One chronological event entry in the timeline projection."""
+
     index: int
     event_type: str
     occurred_at: datetime
@@ -38,11 +44,15 @@ class TimelineEntry(FrozenModel):
 
 
 class TimelineView(FrozenModel):
+    """Timeline projection for a run."""
+
     run_id: str
     entries: list[TimelineEntry] = Field(default_factory=list)
 
 
 class GenerationTraceRecord(FrozenModel):
+    """One generation trace record."""
+
     case_id: str
     candidate_id: str
     trace_id: str
@@ -50,6 +60,8 @@ class GenerationTraceRecord(FrozenModel):
 
 
 class ConversationTraceRecord(FrozenModel):
+    """One conversation trace record."""
+
     case_id: str
     candidate_id: str
     trace_id: str
@@ -57,6 +69,8 @@ class ConversationTraceRecord(FrozenModel):
 
 
 class EvaluationTraceRecord(FrozenModel):
+    """One evaluation trace record."""
+
     case_id: str
     metric_id: str
     candidate_id: str | None = None
@@ -64,6 +78,8 @@ class EvaluationTraceRecord(FrozenModel):
 
 
 class TraceView(FrozenModel):
+    """Trace-oriented projection for a run."""
+
     run_id: str
     generation_traces: list[GenerationTraceRecord] = Field(default_factory=list)
     conversation_traces: list[ConversationTraceRecord] = Field(default_factory=list)

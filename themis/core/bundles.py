@@ -18,6 +18,8 @@ from themis.core.workflows import EvaluationExecution
 
 
 def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
+    """Export stored generation artifacts into a portable bundle."""
+
     stored = store.resume(run_id)
     if stored is None:
         raise ValueError(f"Unknown run_id: {run_id}")
@@ -40,6 +42,8 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
 
 
 def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
+    """Import generation artifacts from a bundle into a store."""
+
     snapshot = bundle.snapshot
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
@@ -70,6 +74,8 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
 
 
 def export_evaluation_bundle(store: RunStore, run_id: str) -> EvaluationBundle:
+    """Export stored evaluation artifacts into a portable bundle."""
+
     stored = store.resume(run_id)
     if stored is None:
         raise ValueError(f"Unknown run_id: {run_id}")
@@ -91,6 +97,8 @@ def export_evaluation_bundle(store: RunStore, run_id: str) -> EvaluationBundle:
 
 
 def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
+    """Import evaluation artifacts from a bundle into a store."""
+
     snapshot = bundle.snapshot
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")

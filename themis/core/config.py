@@ -26,12 +26,16 @@ MetricComponent: TypeAlias = PureMetric | LLMMetric | SelectionMetric | TraceMet
 
 
 class GenerationConfig(HashableModel):
+    """Generation-stage configuration for a run."""
+
     generator: GeneratorComponent
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
     reducer: ReducerComponent | None = None
 
 
 class EvaluationConfig(HashableModel):
+    """Evaluation-stage configuration for parsing, metrics, and judges."""
+
     metrics: list[MetricComponent] = Field(default_factory=list)
     parsers: list[ParserComponent] = Field(default_factory=list)
     judge_models: list[JudgeModelComponent] = Field(default_factory=list)
@@ -40,11 +44,15 @@ class EvaluationConfig(HashableModel):
 
 
 class StorageConfig(HashableModel):
+    """Store backend configuration used for persistence."""
+
     store: str
     parameters: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class RuntimeConfig(HashableModel):
+    """Execution-time controls that do not affect snapshot identity."""
+
     max_concurrent_tasks: int = 32
     stage_concurrency: dict[str, int] = Field(default_factory=dict)
     provider_concurrency: dict[str, int] = Field(default_factory=dict)
