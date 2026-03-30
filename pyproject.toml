@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "themis-eval"
 version = "4.0.0a0"
-description = "Themis v4 Phase 3 execution engine"
+description = "Themis v4 Phase 5 CLI and integration runtime"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Pittawat Taveekitworachai" }]
@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "cyclopts>=3.24.0",
-    "hydra-core>=1.3.2",
+    "omegaconf>=2.3.0",
     "pydantic>=2.12.5",
 ]
 
@@ -58,6 +58,9 @@ mongodb = [
 ]
 postgres = [
     "psycopg>=3.2.0",
+]
+datasets = [
+    "datasets>=3.0.0",
 ]
 
 [tool.pytest.ini_options]
