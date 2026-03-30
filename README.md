@@ -1,8 +1,8 @@
 # Themis v4
 
-This repository contains the clean-slate Phase 3 execution engine for Themis v4.
+This repository contains the clean-slate Phase 5 CLI and integration runtime for Themis v4.
 
-Phase 3 keeps the immutable model layer from Phase 1 and extends the core engine with workflow-backed evaluation: generation fan-out, reduction, parsing, pure-metric scoring, LLM-backed metrics, judge-call planning, resume, rejudge, and bundle export/import for both generation and evaluation.
+The current build keeps the immutable model layer from Phase 1, the workflow-backed execution engine from Phases 2-4, and now adds config-driven execution, a rebuilt CLI, quick-eval entrypoints, and single-host worker-pool and batch submission flows.
 
 ## Current scope
 
@@ -18,6 +18,10 @@ Phase 3 keeps the immutable model layer from Phase 1 and extends the core engine
 - in-memory and SQLite run stores
 - OpenAI, vLLM, and LangGraph generator adapters
 - generation bundle export/import helpers from the root package
+- `evaluate(...)` as a Layer 1 convenience API
+- `Experiment.from_config(...)` for YAML and TOML experiment loading
+- `themis` CLI commands for `run`, `resume`, `estimate`, `report`, `quickcheck`, `compare`, `export`, `quick-eval`, `submit`, `worker run`, `batch run`, and `init`
+- manifest-backed single-host worker-pool and batch execution
 - typed package distribution via `py.typed`
 
 ## What affects `run_id`
@@ -46,7 +50,7 @@ The current runtime accepts two component styles:
 
 1. Builtin string components, resolved through a canonical registry.
    Current demo entries used by tests and examples:
-   `generator/demo`, `reducer/demo`, `parser/demo`, `metric/demo`
+   `builtin/demo_generator`, `builtin/majority_vote`, `builtin/json_identity`, `builtin/exact_match`
 2. Custom component objects that expose `component_id`, `version`, and `fingerprint()`.
 
 Builtin component metadata is intentional identity. If a builtin component's version or fingerprint changes, compiled snapshots and `run_id` values change too.
@@ -61,6 +65,48 @@ Run events use an additive, forward-compatible read model:
 - malformed known event payloads still fail validation
 
 ## Examples
+
+CLI run example:
+
+```bash
+themis run --config experiment.yaml
+themis quickcheck --config experiment.yaml
+themis report --config experiment.yaml --format json
+```
+
+YAML config example:
+
+```yaml
+generation:
+  generator: builtin/demo_generator
+  candidate_policy:
+    num_samples: 1
+  reducer: builtin/majority_vote
+evaluation:
+  metrics:
+    - builtin/exact_match
+  parsers:
+    - builtin/json_identity
+storage:
+  store: sqlite
+  parameters:
+    path: runs/themis.sqlite3
+datasets:
+  - dataset_id: sample
+    cases:
+      - case_id: case-1
+        input:
+          question: 2+2
+        expected_output:
+          answer: "4"
+```
+
+Worker-pool example:
+
+```bash
+themis submit --config experiment.yaml --mode worker-pool
+themis worker run --queue-root runs/queue --once
+```
 
 Judge workflow example:
 
