@@ -15,4 +15,20 @@ What you provide: identity-bearing inputs such as dataset refs, component refs, 
 
 What Themis provides: provenance capture for version, platform, runtime, storage, and environment metadata.
 
+Use this split when you need to explain why two runs are logically the same or different.
+
+```mermaid
+flowchart TD
+    A["Experiment inputs"] --> B["RunSnapshot.identity"]
+    A --> C["RunSnapshot.provenance"]
+    B --> D["dataset refs and fingerprints"]
+    B --> E["component refs"]
+    B --> F["candidate policy, judges, seeds"]
+    C --> G["platform, version, storage, environment"]
+    B --> H["Changes run_id"]
+    C --> I["Recorded metadata only"]
+```
+
+If the logical run changed, the difference should appear on the identity side; provenance explains where and how that same logical run happened.
+
 What to inspect when it goes wrong: look at `RunSnapshot.identity` first. If the logical run should be the same, differences should only appear in `RunSnapshot.provenance`.

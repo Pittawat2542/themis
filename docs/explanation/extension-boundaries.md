@@ -15,4 +15,17 @@ What you provide: protocol-conforming components with stable identity and focuse
 
 What Themis provides: orchestration, fan-out, evaluation workflows, persistence, and projection-backed inspection.
 
+Use this ownership map when a custom component starts to feel broader than one protocol boundary.
+
+```mermaid
+flowchart LR
+    A["User-owned components"] --> B["Generator / Reducer / Parser / Metric"]
+    B --> C["Themis runtime"]
+    C --> D["Planning and fan-out"]
+    C --> E["Workflow execution"]
+    C --> F["Persistence and inspection"]
+```
+
+Custom components should supply behavior at one boundary, not absorb orchestration responsibilities that belong to the runtime.
+
 What to inspect when it goes wrong: check whether the custom component is trying to own orchestration concerns that belong in Themis.

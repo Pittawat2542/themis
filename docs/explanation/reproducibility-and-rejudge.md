@@ -15,4 +15,17 @@ What you provide: stored upstream artifacts and, for memory-backed runs, the ori
 
 What Themis provides: generation/evaluation bundles and `Experiment.rejudge()`.
 
+Use this flow when evaluation must move forward while generation stays frozen.
+
+```mermaid
+flowchart LR
+    A["Original run"] --> B["Stored generation artifacts"]
+    B --> C["Export or reopen store"]
+    C --> D["Import artifacts or reuse store"]
+    D --> E["Experiment.rejudge()"]
+    E --> F["New evaluation executions"]
+```
+
+Rejudge works because the upstream generation evidence stays fixed, so only the evaluation side is rerun.
+
 What to inspect when it goes wrong: verify snapshot identity first, then confirm stored upstream artifacts exist, then inspect the rerun evaluation executions.

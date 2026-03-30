@@ -13,6 +13,20 @@ Use `sqlite` when you want persisted runs, later reporting, resume across proces
 
 Use `jsonl`, `mongodb`, or `postgres` when you have a specific operational requirement that makes those stores a better fit than SQLite.
 
+Use this chooser when persistence and later inspection matter more than the scoring logic itself.
+
+```mermaid
+flowchart TD
+    A["What must the run survive?"]
+    A --> B{"Only this process?"}
+    B -->|Yes| C["memory"]
+    B -->|No| D{"Single-machine local workflow?"}
+    D -->|Yes| E["sqlite"]
+    D -->|No| F["jsonl / mongodb / postgres"]
+```
+
+The decision is mostly about whether later resume, reporting, or handoff must happen outside the current process.
+
 Decision rule:
 
 - tutorials and smoke tests: `memory`

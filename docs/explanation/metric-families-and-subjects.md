@@ -20,4 +20,19 @@ What you provide:
 
 What Themis provides: subject construction, workflow execution, persistence, and artifact inspection.
 
+Use this map when the metric family seems right but the evidence shape does not.
+
+```mermaid
+flowchart TD
+    A["Themis subject builder"] --> B["Parsed output + case data"]
+    A --> C["Candidate set"]
+    A --> D["Trace or conversation"]
+    B --> E["PureMetric"]
+    C --> F["LLMMetric"]
+    C --> G["SelectionMetric"]
+    D --> H["TraceMetric"]
+```
+
+Metric families are mostly distinguished by the subject shape they need, not just by how they compute the final score.
+
 What to inspect when it goes wrong: verify that the subject type and metric family match the kind of evidence you want the runtime to score.

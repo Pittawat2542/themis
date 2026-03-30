@@ -15,6 +15,24 @@ Use this guide when in-process `run()` is not the right operational shape and yo
 
 ## Procedure
 
+Use this comparison when you need to decide whether execution is queue-driven or request-manifest-driven.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant Q as Worker-pool queue
+    participant W as Worker
+    participant B as Batch request
+    participant R as Batch runner
+    U->>Q: themis submit --mode worker-pool
+    W->>Q: themis worker run --queue-root ...
+    Q-->>W: queued manifest
+    U->>B: themis submit --mode batch
+    R->>B: themis batch run --request ...
+```
+
+Both flows hand execution off through a manifest, but they differ in whether work is pulled from a queue or invoked by an explicit request file.
+
 Worker-pool flow:
 
 ```bash

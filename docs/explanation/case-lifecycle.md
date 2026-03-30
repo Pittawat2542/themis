@@ -15,13 +15,17 @@ What you provide: a case inside a dataset, generation config, evaluation config,
 
 What Themis provides: planning, candidate fan-out, optional reduction, optional parsing, scoring, persistence, and projection refresh.
 
+Use this lifecycle map when you need to localize where one case changed shape or failed.
+
 ```mermaid
 flowchart LR
-    A["Dataset case"] --> B["Generation"]
-    B --> C["Reduction"]
-    C --> D["Parsing"]
-    D --> E["Scoring / Evaluation workflow"]
-    E --> F["Store events and projections"]
+    A["Dataset case"] --> B["Generate candidate set"]
+    B --> C["Reduce candidate set"]
+    C --> D["Parse reduced output"]
+    D --> E["Score or run evaluation workflow"]
+    E --> F["Persist events, artifacts, projections"]
 ```
+
+Each box is a distinct inspection boundary, which is why failures are easier to localize than in a monolithic run loop.
 
 What to inspect when it goes wrong: generated candidates, reduced candidate output, parsed output, evaluation executions, and projection-backed reports.

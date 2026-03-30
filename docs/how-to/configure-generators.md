@@ -15,6 +15,19 @@ Use this guide when generation is the main variable you are changing and you alr
 
 ## Procedure
 
+Use this chooser when generation is the variable you are changing and the rest of the runtime should remain stable.
+
+```mermaid
+flowchart TD
+    A["What should produce the candidate?"] --> B{"Deterministic local example?"}
+    B -->|Yes| C["builtin/demo_generator"]
+    B -->|No| D{"External model or graph runtime?"}
+    D -->|Yes| E["Provider adapter"]
+    D -->|No| F["Custom Generator"]
+```
+
+The choice is mainly about where candidate production lives, not whether Themis still owns fan-out, storage, and inspection.
+
 Use the builtin demo generator for deterministic tutorials, smoke tests, and local examples.
 
 Use provider adapters when Themis should still own fan-out, reduction, storage, and inspection, but an external model or graph runtime should produce the candidate output.

@@ -15,4 +15,18 @@ What you provide: a generator that produces one candidate per call plus any cust
 
 What Themis provides: candidate fan-out, reduction, parsing, workflow execution, judge orchestration, persistence, and inspection.
 
+This ownership diagram shows where user-supplied generation stops and runtime-managed evaluation begins.
+
+```mermaid
+flowchart LR
+    A["Generator"] --> B["Candidates"]
+    B --> C["Fan-out policy"]
+    C --> D["Reducer"]
+    D --> E["Parser"]
+    E --> F["Metric / evaluation workflow"]
+    F --> G["Persistence and inspection"]
+```
+
+Generation owns candidate creation, while Themis owns the staged pipeline that turns candidates into inspected results.
+
 What to inspect when it goes wrong: generation artifacts when the raw candidate is wrong, evaluation executions when scoring or judgment is wrong.

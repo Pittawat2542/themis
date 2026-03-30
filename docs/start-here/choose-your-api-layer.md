@@ -13,6 +13,20 @@ Use `Experiment(...)` when you want an explicit compiled object, access to `comp
 
 Use custom extension protocols when builtin generators, parsers, reducers, or metrics are not sufficient and you need to plug your own behavior into the runtime.
 
+Use this chooser when you need the smallest surface that still exposes the behavior you care about.
+
+```mermaid
+flowchart TD
+    A["Start with your workflow need"]
+    A --> B{"Shortest path from data to run?"}
+    B -->|Yes| C["evaluate(...)"]
+    B -->|No| D{"Need compile(), rejudge(), or config loading?"}
+    D -->|Yes| E["Experiment(...)"]
+    D -->|No| F["Custom extension protocols"]
+```
+
+All three paths still converge on the same runtime model, so this choice is about authoring surface, not a different engine.
+
 Decision rule:
 
 - shortest path: `evaluate(...)`

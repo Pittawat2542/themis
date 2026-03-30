@@ -15,6 +15,19 @@ Use this guide when a run already exists and you want to inspect or continue it 
 
 ## Procedure
 
+Use this flow when you need to reopen first and decide later whether any new execution is required.
+
+```mermaid
+flowchart TD
+    A["Persistent store"] --> B["Reopen compiled run_id"]
+    B --> C["Inspect execution state"]
+    C --> D{"Work still pending?"}
+    D -->|Yes| E["Resume or continue run"]
+    D -->|No| F["Report or inspect artifacts"]
+```
+
+The safe order is reopen, inspect, and only then decide whether to continue execution.
+
 1. Use a persistent store, typically SQLite.
 2. Reopen the run by the same compiled `run_id`.
 3. Inspect execution state before rerunning anything.

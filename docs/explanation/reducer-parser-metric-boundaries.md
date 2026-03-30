@@ -19,4 +19,18 @@ What you provide:
 
 What Themis provides: stage ordering and typed inputs to each stage.
 
+Use this responsibility map when one component starts doing work that belongs to the next stage.
+
+```mermaid
+flowchart LR
+    A["Candidate set"] --> B["Reducer"]
+    B --> C["Reduced candidate"]
+    C --> D["Parser"]
+    D --> E["Parsed subject"]
+    E --> F["Metric"]
+    F --> G["Score or judgment output"]
+```
+
+Reducers choose, parsers normalize, and metrics judge; crossing those boundaries is usually the source of design confusion.
+
 What to inspect when it goes wrong: check whether the component is changing data in the wrong stage or relying on information it should not own.

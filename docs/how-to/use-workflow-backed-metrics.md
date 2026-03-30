@@ -15,6 +15,19 @@ Use this guide when deterministic pure scoring is not sufficient and Themis shou
 
 ## Procedure
 
+Use this task map when you need to confirm the minimum pieces required for judge-backed scoring.
+
+```mermaid
+flowchart LR
+    A["Reduced candidate"] --> B["Parser"]
+    B --> C["Workflow-backed metric"]
+    C --> D["Judge model(s)"]
+    C --> E["Workflow overrides"]
+    C --> F["Persisted evaluation executions"]
+```
+
+The runtime builds a workflow around the metric, so the important setup work is choosing the right subject, judge, and overrides.
+
 Provide:
 
 - one or more workflow-backed metrics

@@ -15,6 +15,22 @@ Use this guide when generation should stay fixed but evaluation needs to move st
 
 ## Procedure
 
+Use this sequence when you need to move evidence or rerun workflow-backed evaluation without regenerating candidates.
+
+```mermaid
+sequenceDiagram
+    participant S as Source store
+    participant B as Bundle files
+    participant T as Target store
+    participant E as Experiment.rejudge()
+    S->>B: export generation/evaluation bundle
+    B->>T: import bundle
+    T->>E: reopen stored upstream artifacts
+    E-->>T: write new evaluation executions
+```
+
+The crucial boundary is that generation artifacts stay fixed while evaluation moves or reruns.
+
 ```python
 --8<-- "examples/docs/rejudge_bundle.py"
 ```
