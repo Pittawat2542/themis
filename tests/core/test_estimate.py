@@ -40,8 +40,8 @@ def test_planner_estimate_returns_deterministic_counts_for_compiled_snapshot() -
     assert estimate.planned_score_tasks == 4
 
 
-def test_runtime_execution_mode_does_not_affect_run_identity() -> None:
-    local = Experiment(
+def test_runtime_submission_paths_do_not_affect_run_identity() -> None:
+    default_runtime = Experiment(
         generation=GenerationConfig(
             generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
@@ -58,9 +58,8 @@ def test_runtime_execution_mode_does_not_affect_run_identity() -> None:
                 cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
             )
         ],
-        runtime=RuntimeConfig(execution_mode="local"),
     )
-    worker_pool = Experiment(
+    worker_paths = Experiment(
         generation=GenerationConfig(
             generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
@@ -77,9 +76,9 @@ def test_runtime_execution_mode_does_not_affect_run_identity() -> None:
                 cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
             )
         ],
-        runtime=RuntimeConfig(execution_mode="worker_pool", queue_root="runs/queue"),
+        runtime=RuntimeConfig(queue_root="runs/queue"),
     )
-    batch = Experiment(
+    batch_paths = Experiment(
         generation=GenerationConfig(
             generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
@@ -96,7 +95,7 @@ def test_runtime_execution_mode_does_not_affect_run_identity() -> None:
                 cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
             )
         ],
-        runtime=RuntimeConfig(execution_mode="batch", batch_root="runs/batch"),
+        runtime=RuntimeConfig(batch_root="runs/batch"),
     )
 
-    assert local.compile().run_id == worker_pool.compile().run_id == batch.compile().run_id
+    assert default_runtime.compile().run_id == worker_paths.compile().run_id == batch_paths.compile().run_id

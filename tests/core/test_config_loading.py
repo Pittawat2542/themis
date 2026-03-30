@@ -124,3 +124,92 @@ datasets:
     assert experiment.generation.generator.component_id == CONFIG_GENERATOR.component_id
     assert experiment.generation.generator.fingerprint() == CONFIG_GENERATOR.fingerprint()
     assert experiment.compile().component_refs.generator.component_id == "generator/config"
+
+
+def test_experiment_from_config_resolves_relative_paths_from_config_directory(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    path = root / "experiment.yaml"
+    path.write_text(
+        """
+generation:
+  generator: builtin/demo_generator
+  candidate_policy:
+    num_samples: 1
+  reducer: builtin/majority_vote
+evaluation:
+  metrics:
+    - builtin/exact_match
+  parsers:
+    - builtin/json_identity
+storage:
+  store: sqlite
+  parameters:
+    path: runs/themis.sqlite3
+runtime:
+  queue_root: runs/queue
+  batch_root: runs/batch
+datasets:
+  - dataset_id: dataset-1
+    cases:
+      - case_id: case-1
+        input:
+          question: 2+2
+        expected_output:
+          answer: "4"
+""".strip()
+    )
+
+    experiment = Experiment.from_config(path)
+
+    assert experiment.storage.parameters["path"] == str(root / "runs" / "themis.sqlite3")
+    assert experiment.runtime.queue_root == str(root / "runs" / "queue")
+    assert experiment.runtime.batch_root == str(root / "runs" / "batch")
+
+
+def test_experiment_from_config_applies_overrides_before_normalizing_paths(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    path = root / "experiment.yaml"
+    path.write_text(
+        """
+generation:
+  generator: builtin/demo_generator
+  candidate_policy:
+    num_samples: 1
+  reducer: builtin/majority_vote
+evaluation:
+  metrics:
+    - builtin/exact_match
+  parsers:
+    - builtin/json_identity
+storage:
+  store: sqlite
+  parameters:
+    path: runs/themis.sqlite3
+runtime:
+  queue_root: runs/queue
+  batch_root: runs/batch
+datasets:
+  - dataset_id: dataset-1
+    cases:
+      - case_id: case-1
+        input:
+          question: 2+2
+        expected_output:
+          answer: "4"
+""".strip()
+    )
+
+    experiment = Experiment.from_config(
+        path,
+        overrides=[
+            "storage.parameters.path=alt/store.sqlite3",
+            "runtime.queue_root=alt/queue",
+            "runtime.batch_root=alt/batch",
+        ],
+    )
+
+    assert experiment.storage.parameters["path"] == str(root / "alt" / "store.sqlite3")
+    assert experiment.runtime.queue_root == str(root / "alt" / "queue")
+    assert experiment.runtime.batch_root == str(root / "alt" / "batch")

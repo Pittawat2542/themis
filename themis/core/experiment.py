@@ -1,11 +1,11 @@
-"""Experiment authoring model and snapshot compilation for Phase 3."""
+"""Experiment authoring model and snapshot compilation for Phase 5."""
 
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from themis.core.builtins import (
     resolve_generator_component,
@@ -17,6 +17,7 @@ from themis.core.builtins import (
 from themis.core.base import FrozenModel
 from themis.core.components import component_ref_from_value
 from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
+from themis.core.config_loading import ExperimentConfigMetadata
 from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
 from themis.core.protocols import LLMMetric, LifecycleSubscriber, PureMetric, SelectionMetric, TraceMetric, TracingProvider
@@ -45,13 +46,16 @@ class Experiment(FrozenModel):
     themis_version: str = "4.0.0a0"
     python_version: str = "3.12"
     platform: str = "unknown"
+    _config_metadata: ExperimentConfigMetadata | None = PrivateAttr(default=None)
 
     @classmethod
     def from_config(cls, path: str | Path, *, overrides: list[str] | None = None) -> Experiment:
-        from themis.core.config_loading import load_experiment_payload
+        from themis.core.config_loading import load_experiment_definition
 
-        payload = load_experiment_payload(path, overrides=overrides)
-        return cls.model_validate(payload)
+        loaded = load_experiment_definition(path, overrides=overrides)
+        experiment = cls.model_validate(loaded.payload)
+        experiment._config_metadata = loaded.metadata
+        return experiment
 
     def compile(self) -> RunSnapshot:
         return self._compile_with_runtime(self.runtime)
