@@ -17,3 +17,5 @@ Use this checklist when reviewing documentation changes:
 - tutorials teach one workflow
 - how-to guides solve one task
 - explanation pages answer what it is, when it matters, what the user provides, what Themis provides, and what to inspect when things go wrong
+- diagrams, if present, fit the quadrant: explanation for mental models, landing pages for routing, how-to for flow clarification, tutorials only sparingly, reference preferably as tables
+- each diagram has a short lead-in sentence and a one-sentence interpretation after it

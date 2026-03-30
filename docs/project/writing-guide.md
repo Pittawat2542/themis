@@ -14,5 +14,10 @@ Authoring rules:
 - how-to guides solve one task and assume motivation already exists
 - reference pages stay dry, exact, and lookup-oriented
 - explanation pages prioritize mental models and design reasoning
+- explanation pages may use Mermaid diagrams when a visual clarifies a mental model, boundary, lifecycle, or ownership split
+- start-here and other landing pages may use Mermaid diagrams for routing and decision support
+- how-to guides may use Mermaid diagrams only when they clarify a task flow or meaningful branch in the procedure
+- tutorials may include diagrams sparingly, but the step sequence remains the primary teaching device
+- reference pages should prefer tables and terse structure over diagrams unless a visual is the clearest lookup aid
 - cross-link glossary terms from first meaningful use in major pages
 - do not hand-copy code that already exists in `examples/docs/`
