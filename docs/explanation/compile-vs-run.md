@@ -21,7 +21,7 @@ Use this boundary map when it is unclear whether a setting freezes the run or on
 flowchart LR
     A["Experiment definition"] --> B["compile()"]
     B --> C["RunSnapshot"]
-    C --> D["run() / resume() / rejudge()"]
+    C --> D["run() / resume() / replay()"]
     E["RuntimeConfig"] --> D
     C --> F["Stable run_id"]
     D --> G["Execution state, artifacts, reports"]

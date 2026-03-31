@@ -16,6 +16,7 @@ Store-related symbols:
 
 Inspection and export helpers:
 
+- `get_run_snapshot(store, run_id)`
 - `get_execution_state(store, run_id)`
 - `get_evaluation_execution(store, run_id, case_id, metric_id)`
 - `Reporter`

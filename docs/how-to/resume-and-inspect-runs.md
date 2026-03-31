@@ -7,7 +7,7 @@ goal: Show how to reopen persisted runs and inspect execution state safely.
 
 # Resume and inspect runs
 
-Goal: continue interrupted work and inspect stored execution state.
+Goal: continue interrupted work and inspect stored snapshots, execution state, and evaluation artifacts.
 
 When to use this:
 
@@ -36,7 +36,9 @@ The safe order is reopen, inspect, and only then decide whether to continue exec
 ## Variants
 
 - quick state summary: `themis quickcheck`
+- stored snapshot inspection: `get_run_snapshot(...)` or `themis inspect snapshot`
 - explicit persisted state inspection: `get_execution_state(...)`
+- workflow execution inspection: `get_evaluation_execution(...)` or `themis inspect evaluation`
 - report generation from the stored run: `Reporter` or `themis report`
 
 ## Expected result

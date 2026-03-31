@@ -164,10 +164,12 @@ def test_reference_docs_cover_cli_public_api_and_catalogs() -> None:
     for command in (
         "quick-eval",
         "run",
+        "replay",
         "submit",
         "resume",
         "estimate",
         "report",
+        "inspect",
         "quickcheck",
         "compare",
         "export",

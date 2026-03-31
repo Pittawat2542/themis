@@ -13,7 +13,7 @@ from themis.core.models import Case, Dataset
 
 
 def run_example() -> dict[str, object]:
-    """Export bundle artifacts, import them into another store, and rejudge in place."""
+    """Export bundle artifacts, import them into another store, and replay judge scoring in place."""
 
     source_store = InMemoryRunStore()
     target_store = InMemoryRunStore()
@@ -50,10 +50,10 @@ def run_example() -> dict[str, object]:
     initial = experiment.run(store=source_store)
     import_generation_bundle(target_store, export_generation_bundle(source_store, initial.run_id))
     import_evaluation_bundle(target_store, export_evaluation_bundle(source_store, initial.run_id))
-    rejudged = experiment.rejudge(store=source_store)
+    replayed = experiment.replay(stage="judge", store=source_store)
     return {
         "run_id": initial.run_id,
-        "rejudged_run_id": rejudged.run_id,
+        "replayed_run_id": replayed.run_id,
         "imported": target_store.resume(initial.run_id) is not None,
     }
 

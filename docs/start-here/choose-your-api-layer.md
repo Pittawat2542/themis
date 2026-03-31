@@ -7,9 +7,9 @@ goal: Help readers choose between evaluate, Experiment, and custom extension pro
 
 # Choose your API layer
 
-Use `evaluate(...)` when you want the shortest path from a dataset and a few config objects to a completed run. It is best for quick scripts and quick local experiments.
+Use `evaluate(model=..., data=..., metric=..., ...)` when you want the shortest path from a dataset and a few inline arguments to a completed run. It is best for quick scripts and quick local experiments.
 
-Use `Experiment(...)` when you want an explicit compiled object, access to `compile()`, `run()`, `rejudge()`, config-file loading, or long-lived experiment definitions. This is the primary surface for most serious work.
+Use `Experiment(...)` when you want an explicit compiled object, access to `compile()`, `run()`, `replay()`, config-file loading, or long-lived experiment definitions. This is the primary surface for most serious work.
 
 Use custom extension protocols when builtin generators, parsers, reducers, or metrics are not sufficient and you need to plug your own behavior into the runtime.
 
@@ -19,8 +19,8 @@ Use this chooser when you need the smallest surface that still exposes the behav
 flowchart TD
     A["Start with your workflow need"]
     A --> B{"Shortest path from data to run?"}
-    B -->|Yes| C["evaluate(...)"]
-    B -->|No| D{"Need compile(), rejudge(), or config loading?"}
+    B -->|Yes| C["evaluate(model=..., data=..., metric=..., ...)"]
+    B -->|No| D{"Need compile(), replay(), or config loading?"}
     D -->|Yes| E["Experiment(...)"]
     D -->|No| F["Custom extension protocols"]
 ```
@@ -29,7 +29,7 @@ All three paths still converge on the same runtime model, so this choice is abou
 
 Decision rule:
 
-- shortest path: `evaluate(...)`
+- shortest path: `evaluate(model=..., data=..., metric=..., ...)`
 - reusable experiment: `Experiment(...)`
 - custom runtime behavior: extension protocols
 

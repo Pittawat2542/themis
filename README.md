@@ -19,21 +19,11 @@ Optional extras:
 
 ```python
 from themis import evaluate
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 
 result = evaluate(
-    generation=GenerationConfig(
-        generator="builtin/demo_generator",
-        candidate_policy={"num_samples": 1},
-        reducer="builtin/majority_vote",
-    ),
-    evaluation=EvaluationConfig(
-        metrics=["builtin/exact_match"],
-        parsers=["builtin/json_identity"],
-    ),
-    storage=StorageConfig(store="memory"),
-    datasets=[
+    model="builtin/demo_generator",
+    data=[
         Dataset(
             dataset_id="sample",
             cases=[
@@ -45,6 +35,8 @@ result = evaluate(
             ],
         )
     ],
+    metric="builtin/exact_match",
+    parser="builtin/json_identity",
 )
 
 print(result.run_id, result.status.value)

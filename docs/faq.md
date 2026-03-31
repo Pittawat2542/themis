@@ -9,15 +9,15 @@ goal: Answer common questions and repeated confusion points quickly.
 
 ## Should I start with `evaluate(...)` or `Experiment(...)`?
 
-Start with `evaluate(...)` for the smallest possible script. Move to `Experiment(...)` when you need `compile()`, `rejudge()`, config loading, or a reusable experiment definition.
+Start with `evaluate(model=..., data=..., metric=..., ...)` for the smallest possible script. Move to `Experiment(...)` when you need `compile()`, `replay()`, config loading, or a reusable experiment definition.
 
 ## What changes a `run_id`?
 
 Only identity-bearing inputs inside `RunSnapshot.identity` change `run_id`: dataset refs and fingerprints, component refs, candidate policy, judge config, workflow overrides, and seeds.
 
-## Why does memory-backed rejudge require `store=...`?
+## Why does memory-backed replay require `store=...`?
 
-The memory store only exists in-process. Rejudge needs stored upstream artifacts, so a memory-backed run must reuse the original store instance.
+The memory store only exists in-process. Replay needs stored upstream artifacts, so a memory-backed run must reuse the original store instance.
 
 ## When should I use SQLite instead of memory?
 
@@ -25,11 +25,11 @@ Use SQLite whenever the run needs to survive process boundaries or support later
 
 ## What is stored by default?
 
-The runtime persists generation results, evaluation executions, and related artifacts needed for later inspection, reporting, bundle export/import, and workflow-backed rejudge flows.
+The runtime persists generation results, evaluation executions, snapshots, execution state, and related artifacts needed for later inspection, reporting, bundle export/import, and replay flows.
 
-## What is the difference between resume and rejudge?
+## What is the difference between resume and replay?
 
-Resume continues unfinished work for the same run. Rejudge re-runs workflow-backed metrics from stored upstream artifacts without regenerating candidates.
+Resume continues unfinished work for the same run. Replay re-runs downstream stages from stored upstream artifacts without regenerating candidates. `rejudge()` is the workflow-metric specialization of `replay(stage="judge")`.
 
 ## How should I add docs for a new public surface?
 

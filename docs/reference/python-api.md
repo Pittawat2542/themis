@@ -27,6 +27,7 @@ This page is the generated entry point into the public Python API. Use the small
 - `export_generation_bundle`
 - `get_evaluation_execution`
 - `get_execution_state`
+- `get_run_snapshot`
 - `import_evaluation_bundle`
 - `import_generation_bundle`
 - `quickcheck`

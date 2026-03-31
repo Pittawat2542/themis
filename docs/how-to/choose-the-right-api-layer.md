@@ -15,23 +15,23 @@ Use this guide when you already know the problem you want to solve but you are u
 
 ## Procedure
 
-Start with `evaluate(...)` if all of these are true:
+Start with `evaluate(model=..., data=..., metric=..., ...)` if all of these are true:
 
 - you are writing a short Python script
-- your run can be described inline with config objects and datasets
-- you do not need `compile()`, `rejudge()`, or config-file loading
+- your run can be described inline with a model, data, metrics, and small optional overrides
+- you do not need `compile()`, `replay()`, or config-file loading
 
 Choose `Experiment(...)` if any of these are true:
 
 - you need an explicit compiled artifact
 - you want a reusable experiment definition
-- you need config loading, persisted stores, or rejudge support
+- you need config loading, persisted stores, or replay support
 
 Choose custom protocols if builtin components are not sufficient and your logic belongs inside generation, reduction, parsing, or scoring.
 
 ## Variants
 
-- shortest possible local script: `evaluate(...)`
+- shortest possible local script: `evaluate(model=..., data=..., metric=..., ...)`
 - most reusable user workflow: `Experiment(...)`
 - advanced extensibility: `Generator`, `Parser`, `CandidateReducer`, and metric protocols
 

@@ -399,7 +399,7 @@ The system involves multiplicative fan-out: `cases × candidates × judge_calls 
     │  Layer 2: Configurable Experiments                              │
     │                                                                 │
     │    exp = Experiment(                                             │
-    │        generation=GenerationConfig(                              │
+    │        model="builtin/demo_generator",                           │
     │            generator=openai("gpt-4o"),                           │
     │            candidate_policy=SamplingPolicy(num_samples=3),       │
     │            reducer=majority_vote(),                              │
@@ -1495,7 +1495,7 @@ The blackbox generation model significantly simplifies Phases 1-2 compared to th
 - Migrate built-in parsers with namespaced component refs.
 - Migrate built-in pure metrics: `builtin/exact_match`, `builtin/f1`, `builtin/bleu`, etc.
 - Implement built-in evaluation workflows / LLM metrics: `builtin/llm_rubric`, `builtin/pairwise_judge`, `builtin/panel_of_judges`, `builtin/majority_vote_judge`.
-- Implement built-in candidate reducers: `builtin/majority_vote`, `builtin/best_of_n`.
+- Implement built-in candidate reducer `builtin/majority_vote` and candidate selector `builtin/best_of_n`.
 - Migrate benchmark definitions with stable ids, dataset fingerprint rules, prompt/parser/metric sets, summary adapters.
 - Replace ad hoc registration with declarative catalog manifests + code-backed loaders.
 - Implement `catalog.load("mmlu_pro")` and `catalog.run("mmlu_pro", model=..., store=...)`.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from themis import Experiment, Reporter, get_execution_state, sqlite_store
+from themis import Experiment, Reporter, get_execution_state, get_run_snapshot, sqlite_store
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 
@@ -40,12 +40,14 @@ def run_example(root: Path) -> dict[str, object]:
     )
 
     result = experiment.run(store=store)
+    snapshot = get_run_snapshot(store, result.run_id)
     state = get_execution_state(store, result.run_id)
     report = Reporter(store).export_markdown(result.run_id)
     return {
         "run_id": result.run_id,
         "status": result.status.value,
         "store_path": str(store_path),
+        "snapshot_run_id": snapshot.run_id,
         "state_status": state.status.value,
         "report_preview": report.splitlines()[:4],
     }

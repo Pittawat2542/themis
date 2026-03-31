@@ -15,4 +15,4 @@ What you provide: generators and workflows that return structured outputs and ar
 
 What Themis provides: default persistence, blob refs, bundle helpers, and inspection APIs.
 
-What to inspect when it goes wrong: `get_execution_state(...)`, `get_evaluation_execution(...)`, exported bundles, and report projections.
+What to inspect when it goes wrong: `get_run_snapshot(...)`, `get_execution_state(...)`, `get_evaluation_execution(...)`, exported bundles, and report projections.

@@ -7,11 +7,11 @@ goal: Show how to move persisted artifacts and re-run scoring without regenerati
 
 # Reproduce and rejudge runs
 
-Goal: export/import run artifacts and re-run workflow-backed metrics from stored upstream data.
+Goal: export/import run artifacts and replay downstream evaluation stages from stored upstream data.
 
 When to use this:
 
-Use this guide when generation should stay fixed but evaluation needs to move stores or be rerun.
+Use this guide when generation should stay fixed but evaluation needs to move stores or be rerun from a downstream stage.
 
 ## Procedure
 
@@ -22,7 +22,7 @@ sequenceDiagram
     participant S as Source store
     participant B as Bundle files
     participant T as Target store
-    participant E as Experiment.rejudge()
+    participant E as "Experiment.replay(stage='judge')"
     S->>B: export generation/evaluation bundle
     B->>T: import bundle
     T->>E: reopen stored upstream artifacts
@@ -41,11 +41,12 @@ The crucial boundary is that generation artifacts stay fixed while evaluation mo
 
 - portable generation artifacts only: generation bundle export/import
 - portable evaluation artifacts too: evaluation bundle export/import
-- rerun workflow-backed metrics in place: `Experiment.rejudge()`
+- rerun workflow-backed metrics in place: `Experiment.replay(stage="judge")`
+- rerun pure scoring from parsed outputs: `Experiment.replay(stage="score")`
 
 ## Expected result
 
-You should be able to move artifacts between stores and rerun workflow-backed metrics without regenerating candidates.
+You should be able to move artifacts between stores and replay downstream stages without regenerating candidates.
 
 ## Troubleshooting
 

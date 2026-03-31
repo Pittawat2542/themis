@@ -2,22 +2,22 @@
 title: Use reduction strategies
 diataxis: how-to
 audience: users working with multi-candidate generation
-goal: Show when and how to use builtin or custom reduction strategies.
+goal: Show when and how to use builtin selectors, reducers, or custom multi-candidate logic.
 ---
 
 # Use reduction strategies
 
-Goal: choose a reducer for multi-candidate generation.
+Goal: choose a selector or reducer for multi-candidate generation.
 
 When to use this:
 
-Use this guide when `num_samples` is greater than one and you need a reduced candidate before parsing or scoring.
+Use this guide when `num_samples` is greater than one and you need candidate selection or reduction before parsing or scoring.
 
 ## Procedure
 
 Use `builtin/majority_vote` when multiple candidates can converge on the same output and a simple majority is sufficient.
 
-Use `builtin/best_of_n` when judge-backed comparison should choose the best candidate among alternatives.
+Use `builtin/best_of_n` when judge-backed comparison should select the best candidate before any optional reduction step.
 
 Use a custom reducer when the selection rule is domain-specific.
 
@@ -35,7 +35,7 @@ Use a custom reducer when the selection rule is domain-specific.
 
 ## Expected result
 
-The run should produce a reduced candidate that downstream parsing and scoring can consume.
+The run should produce either a selected candidate set or a reduced candidate that downstream parsing and scoring can consume.
 
 ## Troubleshooting
 

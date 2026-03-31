@@ -10,8 +10,8 @@ goal: Summarize builtin component ids and adapter families with their primary us
 Builtin component ids:
 
 - `builtin/demo_generator`
-- `builtin/majority_vote`
-- `builtin/best_of_n`
+- `builtin/majority_vote` (reducer)
+- `builtin/best_of_n` (selector)
 - `builtin/json_identity`
 - `builtin/exact_match`
 - `builtin/f1`
