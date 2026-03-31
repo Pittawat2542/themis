@@ -11,6 +11,7 @@ from themis import (
     RunStatus,
     RuntimeConfig,
     SqliteRunStore,
+    get_run_snapshot,
     get_evaluation_execution,
     get_execution_state,
     sqlite_store,
@@ -31,6 +32,7 @@ def test_root_package_exports_public_symbols() -> None:
         StatsEngine,
         export_evaluation_bundle,
         export_generation_bundle,
+        get_run_snapshot,
         get_evaluation_execution,
         get_execution_state,
         import_evaluation_bundle,
@@ -51,6 +53,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert export_generation_bundle is not None
     assert import_evaluation_bundle is not None
     assert import_generation_bundle is not None
+    assert get_run_snapshot is not None
     assert get_execution_state is not None
     assert get_evaluation_execution is not None
     assert quickcheck is not None
@@ -186,9 +189,11 @@ def test_public_inspection_helpers_return_execution_state_and_evaluation_executi
         )
     )
 
+    stored_snapshot = get_run_snapshot(store, snapshot.run_id)
     state = get_execution_state(store, snapshot.run_id)
     execution = get_evaluation_execution(store, snapshot.run_id, "case-1", "metric/judge")
 
+    assert stored_snapshot.run_id == snapshot.run_id
     assert state.run_id == snapshot.run_id
     assert execution is not None
     assert execution.execution_id == "execution-1"

@@ -8,6 +8,7 @@ from themis.core.bundles import (
     import_generation_bundle,
 )
 from themis.core.builtins import resolve_judge_model_component
+from themis.core.builtins import resolve_selector_component
 from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.contexts import (
     EvalScoreContext,
@@ -15,6 +16,7 @@ from themis.core.contexts import (
     ParseContext,
     ReduceContext,
     ScoreContext,
+    SelectContext,
 )
 from themis.core.events import (
     EvaluationCompletedEvent,
@@ -38,7 +40,7 @@ from themis.core.events import (
 )
 from themis.core.evaluate import evaluate
 from themis.core.experiment import Experiment
-from themis.core.inspection import get_evaluation_execution, get_execution_state
+from themis.core.inspection import get_evaluation_execution, get_execution_state, get_run_snapshot
 from themis.core.quickcheck import quickcheck
 from themis.core.read_models import BenchmarkResult, TimelineView, TraceView
 from themis.core.reporter import Reporter, snapshot_report
@@ -67,6 +69,7 @@ from themis.core.protocols import (
     BeforeReduce,
     BeforeScore,
     CandidateReducer,
+    CandidateSelector,
     EvaluationWorkflow,
     Generator,
     JudgeModel,
@@ -144,6 +147,7 @@ __all__ = [
     "AfterJudge",
     "BenchmarkResult",
     "CandidateReducer",
+    "CandidateSelector",
     "CandidateSetSubject",
     "ComponentRef",
     "ComponentRefs",
@@ -189,6 +193,7 @@ __all__ = [
     "Planner",
     "RenderedJudgePrompt",
     "ReduceContext",
+    "SelectContext",
     "ReducedCandidate",
     "ReductionCompletedEvent",
     "ReductionFailedEvent",
@@ -214,6 +219,7 @@ __all__ = [
     "GenerationBundleRecord",
     "get_evaluation_execution",
     "get_execution_state",
+    "get_run_snapshot",
     "ProgressSnapshot",
     "quickcheck",
     "Reporter",
@@ -248,6 +254,7 @@ __all__ = [
     "import_evaluation_bundle",
     "import_generation_bundle",
     "resolve_judge_model_component",
+    "resolve_selector_component",
     "sqlite_store",
     "validate_candidate_set_for_llm_metric",
     "validate_candidate_set_for_selection_metric",

@@ -61,6 +61,8 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(tmp_p
     assert report_json.returncode == 0, report_json.stderr
     report_payload = json.loads(report_json.stdout)
     assert report_payload["run_result"]["status"] == "completed"
+    assert report_payload["snapshot"]["run_id"] == json.loads(baseline_run.stdout)["run_id"]
+    assert report_payload["execution_state"]["run_id"] == json.loads(baseline_run.stdout)["run_id"]
 
     report_markdown = _run_cli("report", "--config", str(baseline_config), "--format", "markdown")
     assert report_markdown.returncode == 0, report_markdown.stderr

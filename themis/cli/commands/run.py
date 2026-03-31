@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from themis.cli.helpers import dump_json, initialize_store, load_experiment
 from themis.core.planner import Planner
 
@@ -61,4 +63,29 @@ def quickcheck(*, config: str) -> int:
     from themis.core.quickcheck import quickcheck as quickcheck_run
 
     print(dump_json(quickcheck_run(store, snapshot.run_id)))
+    return 0
+
+
+def replay(
+    *,
+    config: str,
+    stage: Literal["reduce", "parse", "score", "judge"],
+    metric_id: list[str] | None = None,
+) -> int:
+    experiment = load_experiment(config)
+    store = initialize_store(experiment)
+    result = experiment.replay(stage=stage, metric_ids=metric_id, store=store)
+    benchmark = store.get_projection(result.run_id, "benchmark_result")
+    metric_means = {}
+    if isinstance(benchmark, dict):
+        metric_means = dict(benchmark.get("metric_means", {}))
+    print(
+        dump_json(
+            {
+                "run_id": result.run_id,
+                "status": result.status.value,
+                "metric_means": metric_means,
+            }
+        )
+    )
     return 0

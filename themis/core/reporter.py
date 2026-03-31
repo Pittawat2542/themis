@@ -9,6 +9,7 @@ from io import StringIO
 from typing import cast
 
 from themis.core.base import JSONValue
+from themis.core.inspection import get_execution_state, get_run_snapshot
 from themis.core.store import RunStore
 
 
@@ -28,6 +29,8 @@ class Reporter:
 
     def export_json(self, run_id: str) -> str:
         payload = {
+            "snapshot": get_run_snapshot(self.store, run_id).model_dump(mode="json"),
+            "execution_state": get_execution_state(self.store, run_id).model_dump(mode="json"),
             "run_result": self._projection(run_id, "run_result"),
             "benchmark_result": self._projection(run_id, "benchmark_result"),
             "timeline_view": self._projection(run_id, "timeline_view"),

@@ -115,6 +115,8 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
     csv_rows = list(csv.DictReader(StringIO(exported_csv)))
 
     assert parsed_json["run_result"]["run_id"] == run_id
+    assert parsed_json["snapshot"]["run_id"] == run_id
+    assert parsed_json["execution_state"]["run_id"] == run_id
     assert "# Run Report" in exported_markdown
     assert "builtin/exact_match" in exported_markdown
     assert len(csv_rows) == 1

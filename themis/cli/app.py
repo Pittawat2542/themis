@@ -10,9 +10,10 @@ from themis.cli.commands.batch import batch_app
 from themis.cli.commands.compare import compare
 from themis.cli.commands.export import export_app
 from themis.cli.commands.init import init
+from themis.cli.commands.inspect import inspect_app
 from themis.cli.commands.quick_eval import quick_eval_app
 from themis.cli.commands.reporting import report
-from themis.cli.commands.run import estimate, quickcheck, resume, run
+from themis.cli.commands.run import estimate, quickcheck, replay, resume, run
 from themis.cli.commands.worker import worker_app
 from themis.cli.helpers import dump_json, load_experiment
 from themis.core.submission import submit_experiment
@@ -39,12 +40,14 @@ def submit(*, config: str, mode: Literal["worker-pool", "batch"]) -> int:
 
 
 app.command(run)
+app.command(replay)
 app.command(resume)
 app.command(estimate)
 app.command(report)
 app.command(quickcheck)
 app.command(compare)
 app.command(init)
+app.command(inspect_app)
 app.command(quick_eval_app)
 app.command(export_app)
 app.command(worker_app)
