@@ -13,7 +13,7 @@ Themis docs are split into:
 - runnable example sources under `examples/docs/`
 - tests that enforce docs inventory and example coverage
 - generated API reference from docstrings
-- the docs inventory script at `scripts/docs/build_inventory.py`
+- the docs inventory script at `scripts/docs/build_inventory.py`, including root exports, catalog exports, and required topic markers
 
 Use this source-of-truth map when you need to decide where a documentation change should actually originate.
 

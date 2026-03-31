@@ -21,4 +21,4 @@ Reference map:
 - [Protocols](protocols.md): extension contracts
 - [Data models](data-models.md): runtime and projection models
 - [Builtins and adapters](builtins-and-adapters.md): builtin component ids and usage notes
-- [Benchmark catalog](benchmark-catalog.md): named shipped benchmarks
+- [Benchmark catalog](benchmark-catalog.md): named shipped benchmarks plus `themis.catalog.load(...)` / `themis.catalog.run(...)`

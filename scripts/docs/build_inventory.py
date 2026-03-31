@@ -4,6 +4,7 @@ import json
 import tomllib
 from pathlib import Path
 
+import themis.catalog
 import themis
 from themis.cli.app import app
 
@@ -37,6 +38,7 @@ def _manifest_table(path: Path, key: str) -> list[str]:
 def main() -> None:
     payload = {
         "public_exports": sorted(themis.__all__),
+        "catalog_exports": sorted(themis.catalog.__all__),
         "cli_commands": _cli_commands(),
         "builtin_components": _manifest_table(
             REPO_ROOT / "themis" / "catalog" / "manifests" / "components.toml",
@@ -56,6 +58,23 @@ def main() -> None:
             "glossary": "docs/glossary.md",
             "faq": "docs/faq.md",
             "project": "docs/project/index.md",
+        },
+        "required_topics": {
+            "catalog_api": [
+                "themis.catalog.load(...)",
+                "themis.catalog.run(...)",
+            ],
+            "observability": [
+                "LifecycleSubscriber",
+                "TracingProvider",
+            ],
+            "config_loading": [
+                "Experiment.from_config(...)",
+                "YAML",
+                "TOML",
+                "overrides",
+                "relative to the config file directory",
+            ],
         },
     }
     print(json.dumps(payload, sort_keys=True))

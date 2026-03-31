@@ -13,7 +13,7 @@ When it matters: whenever a `run_id` changes unexpectedly or stays the same when
 
 What you provide: identity-bearing inputs such as dataset refs, component refs, candidate policy, judge config, workflow overrides, and seeds.
 
-What Themis provides: provenance capture for version, platform, runtime, storage, and environment metadata.
+What Themis provides: provenance capture for version, platform, runtime, storage, environment metadata, and runtime-only execution wiring such as tracing or subscribers.
 
 Use this split when you need to explain why two runs are logically the same or different.
 
@@ -25,10 +25,11 @@ flowchart TD
     B --> E["component refs"]
     B --> F["candidate policy, judges, seeds"]
     C --> G["platform, version, storage, environment"]
+    C --> J["subscribers, tracing backend"]
     B --> H["Changes run_id"]
     C --> I["Recorded metadata only"]
 ```
 
-If the logical run changed, the difference should appear on the identity side; provenance explains where and how that same logical run happened.
+If the logical run changed, the difference should appear on the identity side; provenance explains where and how that same logical run happened. Changing a `LifecycleSubscriber` or `TracingProvider` changes runtime observation, not logical run identity.
 
 What to inspect when it goes wrong: look at `RunSnapshot.identity` first. If the logical run should be the same, differences should only appear in `RunSnapshot.provenance`.

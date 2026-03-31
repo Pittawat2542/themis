@@ -19,16 +19,23 @@ Install only the extras you need:
 
 ```bash
 uv pip install -e ".[openai]"
+uv pip install -e ".[vllm]"  # Linux only
 uv pip install -e ".[langgraph]"
 uv pip install -e ".[datasets]"
+uv pip install -e ".[mongodb]"
+uv pip install -e ".[postgres]"
 ```
 
 Provider specifics:
 
 - OpenAI: install `.[openai]` and either inject a client or provide credentials to the adapter
-- vLLM: use Linux where the `vllm` package is supported, or inject an OpenAI-compatible client
+- vLLM: install `.[vllm]` on Linux, or inject an OpenAI-compatible client when you cannot install the Linux-only dependency
 - LangGraph: install `.[langgraph]` and pass a graph with `invoke()` or `ainvoke()`
 - Hugging Face quick-eval: install `.[datasets]`
+- MongoDB store: install `.[mongodb]` before using the `mongodb` backend
+- Postgres store: install `.[postgres]` before using the `postgres` backend
+
+If you only need builtin components with `memory` or `sqlite`, the base install is enough.
 
 ## Variants
 
@@ -42,4 +49,5 @@ You should know which extra package to install and whether a real provider is re
 ## Troubleshooting
 
 - [Configure generators](configure-generators.md)
+- [Choose the right store backend](choose-the-right-store-backend.md)
 - [Adapters reference](../reference/adapters.md)

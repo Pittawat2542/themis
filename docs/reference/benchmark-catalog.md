@@ -7,6 +7,13 @@ goal: Summarize the shipped benchmark names and point readers to adapter-specifi
 
 # Benchmark catalog
 
+Python catalog entry points:
+
+- `themis.catalog.load(...)`: resolve a shipped benchmark name to a `BenchmarkDefinition`
+- `themis.catalog.run(...)`: build and execute the named benchmark through the catalog runtime
+
+Use `themis.catalog.load("mmlu_pro")` when you want to inspect the resolved benchmark definition first. Use `themis.catalog.run("mmlu_pro", model=..., store=...)` when you want catalog convenience without going through the CLI.
+
 Named benchmark entries currently shipped in the manifest include:
 
 - `aime_2025`

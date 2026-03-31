@@ -27,10 +27,25 @@ Use config and CLI when you want:
 - shell-friendly automation
 - submission flows such as worker-pool and batch
 
+Config-backed execution details:
+
+- `Experiment.from_config(...)` supports `YAML` (`.yaml` / `.yml`) and `TOML` (`.toml`)
+- config component fields accept builtin ids or importable module paths such as `package.module:factory`
+- config files carry strings, not live Python objects; object instances belong in Python authoring only
+- relative storage and runtime paths resolve relative to the config file directory
+- CLI or Python callers can pass dotlist `overrides` before compile/run time
+
+Use the config-backed external execution example when you want one runnable path from config file to execution:
+
+```python
+--8<-- "examples/docs/external_execution.py"
+```
+
 ## Variants
 
 - ad hoc scripts and notebooks: Python
 - checked-in experiment specs and automation: config + CLI
+- mixed approach: author configs for repeatable runs and keep Python for custom component implementation
 
 ## Expected result
 

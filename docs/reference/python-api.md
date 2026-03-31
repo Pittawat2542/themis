@@ -40,6 +40,10 @@ Root package:
 
 ::: themis
 
+Catalog namespace:
+
+::: themis.catalog
+
 Core namespace:
 
 ::: themis.core

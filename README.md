@@ -14,6 +14,8 @@ Optional extras:
 - `uv pip install -e ".[vllm]"` on Linux
 - `uv pip install -e ".[langgraph]"`
 - `uv pip install -e ".[datasets]"`
+- `uv pip install -e ".[mongodb]"`
+- `uv pip install -e ".[postgres]"`
 
 ## Quick Start
 

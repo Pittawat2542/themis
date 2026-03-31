@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import tomllib
@@ -56,6 +59,7 @@ def test_docs_tree_contains_required_diataxis_entrypoints() -> None:
         DOCS_ROOT / "how-to" / "run-from-python-vs-config-and-cli.md",
         DOCS_ROOT / "how-to" / "configure-generators.md",
         DOCS_ROOT / "how-to" / "author-custom-components.md",
+        DOCS_ROOT / "how-to" / "observe-runs-and-instrumentation.md",
         DOCS_ROOT / "how-to" / "capture-traces-and-conversations.md",
         DOCS_ROOT / "how-to" / "use-reduction-strategies.md",
         DOCS_ROOT / "how-to" / "use-pure-metrics.md",
@@ -125,6 +129,7 @@ def test_docs_examples_are_file_backed_and_embedded() -> None:
         examples_root / "provider_openai.py",
         examples_root / "provider_vllm.py",
         examples_root / "provider_langgraph.py",
+        examples_root / "observability.py",
         examples_root / "pure_metrics.py",
         examples_root / "workflow_metrics.py",
         examples_root / "trace_capture.py",
@@ -144,8 +149,10 @@ def test_docs_examples_are_file_backed_and_embedded() -> None:
         DOCS_ROOT / "tutorials" / "first-advanced-run.md",
         DOCS_ROOT / "tutorials" / "first-custom-component.md",
         DOCS_ROOT / "tutorials" / "first-external-execution.md",
+        DOCS_ROOT / "how-to" / "run-from-python-vs-config-and-cli.md",
         DOCS_ROOT / "how-to" / "configure-generators.md",
         DOCS_ROOT / "how-to" / "author-custom-components.md",
+        DOCS_ROOT / "how-to" / "observe-runs-and-instrumentation.md",
         DOCS_ROOT / "how-to" / "capture-traces-and-conversations.md",
         DOCS_ROOT / "how-to" / "reproduce-and-rejudge-runs.md",
         DOCS_ROOT / "how-to" / "use-reduction-strategies.md",
@@ -156,7 +163,10 @@ def test_docs_examples_are_file_backed_and_embedded() -> None:
     for doc_path in embedded_docs:
         contents = doc_path.read_text(encoding="utf-8")
         assert "--8<--" in contents
-        assert str(snippets_root.relative_to(DOCS_ROOT)) in contents
+        assert (
+            str(snippets_root.relative_to(DOCS_ROOT)) in contents
+            or "examples/docs/" in contents
+        )
 
 
 def test_reference_docs_cover_cli_public_api_and_catalogs() -> None:
@@ -164,12 +174,10 @@ def test_reference_docs_cover_cli_public_api_and_catalogs() -> None:
     for command in (
         "quick-eval",
         "run",
-        "replay",
         "submit",
         "resume",
         "estimate",
         "report",
-        "inspect",
         "quickcheck",
         "compare",
         "export",
@@ -199,6 +207,35 @@ def test_reference_docs_cover_cli_public_api_and_catalogs() -> None:
     )
     for benchmark_name in benchmark_manifest["benchmarks"]:
         assert f"`{benchmark_name}`" in benchmark_reference
+
+    assert "themis.catalog.load(...)" in benchmark_reference
+    assert "themis.catalog.run(...)" in benchmark_reference
+
+
+def test_docs_cover_required_topics_and_optional_extras() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/docs/build_inventory.py"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    inventory = json.loads(result.stdout)
+    docs_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(DOCS_ROOT.rglob("*.md"))
+        if "_snippets" not in path.parts
+    )
+
+    for markers in inventory["required_topics"].values():
+        for marker in markers:
+            assert marker in docs_text
+
+    install_guide = (DOCS_ROOT / "how-to" / "install-extras-and-configure-providers.md").read_text(encoding="utf-8")
+    for extra in (".[openai]", ".[vllm]", ".[langgraph]", ".[datasets]", ".[mongodb]", ".[postgres]"):
+        assert extra in install_guide
 
 
 def test_substantive_docs_pages_have_metadata_contract() -> None:

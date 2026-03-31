@@ -55,6 +55,7 @@ nav:
       - Run from Python vs config and CLI: how-to/run-from-python-vs-config-and-cli.md
       - Configure generators: how-to/configure-generators.md
       - Author custom components: how-to/author-custom-components.md
+      - Observe runs and instrumentation: how-to/observe-runs-and-instrumentation.md
       - Capture traces and conversations: how-to/capture-traces-and-conversations.md
       - Use reduction strategies: how-to/use-reduction-strategies.md
       - Use pure metrics: how-to/use-pure-metrics.md

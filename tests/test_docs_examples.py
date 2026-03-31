@@ -25,6 +25,7 @@ def test_python_tutorial_examples_run() -> None:
         "advanced_run",
         "custom_parser",
         "custom_reducer",
+        "observability",
         "pure_metrics",
         "workflow_metrics",
         "external_execution",
@@ -54,6 +55,7 @@ def test_custom_component_examples_run() -> None:
     openai_module = _load_module("provider_openai")
     vllm_module = _load_module("provider_vllm")
     langgraph_module = _load_module("provider_langgraph")
+    observability_module = _load_module("observability")
 
     generator_payload = generator_module.run_example()
     metric_payload = metric_module.run_example()
@@ -61,6 +63,7 @@ def test_custom_component_examples_run() -> None:
     openai_payload = openai_module.run_example()
     vllm_payload = vllm_module.run_example()
     langgraph_payload = langgraph_module.run_example()
+    observability_payload = observability_module.run_example()
 
     assert generator_payload["status"] == "completed"
     assert metric_payload["status"] == "completed"
@@ -73,6 +76,9 @@ def test_custom_component_examples_run() -> None:
     assert openai_payload["artifact_keys"]
     assert vllm_payload["api_mode"] in {"responses", "chat_completions"}
     assert langgraph_payload["trace_steps"] >= 1
+    assert observability_payload["status"] == "completed"
+    assert "run" in observability_payload["span_names"]
+    assert any(call.startswith("before_generate:") for call in observability_payload["subscriber_calls"])
 
 
 def test_rejudge_bundle_example_round_trips() -> None:
@@ -81,4 +87,4 @@ def test_rejudge_bundle_example_round_trips() -> None:
     payload = module.run_example()
 
     assert payload["imported"] is True
-    assert payload["run_id"] == payload["rejudged_run_id"]
+    assert payload["run_id"] == payload["replayed_run_id"]

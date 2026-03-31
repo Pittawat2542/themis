@@ -21,12 +21,15 @@ Run the shortest benchmark workflow:
 themis quick-eval benchmark --name mmlu_pro
 ```
 
+Or run the same named benchmark from Python through the catalog API using `themis.catalog.run(...)`.
+
 Then inspect the benchmark catalog for prerequisites such as optional dataset dependencies or adapter-specific execution constraints.
 
 ## Variants
 
 - quick local check: `quick-eval benchmark`
-- custom experiment around the same dataset: move to Python or config-driven experiments
+- Python catalog execution: `themis.catalog.run(...)`
+- custom experiment around the same dataset: load the definition first and move to Python or config-driven experiments
 
 ## Expected result
 
