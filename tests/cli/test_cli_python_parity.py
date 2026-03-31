@@ -4,9 +4,11 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 from themis import Reporter, StatsEngine, evaluate
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.base import JSONValue
+from themis.core.config import StorageConfig
 from themis.core.dataset_inputs import dataset_from_jsonl
 from themis.core.experiment import Experiment
 from themis.core.read_models import BenchmarkResult
@@ -69,17 +71,14 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(tmp_
     python_store = create_run_store(experiment.storage)
     python_store.initialize()
     python_result = experiment.run(store=python_store)
-    python_benchmark = python_store.get_projection(python_result.run_id, "benchmark_result")
+    python_benchmark = cast(dict[str, JSONValue], python_store.get_projection(python_result.run_id, "benchmark_result"))
 
     evaluate_result = evaluate(
-        generation=GenerationConfig(
-            generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
-            reducer="builtin/majority_vote",
-        ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        model="builtin/demo_generator",
+        data=[dataset_from_jsonl(cases_path, dataset_id="cases")],
+        metric="builtin/exact_match",
+        parser="builtin/json_identity",
         storage=StorageConfig(store="memory"),
-        datasets=[dataset_from_jsonl(cases_path, dataset_id="cases")],
     )
 
     cli_run = _run_cli("run", "--config", str(config_path))

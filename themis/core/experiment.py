@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, PrivateAttr
 
@@ -144,30 +145,34 @@ class Experiment(FrozenModel):
         )
         return await orchestrator.run(snapshot)
 
-    async def rejudge_async(
+    async def replay_async(
         self,
         *,
+        stage: Literal["reduce", "parse", "score", "judge"],
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
-        """Re-run workflow-backed metrics from stored upstream artifacts."""
+        """Replay persisted runs from a downstream stage."""
+
+        if stage not in {"reduce", "parse", "score", "judge"}:
+            raise ValueError(f"Unsupported replay stage: {stage}")
 
         effective_runtime = runtime or self.runtime
         snapshot = self._compile_with_runtime(effective_runtime)
         if store is None and self.storage.store == "memory":
             raise ValueError(
-                "Memory-backed rejudge requires the original store instance; pass store=... or use sqlite storage."
+                "Memory-backed replay requires the original store instance; pass store=... or use sqlite storage."
             )
         run_store = store or self._build_store()
         run_store.initialize()
         if run_store.resume(snapshot.run_id) is None:
-            raise ValueError(f"No stored run found for rejudge: {snapshot.run_id}")
+            raise ValueError(f"No stored run found for replay: {snapshot.run_id}")
 
         requested_metric_ids = set(metric_ids or [])
-        if not requested_metric_ids:
+        if stage == "judge" and not requested_metric_ids:
             requested_metric_ids = {
                 component_ref.component_id
                 for component_ref, metric_kind in zip(snapshot.component_refs.metrics, snapshot.metric_kinds, strict=False)
@@ -187,8 +192,28 @@ class Experiment(FrozenModel):
             tracing_provider=tracing_provider or NoOpTracingProvider(),
             runtime=effective_runtime,
             force_workflow_metrics=requested_metric_ids,
+            replay_stage=stage,
         )
         return await orchestrator.run(snapshot)
+
+    async def rejudge_async(
+        self,
+        *,
+        metric_ids: list[str] | None = None,
+        runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
+        """Re-run workflow-backed metrics from stored upstream artifacts."""
+        return await self.replay_async(
+            stage="judge",
+            metric_ids=metric_ids,
+            runtime=runtime,
+            store=store,
+            subscribers=subscribers,
+            tracing_provider=tracing_provider,
+        )
 
     def run(
         self,
@@ -222,6 +247,29 @@ class Experiment(FrozenModel):
 
         return asyncio.run(
             self.rejudge_async(
+                metric_ids=metric_ids,
+                runtime=runtime,
+                store=store,
+                subscribers=subscribers,
+                tracing_provider=tracing_provider,
+            )
+        )
+
+    def replay(
+        self,
+        *,
+        stage: Literal["reduce", "parse", "score", "judge"],
+        metric_ids: list[str] | None = None,
+        runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
+        """Replay persisted runs from a downstream stage synchronously."""
+
+        return asyncio.run(
+            self.replay_async(
+                stage=stage,
                 metric_ids=metric_ids,
                 runtime=runtime,
                 store=store,

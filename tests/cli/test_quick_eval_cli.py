@@ -5,9 +5,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
-from themis import InMemoryRunStore, Reporter, evaluate
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import InMemoryRunStore, evaluate
+from themis.core.base import JSONValue
+from themis.core.config import StorageConfig
 from themis.core.dataset_inputs import dataset_from_inline, dataset_from_jsonl
 
 
@@ -28,17 +30,14 @@ def test_quick_eval_inline_matches_python_api() -> None:
     store = InMemoryRunStore()
     dataset = dataset_from_inline(input_value={"question": "2+2"}, expected_output={"answer": "4"})
     python_result = evaluate(
-        generation=GenerationConfig(
-            generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
-            reducer="builtin/majority_vote",
-        ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        model="builtin/demo_generator",
+        data=[dataset],
+        metric="builtin/exact_match",
+        parser="builtin/json_identity",
         storage=StorageConfig(store="memory"),
-        datasets=[dataset],
         store=store,
     )
-    benchmark = store.get_projection(python_result.run_id, "benchmark_result")
+    benchmark = cast(dict[str, JSONValue], store.get_projection(python_result.run_id, "benchmark_result"))
 
     cli_result = _run_cli(
         "quick-eval",
@@ -62,17 +61,14 @@ def test_quick_eval_file_matches_python_api(tmp_path: Path) -> None:
     store = InMemoryRunStore()
     dataset = dataset_from_jsonl(path)
     python_result = evaluate(
-        generation=GenerationConfig(
-            generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
-            reducer="builtin/majority_vote",
-        ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        model="builtin/demo_generator",
+        data=[dataset],
+        metric="builtin/exact_match",
+        parser="builtin/json_identity",
         storage=StorageConfig(store="memory"),
-        datasets=[dataset],
         store=store,
     )
-    benchmark = store.get_projection(python_result.run_id, "benchmark_result")
+    benchmark = cast(dict[str, JSONValue], store.get_projection(python_result.run_id, "benchmark_result"))
 
     cli_result = _run_cli("quick-eval", "file", "--path", str(path))
 

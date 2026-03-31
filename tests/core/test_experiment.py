@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from typing import Any, cast
 
 from themis import Experiment, RunSnapshot
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
@@ -90,6 +91,31 @@ def test_rejudge_requires_explicit_store_for_memory_backed_runs() -> None:
         experiment.rejudge()
 
 
+def test_replay_requires_explicit_store_for_memory_backed_runs() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+            )
+        ],
+        seeds=[7],
+    )
+
+    with pytest.raises(ValueError, match="original store instance"):
+        experiment.replay(stage="score")
+
+
 def test_run_accepts_explicit_store_for_memory_backed_runs() -> None:
     experiment = Experiment(
         generation=GenerationConfig(
@@ -116,3 +142,31 @@ def test_run_accepts_explicit_store_for_memory_backed_runs() -> None:
 
     assert result.status.value == "completed"
     assert store.resume(experiment.compile().run_id) is not None
+
+
+def test_replay_rejects_unknown_stage() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+            )
+        ],
+        seeds=[7],
+    )
+    store = InMemoryRunStore()
+
+    experiment.run(store=store)
+
+    with pytest.raises(ValueError, match="Unsupported replay stage"):
+        experiment.replay(stage=cast(Any, "unknown"), store=store)

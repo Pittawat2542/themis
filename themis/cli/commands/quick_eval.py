@@ -10,7 +10,7 @@ from cyclopts import App
 from themis import InMemoryRunStore
 from themis.catalog import run as run_catalog_benchmark
 from themis.core.base import JSONValue
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.config import StorageConfig
 from themis.core.dataset_inputs import (
     MissingOptionalDependencyError,
     dataset_from_huggingface,
@@ -20,16 +20,6 @@ from themis.core.dataset_inputs import (
 from themis.core.evaluate import evaluate
 
 quick_eval_app = App(name="quick-eval", help="Quick evaluation workflows.")
-
-_DEFAULT_GENERATION = GenerationConfig(
-    generator="builtin/demo_generator",
-    candidate_policy={"num_samples": 1},
-    reducer="builtin/majority_vote",
-)
-_DEFAULT_EVALUATION = EvaluationConfig(
-    metrics=["builtin/exact_match"],
-    parsers=["builtin/json_identity"],
-)
 _DEFAULT_STORAGE = StorageConfig(store="memory")
 
 
@@ -47,10 +37,11 @@ def _result_payload(*, run_id: str, status: str, metric_means: dict[str, float])
 def _run_dataset(dataset) -> str:
     store = InMemoryRunStore()
     result = evaluate(
-        generation=_DEFAULT_GENERATION,
-        evaluation=_DEFAULT_EVALUATION,
+        model="builtin/demo_generator",
+        data=[dataset],
+        metric="builtin/exact_match",
+        parser="builtin/json_identity",
         storage=_DEFAULT_STORAGE,
-        datasets=[dataset],
         store=store,
     )
     benchmark = store.get_projection(result.run_id, "benchmark_result")

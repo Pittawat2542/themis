@@ -6,7 +6,7 @@ import asyncio
 import json
 from time import monotonic
 from collections.abc import Mapping
-from typing import TypeGuard
+from typing import Literal, TypeGuard
 
 from themis.core.config import RuntimeConfig
 from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
@@ -139,6 +139,7 @@ class Orchestrator:
         store_retry_delay: float | None = None,
         store_retry_attempts: int | None = None,
         force_workflow_metrics: set[str] | None = None,
+        replay_stage: Literal["reduce", "parse", "score", "judge"] | None = None,
     ) -> None:
         self.store = store
         self.generator = generator
@@ -147,6 +148,7 @@ class Orchestrator:
         self.metrics = list(metrics or [])
         self.judge_models = list(judge_models or [])
         self.force_workflow_metrics = set(force_workflow_metrics or set())
+        self.replay_stage = replay_stage
         self.planner = planner or Planner()
         self.subscribers = list(subscribers or [])
         self.tracing_provider = tracing_provider or NoOpTracingProvider()
@@ -252,7 +254,7 @@ class Orchestrator:
         existing_state: ExecutionState,
     ) -> tuple[CaseResult, bool]:
         case = items[0].case
-        prior_case_state = existing_state.case_states.get(case.case_id, CaseExecutionState())
+        prior_case_state = self._replay_case_state(existing_state.case_states.get(case.case_id, CaseExecutionState()))
         generated_by_index = dict(prior_case_state.generated_candidates_by_index)
         workflow_executions = dict(prior_case_state.evaluation_executions)
         evaluation_failures = dict(prior_case_state.evaluation_failures)
@@ -693,6 +695,76 @@ class Orchestrator:
                 finally:
                     if provider_semaphore is not None:
                         provider_semaphore.release()
+
+    def _replay_case_state(self, case_state: CaseExecutionState) -> CaseExecutionState:
+        if self.replay_stage is None:
+            return case_state
+
+        workflow_metric_ids = {
+            metric.component_id
+            for metric, metric_kind in zip(self.metrics, self._metric_kinds(), strict=False)
+            if metric_kind != "pure"
+        }
+        successful_scores = dict(case_state.successful_scores)
+        score_failures = dict(case_state.score_failures)
+
+        if self.replay_stage == "judge":
+            for metric_id in workflow_metric_ids:
+                successful_scores.pop(metric_id, None)
+                score_failures.pop(metric_id, None)
+            return case_state.model_copy(
+                update={
+                    "evaluation_executions": {},
+                    "evaluation_execution_blob_refs": {},
+                    "evaluation_failures": {},
+                    "successful_scores": successful_scores,
+                    "score_failures": score_failures,
+                }
+            )
+
+        if self.replay_stage == "score":
+            return case_state.model_copy(
+                update={
+                    "evaluation_executions": {},
+                    "evaluation_execution_blob_refs": {},
+                    "evaluation_failures": {},
+                    "successful_scores": {},
+                    "score_failures": {},
+                }
+            )
+
+        if self.replay_stage == "parse":
+            return case_state.model_copy(
+                update={
+                    "parsed_output": None,
+                    "parse_error": None,
+                    "evaluation_executions": {},
+                    "evaluation_execution_blob_refs": {},
+                    "evaluation_failures": {},
+                    "successful_scores": {},
+                    "score_failures": {},
+                }
+            )
+
+        return case_state.model_copy(
+            update={
+                "reduced_candidate": None,
+                "reduction_error": None,
+                "parsed_output": None,
+                "parse_error": None,
+                "evaluation_executions": {},
+                "evaluation_execution_blob_refs": {},
+                "evaluation_failures": {},
+                "successful_scores": {},
+                "score_failures": {},
+            }
+        )
+
+    def _metric_kinds(self) -> list[str]:
+        return [
+            "pure" if _is_pure_metric(metric) else "workflow"
+            for metric in self.metrics
+        ]
 
     async def _persist_event(self, event) -> None:
         for attempt in range(self.runtime.store_retry_attempts):
