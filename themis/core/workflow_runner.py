@@ -257,6 +257,7 @@ class DefaultWorkflowRunner:
                 )
             )
         except Exception as exc:
+            retry_history = list(getattr(exc, "retry_history", []))
             await self._persist_event(
                 StepFailedEvent(
                     run_id=ctx.run_id,
@@ -264,6 +265,7 @@ class DefaultWorkflowRunner:
                     step_id=model_step_id,
                     step_type="model_call",
                     error_message=str(exc),
+                    retry_history=retry_history,
                 )
             )
             return _CallExecutionResult(
@@ -276,6 +278,7 @@ class DefaultWorkflowRunner:
                     step_id=model_step_id,
                     step_type="model_call",
                     error_message=str(exc),
+                    retry_history=retry_history,
                 ),
             )
 

@@ -34,7 +34,8 @@ class BenchmarkDefinition(FrozenModel):
     metric_ids: list[str] = Field(default_factory=lambda: ["builtin/exact_match"])
     parser_ids: list[str] = Field(default_factory=lambda: ["builtin/json_identity"])
     judge_model_ids: list[str] = Field(default_factory=list)
-    reducer_id: str = "builtin/majority_vote"
+    selector_id: str | None = None
+    reducer_id: str | None = "builtin/majority_vote"
     generator_id: str = "builtin/demo_generator"
     candidate_policy: dict[str, JSONValue] = Field(default_factory=_default_candidate_policy)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
@@ -56,6 +57,7 @@ class BenchmarkDefinition(FrozenModel):
             generation=GenerationConfig(
                 generator=generator,
                 candidate_policy=self.candidate_policy,
+                selector=self.selector_id,
                 reducer=self.reducer_id,
             ),
             evaluation=EvaluationConfig(
@@ -129,7 +131,13 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         metric_ids=_string_list_from_value(spec.get("metric_ids", adapter_payload.get("metric_ids", ["builtin/exact_match"]))),
         parser_ids=_string_list_from_value(spec.get("parser_ids", adapter_payload.get("parser_ids", ["builtin/json_identity"]))),
         judge_model_ids=_string_list_from_value(spec.get("judge_model_ids", adapter_payload.get("judge_model_ids", []))),
-        reducer_id=_string_from_value(spec.get("reducer_id", adapter_payload.get("reducer_id", "builtin/majority_vote"))),
+        selector_id=_optional_str(spec.get("selector_id", adapter_payload.get("selector_id"))),
+        reducer_id=_optional_str(
+            spec.get(
+                "reducer_id",
+                adapter_payload.get("reducer_id", None if "selector_id" in adapter_payload else "builtin/majority_vote"),
+            )
+        ),
         generator_id=_string_from_value(spec.get("generator_id", adapter_payload.get("generator_id", "builtin/demo_generator"))),
         candidate_policy=_json_mapping_from_value(adapter_payload.get("candidate_policy", {"num_samples": 1})),
         workflow_overrides=_json_mapping_from_value(adapter_payload.get("workflow_overrides", {})),

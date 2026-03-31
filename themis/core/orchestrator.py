@@ -6,15 +6,18 @@ import asyncio
 import json
 from time import monotonic
 from collections.abc import Mapping
-from typing import Literal, TypeGuard
+from typing import Literal, TypeGuard, cast
 
+from themis.core.base import JSONValue
 from themis.core.config import RuntimeConfig
-from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext, SelectContext
 from themis.core.events import (
     EvaluationCompletedEvent,
     EvaluationFailedEvent,
     GenerationCompletedEvent,
     GenerationFailedEvent,
+    SelectionCompletedEvent,
+    SelectionFailedEvent,
     ParseCompletedEvent,
     ParseFailedEvent,
     ReductionCompletedEvent,
@@ -38,6 +41,7 @@ from themis.core.planner import Planner
 from themis.core.projections import build_run_result
 from themis.core.protocols import (
     CandidateReducer,
+    CandidateSelector,
     Generator,
     JudgeModel,
     LifecycleSubscriber,
@@ -122,6 +126,7 @@ class Orchestrator:
         *,
         store: RunStore,
         generator: Generator,
+        selector: CandidateSelector | None = None,
         reducer: CandidateReducer | None = None,
         parser: Parser | None = None,
         metrics: list[RuntimeMetric] | None = None,
@@ -143,6 +148,7 @@ class Orchestrator:
     ) -> None:
         self.store = store
         self.generator = generator
+        self.selector = selector
         self.reducer = reducer
         self.parser = parser
         self.metrics = list(metrics or [])
@@ -173,6 +179,30 @@ class Orchestrator:
                 max(
                     1,
                     self.runtime.stage_concurrency.get("evaluation", self.runtime.max_concurrent_tasks),
+                )
+            ),
+            "selection": asyncio.Semaphore(
+                max(
+                    1,
+                    self.runtime.stage_concurrency.get("selection", self.runtime.max_concurrent_tasks),
+                )
+            ),
+            "reduction": asyncio.Semaphore(
+                max(
+                    1,
+                    self.runtime.stage_concurrency.get("reduction", self.runtime.max_concurrent_tasks),
+                )
+            ),
+            "parsing": asyncio.Semaphore(
+                max(
+                    1,
+                    self.runtime.stage_concurrency.get("parsing", self.runtime.max_concurrent_tasks),
+                )
+            ),
+            "scoring": asyncio.Semaphore(
+                max(
+                    1,
+                    self.runtime.stage_concurrency.get("scoring", self.runtime.max_concurrent_tasks),
                 )
             ),
         }
@@ -276,19 +306,53 @@ class Orchestrator:
         if not generated_candidates and prior_case_state.reduced_candidate is None:
             return CaseResult(case_id=case.case_id), True
 
-        reduced = prior_case_state.reduced_candidate
-        if reduced is None:
-            reduce_ctx = ReduceContext(
+        selected_candidates = self._selected_candidates_from_state(prior_case_state, generated_candidates)
+        if self.selector is not None and prior_case_state.selected_candidate_ids is None:
+            select_ctx = SelectContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
                 candidate_ids=[candidate.candidate_id for candidate in generated_candidates],
                 seed=items[0].seed,
                 judge_models=list(self.judge_models),
             )
-            self._notify("before_reduce", generated_candidates, reduce_ctx)
+            span = self.tracing_provider.start_span("selection", {"case_id": case.case_id})
+            try:
+                selected_candidates = await self._select_candidates(generated_candidates, select_ctx)
+                if not selected_candidates:
+                    raise ValueError("Candidate selector returned no candidates")
+                await self._persist_event(
+                    SelectionCompletedEvent(
+                        run_id=snapshot.run_id,
+                        case_id=case.case_id,
+                        candidate_ids=[candidate.candidate_id for candidate in selected_candidates],
+                        metadata={"selector_id": self.selector.component_id},
+                    )
+                )
+                self.tracing_provider.end_span(span, "ok")
+            except Exception as exc:
+                await self._persist_event(
+                    SelectionFailedEvent(
+                        run_id=snapshot.run_id,
+                        case_id=case.case_id,
+                        error_message=str(exc),
+                    )
+                )
+                self.tracing_provider.end_span(span, "error")
+                return CaseResult(case_id=case.case_id, generated_candidates=generated_candidates), True
+
+        reduced = prior_case_state.reduced_candidate
+        if reduced is None:
+            reduce_ctx = ReduceContext(
+                run_id=snapshot.run_id,
+                case_id=case.case_id,
+                candidate_ids=[candidate.candidate_id for candidate in selected_candidates],
+                seed=items[0].seed,
+                metadata={"selector_id": self.selector.component_id} if self.selector is not None else {},
+            )
+            self._notify("before_reduce", selected_candidates, reduce_ctx)
             span = self.tracing_provider.start_span("reduction", {"case_id": case.case_id})
             try:
-                reduced = await self._reduce_candidates(generated_candidates, reduce_ctx)
+                reduced = await self._reduce_candidates(selected_candidates, reduce_ctx)
                 self._notify("after_reduce", reduced, reduce_ctx)
                 await self._persist_event(
                     ReductionCompletedEvent(
@@ -317,7 +381,9 @@ class Orchestrator:
             self._notify("before_parse", reduced, parse_ctx)
             span = self.tracing_provider.start_span("parse", {"case_id": case.case_id})
             try:
-                parsed = self._parse_candidate(reduced, parse_ctx)
+                async with self._global_semaphore:
+                    async with self._stage_semaphores["parsing"]:
+                        parsed = await asyncio.to_thread(self._parse_candidate, reduced, parse_ctx)
                 self._notify("after_parse", parsed, parse_ctx)
                 await self._persist_event(
                     ParseCompletedEvent(
@@ -369,7 +435,8 @@ class Orchestrator:
                     {"case_id": case.case_id, "metric_id": metric.component_id},
                 )
                 try:
-                    score = metric.score(parsed, case, score_ctx)
+                    async with self._stage_semaphores["scoring"]:
+                        score = await asyncio.to_thread(metric.score, parsed, case, score_ctx)
                     self._notify("after_score", score, score_ctx)
                     if isinstance(score, ScoreError):
                         score_failures[metric.component_id] = score
@@ -553,7 +620,7 @@ class Orchestrator:
                     self._notify("before_generate", case, generate_ctx)
                     span = self.tracing_provider.start_span("generation", {"case_id": item.case_id})
                     try:
-                        generated = await self.generator.generate(case, generate_ctx)
+                        generated = await self._generate_with_retries(case, generate_ctx)
                         await self._update_rate_limit(provider_key, generated.artifacts)
                         self._notify("after_generate", generated, generate_ctx)
                         blob_ref = await self._store_blob(
@@ -575,12 +642,14 @@ class Orchestrator:
                         self.tracing_provider.end_span(span, "ok")
                         return item.candidate_index, generated, False
                     except Exception as exc:
+                        retry_history = getattr(exc, "retry_history", [])
                         await self._persist_event(
                             GenerationFailedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
                                 candidate_id=item.candidate_id,
                                 error_message=str(exc),
+                                retry_history=retry_history,
                             )
                         )
                         self.tracing_provider.end_span(span, "error")
@@ -589,19 +658,32 @@ class Orchestrator:
                     if provider_semaphore is not None:
                         provider_semaphore.release()
 
+    async def _select_candidates(
+        self,
+        generated_candidates: list[GenerationResult],
+        select_ctx: SelectContext,
+    ) -> list[GenerationResult]:
+        if self.selector is None:
+            return generated_candidates
+        async with self._global_semaphore:
+            async with self._stage_semaphores["selection"]:
+                return await self.selector.select(generated_candidates, select_ctx)
+
     async def _reduce_candidates(
         self,
         generated_candidates: list[GenerationResult],
         reduce_ctx: ReduceContext,
     ) -> ReducedCandidate:
-        if self.reducer is None:
-            candidate = generated_candidates[0]
-            return ReducedCandidate(
-                candidate_id=candidate.candidate_id,
-                source_candidate_ids=[candidate.candidate_id],
-                final_output=candidate.final_output,
-            )
-        return await self.reducer.reduce(generated_candidates, reduce_ctx)
+        async with self._global_semaphore:
+            async with self._stage_semaphores["reduction"]:
+                if self.reducer is None:
+                    candidate = generated_candidates[0]
+                    return ReducedCandidate(
+                        candidate_id=candidate.candidate_id,
+                        source_candidate_ids=[candidate.candidate_id for candidate in generated_candidates],
+                        final_output=candidate.final_output,
+                    )
+                return await self.reducer.reduce(generated_candidates, reduce_ctx)
 
     def _parse_candidate(self, reduced: ReducedCandidate, parse_ctx: ParseContext) -> ParsedOutput:
         if self.parser is None:
@@ -691,7 +773,7 @@ class Orchestrator:
                 if provider_limiter is not None:
                     await provider_limiter.acquire()
                 try:
-                    return await judge_model.judge(prompt, seed=seed)
+                    return await self._judge_with_retries(judge_model, prompt, seed=seed)
                 finally:
                     if provider_semaphore is not None:
                         provider_semaphore.release()
@@ -765,6 +847,74 @@ class Orchestrator:
             "pure" if _is_pure_metric(metric) else "workflow"
             for metric in self.metrics
         ]
+
+    def _selected_candidates_from_state(
+        self,
+        case_state: CaseExecutionState,
+        generated_candidates: list[GenerationResult],
+    ) -> list[GenerationResult]:
+        if case_state.selected_candidate_ids is None:
+            return generated_candidates
+        selected_by_id = {candidate.candidate_id: candidate for candidate in generated_candidates}
+        return [
+            selected_by_id[candidate_id]
+            for candidate_id in case_state.selected_candidate_ids
+            if candidate_id in selected_by_id
+        ]
+
+    async def _generate_with_retries(self, case, generate_ctx: GenerateContext) -> GenerationResult:
+        retry_history: list[dict[str, JSONValue]] = []
+        for attempt in range(self.runtime.generation_retry_attempts):
+            try:
+                generated = await self.generator.generate(case, generate_ctx)
+                if retry_history:
+                    artifacts = dict(generated.artifacts or {})
+                    artifacts["retry_history"] = cast(JSONValue, retry_history)
+                    generated = generated.model_copy(update={"artifacts": artifacts})
+                return generated
+            except Exception as exc:
+                if attempt + 1 == self.runtime.generation_retry_attempts or not _is_retryable_error(exc):
+                    setattr(exc, "retry_history", retry_history)
+                    raise
+                delay = self.runtime.generation_retry_delay * (self.runtime.generation_retry_backoff ** attempt)
+                retry_history.append(
+                    {
+                        "attempt": attempt + 1,
+                        "error_message": str(exc),
+                        "delay_s": delay,
+                    }
+                )
+                await asyncio.sleep(delay)
+        raise RuntimeError("unreachable")
+
+    async def _judge_with_retries(
+        self,
+        judge_model: JudgeModel,
+        prompt: str,
+        *,
+        seed: int | None,
+    ) -> JudgeResponse:
+        retry_history: list[dict[str, JSONValue]] = []
+        for attempt in range(self.runtime.judge_retry_attempts):
+            try:
+                response = await judge_model.judge(prompt, seed=seed)
+                if retry_history:
+                    response = response.model_copy(update={"retry_history": retry_history})
+                return response
+            except Exception as exc:
+                if attempt + 1 == self.runtime.judge_retry_attempts or not _is_retryable_error(exc):
+                    setattr(exc, "retry_history", retry_history)
+                    raise
+                delay = self.runtime.judge_retry_delay * (self.runtime.judge_retry_backoff ** attempt)
+                retry_history.append(
+                    {
+                        "attempt": attempt + 1,
+                        "error_message": str(exc),
+                        "delay_s": delay,
+                    }
+                )
+                await asyncio.sleep(delay)
+        raise RuntimeError("unreachable")
 
     async def _persist_event(self, event) -> None:
         for attempt in range(self.runtime.store_retry_attempts):
@@ -853,8 +1003,18 @@ class Orchestrator:
             updates["provider_rate_limits"] = {
                 provider: max(1, limit) for provider, limit in provider_rate_limits.items()
             }
+        updates["generation_retry_attempts"] = max(1, base.generation_retry_attempts)
+        updates["generation_retry_delay"] = max(0.0, base.generation_retry_delay)
+        updates["generation_retry_backoff"] = max(1.0, base.generation_retry_backoff)
+        updates["judge_retry_attempts"] = max(1, base.judge_retry_attempts)
+        updates["judge_retry_delay"] = max(0.0, base.judge_retry_delay)
+        updates["judge_retry_backoff"] = max(1.0, base.judge_retry_backoff)
         if store_retry_delay is not None:
             updates["store_retry_delay"] = max(0.0, store_retry_delay)
         if store_retry_attempts is not None:
             updates["store_retry_attempts"] = max(1, store_retry_attempts)
         return base.model_copy(update=updates)
+
+
+def _is_retryable_error(exc: Exception) -> bool:
+    return bool(getattr(exc, "retryable", False))

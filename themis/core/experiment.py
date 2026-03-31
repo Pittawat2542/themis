@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from pathlib import Path
 from typing import Literal
 
@@ -14,9 +15,11 @@ from themis.core.builtins import (
     resolve_metric_component,
     resolve_parser_component,
     resolve_reducer_component,
+    resolve_selector_component,
 )
 from themis.core.base import FrozenModel
-from themis.core.components import component_ref_from_value
+from themis.core.base import JSONValue
+from themis.core.components import ComponentRef, component_ref_from_value
 from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
 from themis.core.config_loading import ExperimentConfigMetadata
 from themis.core.models import Dataset
@@ -51,7 +54,11 @@ class Experiment(FrozenModel):
     themis_version: str = "4.0.0rc1"
     python_version: str = "3.12"
     platform: str = "unknown"
+    git_commit: str | None = None
+    dependency_versions: dict[str, str] = Field(default_factory=dict)
+    provider_metadata: dict[str, JSONValue] = Field(default_factory=dict)
     _config_metadata: ExperimentConfigMetadata | None = PrivateAttr(default=None)
+    _compiled_snapshot: RunSnapshot | None = PrivateAttr(default=None)
 
     @classmethod
     def from_config(cls, path: str | Path, *, overrides: list[str] | None = None) -> Experiment:
@@ -67,11 +74,16 @@ class Experiment(FrozenModel):
     def compile(self) -> RunSnapshot:
         """Compile the experiment into an immutable `RunSnapshot`."""
 
-        return self._compile_with_runtime(self.runtime)
+        if self._compiled_snapshot is None:
+            self._compiled_snapshot = self._compile_with_runtime(self.runtime)
+        return self._compiled_snapshot
 
     def _compile_with_runtime(self, runtime: RuntimeConfig) -> RunSnapshot:
         component_refs = ComponentRefs(
             generator=component_ref_from_value(self.generation.generator),
+            selector=component_ref_from_value(self.generation.selector)
+            if self.generation.selector is not None
+            else None,
             reducer=component_ref_from_value(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
@@ -89,6 +101,7 @@ class Experiment(FrozenModel):
                 for dataset in self.datasets
             ],
             generator_ref=component_refs.generator,
+            selector_ref=component_refs.selector,
             reducer_ref=component_refs.reducer,
             parser_refs=component_refs.parsers,
             metric_refs=component_refs.metrics,
@@ -102,6 +115,9 @@ class Experiment(FrozenModel):
             themis_version=self.themis_version,
             python_version=self.python_version,
             platform=self.platform,
+            git_commit=self.git_commit or _detect_git_commit(),
+            dependency_versions=self.dependency_versions or _default_dependency_versions(self.themis_version),
+            provider_metadata=self.provider_metadata or _default_provider_metadata(self),
             storage=self.storage,
             runtime=runtime,
             environment_metadata=self.environment_metadata,
@@ -125,14 +141,19 @@ class Experiment(FrozenModel):
         """Run the compiled snapshot asynchronously."""
 
         effective_runtime = runtime or self.runtime
-        snapshot = self._compile_with_runtime(effective_runtime)
+        snapshot = self._snapshot_for_runtime(effective_runtime)
         run_store = store or self._build_store()
         run_store.initialize()
         if run_store.resume(snapshot.run_id) is None:
             run_store.persist_snapshot(snapshot)
+        resolved_component_refs = self._resolved_component_refs()
+        self._validate_component_refs(snapshot, resolved_component_refs)
         orchestrator = Orchestrator(
             store=run_store,
             generator=resolve_generator_component(self.generation.generator),
+            selector=resolve_selector_component(self.generation.selector)
+            if self.generation.selector is not None
+            else None,
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
@@ -161,7 +182,7 @@ class Experiment(FrozenModel):
             raise ValueError(f"Unsupported replay stage: {stage}")
 
         effective_runtime = runtime or self.runtime
-        snapshot = self._compile_with_runtime(effective_runtime)
+        snapshot = self._snapshot_for_runtime(effective_runtime)
         if store is None and self.storage.store == "memory":
             raise ValueError(
                 "Memory-backed replay requires the original store instance; pass store=... or use sqlite storage."
@@ -170,6 +191,7 @@ class Experiment(FrozenModel):
         run_store.initialize()
         if run_store.resume(snapshot.run_id) is None:
             raise ValueError(f"No stored run found for replay: {snapshot.run_id}")
+        self._validate_component_refs(snapshot, self._resolved_component_refs())
 
         requested_metric_ids = set(metric_ids or [])
         if stage == "judge" and not requested_metric_ids:
@@ -182,6 +204,9 @@ class Experiment(FrozenModel):
         orchestrator = Orchestrator(
             store=run_store,
             generator=resolve_generator_component(self.generation.generator),
+            selector=resolve_selector_component(self.generation.selector)
+            if self.generation.selector is not None
+            else None,
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
@@ -300,3 +325,107 @@ class Experiment(FrozenModel):
 
     def _build_store(self):
         return create_run_store(self.storage)
+
+    def _snapshot_for_runtime(self, runtime: RuntimeConfig) -> RunSnapshot:
+        compiled = self.compile()
+        if runtime == compiled.provenance.runtime:
+            return compiled
+        return compiled.model_copy(
+            update={
+                "provenance": compiled.provenance.model_copy(update={"runtime": runtime}),
+            }
+        )
+
+    def _resolved_component_refs(self) -> ComponentRefs:
+        return ComponentRefs(
+            generator=component_ref_from_value(resolve_generator_component(self.generation.generator)),
+            selector=component_ref_from_value(resolve_selector_component(self.generation.selector))
+            if self.generation.selector is not None
+            else None,
+            reducer=component_ref_from_value(resolve_reducer_component(self.generation.reducer))
+            if self.generation.reducer is not None
+            else None,
+            parsers=[
+                component_ref_from_value(resolve_parser_component(parser))
+                for parser in self.evaluation.parsers
+            ],
+            metrics=[
+                component_ref_from_value(resolve_metric_component(metric))
+                for metric in self.evaluation.metrics
+            ],
+            judge_models=[
+                component_ref_from_value(resolve_judge_model_component(judge_model))
+                for judge_model in self.evaluation.judge_models
+            ],
+        )
+
+    def _validate_component_refs(self, snapshot: RunSnapshot, resolved: ComponentRefs) -> None:
+        self._validate_component_ref("generator", snapshot.component_refs.generator, resolved.generator)
+        self._validate_component_ref("selector", snapshot.component_refs.selector, resolved.selector)
+        self._validate_component_ref("reducer", snapshot.component_refs.reducer, resolved.reducer)
+        self._validate_component_ref_list("parser", snapshot.component_refs.parsers, resolved.parsers)
+        self._validate_component_ref_list("metric", snapshot.component_refs.metrics, resolved.metrics)
+        self._validate_component_ref_list("judge_model", snapshot.component_refs.judge_models, resolved.judge_models)
+
+    def _validate_component_ref(
+        self,
+        label: str,
+        expected: ComponentRef | None,
+        actual: ComponentRef | None,
+    ) -> None:
+        if expected == actual:
+            return
+        raise RuntimeError(
+            f"Component fingerprint mismatch for {label}: expected {expected}, got {actual}. Recompile the experiment."
+        )
+
+    def _validate_component_ref_list(
+        self,
+        label: str,
+        expected: list[ComponentRef],
+        actual: list[ComponentRef],
+    ) -> None:
+        if expected == actual:
+            return
+        raise RuntimeError(
+            f"Component fingerprint mismatch for {label}: expected {expected}, got {actual}. Recompile the experiment."
+        )
+
+
+def _detect_git_commit() -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return None
+    commit = completed.stdout.strip()
+    return commit or None
+
+
+def _default_dependency_versions(themis_version: str) -> dict[str, str]:
+    return {"themis-eval": themis_version}
+
+
+def _default_provider_metadata(experiment: Experiment) -> dict[str, JSONValue]:
+    metadata: dict[str, JSONValue] = {}
+    for label, value in (
+        ("generator", experiment.generation.generator),
+        *[(f"judge_model:{index}", judge_model) for index, judge_model in enumerate(experiment.evaluation.judge_models)],
+    ):
+        provider_key = getattr(value, "provider_key", None)
+        model_id = getattr(value, "model_id", None)
+        endpoint = getattr(value, "endpoint", None)
+        entry: dict[str, JSONValue] = {}
+        if isinstance(provider_key, str):
+            entry["provider_key"] = provider_key
+        if isinstance(model_id, str):
+            entry["model_id"] = model_id
+        if isinstance(endpoint, str):
+            entry["endpoint"] = endpoint
+        if entry:
+            metadata[label] = entry
+    return metadata

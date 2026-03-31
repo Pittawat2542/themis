@@ -15,6 +15,7 @@ from themis.core.security import is_secret_reference
 
 _SINGLE_COMPONENT_FIELDS = (
     ("generation", "generator"),
+    ("generation", "selector"),
     ("generation", "reducer"),
 )
 _LIST_COMPONENT_FIELDS = (
@@ -27,6 +28,7 @@ _STORAGE_PATH_FIELDS = ("path", "root", "blob_root")
 
 class ExecutionComponentTargets(FrozenModel):
     generator: str
+    selector: str | None = None
     reducer: str | None = None
     parsers: list[str] = Field(default_factory=list)
     metrics: list[str] = Field(default_factory=list)
@@ -121,6 +123,7 @@ def _capture_component_targets(payload: dict[str, Any]) -> ExecutionComponentTar
     evaluation = _mapping(payload.get("evaluation"))
 
     generator = _require_component_target(generation.get("generator"), field="generation.generator")
+    selector = _optional_component_target(generation.get("selector"), field="generation.selector")
     reducer = _optional_component_target(generation.get("reducer"), field="generation.reducer")
     parsers = _component_target_list(evaluation.get("parsers"), field="evaluation.parsers")
     metrics = _component_target_list(evaluation.get("metrics"), field="evaluation.metrics")
@@ -128,6 +131,7 @@ def _capture_component_targets(payload: dict[str, Any]) -> ExecutionComponentTar
 
     return ExecutionComponentTargets(
         generator=generator,
+        selector=selector,
         reducer=reducer,
         parsers=parsers,
         metrics=metrics,

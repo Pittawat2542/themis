@@ -10,6 +10,7 @@ from themis.core.contexts import (
     ParseContext,
     ReduceContext,
     ScoreContext,
+    SelectContext,
 )
 from themis.core.events import RunEvent
 from themis.core.models import (
@@ -63,6 +64,20 @@ class CandidateReducer(Protocol):
         candidates: list[GenerationResult],
         ctx: ReduceContext,
     ) -> ReducedCandidate: ...
+
+
+@runtime_checkable
+class CandidateSelector(Protocol):
+    component_id: str
+    version: str
+
+    def fingerprint(self) -> str: ...
+
+    async def select(
+        self,
+        candidates: list[GenerationResult],
+        ctx: SelectContext,
+    ) -> list[GenerationResult]: ...
 
 
 @runtime_checkable

@@ -82,8 +82,8 @@ class Planner:
         candidate_count = self.candidate_count(snapshot)
         if len(snapshot.component_refs.parsers) > 1:
             raise ValueError("Phase 2 supports at most one parser")
-        if candidate_count > 1 and snapshot.component_refs.reducer is None:
-            raise ValueError("Multi-candidate runs require an explicit reducer")
+        if candidate_count > 1 and snapshot.component_refs.reducer is None and snapshot.component_refs.selector is None:
+            raise ValueError("Multi-candidate runs require an explicit reducer or selector")
         workflow_metric_kinds = [kind for kind in snapshot.metric_kinds if kind != "pure"]
         if workflow_metric_kinds and not snapshot.component_refs.judge_models:
             raise ValueError("Workflow-backed metrics require at least one judge model")

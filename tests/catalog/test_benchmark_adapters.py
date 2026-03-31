@@ -20,11 +20,12 @@ def test_code_benchmark_adapter_configures_best_of_n_and_execution_metadata() ->
     benchmark = load("codeforces")
     experiment = benchmark.build_experiment()
 
-    assert benchmark.reducer_id == "builtin/best_of_n"
+    assert benchmark.selector_id == "builtin/best_of_n"
     assert benchmark.judge_model_ids == ["builtin/demo_judge"]
     assert benchmark.candidate_policy == {"num_samples": 2}
     assert benchmark.sample_case_input["problem"].startswith("Solve the programming task")
-    assert experiment.generation.reducer == "builtin/best_of_n"
+    assert experiment.generation.selector == "builtin/best_of_n"
+    assert experiment.generation.reducer is None
     assert experiment.datasets[0].metadata["supported_execution_backends"] == "piston,sandbox_fusion"
 
 

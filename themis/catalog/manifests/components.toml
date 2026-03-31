@@ -11,8 +11,8 @@ version = "1.0"
 fingerprint = "builtin-majority-vote-fingerprint"
 
 [components."builtin/best_of_n"]
-kind = "reducer"
-target = "themis.catalog.builtins.reducers:BestOfNReducer"
+kind = "selector"
+target = "themis.catalog.builtins.selectors:BestOfNSelector"
 version = "1.0"
 fingerprint = "builtin-best-of-n-fingerprint"
 

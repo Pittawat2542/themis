@@ -52,6 +52,20 @@ class GenerationFailedEvent(RunEvent):
     case_id: str
     candidate_id: str
     error_message: str
+    retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
+
+
+class SelectionCompletedEvent(RunEvent):
+    event_type: Literal["selection_completed"] = "selection_completed"
+    case_id: str
+    candidate_ids: list[str] = Field(default_factory=list)
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class SelectionFailedEvent(RunEvent):
+    event_type: Literal["selection_failed"] = "selection_failed"
+    case_id: str
+    error_message: str
 
 
 class ReductionCompletedEvent(RunEvent):
@@ -136,6 +150,7 @@ class StepFailedEvent(RunEvent):
     step_id: str
     step_type: str
     error_message: str
+    retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
 
 
 EVENT_TYPES: dict[str, type[RunEvent]] = {
@@ -144,6 +159,8 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
     "run_failed": RunFailedEvent,
     "generation_completed": GenerationCompletedEvent,
     "generation_failed": GenerationFailedEvent,
+    "selection_completed": SelectionCompletedEvent,
+    "selection_failed": SelectionFailedEvent,
     "reduction_completed": ReductionCompletedEvent,
     "reduction_failed": ReductionFailedEvent,
     "parse_completed": ParseCompletedEvent,

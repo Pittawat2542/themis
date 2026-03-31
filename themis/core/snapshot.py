@@ -41,6 +41,7 @@ class ComponentRefs(FrozenModel):
     """Resolved component refs stored with the snapshot."""
 
     generator: ComponentRef
+    selector: ComponentRef | None = None
     reducer: ComponentRef | None = None
     parsers: list[ComponentRef] = Field(default_factory=list)
     metrics: list[ComponentRef] = Field(default_factory=list)
@@ -52,6 +53,7 @@ class RunIdentity(HashableModel):
 
     dataset_refs: list[DatasetRef] = Field(default_factory=list)
     generator_ref: ComponentRef
+    selector_ref: ComponentRef | None = None
     reducer_ref: ComponentRef | None = None
     parser_refs: list[ComponentRef] = Field(default_factory=list)
     metric_refs: list[ComponentRef] = Field(default_factory=list)
@@ -86,6 +88,9 @@ class RunProvenance(FrozenModel):
     themis_version: str
     python_version: str
     platform: str
+    git_commit: str | None = None
+    dependency_versions: dict[str, str] = Field(default_factory=dict)
+    provider_metadata: dict[str, JSONValue] = Field(default_factory=dict)
     storage: StorageConfig
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
@@ -101,6 +106,11 @@ class RunProvenance(FrozenModel):
         )
         return self.model_copy(
             update={
+                "dependency_versions": dict(self.dependency_versions),
+                "provider_metadata": sanitize_persisted_json_value(
+                    self.provider_metadata,
+                    field_path="provenance.provider_metadata",
+                ),
                 "storage": self.storage.model_copy(update={"parameters": storage_parameters}),
                 "environment_metadata": environment_metadata,
             }

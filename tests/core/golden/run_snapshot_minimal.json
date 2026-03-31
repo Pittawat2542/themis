@@ -24,7 +24,8 @@
       "component_id": "builtin/majority_vote",
       "fingerprint": "reducer-fingerprint",
       "version": "1.0"
-    }
+    },
+    "selector": null
   },
   "datasets": [
     {
@@ -88,19 +89,31 @@
       7,
       11
     ],
+    "selector_ref": null,
     "workflow_overrides": {}
   },
   "metric_kinds": [
     "pure"
   ],
   "provenance": {
+    "dependency_versions": {
+      "themis-eval": "4.0.0rc1"
+    },
     "environment_metadata": {
       "env": "test"
     },
+    "git_commit": "abc123",
     "platform": "macos",
+    "provider_metadata": {},
     "python_version": "3.12.9",
     "runtime": {
       "batch_root": null,
+      "generation_retry_attempts": 3,
+      "generation_retry_backoff": 2.0,
+      "generation_retry_delay": 0.01,
+      "judge_retry_attempts": 3,
+      "judge_retry_backoff": 2.0,
+      "judge_retry_delay": 0.01,
       "max_concurrent_tasks": 16,
       "provider_concurrency": {
         "openai:https://api.openai.com/v1": 4
@@ -123,5 +136,5 @@
     },
     "themis_version": "4.0.0rc1"
   },
-  "run_id": "e9cec0a66ee776a25673b8b2eebd3547032d0422fbe9f58acb94f939d7eb29e0"
+  "run_id": "1789ea0462d89e8962ed09464f41779f1c7ecbdd9ad23e54ececcbe41abbef03"
 }

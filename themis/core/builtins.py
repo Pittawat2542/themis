@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from typing import cast
 
-from themis.catalog.builtins.generators import DemoGenerator, DemoJudgeModel
-from themis.catalog.builtins.metrics import ExactMatchMetric
-from themis.catalog.builtins.parsers import JsonIdentityParser
-from themis.catalog.builtins.reducers import MajorityVoteReducer
 from themis.catalog.registry import load_component
 from themis.core.protocols import (
     CandidateReducer,
+    CandidateSelector,
     Generator,
     JudgeModel,
     LLMMetric,
@@ -30,6 +27,10 @@ def _resolve(value: object, *, kind: str) -> object:
 
 def resolve_generator_component(value: object) -> Generator:
     return cast(Generator, _resolve(value, kind="generator"))
+
+
+def resolve_selector_component(value: object) -> CandidateSelector:
+    return cast(CandidateSelector, _resolve(value, kind="selector"))
 
 
 def resolve_reducer_component(value: object) -> CandidateReducer:

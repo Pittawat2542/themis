@@ -5,9 +5,9 @@ import pytest
 from themis.catalog import load
 from themis.core.components import component_ref_from_value
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.contexts import EvalScoreContext, ParseContext, ReduceContext
+from themis.core.contexts import EvalScoreContext, SelectContext
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate
+from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject
@@ -36,15 +36,15 @@ class ChoosingJudgeModel:
 
 @pytest.mark.asyncio
 async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> None:
-    reducer = load("builtin/best_of_n")
+    selector = load("builtin/best_of_n")
     candidates = [
         GenerationResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
         GenerationResult(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
     ]
 
-    reduced = await reducer.reduce(
+    selected = await selector.select(
         candidates,
-        ReduceContext(
+        SelectContext(
             run_id="run-1",
             case_id="case-1",
             candidate_ids=[candidate.candidate_id for candidate in candidates],
@@ -53,9 +53,8 @@ async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> N
         ),
     )
 
-    assert reduced.candidate_id == "case-1-reduced"
-    assert reduced.final_output == {"answer": "5"}
-    assert reduced.metadata["strategy"] == "best_of_n"
+    assert [candidate.candidate_id for candidate in selected] == ["case-1-candidate-1"]
+    assert selected[0].final_output == {"answer": "5"}
 
 
 def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
@@ -98,6 +97,7 @@ def test_catalog_builtin_judge_metrics_run_end_to_end_through_experiment() -> No
         generation=GenerationConfig(
             generator="builtin/demo_generator",
             candidate_policy={"num_samples": 2},
+            selector="builtin/best_of_n",
             reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(

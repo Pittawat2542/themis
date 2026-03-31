@@ -61,6 +61,7 @@ class WorkflowFailure(HashableModel):
     step_id: str
     step_type: str
     error_message: str
+    retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
 
 
 class EvaluationExecution(HashableModel):

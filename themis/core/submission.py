@@ -14,6 +14,7 @@ from themis.core.config_loading import ExecutionComponentTargets, load_experimen
 from themis.core.experiment import Experiment
 from themis.core.protocols import (
     CandidateReducer,
+    CandidateSelector,
     Generator,
     JudgeModel,
     LLMMetric,
@@ -123,9 +124,12 @@ def _run_manifest(manifest: SubmissionManifest) -> RunResult:
 def _experiment_from_manifest(manifest: SubmissionManifest) -> Experiment:
     snapshot = manifest.snapshot
     targets = manifest.execution_targets
-    return Experiment(
+    experiment = Experiment(
         generation=GenerationConfig(
             generator=cast(Generator | str, _resolve_execution_target(targets.generator, kind="generator")),
+            selector=cast(CandidateSelector | str | None, _resolve_execution_target(targets.selector, kind="selector"))
+            if targets.selector is not None
+            else None,
             candidate_policy=snapshot.identity.candidate_policy,
             reducer=cast(CandidateReducer | str | None, _resolve_execution_target(targets.reducer, kind="reducer"))
             if targets.reducer is not None
@@ -155,7 +159,12 @@ def _experiment_from_manifest(manifest: SubmissionManifest) -> Experiment:
         themis_version=snapshot.provenance.themis_version,
         python_version=snapshot.provenance.python_version,
         platform=snapshot.provenance.platform,
+        git_commit=snapshot.provenance.git_commit,
+        dependency_versions=snapshot.provenance.dependency_versions,
+        provider_metadata=snapshot.provenance.provider_metadata,
     )
+    experiment._compiled_snapshot = snapshot
+    return experiment
 
 
 def _resolve_execution_target(target: str, *, kind: str) -> object:
@@ -206,6 +215,7 @@ def _resolve_execution_targets(
                 config_targets = loaded.metadata.component_targets
 
     generator = _select_target(experiment.generation.generator, config_targets.generator if config_targets else None)
+    selector = _select_target(experiment.generation.selector, config_targets.selector if config_targets else None)
     reducer = _select_target(experiment.generation.reducer, config_targets.reducer if config_targets else None)
     parsers = _select_target_list(
         experiment.evaluation.parsers,
@@ -224,6 +234,11 @@ def _resolve_execution_targets(
             "submit_experiment only supports builtin components or importable config symbols; "
             "define custom components in config via module:symbol paths."
         )
+    if experiment.generation.selector is not None and selector is None:
+        raise ValueError(
+            "submit_experiment only supports builtin components or importable config symbols; "
+            "define custom components in config via module:symbol paths."
+        )
     if experiment.generation.reducer is not None and reducer is None:
         raise ValueError(
             "submit_experiment only supports builtin components or importable config symbols; "
@@ -231,6 +246,7 @@ def _resolve_execution_targets(
         )
     return ExecutionComponentTargets(
         generator=generator,
+        selector=selector,
         reducer=reducer,
         parsers=[target for target in parsers if target is not None],
         metrics=[target for target in metrics if target is not None],

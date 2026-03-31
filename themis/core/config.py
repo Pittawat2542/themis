@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import TypeAlias
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from themis.core.base import HashableModel, JSONValue
 from themis.core.protocols import (
     CandidateReducer,
+    CandidateSelector,
     Generator,
     JudgeModel,
     LLMMetric,
@@ -19,6 +20,7 @@ from themis.core.protocols import (
 )
 
 GeneratorComponent: TypeAlias = Generator | str
+SelectorComponent: TypeAlias = CandidateSelector | str
 ReducerComponent: TypeAlias = CandidateReducer | str
 ParserComponent: TypeAlias = Parser | str
 JudgeModelComponent: TypeAlias = JudgeModel | str
@@ -30,6 +32,7 @@ class GenerationConfig(HashableModel):
 
     generator: GeneratorComponent
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
+    selector: SelectorComponent | None = None
     reducer: ReducerComponent | None = None
 
 
@@ -41,6 +44,12 @@ class EvaluationConfig(HashableModel):
     judge_models: list[JudgeModelComponent] = Field(default_factory=list)
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_single_parser(self) -> EvaluationConfig:
+        if len(self.parsers) > 1:
+            raise ValueError("Themis v4 supports at most one parser")
+        return self
 
 
 class StorageConfig(HashableModel):
@@ -57,6 +66,12 @@ class RuntimeConfig(HashableModel):
     stage_concurrency: dict[str, int] = Field(default_factory=dict)
     provider_concurrency: dict[str, int] = Field(default_factory=dict)
     provider_rate_limits: dict[str, int] = Field(default_factory=dict)
+    generation_retry_attempts: int = 3
+    generation_retry_delay: float = 0.01
+    generation_retry_backoff: float = 2.0
+    judge_retry_attempts: int = 3
+    judge_retry_delay: float = 0.01
+    judge_retry_backoff: float = 2.0
     store_retry_attempts: int = 5
     store_retry_delay: float = 0.01
     queue_root: str | None = None

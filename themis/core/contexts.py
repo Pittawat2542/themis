@@ -18,13 +18,21 @@ class GenerateContext(HashableModel):
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
-class ReduceContext(HashableModel):
+class SelectContext(HashableModel):
     run_id: str
     case_id: str
     candidate_ids: list[str] = Field(default_factory=list)
     seed: int | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
     judge_models: list[Any] = Field(default_factory=list, exclude=True)
+
+
+class ReduceContext(HashableModel):
+    run_id: str
+    case_id: str
+    candidate_ids: list[str] = Field(default_factory=list)
+    seed: int | None = None
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class ParseContext(HashableModel):

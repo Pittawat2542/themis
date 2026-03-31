@@ -12,6 +12,8 @@ from themis.core.events import (
     EvaluationFailedEvent,
     GenerationCompletedEvent,
     GenerationFailedEvent,
+    SelectionCompletedEvent,
+    SelectionFailedEvent,
     ParseCompletedEvent,
     ParseFailedEvent,
     ReductionCompletedEvent,
@@ -30,6 +32,8 @@ from themis.core.workflows import EvaluationExecution
 CaseStageEvent = (
     GenerationCompletedEvent
     | GenerationFailedEvent
+    | SelectionCompletedEvent
+    | SelectionFailedEvent
     | ReductionCompletedEvent
     | ReductionFailedEvent
     | ParseCompletedEvent
@@ -66,6 +70,9 @@ class CaseExecutionState(FrozenModel):
     generated_candidates_by_index: dict[int, GenerationResult] = Field(default_factory=dict)
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
+    selected_candidate_ids: list[str] | None = None
+    selection_metadata: dict[str, object] = Field(default_factory=dict)
+    selection_error: str | None = None
     reduced_candidate: ReducedCandidate | None = None
     reduction_error: str | None = None
     parsed_output: ParsedOutput | None = None
@@ -137,6 +144,16 @@ class ExecutionState(FrozenModel):
             failures = dict(current.generation_failures)
             failures[event.candidate_id] = event.error_message
             updated = current.model_copy(update={"generation_failures": failures})
+        elif isinstance(event, SelectionCompletedEvent):
+            updated = current.model_copy(
+                update={
+                    "selected_candidate_ids": list(event.candidate_ids),
+                    "selection_metadata": dict(event.metadata),
+                    "selection_error": None,
+                }
+            )
+        elif isinstance(event, SelectionFailedEvent):
+            updated = current.model_copy(update={"selection_error": event.error_message})
         elif isinstance(event, ReductionCompletedEvent) and event.result is not None:
             updated = current.model_copy(
                 update={"reduced_candidate": ReducedCandidate.model_validate(event.result)}
@@ -210,6 +227,7 @@ def _case_state_has_failures(case_state: CaseExecutionState) -> bool:
     return any(
         (
             case_state.generation_failures,
+            case_state.selection_error is not None,
             case_state.reduction_error is not None,
             case_state.parse_error is not None,
             case_state.evaluation_failures,

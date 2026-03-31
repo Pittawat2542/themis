@@ -3,7 +3,8 @@
 from themis.catalog.builtins.generators import DemoGenerator, DemoJudgeModel
 from themis.catalog.builtins.metrics import BleuMetric, ExactMatchMetric, F1Metric
 from themis.catalog.builtins.parsers import JsonIdentityParser
-from themis.catalog.builtins.reducers import BestOfNReducer, MajorityVoteReducer
+from themis.catalog.builtins.reducers import MajorityVoteReducer
+from themis.catalog.builtins.selectors import BestOfNSelector
 from themis.catalog.builtins.workflows import (
     LLMRubricMetric,
     MajorityVoteJudgeMetric,
@@ -12,7 +13,7 @@ from themis.catalog.builtins.workflows import (
 )
 
 __all__ = [
-    "BestOfNReducer",
+    "BestOfNSelector",
     "BleuMetric",
     "DemoGenerator",
     "DemoJudgeModel",

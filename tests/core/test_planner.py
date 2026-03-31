@@ -56,6 +56,7 @@ def _experiment(
     *,
     candidate_policy=None,
     reducer="builtin/majority_vote",
+    selector=None,
     parsers=None,
     metrics=None,
     seeds=None,
@@ -65,6 +66,7 @@ def _experiment(
         generation=GenerationConfig(
             generator="builtin/demo_generator",
             candidate_policy=candidate_policy or {"num_samples": 1},
+            selector=selector,
             reducer=reducer,
         ),
         evaluation=EvaluationConfig(
@@ -116,19 +118,23 @@ async def test_planner_honors_explicit_seeds_per_candidate() -> None:
 
 
 def test_planner_rejects_multiple_parsers_for_phase_2() -> None:
-    planner = Planner()
-    snapshot = _experiment(parsers=["builtin/json_identity", "builtin/json_identity"]).compile()
-
-    with pytest.raises(ValueError, match="Phase 2 supports at most one parser"):
-        planner.validate_snapshot(snapshot)
+    with pytest.raises(ValueError, match="at most one parser"):
+        _experiment(parsers=["builtin/json_identity", "builtin/json_identity"]).compile()
 
 
-def test_planner_requires_reducer_for_multi_candidate_runs() -> None:
+def test_planner_requires_reducer_or_selector_for_multi_candidate_runs() -> None:
     planner = Planner()
     snapshot = _experiment(candidate_policy={"num_samples": 2}, reducer=None, parsers=[]).compile()
 
-    with pytest.raises(ValueError, match="Multi-candidate runs require an explicit reducer"):
+    with pytest.raises(ValueError, match="reducer or selector"):
         planner.validate_snapshot(snapshot)
+
+
+def test_planner_allows_selector_for_multi_candidate_runs() -> None:
+    planner = Planner()
+    snapshot = _experiment(candidate_policy={"num_samples": 2}, selector="builtin/best_of_n", reducer=None).compile()
+
+    planner.validate_snapshot(snapshot)
 
 
 def test_planner_allows_workflow_backed_metrics_when_judge_models_are_present() -> None:

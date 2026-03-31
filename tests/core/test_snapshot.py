@@ -109,6 +109,9 @@ def _experiment(
         themis_version="4.0.0rc1",
         python_version="3.12.9",
         platform="macos",
+        git_commit="abc123",
+        dependency_versions={"themis-eval": "4.0.0rc1"},
+        provider_metadata={},
     )
 
 

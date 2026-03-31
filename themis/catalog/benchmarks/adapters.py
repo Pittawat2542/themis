@@ -84,7 +84,7 @@ def _code_generation_adapter(
     backends = ",".join(_coerce_string_list(spec.get("supported_execution_backends")))
     return {
         "candidate_policy": {"num_samples": 2},
-        "reducer_id": "builtin/best_of_n",
+        "selector_id": "builtin/best_of_n",
         "judge_model_ids": ["builtin/demo_judge"],
         "dataset_metadata": {
             "execution_kind": "code_generation",

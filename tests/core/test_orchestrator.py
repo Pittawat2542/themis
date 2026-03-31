@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
@@ -299,6 +300,55 @@ class FlakyJudgeModel:
         )
 
 
+class RetryableFailure(RuntimeError):
+    retryable = True
+
+
+class RetryableGenerator:
+    component_id = "generator/retryable"
+    version = "1.0"
+
+    def __init__(self, failures_before_success: int) -> None:
+        self.failures_before_success = failures_before_success
+        self.calls = 0
+
+    def fingerprint(self) -> str:
+        return "generator-retryable"
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        self.calls += 1
+        if self.calls <= self.failures_before_success:
+            raise RetryableFailure("temporary generator failure")
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
+            final_output=case.expected_output,
+        )
+
+
+class RetryableJudgeModel:
+    component_id = "builtin/demo_judge"
+    version = "1.0"
+
+    def __init__(self, failures_before_success: int) -> None:
+        self.failures_before_success = failures_before_success
+        self.calls = 0
+
+    def fingerprint(self) -> str:
+        return "judge-retryable"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del prompt, seed
+        self.calls += 1
+        if self.calls <= self.failures_before_success:
+            raise RetryableFailure("temporary judge failure")
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response="pass",
+        )
+
+
 class PartialFailureWorkflow:
     component_id = "workflow/partial"
     version = "1.0"
@@ -371,6 +421,98 @@ class AwaitedReducer:
             source_candidate_ids=[candidate.candidate_id for candidate in candidates],
             final_output=candidates[-1].final_output,
         )
+
+
+class SlowSelector:
+    component_id = "selector/slow"
+    version = "1.0"
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.max_active = 0
+
+    def fingerprint(self) -> str:
+        return "selector-slow"
+
+    async def select(self, candidates: list[GenerationResult], ctx) -> list[GenerationResult]:
+        del ctx
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            await asyncio.sleep(0.02)
+            return candidates[:1]
+        finally:
+            self.active -= 1
+
+
+class SlowReducer:
+    component_id = "reducer/slow"
+    version = "1.0"
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.max_active = 0
+
+    def fingerprint(self) -> str:
+        return "reducer-slow"
+
+    async def reduce(self, candidates: list[GenerationResult], ctx) -> ReducedCandidate:
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            await asyncio.sleep(0.02)
+            return ReducedCandidate(
+                candidate_id=f"{ctx.case_id}-reduced",
+                source_candidate_ids=[candidate.candidate_id for candidate in candidates],
+                final_output=candidates[0].final_output,
+            )
+        finally:
+            self.active -= 1
+
+
+class SlowParser:
+    component_id = "parser/slow"
+    version = "1.0"
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.max_active = 0
+
+    def fingerprint(self) -> str:
+        return "parser-slow"
+
+    def parse(self, candidate: ReducedCandidate, ctx) -> ParsedOutput:
+        del ctx
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            time.sleep(0.02)
+            return ParsedOutput(value=candidate.final_output, format="json")
+        finally:
+            self.active -= 1
+
+
+class SlowMetric:
+    component_id = "metric/slow"
+    version = "1.0"
+    metric_family = "pure"
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.max_active = 0
+
+    def fingerprint(self) -> str:
+        return "metric-slow"
+
+    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+        del parsed, case, ctx
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            time.sleep(0.02)
+            return Score(metric_id=self.component_id, value=1.0)
+        finally:
+            self.active -= 1
 
 
 def _experiment() -> Experiment:
@@ -724,3 +866,277 @@ async def test_orchestrator_persists_partial_workflow_failures_without_dropping_
     assert case.evaluation_executions[0].failures[0].call_id == "call-fail"
     assert case.scores[0].metric_id == "metric/partial"
     assert any(isinstance(event, EvaluationCompletedEvent) for event in events)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retries_retryable_generation_failures_and_persists_history() -> None:
+    generator = RetryableGenerator(failures_before_success=2)
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator=generator,
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=generator,
+        reducer=resolve_reducer_component("builtin/majority_vote"),
+        parser=resolve_parser_component("builtin/json_identity"),
+        metrics=[resolve_metric_component("builtin/exact_match")],
+    )
+
+    result = await orchestrator.run(snapshot)
+    stored = store.resume(snapshot.run_id)
+    assert stored is not None
+    execution_state = stored.execution_state
+    artifacts = execution_state.case_states["case-1"].generated_candidates_by_index[0].artifacts
+
+    assert result.status is RunStatus.COMPLETED
+    assert generator.calls == 3
+    assert artifacts is not None
+    retry_history = artifacts["retry_history"]
+    assert isinstance(retry_history, list)
+    assert len(retry_history) == 2
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retries_retryable_judge_failures_and_persists_history() -> None:
+    metric = RecordingLLMMetric()
+    judge_model = RetryableJudgeModel(failures_before_success=1)
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[metric],
+            parsers=["builtin/json_identity"],
+            judge_models=[judge_model],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component("builtin/demo_generator"),
+        reducer=resolve_reducer_component("builtin/majority_vote"),
+        parser=resolve_parser_component("builtin/json_identity"),
+        metrics=[metric],
+        judge_models=[judge_model],
+    )
+
+    result = await orchestrator.run(snapshot)
+    stored = store.resume(snapshot.run_id)
+    assert stored is not None
+    execution = stored.execution_state.case_states["case-1"].evaluation_executions["metric/llm"]
+
+    assert result.status is RunStatus.COMPLETED
+    assert judge_model.calls == 2
+    assert len(execution.judge_responses[0].retry_history) == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_limits_parsing_stage_concurrency() -> None:
+    parser = SlowParser()
+    metric = resolve_metric_component("builtin/exact_match")
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    for index in range(6)
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component("builtin/demo_generator"),
+        reducer=resolve_reducer_component("builtin/majority_vote"),
+        parser=parser,
+        metrics=[metric],
+        max_concurrent_tasks=4,
+        stage_concurrency={"parsing": 1},
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert parser.max_active <= 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_limits_selection_stage_concurrency() -> None:
+    selector = SlowSelector()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 2},
+            selector=selector,
+            reducer=None,
+        ),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    for index in range(6)
+                ],
+            )
+        ],
+        seeds=[7, 11],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component("builtin/demo_generator"),
+        selector=selector,
+        reducer=None,
+        parser=resolve_parser_component("builtin/json_identity"),
+        metrics=[resolve_metric_component("builtin/exact_match")],
+        max_concurrent_tasks=4,
+        stage_concurrency={"selection": 1},
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert selector.max_active <= 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_limits_reduction_stage_concurrency() -> None:
+    reducer = SlowReducer()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 2},
+            reducer=reducer,
+        ),
+        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    for index in range(6)
+                ],
+            )
+        ],
+        seeds=[7, 11],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component("builtin/demo_generator"),
+        reducer=reducer,
+        parser=resolve_parser_component("builtin/json_identity"),
+        metrics=[resolve_metric_component("builtin/exact_match")],
+        max_concurrent_tasks=4,
+        stage_concurrency={"reduction": 1},
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert reducer.max_active <= 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_limits_scoring_stage_concurrency() -> None:
+    metric = SlowMetric()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(metrics=[metric], parsers=["builtin/json_identity"]),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    for index in range(6)
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component("builtin/demo_generator"),
+        reducer=resolve_reducer_component("builtin/majority_vote"),
+        parser=resolve_parser_component("builtin/json_identity"),
+        metrics=[metric],
+        max_concurrent_tasks=4,
+        stage_concurrency={"scoring": 1},
+    )
+
+    await orchestrator.run(snapshot)
+
+    assert metric.max_active <= 1
