@@ -158,7 +158,7 @@ jobs:
 
       - name: Validate examples
         if: matrix.python-version == '3.12'
-        run: uv run python scripts/ci/run_examples.py
+        run: uv run pytest tests/test_docs_examples.py tests/test_readme_examples.py -q
 
   tests-postgres:
     name: Tests (Postgres, Python 3.12)
@@ -226,7 +226,7 @@ jobs:
         run: uv run pytest -q --cov=themis --cov-report=xml --cov-report=json:coverage.json --cov-fail-under=60
 
       - name: Enforce module-level coverage thresholds
-        run: python scripts/check_coverage_thresholds.py coverage.json
+        run: uv run python scripts/check_coverage_thresholds.py coverage.json
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7
@@ -257,7 +257,7 @@ jobs:
         run: uv sync --frozen --all-extras --dev
 
       - name: Run docs verification tests
-        run: uv run pytest tests/docs/test_docs_consistency.py tests/docs/test_public_docstrings.py tests/docs/test_documented_workflows.py tests/docs/test_example_display_paths.py
+        run: uv run pytest tests/test_docs_site.py tests/test_docs_inventory.py tests/test_docs_examples.py tests/test_readme_examples.py -q
 
       - name: Build documentation (strict)
         run: uv run mkdocs build --strict
