@@ -3,6 +3,7 @@ from __future__ import annotations
 from themis.catalog import load, run
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
+from tests.catalog_ids import catalog_benchmark_ids
 
 
 def test_rolebench_variant_uses_variant_specific_rubric() -> None:
@@ -50,39 +51,9 @@ def test_hle_and_humaneval_variants_preserve_variant_shapes() -> None:
 
 
 def test_catalog_load_covers_all_benchmark_entries_from_catalog_md() -> None:
-    benchmark_ids = [
-        "aime_2025",
-        "aime_2026",
-        "aethercode",
-        "apex_2025",
-        "babe",
-        "beyond_aime",
-        "encyclo_k",
-        "frontierscience",
-        "gpqa_diamond",
-        "healthbench",
-        "hle:math,reasoning",
-        "hmmt_feb_2025",
-        "hmmt_nov_2025",
-        "humaneval:mini",
-        "humaneval_plus:noextreme",
-        "imo_answerbench",
-        "livecodebench",
-        "lpfqa",
-        "mmlu_pro",
-        "mmmlu:thai",
-        "codeforces",
-        "phybench",
-        "procbench:task07",
-        "rolebench:role_generalization_eng",
-        "simpleqa_verified",
-        "superchem:en",
-        "supergpqa",
-    ]
+    loaded = [load(benchmark_id) for benchmark_id in catalog_benchmark_ids()]
 
-    loaded = [load(benchmark_id) for benchmark_id in benchmark_ids]
-
-    assert [benchmark.benchmark_id for benchmark in loaded] == benchmark_ids
+    assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
 
 
 def test_catalog_run_executes_variant_backed_benchmarks() -> None:

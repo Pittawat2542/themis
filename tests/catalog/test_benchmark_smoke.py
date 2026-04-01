@@ -6,37 +6,14 @@ from themis.catalog import load
 from themis.core.builtins import resolve_generator_component
 from themis.core.contexts import GenerateContext
 from themis.core.models import GenerationResult
+from tests.catalog_ids import catalog_benchmark_ids
 
 
-BENCHMARK_IDS = [
-    "aime_2025",
-    "aime_2026",
-    "aethercode",
-    "apex_2025",
-    "babe",
-    "beyond_aime",
-    "encyclo_k",
-    "frontierscience",
-    "gpqa_diamond",
-    "healthbench",
-    "hle:math,reasoning",
-    "hmmt_feb_2025",
-    "hmmt_nov_2025",
-    "humaneval:mini",
-    "humaneval_plus:noextreme",
-    "imo_answerbench",
-    "livecodebench",
-    "lpfqa",
-    "mmlu_pro",
-    "mmmlu:thai",
-    "codeforces",
-    "phybench",
-    "procbench:task07",
-    "rolebench:role_generalization_eng",
-    "simpleqa_verified",
-    "superchem:en",
-    "supergpqa",
-]
+BENCHMARK_IDS = catalog_benchmark_ids()
+
+
+def test_benchmark_catalog_smoke_ids_cover_manifest_entries() -> None:
+    assert BENCHMARK_IDS == catalog_benchmark_ids()
 
 
 @pytest.mark.asyncio

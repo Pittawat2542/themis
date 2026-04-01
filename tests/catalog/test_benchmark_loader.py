@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from themis.catalog import load
+from tests.catalog_ids import catalog_benchmark_ids
 
 
 def test_catalog_load_returns_benchmark_definition_for_manifest_entry() -> None:
@@ -46,17 +47,6 @@ def test_catalog_load_preserves_dataset_revisions_from_catalog_notes() -> None:
 
 
 def test_catalog_manifest_covers_representative_benchmark_families() -> None:
-    benchmark_ids = [
-        "aime_2025",
-        "gpqa_diamond",
-        "mmlu_pro",
-        "rolebench:role_generalization_eng",
-        "superchem:en",
-        "humaneval:mini",
-        "procbench:task07",
-        "simpleqa_verified",
-    ]
+    loaded = [load(benchmark_id) for benchmark_id in catalog_benchmark_ids()]
 
-    loaded = [load(benchmark_id) for benchmark_id in benchmark_ids]
-
-    assert [benchmark.benchmark_id for benchmark in loaded] == benchmark_ids
+    assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
