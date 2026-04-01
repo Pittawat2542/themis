@@ -63,7 +63,7 @@ done
         windows_script = bin_dir / "uv.bat"
         windows_script.write_text(
             "@echo off\n"
-            "python -c \"from pathlib import Path; import os, sys; "
+            'python -c "from pathlib import Path; import os, sys; '
             "args = sys.argv[1:]; "
             "log = Path(os.environ['FAKE_UV_LOG']); "
             "with log.open('a', encoding='utf-8') as fh: fh.write(' '.join(args) + '\\n'); "
@@ -74,7 +74,7 @@ done
             "        bad = True\n"
             "if bad:\n"
             "    print('saw broken content', file=sys.stderr)\n"
-            "    sys.exit(1)\"\n",
+            '    sys.exit(1)"\n',
             encoding="utf-8",
         )
 
