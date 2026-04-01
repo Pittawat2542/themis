@@ -59,6 +59,32 @@ done
         encoding="utf-8",
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    if os.name == "nt":
+        windows_script = bin_dir / "uv.bat"
+        windows_script.write_text(
+            "@echo off\n"
+            "python -c \"from pathlib import Path; import os, sys; "
+            "args = sys.argv[1:]; "
+            "log = Path(os.environ['FAKE_UV_LOG']); "
+            "with log.open('a', encoding='utf-8') as fh: fh.write(' '.join(args) + '\\n'); "
+            "bad = False; "
+            "for arg in args:\n"
+            "    p = Path(arg)\n"
+            "    if p.is_file() and 'BROKEN' in p.read_text(encoding='utf-8'):\n"
+            "        bad = True\n"
+            "if bad:\n"
+            "    print('saw broken content', file=sys.stderr)\n"
+            "    sys.exit(1)\"\n",
+            encoding="utf-8",
+        )
+
+
+def _script_command(script: Path) -> list[str]:
+    if os.name != "nt":
+        return [str(script)]
+    bash = shutil.which("bash")
+    assert bash is not None, "bash is required to test the pre-commit hook on Windows"
+    return [bash, str(script)]
 
 
 def test_check_staged_python_skips_when_no_python_files_are_staged(
@@ -72,9 +98,9 @@ def test_check_staged_python_skips_when_no_python_files_are_staged(
     _run(["git", "add", "README.md"], cwd=repo)
 
     env = dict(os.environ)
-    env["PATH"] = f"{tmp_path / 'bin'}:{env['PATH']}"
+    env["PATH"] = f"{tmp_path / 'bin'}{os.pathsep}{env['PATH']}"
     env["FAKE_UV_LOG"] = str(log_path)
-    result = _run([str(script)], cwd=repo, env=env)
+    result = _run(_script_command(script), cwd=repo, env=env)
 
     assert result.returncode == 0
     assert not log_path.exists()
@@ -95,9 +121,9 @@ def test_check_staged_python_uses_staged_snapshot_not_worktree(tmp_path: Path) -
     tracked.write_text("BROKEN = (\n", encoding="utf-8")
 
     env = dict(os.environ)
-    env["PATH"] = f"{tmp_path / 'bin'}:{env['PATH']}"
+    env["PATH"] = f"{tmp_path / 'bin'}{os.pathsep}{env['PATH']}"
     env["FAKE_UV_LOG"] = str(log_path)
-    result = _run([str(script)], cwd=repo, env=env)
+    result = _run(_script_command(script), cwd=repo, env=env)
 
     assert result.returncode == 0, result.stderr
     logged = log_path.read_text(encoding="utf-8")
