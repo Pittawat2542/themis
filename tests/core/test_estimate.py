@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    RuntimeConfig,
+    StorageConfig,
+)
 from themis.core.models import Case, Dataset
 from themis.core.planner import Planner
 
@@ -22,8 +27,16 @@ def test_planner_estimate_returns_deterministic_counts_for_compiled_snapshot() -
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
-                    Case(case_id="case-2", input={"question": "3+3"}, expected_output={"answer": "6"}),
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    ),
+                    Case(
+                        case_id="case-2",
+                        input={"question": "3+3"},
+                        expected_output={"answer": "6"},
+                    ),
                 ],
             )
         ],
@@ -55,7 +68,13 @@ def test_runtime_submission_paths_do_not_affect_run_identity() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )
@@ -73,7 +92,13 @@ def test_runtime_submission_paths_do_not_affect_run_identity() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         runtime=RuntimeConfig(queue_root="runs/queue"),
@@ -92,10 +117,20 @@ def test_runtime_submission_paths_do_not_affect_run_identity() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         runtime=RuntimeConfig(batch_root="runs/batch"),
     )
 
-    assert default_runtime.compile().run_id == worker_paths.compile().run_id == batch_paths.compile().run_id
+    assert (
+        default_runtime.compile().run_id
+        == worker_paths.compile().run_id
+        == batch_paths.compile().run_id
+    )

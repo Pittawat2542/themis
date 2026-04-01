@@ -6,7 +6,9 @@ import sys
 from pathlib import Path
 
 
-def _write_config(path: Path, *, store_path: Path, queue_root: Path, batch_root: Path) -> None:
+def _write_config(
+    path: Path, *, store_path: Path, queue_root: Path, batch_root: Path
+) -> None:
     path.write_text(
         f"""
 generation:
@@ -53,7 +55,9 @@ def test_worker_pool_submit_resume_and_run(tmp_path: Path) -> None:
     store_path = tmp_path / "run.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
 
     submit = _run_cli("submit", "--config", str(config_path), "--mode", "worker-pool")
     assert submit.returncode == 0, submit.stderr
@@ -74,7 +78,9 @@ def test_batch_submit_resume_and_run_request(tmp_path: Path) -> None:
     store_path = tmp_path / "run.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
 
     submit = _run_cli("submit", "--config", str(config_path), "--mode", "batch")
     assert submit.returncode == 0, submit.stderr
@@ -95,7 +101,9 @@ def test_submit_rejects_invalid_mode_without_traceback(tmp_path: Path) -> None:
     store_path = tmp_path / "run.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
 
     result = _run_cli("submit", "--config", str(config_path), "--mode", "typo")
 

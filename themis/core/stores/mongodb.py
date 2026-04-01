@@ -27,7 +27,10 @@ class MongoDbRunStore(ProjectionRefreshingStore):
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
         self._db()["run_snapshots"].replace_one(
             {"run_id": snapshot.run_id},
-            {"run_id": snapshot.run_id, "snapshot_json": snapshot.model_dump(mode="json")},
+            {
+                "run_id": snapshot.run_id,
+                "snapshot_json": snapshot.model_dump(mode="json"),
+            },
             upsert=True,
         )
         self._bootstrap_projections(snapshot)
@@ -47,7 +50,10 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             self._refresh_projections_for_event(snapshot, event)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
-        rows = sorted(self._db()["run_events"].find({"run_id": run_id}), key=lambda row: row["sequence"])
+        rows = sorted(
+            self._db()["run_events"].find({"run_id": run_id}),
+            key=lambda row: row["sequence"],
+        )
         events: list[RunEvent] = []
         for row in rows:
             try:
@@ -60,7 +66,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         return self._get_projection_with_backfill(run_id, projection_name)
 
     def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
-        row = self._db()["run_projections"].find_one({"run_id": run_id, "projection_name": projection_name})
+        row = self._db()["run_projections"].find_one(
+            {"run_id": run_id, "projection_name": projection_name}
+        )
         if row is None:
             return None
         return row["projection_json"]
@@ -73,7 +81,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         if not blob_path.exists():
             blob_path.write_bytes(blob)
         if not meta_path.exists():
-            meta_path.write_text(json.dumps({"media_type": media_type}, sort_keys=True), encoding="utf-8")
+            meta_path.write_text(
+                json.dumps({"media_type": media_type}, sort_keys=True), encoding="utf-8"
+            )
         return ref
 
     def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
@@ -82,7 +92,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         meta_path = self.blob_root / f"{digest}.meta.json"
         if not blob_path.is_file() or not meta_path.is_file():
             return None
-        return json.loads(meta_path.read_text(encoding="utf-8"))["media_type"], blob_path.read_bytes()
+        return json.loads(meta_path.read_text(encoding="utf-8"))[
+            "media_type"
+        ], blob_path.read_bytes()
 
     def resume(self, run_id: str) -> StoredRun | None:
         snapshot = self._load_snapshot(run_id)
@@ -96,7 +108,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             return None
         return snapshot_from_dict(dict(row["snapshot_json"]))
 
-    def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
+    def _write_projection(
+        self, run_id: str, projection_name: str, payload: JSONValue
+    ) -> None:
         self._db()["run_projections"].replace_one(
             {"run_id": run_id, "projection_name": projection_name},
             {
@@ -113,7 +127,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         try:
             pymongo = importlib.import_module("pymongo")
         except ImportError as exc:
-            raise ImportError("MongoDB support requires the optional 'mongodb' dependency.") from exc
+            raise ImportError(
+                "MongoDB support requires the optional 'mongodb' dependency."
+            ) from exc
         client = pymongo.MongoClient(self.url)
         self._database_handle = client[self.database]
         return self._database_handle

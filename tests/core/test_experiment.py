@@ -40,7 +40,9 @@ class MutableGenerator:
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         del ctx
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output)
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output
+        )
 
 
 def test_experiment_compile_returns_snapshot() -> None:
@@ -60,7 +62,11 @@ def test_experiment_compile_returns_snapshot() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
                 revision="r1",
             )
         ],
@@ -78,7 +84,9 @@ def test_experiment_compile_returns_snapshot() -> None:
     assert snapshot.datasets[0].cases[0].case_id == "case-1"
     assert snapshot.component_refs.generator.component_id == "builtin/demo_generator"
     assert snapshot.component_refs.judge_models[0].component_id == "judge/custom"
-    assert snapshot.identity.judge_model_refs[0].fingerprint == "judge-custom-fingerprint"
+    assert (
+        snapshot.identity.judge_model_refs[0].fingerprint == "judge-custom-fingerprint"
+    )
 
 
 def test_experiment_compile_captures_extended_provenance_fields() -> None:
@@ -96,7 +104,11 @@ def test_experiment_compile_captures_extended_provenance_fields() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         git_commit="abc123",
@@ -108,7 +120,9 @@ def test_experiment_compile_captures_extended_provenance_fields() -> None:
 
     assert snapshot.provenance.git_commit == "abc123"
     assert snapshot.provenance.dependency_versions == {"demo": "1.2.3"}
-    assert snapshot.provenance.provider_metadata == {"generator": {"provider_key": "demo"}}
+    assert snapshot.provenance.provider_metadata == {
+        "generator": {"provider_key": "demo"}
+    }
 
 
 def test_rejudge_requires_explicit_store_for_memory_backed_runs() -> None:
@@ -127,7 +141,11 @@ def test_rejudge_requires_explicit_store_for_memory_backed_runs() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -152,7 +170,11 @@ def test_replay_requires_explicit_store_for_memory_backed_runs() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -177,7 +199,11 @@ def test_run_accepts_explicit_store_for_memory_backed_runs() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -206,7 +232,13 @@ def test_run_rejects_component_fingerprint_mismatch_after_compile() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )
@@ -235,7 +267,13 @@ def test_compile_rejects_multiple_parsers() -> None:
             datasets=[
                 Dataset(
                     dataset_id="dataset-1",
-                    cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                    cases=[
+                        Case(
+                            case_id="case-1",
+                            input={"question": "2+2"},
+                            expected_output={"answer": "4"},
+                        )
+                    ],
                 )
             ],
         )
@@ -256,7 +294,11 @@ def test_replay_rejects_unknown_stage() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         seeds=[7],

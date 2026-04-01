@@ -14,7 +14,9 @@ class BestOfNSelector:
     def fingerprint(self) -> str:
         return "builtin-best-of-n-fingerprint"
 
-    async def select(self, candidates: list[GenerationResult], ctx: SelectContext) -> list[GenerationResult]:
+    async def select(
+        self, candidates: list[GenerationResult], ctx: SelectContext
+    ) -> list[GenerationResult]:
         if len(candidates) <= 1 or not ctx.judge_models:
             return candidates[:1]
         winner = await _select_best_candidate(candidates, ctx.judge_models)

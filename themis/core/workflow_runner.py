@@ -8,7 +8,12 @@ from collections.abc import Awaitable, Callable, Iterable
 
 from themis.core.contexts import EvalScoreContext
 from themis.core.base import JSONValue
-from themis.core.events import RunEvent, StepCompletedEvent, StepFailedEvent, StepStartedEvent
+from themis.core.events import (
+    RunEvent,
+    StepCompletedEvent,
+    StepFailedEvent,
+    StepStartedEvent,
+)
 from themis.core.models import Score, TraceStep, WorkflowTrace
 from themis.core.planner import Planner
 from themis.core.protocols import EvaluationWorkflow, JudgeModel
@@ -46,11 +51,16 @@ class DefaultWorkflowRunner:
         *,
         store: RunStore | None = None,
         judge_models: Iterable[JudgeModel],
-        model_call_executor: Callable[[JudgeModel, str, int | None], Awaitable[JudgeResponse]] | None = None,
+        model_call_executor: Callable[
+            [JudgeModel, str, int | None], Awaitable[JudgeResponse]
+        ]
+        | None = None,
         persist_event: Callable[[RunEvent], Awaitable[None]] | None = None,
     ) -> None:
         if store is None and persist_event is None:
-            raise ValueError("DefaultWorkflowRunner requires a store or persist_event callback")
+            raise ValueError(
+                "DefaultWorkflowRunner requires a store or persist_event callback"
+            )
         self.store = store
         self.judge_models = {model.component_id: model for model in judge_models}
         self.model_call_executor = model_call_executor
@@ -93,7 +103,10 @@ class DefaultWorkflowRunner:
                     TraceStep(
                         step_name=render_step_id,
                         step_type="render_prompt",
-                        input={"call_id": call.call_id, "judge_model": call.judge_model_id},
+                        input={
+                            "call_id": call.call_id,
+                            "judge_model": call.judge_model_id,
+                        },
                         output={"prompt": prompt.content},
                     )
                 )
@@ -132,10 +145,16 @@ class DefaultWorkflowRunner:
             ]
         )
 
-        judge_responses = [result.response for result in call_results if result.response is not None]
-        parsed_judgments = [result.judgment for result in call_results if result.judgment is not None]
+        judge_responses = [
+            result.response for result in call_results if result.response is not None
+        ]
+        parsed_judgments = [
+            result.judgment for result in call_results if result.judgment is not None
+        ]
         scores = [result.score for result in call_results if result.score is not None]
-        failures = [result.failure for result in call_results if result.failure is not None]
+        failures = [
+            result.failure for result in call_results if result.failure is not None
+        ]
         trace_steps = list(render_trace_steps)
         for result in call_results:
             trace_steps.extend(result.trace_steps)
@@ -160,10 +179,17 @@ class DefaultWorkflowRunner:
                 TraceStep(
                     step_name=aggregate_step_id,
                     step_type="aggregate_scores",
-                    input={"score_count": len(scores), "judgment_count": len(parsed_judgments)},
+                    input={
+                        "score_count": len(scores),
+                        "judgment_count": len(parsed_judgments),
+                    },
                     output={
-                        "value": aggregation_output.value if aggregation_output is not None else None,
-                        "method": aggregation_output.method if aggregation_output is not None else "none",
+                        "value": aggregation_output.value
+                        if aggregation_output is not None
+                        else None,
+                        "method": aggregation_output.method
+                        if aggregation_output is not None
+                        else "none",
                     },
                 )
             )
@@ -206,7 +232,10 @@ class DefaultWorkflowRunner:
             scores=scores,
             failures=failures,
             aggregation_output=aggregation_output,
-            trace=WorkflowTrace(trace_id=f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:trace", steps=trace_steps),
+            trace=WorkflowTrace(
+                trace_id=f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:trace",
+                steps=trace_steps,
+            ),
         )
 
     async def _execute_call(
@@ -235,15 +264,25 @@ class DefaultWorkflowRunner:
         try:
             judge_model = self.judge_models[call.judge_model_id]
             if self.model_call_executor is None:
-                response = await judge_model.judge(prompt.content, seed=call.effective_seed)
+                response = await judge_model.judge(
+                    prompt.content, seed=call.effective_seed
+                )
             else:
-                response = await self.model_call_executor(judge_model, prompt.content, call.effective_seed)
-            response = response.model_copy(update={"effective_seed": call.effective_seed})
+                response = await self.model_call_executor(
+                    judge_model, prompt.content, call.effective_seed
+                )
+            response = response.model_copy(
+                update={"effective_seed": call.effective_seed}
+            )
             trace_steps.append(
                 TraceStep(
                     step_name=model_step_id,
                     step_type="model_call",
-                    input={"prompt": prompt.content, "judge_model": call.judge_model_id, "seed": call.effective_seed},
+                    input={
+                        "prompt": prompt.content,
+                        "judge_model": call.judge_model_id,
+                        "seed": call.effective_seed,
+                    },
                     output={"raw_response": response.raw_response},
                 )
             )
@@ -253,7 +292,10 @@ class DefaultWorkflowRunner:
                     workflow_id=workflow_id,
                     step_id=model_step_id,
                     step_type="model_call",
-                    details={"judge_model": call.judge_model_id, "effective_seed": call.effective_seed},
+                    details={
+                        "judge_model": call.judge_model_id,
+                        "effective_seed": call.effective_seed,
+                    },
                 )
             )
         except Exception as exc:
@@ -296,7 +338,10 @@ class DefaultWorkflowRunner:
                 TraceStep(
                     step_name=parse_step_id,
                     step_type="parse_judgment",
-                    input={"raw_response": response.raw_response, "call_id": call.call_id},
+                    input={
+                        "raw_response": response.raw_response,
+                        "call_id": call.call_id,
+                    },
                     output={"label": judgment.label, "score": judgment.score},
                 )
             )
@@ -347,7 +392,10 @@ class DefaultWorkflowRunner:
                     step_name=score_step_id,
                     step_type="emit_score",
                     input={"label": judgment.label, "call_id": call.call_id},
-                    output={"metric_id": metric_id, "value": score.value if score is not None else None},
+                    output={
+                        "metric_id": metric_id,
+                        "value": score.value if score is not None else None,
+                    },
                 )
             )
             await self._persist_event(

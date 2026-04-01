@@ -11,7 +11,10 @@ from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef
 from themis.core.config import RuntimeConfig, StorageConfig
 from themis.core.events import RunEvent
 from themis.core.models import Dataset
-from themis.core.security import sanitize_persisted_json_value, sanitize_persisted_string_mapping
+from themis.core.security import (
+    sanitize_persisted_json_value,
+    sanitize_persisted_string_mapping,
+)
 
 if TYPE_CHECKING:
     from themis.core.results import ExecutionState
@@ -111,7 +114,9 @@ class RunProvenance(FrozenModel):
                     self.provider_metadata,
                     field_path="provenance.provider_metadata",
                 ),
-                "storage": self.storage.model_copy(update={"parameters": storage_parameters}),
+                "storage": self.storage.model_copy(
+                    update={"parameters": storage_parameters}
+                ),
                 "environment_metadata": environment_metadata,
             }
         )

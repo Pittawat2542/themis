@@ -72,7 +72,9 @@ class VLLMGenerator:
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         client = self._client or self._build_client()
-        request_input = self.input_builder(case) if self.input_builder is not None else case.input
+        request_input = (
+            self.input_builder(case) if self.input_builder is not None else case.input
+        )
         if self.api_mode == "chat_completions":
             response = await client.chat.completions.create(
                 model=self.model_id,
@@ -83,7 +85,9 @@ class VLLMGenerator:
             content = getattr(choices[0].message, "content", raw_response)
             usage = extract_token_usage(getattr(response, "usage", None))
         else:
-            response = await client.responses.create(model=self.model_id, input=request_input)
+            response = await client.responses.create(
+                model=self.model_id, input=request_input
+            )
             raw_response = dump_response(response)
             content = getattr(response, "output_text", raw_response)
             usage = extract_token_usage(getattr(response, "usage", None))
@@ -113,7 +117,9 @@ class VLLMGenerator:
             raise ImportError(
                 "vLLM adapter requires the Linux-only 'vllm' extra or an injected OpenAI-compatible client."
             ) from exc
-        return cast(_VLLMClient, AsyncOpenAI(base_url=self.base_url, api_key=self.api_key))
+        return cast(
+            _VLLMClient, AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
+        )
 
 
 def vllm(model_id: str, **kwargs: Any) -> VLLMGenerator:

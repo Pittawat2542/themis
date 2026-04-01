@@ -12,7 +12,9 @@ def run(*, config: str) -> int:
     experiment = load_experiment(config)
     store = initialize_store(experiment)
     result = experiment.run(store=store)
-    report_store = store if experiment.storage.store == "memory" else initialize_store(experiment)
+    report_store = (
+        store if experiment.storage.store == "memory" else initialize_store(experiment)
+    )
     benchmark = report_store.get_projection(result.run_id, "benchmark_result")
     metric_means = {}
     if isinstance(benchmark, dict):
@@ -41,7 +43,9 @@ def resume(*, config: str) -> int:
             {
                 "run_id": snapshot.run_id,
                 "status": stored.execution_state.status.value,
-                "total_cases": sum(len(dataset.cases) for dataset in stored.snapshot.datasets),
+                "total_cases": sum(
+                    len(dataset.cases) for dataset in stored.snapshot.datasets
+                ),
                 "completed_cases": len(stored.execution_state.case_states),
             }
         )

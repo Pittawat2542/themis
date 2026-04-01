@@ -16,13 +16,19 @@ def _snapshot():
             candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="mongodb"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -30,8 +36,13 @@ def _snapshot():
     return experiment.compile()
 
 
-def test_mongodb_store_persists_events_projections_and_blobs(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("themis.core.stores.mongodb.importlib.import_module", lambda name: fake_pymongo_module())
+def test_mongodb_store_persists_events_projections_and_blobs(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(
+        "themis.core.stores.mongodb.importlib.import_module",
+        lambda name: fake_pymongo_module(),
+    )
     blob_root = tmp_path / "mongodb-blobs"
     store = mongodb_store("mongodb://example", "themis_test", blob_root)
     snapshot = _snapshot()
@@ -44,13 +55,19 @@ def test_mongodb_store_persists_events_projections_and_blobs(monkeypatch, tmp_pa
 
     assert isinstance(store, MongoDbRunStore)
     assert store.resume(snapshot.run_id) is not None
-    assert [event.event_type for event in store.query_events(snapshot.run_id)] == ["run_started", "run_completed"]
+    assert [event.event_type for event in store.query_events(snapshot.run_id)] == [
+        "run_started",
+        "run_completed",
+    ]
     assert store.get_projection(snapshot.run_id, "run_result") is not None
     assert store.load_blob(blob_ref) == ("application/json", b'{"answer":"4"}')
 
 
 def test_store_factory_can_build_mongodb_backend(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("themis.core.stores.mongodb.importlib.import_module", lambda name: fake_pymongo_module())
+    monkeypatch.setattr(
+        "themis.core.stores.mongodb.importlib.import_module",
+        lambda name: fake_pymongo_module(),
+    )
 
     store = create_run_store(
         StorageConfig(

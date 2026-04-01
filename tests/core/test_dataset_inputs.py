@@ -41,11 +41,20 @@ def test_dataset_from_jsonl_reads_cases(tmp_path: Path) -> None:
     assert [case.case_id for case in dataset.cases] == ["case-1", "case-2"]
 
 
-def test_dataset_from_huggingface_raises_clear_error_when_dependency_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_dataset_from_huggingface_raises_clear_error_when_dependency_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delitem(sys.modules, "datasets", raising=False)
 
-    with pytest.raises(MissingOptionalDependencyError, match="pip install themis-eval\\[datasets\\]"):
-        dataset_from_huggingface(dataset_name="demo", split="train", input_field="prompt", expected_output_field="answer")
+    with pytest.raises(
+        MissingOptionalDependencyError, match="pip install themis-eval\\[datasets\\]"
+    ):
+        dataset_from_huggingface(
+            dataset_name="demo",
+            split="train",
+            input_field="prompt",
+            expected_output_field="answer",
+        )
 
 
 def test_dataset_from_huggingface_loads_rows(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -55,8 +64,16 @@ def test_dataset_from_huggingface_loads_rows(monkeypatch: pytest.MonkeyPatch) ->
             assert dataset_name == "demo"
             assert split == "train"
             return [
-                {"id": "row-1", "prompt": {"question": "2+2"}, "answer": {"answer": "4"}},
-                {"id": "row-2", "prompt": {"question": "3+3"}, "answer": {"answer": "6"}},
+                {
+                    "id": "row-1",
+                    "prompt": {"question": "2+2"},
+                    "answer": {"answer": "4"},
+                },
+                {
+                    "id": "row-2",
+                    "prompt": {"question": "3+3"},
+                    "answer": {"answer": "6"},
+                },
             ]
 
     monkeypatch.setitem(sys.modules, "datasets", FakeDatasetsModule())

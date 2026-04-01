@@ -6,7 +6,13 @@ import pytest
 
 from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.contexts import (
+    EvalScoreContext,
+    GenerateContext,
+    ParseContext,
+    ReduceContext,
+    ScoreContext,
+)
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
@@ -17,7 +23,15 @@ from themis.core.events import (
     ScoreFailedEvent,
 )
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
+from themis.core.models import (
+    Case,
+    Dataset,
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    Score,
+    ScoreError,
+)
 from themis.core.orchestrator import Orchestrator
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
@@ -47,7 +61,10 @@ class ConcurrencyTrackingGenerator:
         self.max_active = max(self.max_active, self.active)
         await asyncio.sleep(0.01)
         self.active -= 1
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate-{ctx.seed}", final_output=case.expected_output)
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
+            final_output=case.expected_output,
+        )
 
 
 class CountingGenerator:
@@ -62,7 +79,10 @@ class CountingGenerator:
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         self.calls += 1
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate-{ctx.seed}", final_output=case.expected_output)
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
+            final_output=case.expected_output,
+        )
 
 
 class CountingReducer:
@@ -75,7 +95,9 @@ class CountingReducer:
     def fingerprint(self) -> str:
         return "reducer-counting"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
+    async def reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> ReducedCandidate:
         self.calls += 1
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
@@ -112,7 +134,10 @@ class CountingMetric:
     def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
         del ctx
         self.calls += 1
-        return Score(metric_id=self.component_id, value=float(parsed.value == case.expected_output))
+        return Score(
+            metric_id=self.component_id,
+            value=float(parsed.value == case.expected_output),
+        )
 
 
 class RateLimitedGenerator:
@@ -210,16 +235,24 @@ class DemoWorkflow:
     def judge_calls(self) -> list[JudgeCall]:
         return [JudgeCall(call_id="call-0", judge_model_id="builtin/demo_judge")]
 
-    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+    def render_prompt(
+        self, call: JudgeCall, subject, ctx: EvalScoreContext
+    ) -> RenderedJudgePrompt:
         del call, ctx
-        return RenderedJudgePrompt(prompt_id="prompt-0", content=f"Grade {subject.candidates[0].final_output}")
+        return RenderedJudgePrompt(
+            prompt_id="prompt-0", content=f"Grade {subject.candidates[0].final_output}"
+        )
 
-    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+    def parse_judgment(
+        self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext
+    ) -> ParsedJudgment:
         del call, ctx
         label = response.raw_response.strip().split()[0].lower()
         return ParsedJudgment(label=label, score=1.0 if label == "pass" else 0.0)
 
-    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+    def score_judgment(
+        self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
+    ) -> Score | None:
         del call, ctx
         return Score(metric_id="metric/llm", value=float(judgment.score or 0.0))
 
@@ -230,7 +263,9 @@ class DemoWorkflow:
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
-        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+        return AggregationResult(
+            method="mean", value=sum(score.value for score in scores) / len(scores)
+        )
 
 
 class SlowJudgeModel:
@@ -286,7 +321,13 @@ def _experiment(*, generator, reducer, parser, metric, num_samples=1) -> Experim
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7] if num_samples == 1 else [7, 11, 13, 17][:num_samples],
@@ -333,7 +374,9 @@ async def test_orchestrator_retries_transient_store_failures() -> None:
     reducer = CountingReducer()
     parser = CountingParser()
     metric = CountingMetric()
-    experiment = _experiment(generator=generator, reducer=reducer, parser=parser, metric=metric)
+    experiment = _experiment(
+        generator=generator, reducer=reducer, parser=parser, metric=metric
+    )
     snapshot = experiment.compile()
     store = FlakyStore()
 
@@ -381,7 +424,10 @@ async def test_orchestrator_resumes_without_regenerating_completed_candidates() 
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         )
     )
 
@@ -404,7 +450,9 @@ async def test_orchestrator_rescores_without_regeneration_or_reparse() -> None:
     reducer = CountingReducer()
     parser = CountingParser()
     metric = CountingMetric()
-    experiment = _experiment(generator=generator, reducer=reducer, parser=parser, metric=metric)
+    experiment = _experiment(
+        generator=generator, reducer=reducer, parser=parser, metric=metric
+    )
     snapshot = experiment.compile()
     store = InMemoryRunStore()
 
@@ -418,7 +466,10 @@ async def test_orchestrator_rescores_without_regeneration_or_reparse() -> None:
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         )
     )
     store.persist_event(
@@ -465,7 +516,9 @@ async def test_orchestrator_retries_failed_scores_on_resume() -> None:
     reducer = CountingReducer()
     parser = CountingParser()
     metric = CountingMetric()
-    experiment = _experiment(generator=generator, reducer=reducer, parser=parser, metric=metric)
+    experiment = _experiment(
+        generator=generator, reducer=reducer, parser=parser, metric=metric
+    )
     snapshot = experiment.compile()
     store = InMemoryRunStore()
 
@@ -479,7 +532,10 @@ async def test_orchestrator_retries_failed_scores_on_resume() -> None:
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         )
     )
     store.persist_event(
@@ -509,7 +565,9 @@ async def test_orchestrator_retries_failed_scores_on_resume() -> None:
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id=metric.component_id,
-            error=ScoreError(metric_id=metric.component_id, reason="temporary", retryable=True).model_dump(mode="json"),
+            error=ScoreError(
+                metric_id=metric.component_id, reason="temporary", retryable=True
+            ).model_dump(mode="json"),
         )
     )
 
@@ -579,7 +637,9 @@ async def test_orchestrator_applies_default_provider_rate_limit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_updates_provider_rate_limit_from_generation_artifacts() -> None:
+async def test_orchestrator_updates_provider_rate_limit_from_generation_artifacts() -> (
+    None
+):
     generator = RateLimitedGenerator(updated_rate_limit=120)
     reducer = CountingReducer()
     parser = CountingParser()
@@ -628,7 +688,9 @@ async def test_orchestrator_updates_provider_rate_limit_from_generation_artifact
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metrics() -> None:
+async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metrics() -> (
+    None
+):
     generator = CountingGenerator()
     reducer = CountingReducer()
     parser = CountingParser()
@@ -648,7 +710,13 @@ async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metr
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -666,7 +734,10 @@ async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metr
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         )
     )
     store.persist_event(
@@ -753,8 +824,16 @@ async def test_orchestrator_respects_evaluation_concurrency_cap() -> None:
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
-                    Case(case_id="case-2", input={"question": "3+3"}, expected_output={"answer": "6"}),
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    ),
+                    Case(
+                        case_id="case-2",
+                        input={"question": "3+3"},
+                        expected_output={"answer": "6"},
+                    ),
                 ],
             )
         ],
@@ -832,7 +911,9 @@ async def test_orchestrator_limits_in_flight_case_tasks() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume() -> None:
+async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume() -> (
+    None
+):
     generator = CountingGenerator()
     reducer = CountingReducer()
     parser = CountingParser()
@@ -852,7 +933,13 @@ async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume(
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -870,7 +957,10 @@ async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume(
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         )
     )
     store.persist_event(
@@ -944,7 +1034,9 @@ async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume(
 
 
 @pytest.mark.asyncio
-async def test_experiment_rejudge_async_reruns_workflow_metrics_without_regeneration(tmp_path) -> None:
+async def test_experiment_rejudge_async_reruns_workflow_metrics_without_regeneration(
+    tmp_path,
+) -> None:
     metric = CountingLLMMetric()
     judge_model = DemoJudgeModel()
     generator = CountingGenerator()
@@ -961,11 +1053,19 @@ async def test_experiment_rejudge_async_reruns_workflow_metrics_without_regenera
             parsers=[parser],
             judge_models=[judge_model],
         ),
-        storage=StorageConfig(store="sqlite", parameters={"path": str(tmp_path / "run_store.sqlite3")}),
+        storage=StorageConfig(
+            store="sqlite", parameters={"path": str(tmp_path / "run_store.sqlite3")}
+        ),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -980,7 +1080,9 @@ async def test_experiment_rejudge_async_reruns_workflow_metrics_without_regenera
     parser.calls = 0
     metric.calls = 0
 
-    result = await experiment.rejudge_async(metric_ids=[metric.component_id], store=store)
+    result = await experiment.rejudge_async(
+        metric_ids=[metric.component_id], store=store
+    )
     events = store.query_events(experiment.compile().run_id)
 
     assert result.status is RunStatus.COMPLETED

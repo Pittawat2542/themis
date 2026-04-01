@@ -8,7 +8,9 @@ from themis.cli.helpers import initialize_store, load_experiment
 from themis.core.reporter import Reporter
 
 
-def report(*, config: str, format: Literal["json", "markdown", "csv", "latex"] = "json") -> int:
+def report(
+    *, config: str, format: Literal["json", "markdown", "csv", "latex"] = "json"
+) -> int:
     experiment = load_experiment(config)
     snapshot = experiment.compile()
     store = initialize_store(experiment)

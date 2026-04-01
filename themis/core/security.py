@@ -51,7 +51,9 @@ def sanitize_persisted_string_mapping(
     field_path: str,
 ) -> dict[str, str]:
     sanitized = sanitize_persisted_json_value(dict(value), field_path=field_path)
-    if not isinstance(sanitized, dict) or any(not isinstance(item, str) for item in sanitized.values()):
+    if not isinstance(sanitized, dict) or any(
+        not isinstance(item, str) for item in sanitized.values()
+    ):
         raise TypeError(f"Expected sanitized string mapping at {field_path}")
     return cast(dict[str, str], sanitized)
 
@@ -125,4 +127,6 @@ def _redact_url_credentials(value: str) -> str | None:
     else:
         auth = ""
 
-    return urlunsplit((parts.scheme, f"{auth}{host}", parts.path, parts.query, parts.fragment))
+    return urlunsplit(
+        (parts.scheme, f"{auth}{host}", parts.path, parts.query, parts.fragment)
+    )

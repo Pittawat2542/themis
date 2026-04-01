@@ -13,7 +13,9 @@ from themis.core.config import StorageConfig
 from themis.core.dataset_inputs import dataset_from_inline, dataset_from_jsonl
 
 
-def _run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_cli(
+    *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
@@ -28,7 +30,9 @@ def _run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.Comple
 
 def test_quick_eval_inline_matches_python_api() -> None:
     store = InMemoryRunStore()
-    dataset = dataset_from_inline(input_value={"question": "2+2"}, expected_output={"answer": "4"})
+    dataset = dataset_from_inline(
+        input_value={"question": "2+2"}, expected_output={"answer": "4"}
+    )
     python_result = evaluate(
         model="builtin/demo_generator",
         data=[dataset],
@@ -37,7 +41,10 @@ def test_quick_eval_inline_matches_python_api() -> None:
         storage=StorageConfig(store="memory"),
         store=store,
     )
-    benchmark = cast(dict[str, JSONValue], store.get_projection(python_result.run_id, "benchmark_result"))
+    benchmark = cast(
+        dict[str, JSONValue],
+        store.get_projection(python_result.run_id, "benchmark_result"),
+    )
 
     cli_result = _run_cli(
         "quick-eval",
@@ -56,7 +63,9 @@ def test_quick_eval_inline_matches_python_api() -> None:
 
 def test_quick_eval_file_matches_python_api(tmp_path: Path) -> None:
     path = tmp_path / "cases.jsonl"
-    path.write_text('{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n')
+    path.write_text(
+        '{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n'
+    )
 
     store = InMemoryRunStore()
     dataset = dataset_from_jsonl(path)
@@ -68,7 +77,10 @@ def test_quick_eval_file_matches_python_api(tmp_path: Path) -> None:
         storage=StorageConfig(store="memory"),
         store=store,
     )
-    benchmark = cast(dict[str, JSONValue], store.get_projection(python_result.run_id, "benchmark_result"))
+    benchmark = cast(
+        dict[str, JSONValue],
+        store.get_projection(python_result.run_id, "benchmark_result"),
+    )
 
     cli_result = _run_cli("quick-eval", "file", "--path", str(path))
 
@@ -123,7 +135,9 @@ def load_dataset(dataset_name, *, split):
         "answer",
         "--case-id-field",
         "id",
-        env={"PYTHONPATH": f"{tmp_path / 'fakepkgs'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"},
+        env={
+            "PYTHONPATH": f"{tmp_path / 'fakepkgs'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"
+        },
     )
 
     assert cli_result.returncode == 0, cli_result.stderr

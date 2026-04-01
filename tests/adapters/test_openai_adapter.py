@@ -43,12 +43,16 @@ async def test_openai_adapter_generates_results_from_responses_api() -> None:
     generator = openai("gpt-5.4-mini", client=client, instructions="Answer directly.")
     case = Case(case_id="case-1", input="What is 2+2?", expected_output="4")
 
-    result = await generator.generate(case, GenerateContext(run_id="run-1", case_id="case-1", seed=7))
+    result = await generator.generate(
+        case, GenerateContext(run_id="run-1", case_id="case-1", seed=7)
+    )
 
     assert isinstance(result, GenerationResult)
     assert result.candidate_id == "case-1-candidate-7"
     assert result.final_output == "4"
-    assert [(message.role, message.content) for message in result.conversation or []] == [
+    assert [
+        (message.role, message.content) for message in result.conversation or []
+    ] == [
         ("system", "Answer directly."),
         ("user", "What is 2+2?"),
         ("assistant", "4"),

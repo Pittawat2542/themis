@@ -112,7 +112,11 @@ class _RubricWorkflow:
 
     def judge_calls(self) -> list[JudgeCall]:
         return [
-            JudgeCall(call_id=f"judge-{index}", judge_model_id=judge_model_id, repeat_index=index)
+            JudgeCall(
+                call_id=f"judge-{index}",
+                judge_model_id=judge_model_id,
+                repeat_index=index,
+            )
             for index, judge_model_id in enumerate(self.judge_model_ids)
         ]
 
@@ -151,7 +155,11 @@ class _RubricWorkflow:
         ctx: EvalScoreContext,
     ) -> Score | None:
         del call, ctx
-        return Score(metric_id=self.metric_id, value=float(judgment.score or 0.0), details={"label": judgment.label})
+        return Score(
+            metric_id=self.metric_id,
+            value=float(judgment.score or 0.0),
+            details={"label": judgment.label},
+        )
 
     def aggregate(
         self,
@@ -234,7 +242,9 @@ class _PairwiseWorkflow:
     ) -> ParsedJudgment:
         del call, ctx
         label = response.raw_response.strip().split()[0].lower()
-        return ParsedJudgment(label=label, score=_pairwise_score(label), rationale=response.raw_response)
+        return ParsedJudgment(
+            label=label, score=_pairwise_score(label), rationale=response.raw_response
+        )
 
     def score_judgment(
         self,
@@ -243,7 +253,11 @@ class _PairwiseWorkflow:
         ctx: EvalScoreContext,
     ) -> Score | None:
         del call, ctx
-        return Score(metric_id=self.metric_id, value=float(judgment.score or 0.0), details={"label": judgment.label})
+        return Score(
+            metric_id=self.metric_id,
+            value=float(judgment.score or 0.0),
+            details={"label": judgment.label},
+        )
 
     def aggregate(
         self,

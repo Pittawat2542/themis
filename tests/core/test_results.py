@@ -31,7 +31,13 @@ def _snapshot():
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )
@@ -82,18 +88,30 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
                 case_id="case-1",
                 candidate_id="case-1-reduced",
                 metric_id="builtin/exact_match",
-                score={"metric_id": "builtin/exact_match", "value": 1.0, "details": {"matched": True}},
+                score={
+                    "metric_id": "builtin/exact_match",
+                    "value": 1.0,
+                    "details": {"matched": True},
+                },
             ),
             RunCompletedEvent(run_id="run-1"),
         ],
     )
 
     assert state.status is RunStatus.COMPLETED
-    assert state.case_states["case-1"].generated_candidates["candidate-1"].final_output == {"answer": "4"}
+    assert state.case_states["case-1"].generated_candidates[
+        "candidate-1"
+    ].final_output == {"answer": "4"}
     assert state.case_states["case-1"].reduced_candidate is not None
     assert state.case_states["case-1"].parsed_output is not None
-    assert state.case_states["case-1"].evaluation_executions["metric/judge"].execution_id == "execution-1"
-    assert state.case_states["case-1"].successful_scores["builtin/exact_match"].value == 1.0
+    assert (
+        state.case_states["case-1"].evaluation_executions["metric/judge"].execution_id
+        == "execution-1"
+    )
+    assert (
+        state.case_states["case-1"].successful_scores["builtin/exact_match"].value
+        == 1.0
+    )
 
 
 def test_stored_run_exposes_execution_state() -> None:

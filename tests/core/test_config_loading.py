@@ -15,7 +15,9 @@ class ConfigGenerator:
 
     async def generate(self, case: Case, ctx: object) -> GenerationResult:
         del ctx
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output)
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output
+        )
 
 
 CONFIG_GENERATOR = ConfigGenerator()
@@ -55,7 +57,19 @@ seeds: [7]
         generation=loaded.generation,
         evaluation=loaded.evaluation,
         storage=loaded.storage,
-        datasets=[Dataset(dataset_id="dataset-1", revision="r1", cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                revision="r1",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
         seeds=[7],
     )
 
@@ -94,7 +108,9 @@ answer = "4"
 """.strip()
     )
 
-    experiment = Experiment.from_config(path, overrides=["generation.candidate_policy.num_samples=2"])
+    experiment = Experiment.from_config(
+        path, overrides=["generation.candidate_policy.num_samples=2"]
+    )
 
     assert experiment.generation.candidate_policy["num_samples"] == 2
 
@@ -122,11 +138,17 @@ datasets:
 
     assert not isinstance(experiment.generation.generator, str)
     assert experiment.generation.generator.component_id == CONFIG_GENERATOR.component_id
-    assert experiment.generation.generator.fingerprint() == CONFIG_GENERATOR.fingerprint()
-    assert experiment.compile().component_refs.generator.component_id == "generator/config"
+    assert (
+        experiment.generation.generator.fingerprint() == CONFIG_GENERATOR.fingerprint()
+    )
+    assert (
+        experiment.compile().component_refs.generator.component_id == "generator/config"
+    )
 
 
-def test_experiment_from_config_resolves_relative_paths_from_config_directory(tmp_path: Path) -> None:
+def test_experiment_from_config_resolves_relative_paths_from_config_directory(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "project"
     root.mkdir()
     path = root / "experiment.yaml"
@@ -162,12 +184,16 @@ datasets:
 
     experiment = Experiment.from_config(path)
 
-    assert experiment.storage.parameters["path"] == str(root / "runs" / "themis.sqlite3")
+    assert experiment.storage.parameters["path"] == str(
+        root / "runs" / "themis.sqlite3"
+    )
     assert experiment.runtime.queue_root == str(root / "runs" / "queue")
     assert experiment.runtime.batch_root == str(root / "runs" / "batch")
 
 
-def test_experiment_from_config_applies_overrides_before_normalizing_paths(tmp_path: Path) -> None:
+def test_experiment_from_config_applies_overrides_before_normalizing_paths(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "project"
     root.mkdir()
     path = root / "experiment.yaml"

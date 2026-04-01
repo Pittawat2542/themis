@@ -10,7 +10,14 @@ from typing import Literal, TypeGuard, cast
 
 from themis.core.base import JSONValue
 from themis.core.config import RuntimeConfig
-from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext, SelectContext
+from themis.core.contexts import (
+    EvalScoreContext,
+    GenerateContext,
+    ParseContext,
+    ReduceContext,
+    ScoreContext,
+    SelectContext,
+)
 from themis.core.events import (
     EvaluationCompletedEvent,
     EvaluationFailedEvent,
@@ -53,7 +60,14 @@ from themis.core.protocols import (
     TracingProvider,
     WorkflowRunner,
 )
-from themis.core.results import CaseExecutionState, CaseResult, ExecutionState, GenerationWorkItem, RunResult, RunStatus
+from themis.core.results import (
+    CaseExecutionState,
+    CaseResult,
+    ExecutionState,
+    GenerationWorkItem,
+    RunResult,
+    RunStatus,
+)
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
 from themis.core.subjects import (
@@ -172,37 +186,49 @@ class Orchestrator:
             "generation": asyncio.Semaphore(
                 max(
                     1,
-                    self.runtime.stage_concurrency.get("generation", self.runtime.max_concurrent_tasks),
+                    self.runtime.stage_concurrency.get(
+                        "generation", self.runtime.max_concurrent_tasks
+                    ),
                 )
             ),
             "evaluation": asyncio.Semaphore(
                 max(
                     1,
-                    self.runtime.stage_concurrency.get("evaluation", self.runtime.max_concurrent_tasks),
+                    self.runtime.stage_concurrency.get(
+                        "evaluation", self.runtime.max_concurrent_tasks
+                    ),
                 )
             ),
             "selection": asyncio.Semaphore(
                 max(
                     1,
-                    self.runtime.stage_concurrency.get("selection", self.runtime.max_concurrent_tasks),
+                    self.runtime.stage_concurrency.get(
+                        "selection", self.runtime.max_concurrent_tasks
+                    ),
                 )
             ),
             "reduction": asyncio.Semaphore(
                 max(
                     1,
-                    self.runtime.stage_concurrency.get("reduction", self.runtime.max_concurrent_tasks),
+                    self.runtime.stage_concurrency.get(
+                        "reduction", self.runtime.max_concurrent_tasks
+                    ),
                 )
             ),
             "parsing": asyncio.Semaphore(
                 max(
                     1,
-                    self.runtime.stage_concurrency.get("parsing", self.runtime.max_concurrent_tasks),
+                    self.runtime.stage_concurrency.get(
+                        "parsing", self.runtime.max_concurrent_tasks
+                    ),
                 )
             ),
             "scoring": asyncio.Semaphore(
                 max(
                     1,
-                    self.runtime.stage_concurrency.get("scoring", self.runtime.max_concurrent_tasks),
+                    self.runtime.stage_concurrency.get(
+                        "scoring", self.runtime.max_concurrent_tasks
+                    ),
                 )
             ),
         }
@@ -219,7 +245,9 @@ class Orchestrator:
         stored_run = self.store.resume(snapshot.run_id)
         existing_events = stored_run.events if stored_run is not None else []
         existing_state = (
-            stored_run.execution_state if stored_run is not None else ExecutionState(run_id=snapshot.run_id)
+            stored_run.execution_state
+            if stored_run is not None
+            else ExecutionState(run_id=snapshot.run_id)
         )
         run_span = self.tracing_provider.start_span("run", {"run_id": snapshot.run_id})
         if not any(isinstance(event, RunStartedEvent) for event in existing_events):
@@ -229,19 +257,27 @@ class Orchestrator:
         case_failures: list[bool] = []
 
         try:
-            async for case_result, case_failed in self._run_cases(snapshot, existing_state):
+            async for case_result, case_failed in self._run_cases(
+                snapshot, existing_state
+            ):
                 case_results.append(case_result)
                 case_failures.append(case_failed)
-            status = RunStatus.PARTIAL_FAILURE if any(case_failures) else RunStatus.COMPLETED
+            status = (
+                RunStatus.PARTIAL_FAILURE if any(case_failures) else RunStatus.COMPLETED
+            )
             await self._persist_event(RunCompletedEvent(run_id=snapshot.run_id))
-            self.tracing_provider.end_span(run_span, "error" if status is RunStatus.PARTIAL_FAILURE else "ok")
+            self.tracing_provider.end_span(
+                run_span, "error" if status is RunStatus.PARTIAL_FAILURE else "ok"
+            )
             del status, case_results, case_failures
             stored_run = self.store.resume(snapshot.run_id)
             if stored_run is None:
                 raise RuntimeError(f"Run disappeared from store: {snapshot.run_id}")
             return build_run_result(stored_run.snapshot, stored_run.events)
         except Exception as exc:
-            await self._persist_event(RunFailedEvent(run_id=snapshot.run_id, error_message=str(exc)))
+            await self._persist_event(
+                RunFailedEvent(run_id=snapshot.run_id, error_message=str(exc))
+            )
             self.tracing_provider.end_span(run_span, "error")
             raise
 
@@ -253,13 +289,19 @@ class Orchestrator:
             if not items:
                 continue
             while len(pending) >= max_in_flight_cases:
-                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                done, pending = await asyncio.wait(
+                    pending, return_when=asyncio.FIRST_COMPLETED
+                )
                 for task in done:
                     yield task.result()
-            pending.add(asyncio.create_task(self._run_case(snapshot, items, existing_state)))
+            pending.add(
+                asyncio.create_task(self._run_case(snapshot, items, existing_state))
+            )
 
         while pending:
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
             for task in done:
                 yield task.result()
 
@@ -284,7 +326,9 @@ class Orchestrator:
         existing_state: ExecutionState,
     ) -> tuple[CaseResult, bool]:
         case = items[0].case
-        prior_case_state = self._replay_case_state(existing_state.case_states.get(case.case_id, CaseExecutionState()))
+        prior_case_state = self._replay_case_state(
+            existing_state.case_states.get(case.case_id, CaseExecutionState())
+        )
         generated_by_index = dict(prior_case_state.generated_candidates_by_index)
         workflow_executions = dict(prior_case_state.evaluation_executions)
         evaluation_failures = dict(prior_case_state.evaluation_failures)
@@ -297,34 +341,51 @@ class Orchestrator:
             for item in items
             if item.candidate_index not in generated_by_index
         ]
-        for candidate_index, generated, failed in await asyncio.gather(*pending_generation):
+        for candidate_index, generated, failed in await asyncio.gather(
+            *pending_generation
+        ):
             if generated is not None:
                 generated_by_index[candidate_index] = generated
             had_failure = had_failure or failed
 
-        generated_candidates = [generated_by_index[index] for index in sorted(generated_by_index)]
+        generated_candidates = [
+            generated_by_index[index] for index in sorted(generated_by_index)
+        ]
         if not generated_candidates and prior_case_state.reduced_candidate is None:
             return CaseResult(case_id=case.case_id), True
 
-        selected_candidates = self._selected_candidates_from_state(prior_case_state, generated_candidates)
-        if self.selector is not None and prior_case_state.selected_candidate_ids is None:
+        selected_candidates = self._selected_candidates_from_state(
+            prior_case_state, generated_candidates
+        )
+        if (
+            self.selector is not None
+            and prior_case_state.selected_candidate_ids is None
+        ):
             select_ctx = SelectContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
-                candidate_ids=[candidate.candidate_id for candidate in generated_candidates],
+                candidate_ids=[
+                    candidate.candidate_id for candidate in generated_candidates
+                ],
                 seed=items[0].seed,
                 judge_models=list(self.judge_models),
             )
-            span = self.tracing_provider.start_span("selection", {"case_id": case.case_id})
+            span = self.tracing_provider.start_span(
+                "selection", {"case_id": case.case_id}
+            )
             try:
-                selected_candidates = await self._select_candidates(generated_candidates, select_ctx)
+                selected_candidates = await self._select_candidates(
+                    generated_candidates, select_ctx
+                )
                 if not selected_candidates:
                     raise ValueError("Candidate selector returned no candidates")
                 await self._persist_event(
                     SelectionCompletedEvent(
                         run_id=snapshot.run_id,
                         case_id=case.case_id,
-                        candidate_ids=[candidate.candidate_id for candidate in selected_candidates],
+                        candidate_ids=[
+                            candidate.candidate_id for candidate in selected_candidates
+                        ],
                         metadata={"selector_id": self.selector.component_id},
                     )
                 )
@@ -338,19 +399,27 @@ class Orchestrator:
                     )
                 )
                 self.tracing_provider.end_span(span, "error")
-                return CaseResult(case_id=case.case_id, generated_candidates=generated_candidates), True
+                return CaseResult(
+                    case_id=case.case_id, generated_candidates=generated_candidates
+                ), True
 
         reduced = prior_case_state.reduced_candidate
         if reduced is None:
             reduce_ctx = ReduceContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
-                candidate_ids=[candidate.candidate_id for candidate in selected_candidates],
+                candidate_ids=[
+                    candidate.candidate_id for candidate in selected_candidates
+                ],
                 seed=items[0].seed,
-                metadata={"selector_id": self.selector.component_id} if self.selector is not None else {},
+                metadata={"selector_id": self.selector.component_id}
+                if self.selector is not None
+                else {},
             )
             self._notify("before_reduce", selected_candidates, reduce_ctx)
-            span = self.tracing_provider.start_span("reduction", {"case_id": case.case_id})
+            span = self.tracing_provider.start_span(
+                "reduction", {"case_id": case.case_id}
+            )
             try:
                 reduced = await self._reduce_candidates(selected_candidates, reduce_ctx)
                 self._notify("after_reduce", reduced, reduce_ctx)
@@ -373,17 +442,25 @@ class Orchestrator:
                     )
                 )
                 self.tracing_provider.end_span(span, "error")
-                return CaseResult(case_id=case.case_id, generated_candidates=generated_candidates), True
+                return CaseResult(
+                    case_id=case.case_id, generated_candidates=generated_candidates
+                ), True
 
         parsed = prior_case_state.parsed_output
         if parsed is None:
-            parse_ctx = ParseContext(run_id=snapshot.run_id, case_id=case.case_id, candidate_id=reduced.candidate_id)
+            parse_ctx = ParseContext(
+                run_id=snapshot.run_id,
+                case_id=case.case_id,
+                candidate_id=reduced.candidate_id,
+            )
             self._notify("before_parse", reduced, parse_ctx)
             span = self.tracing_provider.start_span("parse", {"case_id": case.case_id})
             try:
                 async with self._global_semaphore:
                     async with self._stage_semaphores["parsing"]:
-                        parsed = await asyncio.to_thread(self._parse_candidate, reduced, parse_ctx)
+                        parsed = await asyncio.to_thread(
+                            self._parse_candidate, reduced, parse_ctx
+                        )
                 self._notify("after_parse", parsed, parse_ctx)
                 await self._persist_event(
                     ParseCompletedEvent(
@@ -413,7 +490,9 @@ class Orchestrator:
                     True,
                 )
 
-        for metric, metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False):
+        for metric, metric_kind in zip(
+            self.metrics, snapshot.metric_kinds, strict=False
+        ):
             if (
                 metric_kind != "pure"
                 and metric.component_id not in self.force_workflow_metrics
@@ -427,8 +506,15 @@ class Orchestrator:
                 continue
             if metric_kind == "pure":
                 if not _is_pure_metric(metric):
-                    raise TypeError(f"Metric {metric.component_id} does not implement PureMetric")
-                score_ctx = ScoreContext(run_id=snapshot.run_id, case=case, parsed_output=parsed, seed=items[0].seed)
+                    raise TypeError(
+                        f"Metric {metric.component_id} does not implement PureMetric"
+                    )
+                score_ctx = ScoreContext(
+                    run_id=snapshot.run_id,
+                    case=case,
+                    parsed_output=parsed,
+                    seed=items[0].seed,
+                )
                 self._notify("before_score", parsed, score_ctx)
                 span = self.tracing_provider.start_span(
                     "score",
@@ -436,7 +522,9 @@ class Orchestrator:
                 )
                 try:
                     async with self._stage_semaphores["scoring"]:
-                        score = await asyncio.to_thread(metric.score, parsed, case, score_ctx)
+                        score = await asyncio.to_thread(
+                            metric.score, parsed, case, score_ctx
+                        )
                     self._notify("after_score", score, score_ctx)
                     if isinstance(score, ScoreError):
                         score_failures[metric.component_id] = score
@@ -466,7 +554,9 @@ class Orchestrator:
                     )
                     self.tracing_provider.end_span(span, "ok")
                 except Exception as exc:
-                    score_error = ScoreError(metric_id=metric.component_id, reason=str(exc))
+                    score_error = ScoreError(
+                        metric_id=metric.component_id, reason=str(exc)
+                    )
                     score_failures[metric.component_id] = score_error
                     successful_scores.pop(metric.component_id, None)
                     await self._persist_event(
@@ -483,7 +573,9 @@ class Orchestrator:
                 continue
 
             if not _is_workflow_metric(metric):
-                raise TypeError(f"Metric {metric.component_id} does not implement a workflow metric protocol")
+                raise TypeError(
+                    f"Metric {metric.component_id} does not implement a workflow metric protocol"
+                )
             eval_ctx = self._evaluation_context(snapshot, case, parsed, items[0].seed)
             subject = self._evaluation_subject(
                 metric_kind=metric_kind,
@@ -507,7 +599,9 @@ class Orchestrator:
                 workflow_executions[metric.component_id] = execution
                 evaluation_failures.pop(metric.component_id, None)
                 execution_blob_ref = await self._store_blob(
-                    json.dumps(execution.model_dump(mode="json"), sort_keys=True).encode("utf-8"),
+                    json.dumps(
+                        execution.model_dump(mode="json"), sort_keys=True
+                    ).encode("utf-8"),
                     "application/json",
                 )
                 await self._persist_event(
@@ -521,7 +615,11 @@ class Orchestrator:
                     )
                 )
                 final_score = self._final_workflow_score(metric.component_id, execution)
-                had_failure = had_failure or execution.status == "partial_failure" or bool(execution.failures)
+                had_failure = (
+                    had_failure
+                    or execution.status == "partial_failure"
+                    or bool(execution.failures)
+                )
                 if final_score is not None:
                     successful_scores[metric.component_id] = final_score
                     score_failures.pop(metric.component_id, None)
@@ -587,13 +685,21 @@ class Orchestrator:
                 parsed_output=parsed,
                 evaluation_executions=[
                     workflow_executions[metric.component_id]
-                    for metric, metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False)
-                    if metric_kind != "pure" and metric.component_id in workflow_executions
+                    for metric, metric_kind in zip(
+                        self.metrics, snapshot.metric_kinds, strict=False
+                    )
+                    if metric_kind != "pure"
+                    and metric.component_id in workflow_executions
                 ],
                 scores=[
                     score
-                    for metric, _metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False)
-                    for score in [successful_scores.get(metric.component_id) or score_failures.get(metric.component_id)]
+                    for metric, _metric_kind in zip(
+                        self.metrics, snapshot.metric_kinds, strict=False
+                    )
+                    for score in [
+                        successful_scores.get(metric.component_id)
+                        or score_failures.get(metric.component_id)
+                    ]
                     if score is not None
                 ],
             ),
@@ -606,25 +712,41 @@ class Orchestrator:
         case,
         item: GenerationWorkItem,
     ) -> tuple[int, GenerationResult | None, bool]:
-        generate_ctx = GenerateContext(run_id=snapshot.run_id, case_id=item.case_id, seed=item.seed)
+        generate_ctx = GenerateContext(
+            run_id=snapshot.run_id, case_id=item.case_id, seed=item.seed
+        )
         async with self._global_semaphore:
             async with self._stage_semaphores["generation"]:
                 provider_key = self._provider_key()
-                provider_semaphore = self._provider_semaphore(provider_key) if provider_key is not None else None
-                provider_limiter = self._provider_limiter(provider_key) if provider_key is not None else None
+                provider_semaphore = (
+                    self._provider_semaphore(provider_key)
+                    if provider_key is not None
+                    else None
+                )
+                provider_limiter = (
+                    self._provider_limiter(provider_key)
+                    if provider_key is not None
+                    else None
+                )
                 if provider_semaphore is not None:
                     await provider_semaphore.acquire()
                 if provider_limiter is not None:
                     await provider_limiter.acquire()
                 try:
                     self._notify("before_generate", case, generate_ctx)
-                    span = self.tracing_provider.start_span("generation", {"case_id": item.case_id})
+                    span = self.tracing_provider.start_span(
+                        "generation", {"case_id": item.case_id}
+                    )
                     try:
-                        generated = await self._generate_with_retries(case, generate_ctx)
+                        generated = await self._generate_with_retries(
+                            case, generate_ctx
+                        )
                         await self._update_rate_limit(provider_key, generated.artifacts)
                         self._notify("after_generate", generated, generate_ctx)
                         blob_ref = await self._store_blob(
-                            json.dumps(generated.model_dump(mode="json"), sort_keys=True).encode("utf-8"),
+                            json.dumps(
+                                generated.model_dump(mode="json"), sort_keys=True
+                            ).encode("utf-8"),
                             "application/json",
                         )
                         await self._persist_event(
@@ -680,12 +802,16 @@ class Orchestrator:
                     candidate = generated_candidates[0]
                     return ReducedCandidate(
                         candidate_id=candidate.candidate_id,
-                        source_candidate_ids=[candidate.candidate_id for candidate in generated_candidates],
+                        source_candidate_ids=[
+                            candidate.candidate_id for candidate in generated_candidates
+                        ],
                         final_output=candidate.final_output,
                     )
                 return await self.reducer.reduce(generated_candidates, reduce_ctx)
 
-    def _parse_candidate(self, reduced: ReducedCandidate, parse_ctx: ParseContext) -> ParsedOutput:
+    def _parse_candidate(
+        self, reduced: ReducedCandidate, parse_ctx: ParseContext
+    ) -> ParsedOutput:
         if self.parser is None:
             return ParsedOutput(value=reduced.final_output)
         return self.parser.parse(reduced, parse_ctx)
@@ -698,7 +824,9 @@ class Orchestrator:
         seed: int | None,
     ) -> EvalScoreContext:
         if not snapshot.identity.judge_model_refs:
-            raise WorkflowBuildError("Workflow-backed metrics require at least one judge model")
+            raise WorkflowBuildError(
+                "Workflow-backed metrics require at least one judge model"
+            )
         return EvalScoreContext(
             run_id=snapshot.run_id,
             case=case,
@@ -725,13 +853,25 @@ class Orchestrator:
         if metric_kind == "selection":
             return candidate_set_subject_for_selection_metric(generated_candidates)
         if metric_kind == "trace":
-            winner_id = reduced.source_candidate_ids[0] if reduced.source_candidate_ids else generated_candidates[0].candidate_id
+            winner_id = (
+                reduced.source_candidate_ids[0]
+                if reduced.source_candidate_ids
+                else generated_candidates[0].candidate_id
+            )
             winner = next(
-                (candidate for candidate in generated_candidates if candidate.candidate_id == winner_id),
+                (
+                    candidate
+                    for candidate in generated_candidates
+                    if candidate.candidate_id == winner_id
+                ),
                 generated_candidates[0],
             )
             if winner.trace is not None:
-                return TraceSubject(trace=WorkflowTrace(trace_id=f"{winner.candidate_id}:trace", steps=winner.trace))
+                return TraceSubject(
+                    trace=WorkflowTrace(
+                        trace_id=f"{winner.candidate_id}:trace", steps=winner.trace
+                    )
+                )
             if winner.conversation is not None:
                 return ConversationSubject(
                     conversation=ConversationTrace(
@@ -739,7 +879,9 @@ class Orchestrator:
                         messages=winner.conversation,
                     )
                 )
-            raise WorkflowBuildError("Trace metrics require a trace or conversation on the winning candidate")
+            raise WorkflowBuildError(
+                "Trace metrics require a trace or conversation on the winning candidate"
+            )
         raise WorkflowBuildError(f"Unsupported metric kind: {metric_kind}")
 
     def _final_workflow_score(
@@ -747,7 +889,9 @@ class Orchestrator:
         metric_id: str,
         execution,
     ) -> Score | None:
-        if execution.aggregation_output is not None and isinstance(execution.aggregation_output.value, (int, float)):
+        if execution.aggregation_output is not None and isinstance(
+            execution.aggregation_output.value, (int, float)
+        ):
             return Score(
                 metric_id=metric_id,
                 value=float(execution.aggregation_output.value),
@@ -766,14 +910,24 @@ class Orchestrator:
         async with self._global_semaphore:
             async with self._stage_semaphores["evaluation"]:
                 provider_key = getattr(judge_model, "provider_key", None)
-                provider_semaphore = self._provider_semaphore(provider_key) if provider_key is not None else None
-                provider_limiter = self._provider_limiter(provider_key) if provider_key is not None else None
+                provider_semaphore = (
+                    self._provider_semaphore(provider_key)
+                    if provider_key is not None
+                    else None
+                )
+                provider_limiter = (
+                    self._provider_limiter(provider_key)
+                    if provider_key is not None
+                    else None
+                )
                 if provider_semaphore is not None:
                     await provider_semaphore.acquire()
                 if provider_limiter is not None:
                     await provider_limiter.acquire()
                 try:
-                    return await self._judge_with_retries(judge_model, prompt, seed=seed)
+                    return await self._judge_with_retries(
+                        judge_model, prompt, seed=seed
+                    )
                 finally:
                     if provider_semaphore is not None:
                         provider_semaphore.release()
@@ -784,7 +938,9 @@ class Orchestrator:
 
         workflow_metric_ids = {
             metric.component_id
-            for metric, metric_kind in zip(self.metrics, self._metric_kinds(), strict=False)
+            for metric, metric_kind in zip(
+                self.metrics, self._metric_kinds(), strict=False
+            )
             if metric_kind != "pure"
         }
         successful_scores = dict(case_state.successful_scores)
@@ -844,8 +1000,7 @@ class Orchestrator:
 
     def _metric_kinds(self) -> list[str]:
         return [
-            "pure" if _is_pure_metric(metric) else "workflow"
-            for metric in self.metrics
+            "pure" if _is_pure_metric(metric) else "workflow" for metric in self.metrics
         ]
 
     def _selected_candidates_from_state(
@@ -855,14 +1010,18 @@ class Orchestrator:
     ) -> list[GenerationResult]:
         if case_state.selected_candidate_ids is None:
             return generated_candidates
-        selected_by_id = {candidate.candidate_id: candidate for candidate in generated_candidates}
+        selected_by_id = {
+            candidate.candidate_id: candidate for candidate in generated_candidates
+        }
         return [
             selected_by_id[candidate_id]
             for candidate_id in case_state.selected_candidate_ids
             if candidate_id in selected_by_id
         ]
 
-    async def _generate_with_retries(self, case, generate_ctx: GenerateContext) -> GenerationResult:
+    async def _generate_with_retries(
+        self, case, generate_ctx: GenerateContext
+    ) -> GenerationResult:
         retry_history: list[dict[str, JSONValue]] = []
         for attempt in range(self.runtime.generation_retry_attempts):
             try:
@@ -873,10 +1032,15 @@ class Orchestrator:
                     generated = generated.model_copy(update={"artifacts": artifacts})
                 return generated
             except Exception as exc:
-                if attempt + 1 == self.runtime.generation_retry_attempts or not _is_retryable_error(exc):
+                if (
+                    attempt + 1 == self.runtime.generation_retry_attempts
+                    or not _is_retryable_error(exc)
+                ):
                     setattr(exc, "retry_history", retry_history)
                     raise
-                delay = self.runtime.generation_retry_delay * (self.runtime.generation_retry_backoff ** attempt)
+                delay = self.runtime.generation_retry_delay * (
+                    self.runtime.generation_retry_backoff**attempt
+                )
                 retry_history.append(
                     {
                         "attempt": attempt + 1,
@@ -899,13 +1063,20 @@ class Orchestrator:
             try:
                 response = await judge_model.judge(prompt, seed=seed)
                 if retry_history:
-                    response = response.model_copy(update={"retry_history": retry_history})
+                    response = response.model_copy(
+                        update={"retry_history": retry_history}
+                    )
                 return response
             except Exception as exc:
-                if attempt + 1 == self.runtime.judge_retry_attempts or not _is_retryable_error(exc):
+                if (
+                    attempt + 1 == self.runtime.judge_retry_attempts
+                    or not _is_retryable_error(exc)
+                ):
                     setattr(exc, "retry_history", retry_history)
                     raise
-                delay = self.runtime.judge_retry_delay * (self.runtime.judge_retry_backoff ** attempt)
+                delay = self.runtime.judge_retry_delay * (
+                    self.runtime.judge_retry_backoff**attempt
+                )
                 retry_history.append(
                     {
                         "attempt": attempt + 1,
@@ -950,7 +1121,9 @@ class Orchestrator:
         if provider_key not in self._provider_semaphores:
             limit = max(
                 1,
-                self.runtime.provider_concurrency.get(provider_key, self.runtime.max_concurrent_tasks),
+                self.runtime.provider_concurrency.get(
+                    provider_key, self.runtime.max_concurrent_tasks
+                ),
             )
             self._provider_semaphores[provider_key] = asyncio.Semaphore(limit)
         return self._provider_semaphores[provider_key]
@@ -961,7 +1134,9 @@ class Orchestrator:
                 provider_key,
                 DEFAULT_PROVIDER_RATE_LIMIT,
             )
-            self._provider_limiters[provider_key] = TokenBucketRateLimiter(requests_per_minute)
+            self._provider_limiters[provider_key] = TokenBucketRateLimiter(
+                requests_per_minute
+            )
         return self._provider_limiters[provider_key]
 
     async def _update_rate_limit(
@@ -994,14 +1169,18 @@ class Orchestrator:
         if max_concurrent_tasks is not None:
             updates["max_concurrent_tasks"] = max(1, max_concurrent_tasks)
         if stage_concurrency is not None:
-            updates["stage_concurrency"] = {stage: max(1, limit) for stage, limit in stage_concurrency.items()}
+            updates["stage_concurrency"] = {
+                stage: max(1, limit) for stage, limit in stage_concurrency.items()
+            }
         if provider_concurrency is not None:
             updates["provider_concurrency"] = {
-                provider: max(1, limit) for provider, limit in provider_concurrency.items()
+                provider: max(1, limit)
+                for provider, limit in provider_concurrency.items()
             }
         if provider_rate_limits is not None:
             updates["provider_rate_limits"] = {
-                provider: max(1, limit) for provider, limit in provider_rate_limits.items()
+                provider: max(1, limit)
+                for provider, limit in provider_rate_limits.items()
             }
         updates["generation_retry_attempts"] = max(1, base.generation_retry_attempts)
         updates["generation_retry_delay"] = max(0.0, base.generation_retry_delay)

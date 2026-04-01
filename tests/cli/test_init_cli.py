@@ -19,4 +19,7 @@ def test_init_scaffolds_minimal_project(tmp_path: Path) -> None:
     assert (project_root / "experiment.yaml").is_file()
     assert (project_root / "data" / "sample.jsonl").is_file()
     assert (project_root / "run.py").is_file()
-    assert 'Path(__file__).with_name("experiment.yaml")' in (project_root / "run.py").read_text()
+    assert (
+        'Path(__file__).with_name("experiment.yaml")'
+        in (project_root / "run.py").read_text()
+    )

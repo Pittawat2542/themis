@@ -132,7 +132,13 @@ def test_public_surface_runs_experiment_end_to_end() -> None:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )
@@ -149,7 +155,9 @@ def test_package_includes_py_typed_marker() -> None:
     assert Path(themis.__file__).with_name("py.typed").is_file()
 
 
-def test_public_inspection_helpers_return_execution_state_and_evaluation_execution() -> None:
+def test_public_inspection_helpers_return_execution_state_and_evaluation_execution() -> (
+    None
+):
     experiment = Experiment(
         generation=GenerationConfig(
             generator="builtin/demo_generator",
@@ -164,7 +172,13 @@ def test_public_inspection_helpers_return_execution_state_and_evaluation_executi
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -191,7 +205,9 @@ def test_public_inspection_helpers_return_execution_state_and_evaluation_executi
 
     stored_snapshot = get_run_snapshot(store, snapshot.run_id)
     state = get_execution_state(store, snapshot.run_id)
-    execution = get_evaluation_execution(store, snapshot.run_id, "case-1", "metric/judge")
+    execution = get_evaluation_execution(
+        store, snapshot.run_id, "case-1", "metric/judge"
+    )
 
     assert stored_snapshot.run_id == snapshot.run_id
     assert state.run_id == snapshot.run_id

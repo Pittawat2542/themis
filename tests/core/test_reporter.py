@@ -38,7 +38,13 @@ def _snapshot():
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -94,7 +100,11 @@ def _store() -> tuple[InMemoryRunStore, str]:
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id="builtin/exact_match",
-            score={"metric_id": "builtin/exact_match", "value": 1.0, "details": {"matched": True}},
+            score={
+                "metric_id": "builtin/exact_match",
+                "value": 1.0,
+                "details": {"matched": True},
+            },
         )
     )
     store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
@@ -123,7 +133,14 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
     assert csv_rows[0]["case_id"] == "case-1"
     assert csv_rows[0]["metric_id"] == "builtin/exact_match"
     assert "\\begin{tabular}" in exported_latex
-    assert score_table == [{"case_id": "case-1", "metric_id": "builtin/exact_match", "value": 1.0, "candidate_id": "case-1-reduced"}]
+    assert score_table == [
+        {
+            "case_id": "case-1",
+            "metric_id": "builtin/exact_match",
+            "value": 1.0,
+            "candidate_id": "case-1-reduced",
+        }
+    ]
 
 
 def test_reporter_escapes_latex_special_characters() -> None:

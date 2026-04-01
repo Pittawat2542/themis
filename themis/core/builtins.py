@@ -16,6 +16,7 @@ from themis.core.protocols import (
     SelectionMetric,
     TraceMetric,
 )
+
 BuiltinMetric = PureMetric | LLMMetric | SelectionMetric | TraceMetric
 
 

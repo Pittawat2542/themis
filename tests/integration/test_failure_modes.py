@@ -3,12 +3,31 @@ from __future__ import annotations
 import pytest
 
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.contexts import (
+    EvalScoreContext,
+    GenerateContext,
+    ParseContext,
+    ReduceContext,
+    ScoreContext,
+)
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score
+from themis.core.models import (
+    Case,
+    Dataset,
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    Score,
+)
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
-from themis.core.workflows import AggregationResult, JudgeCall, JudgeResponse, ParsedJudgment, RenderedJudgePrompt
+from themis.core.workflows import (
+    AggregationResult,
+    JudgeCall,
+    JudgeResponse,
+    ParsedJudgment,
+    RenderedJudgePrompt,
+)
 
 
 class FailingGenerator:
@@ -30,7 +49,9 @@ class FailingReducer:
     def fingerprint(self) -> str:
         return "reducer-failing"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
+    async def reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> ReducedCandidate:
         del candidates, ctx
         raise RuntimeError("reducer failed")
 
@@ -67,7 +88,10 @@ class HappyGenerator:
         return "generator-happy"
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate-{ctx.seed}", final_output=case.expected_output)
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
+            final_output=case.expected_output,
+        )
 
 
 class HappyReducer:
@@ -77,7 +101,9 @@ class HappyReducer:
     def fingerprint(self) -> str:
         return "reducer-happy"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
+    async def reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> ReducedCandidate:
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
             source_candidate_ids=[candidate.candidate_id for candidate in candidates],
@@ -132,15 +158,23 @@ class PartialWorkflow:
             JudgeCall(call_id="call-fail", judge_model_id="judge/fail"),
         ]
 
-    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+    def render_prompt(
+        self, call: JudgeCall, subject, ctx: EvalScoreContext
+    ) -> RenderedJudgePrompt:
         del subject, ctx
-        return RenderedJudgePrompt(prompt_id=f"prompt-{call.call_id}", content=call.call_id)
+        return RenderedJudgePrompt(
+            prompt_id=f"prompt-{call.call_id}", content=call.call_id
+        )
 
-    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+    def parse_judgment(
+        self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext
+    ) -> ParsedJudgment:
         del call, ctx
         return ParsedJudgment(label=response.raw_response, score=1.0)
 
-    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+    def score_judgment(
+        self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
+    ) -> Score | None:
         del call, ctx
         return Score(metric_id="metric/partial", value=float(judgment.score or 0.0))
 
@@ -153,7 +187,9 @@ class PartialWorkflow:
         del judgments, ctx
         if not scores:
             return None
-        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+        return AggregationResult(
+            method="mean", value=sum(score.value for score in scores) / len(scores)
+        )
 
 
 class PartialMetric:
@@ -189,7 +225,13 @@ def _base_dataset() -> list[Dataset]:
     return [
         Dataset(
             dataset_id="dataset-1",
-            cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            cases=[
+                Case(
+                    case_id="case-1",
+                    input={"question": "2+2"},
+                    expected_output={"answer": "4"},
+                )
+            ],
         )
     ]
 
@@ -205,7 +247,9 @@ def _base_dataset() -> list[Dataset]:
 )
 def test_failure_modes_cover_stage_failures(generator, reducer, parser, metric) -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator=generator, candidate_policy={"num_samples": 1}, reducer=reducer),
+        generation=GenerationConfig(
+            generator=generator, candidate_policy={"num_samples": 1}, reducer=reducer
+        ),
         evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
         storage=StorageConfig(store="memory"),
         datasets=_base_dataset(),
@@ -220,11 +264,18 @@ def test_failure_modes_cover_stage_failures(generator, reducer, parser, metric) 
 def test_failure_modes_persist_partial_workflow_failures() -> None:
     metric = PartialMetric()
     experiment = Experiment(
-        generation=GenerationConfig(generator=HappyGenerator(), candidate_policy={"num_samples": 1}, reducer=HappyReducer()),
+        generation=GenerationConfig(
+            generator=HappyGenerator(),
+            candidate_policy={"num_samples": 1},
+            reducer=HappyReducer(),
+        ),
         evaluation=EvaluationConfig(
             metrics=[metric],
             parsers=[HappyParser()],
-            judge_models=[PartialJudgeModel("judge/ok"), PartialJudgeModel("judge/fail", fail=True)],
+            judge_models=[
+                PartialJudgeModel("judge/ok"),
+                PartialJudgeModel("judge/fail", fail=True),
+            ],
         ),
         storage=StorageConfig(store="memory"),
         datasets=_base_dataset(),
@@ -241,10 +292,16 @@ def test_failure_modes_persist_partial_workflow_failures() -> None:
     assert result.cases[0].scores[0].metric_id == "metric/partial"
 
 
-def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging() -> None:
+def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging() -> (
+    None
+):
     metric = PartialMetric()
     experiment = Experiment(
-        generation=GenerationConfig(generator=HappyGenerator(), candidate_policy={"num_samples": 1}, reducer=HappyReducer()),
+        generation=GenerationConfig(
+            generator=HappyGenerator(),
+            candidate_policy={"num_samples": 1},
+            reducer=HappyReducer(),
+        ),
         evaluation=EvaluationConfig(
             metrics=[metric],
             parsers=[HappyParser()],
@@ -259,7 +316,9 @@ def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging(
 
     stored_run = store.resume(experiment.compile().run_id)
     assert stored_run is not None
-    partial_execution = stored_run.execution_state.case_states["case-1"].evaluation_executions["metric/partial"]
+    partial_execution = stored_run.execution_state.case_states[
+        "case-1"
+    ].evaluation_executions["metric/partial"]
     assert partial_execution is not None
 
     metric.calls = 0
@@ -271,7 +330,11 @@ def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging(
 
 def test_failure_modes_recover_from_store_write_retry() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator=HappyGenerator(), candidate_policy={"num_samples": 1}, reducer=HappyReducer()),
+        generation=GenerationConfig(
+            generator=HappyGenerator(),
+            candidate_policy={"num_samples": 1},
+            reducer=HappyReducer(),
+        ),
         evaluation=EvaluationConfig(metrics=[FailingMetric()], parsers=[HappyParser()]),
         storage=StorageConfig(store="memory"),
         datasets=_base_dataset(),

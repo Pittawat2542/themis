@@ -66,7 +66,9 @@ def evaluate(
             parsers=cast(list[ParserComponent], parsers),
             judge_models=cast(list[JudgeModelComponent], judge_models),
             judge_config=cast(dict[str, JSONValue], dict(judge_config or {})),
-            workflow_overrides=cast(dict[str, JSONValue], dict(workflow_overrides or {})),
+            workflow_overrides=cast(
+                dict[str, JSONValue], dict(workflow_overrides or {})
+            ),
         ),
         storage=storage or StorageConfig(store="memory"),
         runtime=runtime or RuntimeConfig(),
@@ -112,7 +114,9 @@ def _case_from_mapping(index: int, payload: Mapping[str, Any]) -> Case:
         case_id=str(payload.get("case_id", f"case-{index}")),
         input=payload["input"],
         expected_output=payload.get("expected_output"),
-        metadata={key: str(value) for key, value in metadata.items()} if isinstance(metadata, Mapping) else {},
+        metadata={key: str(value) for key, value in metadata.items()}
+        if isinstance(metadata, Mapping)
+        else {},
     )
 
 

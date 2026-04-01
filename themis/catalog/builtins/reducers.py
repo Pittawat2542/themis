@@ -15,12 +15,18 @@ class MajorityVoteReducer:
     def fingerprint(self) -> str:
         return "builtin-majority-vote-fingerprint"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
-        serialized_outputs = [_stable_output(candidate.final_output) for candidate in candidates]
+    async def reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> ReducedCandidate:
+        serialized_outputs = [
+            _stable_output(candidate.final_output) for candidate in candidates
+        ]
         winning_output, _count = Counter(serialized_outputs).most_common(1)[0]
         winning_candidate = next(
             candidate
-            for candidate, serialized in zip(candidates, serialized_outputs, strict=False)
+            for candidate, serialized in zip(
+                candidates, serialized_outputs, strict=False
+            )
             if serialized == winning_output
         )
         return ReducedCandidate(

@@ -183,7 +183,9 @@ class SqliteRunStore(ProjectionRefreshingStore):
             return None
         return snapshot_from_dict(json.loads(row[0]))
 
-    def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
+    def _write_projection(
+        self, run_id: str, projection_name: str, payload: JSONValue
+    ) -> None:
         with sqlite3.connect(self.path) as connection:
             connection.execute(
                 """

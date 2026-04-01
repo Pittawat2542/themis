@@ -25,7 +25,13 @@ def _experiment(
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         environment_metadata=environment_metadata or {},
@@ -68,10 +74,15 @@ def test_compile_redacts_credentials_in_storage_urls() -> None:
     experiment = _experiment(
         storage=StorageConfig(
             store="postgres",
-            parameters={"url": "postgresql://themis:swordfish@db.example.com:5432/themis"},
+            parameters={
+                "url": "postgresql://themis:swordfish@db.example.com:5432/themis"
+            },
         )
     )
 
     snapshot = experiment.compile()
 
-    assert snapshot.provenance.storage.parameters["url"] == "postgresql://themis:<redacted>@db.example.com:5432/themis"
+    assert (
+        snapshot.provenance.storage.parameters["url"]
+        == "postgresql://themis:<redacted>@db.example.com:5432/themis"
+    )

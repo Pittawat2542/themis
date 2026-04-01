@@ -12,7 +12,11 @@ from themis import (
     import_generation_bundle,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.events import EvaluationCompletedEvent, GenerationCompletedEvent, RunStartedEvent
+from themis.core.events import (
+    EvaluationCompletedEvent,
+    GenerationCompletedEvent,
+    RunStartedEvent,
+)
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset, GenerationResult
 
@@ -26,15 +30,26 @@ class CustomGenerator:
 
     async def generate(self, case: Case, ctx: object) -> GenerationResult:
         del ctx
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate", final_output={"answer": "4"})
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate", final_output={"answer": "4"}
+        )
 
 
 def test_readme_builtin_component_example_compiles_and_persists() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        generation=GenerationConfig(
+            generator="builtin/demo_generator", reducer="builtin/majority_vote"
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     )
     store = InMemoryRunStore()
 
@@ -48,10 +63,25 @@ def test_readme_builtin_component_example_compiles_and_persists() -> None:
 
 def test_readme_builtin_component_example_runs_end_to_end() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        generation=GenerationConfig(
+            generator="builtin/demo_generator", reducer="builtin/majority_vote"
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"}, expected_output={"answer": "4"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"q": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
     )
 
     result = experiment.run(
@@ -69,7 +99,12 @@ def test_readme_custom_component_example_compiles_and_persists() -> None:
         generation=GenerationConfig(generator=CustomGenerator()),
         evaluation=EvaluationConfig(),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     )
     store = InMemoryRunStore()
 
@@ -86,7 +121,12 @@ def test_readme_custom_component_example_runs_end_to_end() -> None:
         generation=GenerationConfig(generator=CustomGenerator()),
         evaluation=EvaluationConfig(),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     )
 
     result = experiment.run()
@@ -96,13 +136,23 @@ def test_readme_custom_component_example_runs_end_to_end() -> None:
 
 def test_readme_generation_bundle_example_round_trips() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        generation=GenerationConfig(
+            generator="builtin/demo_generator", reducer="builtin/majority_vote"
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"q": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"q": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )
@@ -134,13 +184,23 @@ def test_readme_generation_bundle_example_round_trips() -> None:
 
 def test_readme_evaluation_bundle_example_round_trips() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        generation=GenerationConfig(
+            generator="builtin/demo_generator", reducer="builtin/majority_vote"
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"q": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"q": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )
@@ -173,13 +233,23 @@ def test_readme_evaluation_bundle_example_round_trips() -> None:
 
 def test_readme_inspection_example_reads_execution_state() -> None:
     experiment = Experiment(
-        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        generation=GenerationConfig(
+            generator="builtin/demo_generator", reducer="builtin/majority_vote"
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"q": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"q": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -189,7 +259,9 @@ def test_readme_inspection_example_reads_execution_state() -> None:
     experiment.run(store=store)
 
     state = get_execution_state(store, experiment.compile().run_id)
-    execution = get_evaluation_execution(store, experiment.compile().run_id, "case-1", "metric/judge")
+    execution = get_evaluation_execution(
+        store, experiment.compile().run_id, "case-1", "metric/judge"
+    )
 
     assert state.run_id == experiment.compile().run_id
     assert execution is None

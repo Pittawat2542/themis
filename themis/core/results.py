@@ -25,7 +25,14 @@ from themis.core.events import (
     ScoreCompletedEvent,
     ScoreFailedEvent,
 )
-from themis.core.models import Case, GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
+from themis.core.models import (
+    Case,
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    Score,
+    ScoreError,
+)
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import EvaluationExecution
 
@@ -67,7 +74,9 @@ class CaseExecutionState(FrozenModel):
     """Persisted per-case execution state derived from stored events."""
 
     generated_candidates: dict[str, GenerationResult] = Field(default_factory=dict)
-    generated_candidates_by_index: dict[int, GenerationResult] = Field(default_factory=dict)
+    generated_candidates_by_index: dict[int, GenerationResult] = Field(
+        default_factory=dict
+    )
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
     selected_candidate_ids: list[str] | None = None
@@ -106,14 +115,20 @@ class ExecutionState(FrozenModel):
         return state
 
     def apply_event(self, event: RunEvent) -> ExecutionState:
-        saw_failures = self.status in {RunStatus.FAILED, RunStatus.PARTIAL_FAILURE} or any(
-            _case_state_has_failures(case_state) for case_state in self.case_states.values()
+        saw_failures = self.status in {
+            RunStatus.FAILED,
+            RunStatus.PARTIAL_FAILURE,
+        } or any(
+            _case_state_has_failures(case_state)
+            for case_state in self.case_states.values()
         )
 
         if isinstance(event, RunStartedEvent):
             return self.model_copy(update={"status": RunStatus.RUNNING})
         if isinstance(event, RunCompletedEvent):
-            status = RunStatus.COMPLETED if not saw_failures else RunStatus.PARTIAL_FAILURE
+            status = (
+                RunStatus.COMPLETED if not saw_failures else RunStatus.PARTIAL_FAILURE
+            )
             return self.model_copy(update={"status": status})
         if isinstance(event, RunFailedEvent):
             return self.model_copy(update={"status": RunStatus.FAILED})
@@ -126,11 +141,15 @@ class ExecutionState(FrozenModel):
 
         if isinstance(event, GenerationCompletedEvent) and event.result is not None:
             generated = dict(current.generated_candidates)
-            generated[event.candidate_id] = GenerationResult.model_validate(event.result)
+            generated[event.candidate_id] = GenerationResult.model_validate(
+                event.result
+            )
             generated_by_index = dict(current.generated_candidates_by_index)
             generated_blob_refs = dict(current.generated_candidate_blob_refs)
             if event.candidate_index is not None:
-                generated_by_index[event.candidate_index] = generated[event.candidate_id]
+                generated_by_index[event.candidate_index] = generated[
+                    event.candidate_id
+                ]
             if event.result_blob_ref is not None:
                 generated_blob_refs[event.candidate_id] = event.result_blob_ref
             updated = current.model_copy(
@@ -153,24 +172,40 @@ class ExecutionState(FrozenModel):
                 }
             )
         elif isinstance(event, SelectionFailedEvent):
-            updated = current.model_copy(update={"selection_error": event.error_message})
+            updated = current.model_copy(
+                update={"selection_error": event.error_message}
+            )
         elif isinstance(event, ReductionCompletedEvent) and event.result is not None:
             updated = current.model_copy(
-                update={"reduced_candidate": ReducedCandidate.model_validate(event.result)}
+                update={
+                    "reduced_candidate": ReducedCandidate.model_validate(event.result)
+                }
             )
         elif isinstance(event, ReductionFailedEvent):
-            updated = current.model_copy(update={"reduction_error": event.error_message})
+            updated = current.model_copy(
+                update={"reduction_error": event.error_message}
+            )
         elif isinstance(event, ParseCompletedEvent) and event.result is not None:
-            updated = current.model_copy(update={"parsed_output": ParsedOutput.model_validate(event.result)})
+            updated = current.model_copy(
+                update={"parsed_output": ParsedOutput.model_validate(event.result)}
+            )
         elif isinstance(event, ParseFailedEvent):
             updated = current.model_copy(update={"parse_error": event.error_message})
-        elif isinstance(event, EvaluationCompletedEvent) and event.execution is not None:
+        elif (
+            isinstance(event, EvaluationCompletedEvent) and event.execution is not None
+        ):
             evaluation_executions = dict(current.evaluation_executions)
-            evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
+            evaluation_execution_blob_refs = dict(
+                current.evaluation_execution_blob_refs
+            )
             evaluation_failures = dict(current.evaluation_failures)
-            evaluation_executions[event.metric_id] = EvaluationExecution.model_validate(event.execution)
+            evaluation_executions[event.metric_id] = EvaluationExecution.model_validate(
+                event.execution
+            )
             if event.execution_blob_ref is not None:
-                evaluation_execution_blob_refs[event.metric_id] = event.execution_blob_ref
+                evaluation_execution_blob_refs[event.metric_id] = (
+                    event.execution_blob_ref
+                )
             evaluation_failures.pop(event.metric_id, None)
             updated = current.model_copy(
                 update={
@@ -181,7 +216,9 @@ class ExecutionState(FrozenModel):
             )
         elif isinstance(event, EvaluationFailedEvent):
             evaluation_executions = dict(current.evaluation_executions)
-            evaluation_execution_blob_refs = dict(current.evaluation_execution_blob_refs)
+            evaluation_execution_blob_refs = dict(
+                current.evaluation_execution_blob_refs
+            )
             evaluation_failures = dict(current.evaluation_failures)
             evaluation_executions.pop(event.metric_id, None)
             evaluation_execution_blob_refs.pop(event.metric_id, None)

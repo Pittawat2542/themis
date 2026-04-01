@@ -18,7 +18,10 @@ class ExactMatchMetric:
 
     def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
         del ctx
-        return Score(metric_id=self.component_id, value=float(parsed.value == case.expected_output))
+        return Score(
+            metric_id=self.component_id,
+            value=float(parsed.value == case.expected_output),
+        )
 
 
 class F1Metric:

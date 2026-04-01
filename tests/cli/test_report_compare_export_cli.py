@@ -45,7 +45,9 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_report_compare_and_export_commands_use_existing_read_side_helpers(tmp_path: Path) -> None:
+def test_report_compare_and_export_commands_use_existing_read_side_helpers(
+    tmp_path: Path,
+) -> None:
     baseline_config = tmp_path / "baseline.yaml"
     candidate_config = tmp_path / "candidate.yaml"
     store_path = tmp_path / "runs.sqlite3"
@@ -57,14 +59,24 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(tmp_p
     assert baseline_run.returncode == 0, baseline_run.stderr
     assert candidate_run.returncode == 0, candidate_run.stderr
 
-    report_json = _run_cli("report", "--config", str(baseline_config), "--format", "json")
+    report_json = _run_cli(
+        "report", "--config", str(baseline_config), "--format", "json"
+    )
     assert report_json.returncode == 0, report_json.stderr
     report_payload = json.loads(report_json.stdout)
     assert report_payload["run_result"]["status"] == "completed"
-    assert report_payload["snapshot"]["run_id"] == json.loads(baseline_run.stdout)["run_id"]
-    assert report_payload["execution_state"]["run_id"] == json.loads(baseline_run.stdout)["run_id"]
+    assert (
+        report_payload["snapshot"]["run_id"]
+        == json.loads(baseline_run.stdout)["run_id"]
+    )
+    assert (
+        report_payload["execution_state"]["run_id"]
+        == json.loads(baseline_run.stdout)["run_id"]
+    )
 
-    report_markdown = _run_cli("report", "--config", str(baseline_config), "--format", "markdown")
+    report_markdown = _run_cli(
+        "report", "--config", str(baseline_config), "--format", "markdown"
+    )
     assert report_markdown.returncode == 0, report_markdown.stderr
     assert "# Run Report" in report_markdown.stdout
 
@@ -72,7 +84,9 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(tmp_p
     assert report_csv.returncode == 0, report_csv.stderr
     assert "case_id,metric_id,value,candidate_id" in report_csv.stdout
 
-    report_latex = _run_cli("report", "--config", str(baseline_config), "--format", "latex")
+    report_latex = _run_cli(
+        "report", "--config", str(baseline_config), "--format", "latex"
+    )
     assert report_latex.returncode == 0, report_latex.stderr
     assert "\\begin{tabular}" in report_latex.stdout
 
@@ -87,12 +101,16 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(tmp_p
     compare_payload = json.loads(compare.stdout)
     assert compare_payload["metrics"]["builtin/exact_match"]["ties"] == 1
 
-    generation_export = _run_cli("export", "generation", "--config", str(baseline_config))
+    generation_export = _run_cli(
+        "export", "generation", "--config", str(baseline_config)
+    )
     assert generation_export.returncode == 0, generation_export.stderr
     generation_payload = json.loads(generation_export.stdout)
     assert generation_payload["run_id"] == json.loads(baseline_run.stdout)["run_id"]
 
-    evaluation_export = _run_cli("export", "evaluation", "--config", str(baseline_config))
+    evaluation_export = _run_cli(
+        "export", "evaluation", "--config", str(baseline_config)
+    )
     assert evaluation_export.returncode == 0, evaluation_export.stderr
     evaluation_payload = json.loads(evaluation_export.stdout)
     assert evaluation_payload["run_id"] == json.loads(baseline_run.stdout)["run_id"]

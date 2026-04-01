@@ -12,7 +12,10 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import GenerationCompletedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
-from themis.core.projections import apply_event_to_store_projection_payloads, build_initial_store_projection_payloads
+from themis.core.projections import (
+    apply_event_to_store_projection_payloads,
+    build_initial_store_projection_payloads,
+)
 from themis.core.snapshot import RunSnapshot
 
 
@@ -40,12 +43,20 @@ def _snapshot() -> RunSnapshot:
             candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -61,7 +72,9 @@ def test_compute_hash_reuses_cached_canonical_fingerprint_work() -> None:
     assert component.calls == 1
 
 
-def test_projection_updates_reuse_existing_snapshot_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_projection_updates_reuse_existing_snapshot_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     snapshot = _snapshot()
     calls = 0
     original_model_dump = RunSnapshot.model_dump
@@ -84,7 +97,10 @@ def test_projection_updates_reuse_existing_snapshot_payload(monkeypatch: pytest.
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         ),
     )
 

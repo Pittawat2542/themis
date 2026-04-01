@@ -43,7 +43,11 @@ def list_component_ids(*, kind: str | None = None) -> list[str]:
     component_ids = sorted(component_specs())
     if kind is None:
         return component_ids
-    return [component_id for component_id in component_ids if component_specs()[component_id].kind == kind]
+    return [
+        component_id
+        for component_id in component_ids
+        if component_specs()[component_id].kind == kind
+    ]
 
 
 def load_component(component_id: str, *, kind: str | None = None) -> object:
@@ -73,7 +77,9 @@ def load(name: str) -> object:
 
 
 def _unknown_component_message(component_id: str) -> str:
-    suggestions = get_close_matches(component_id, component_specs().keys(), n=3, cutoff=0.5)
+    suggestions = get_close_matches(
+        component_id, component_specs().keys(), n=3, cutoff=0.5
+    )
     if suggestions:
         return f"Unknown builtin component: {component_id}. Did you mean: {', '.join(suggestions)}?"
     return f"Unknown builtin component: {component_id}"

@@ -46,7 +46,9 @@ class OpenAIGenerator:
         self.input_builder = input_builder
         self.base_url = base_url
         self.api_key = api_key
-        self.provider_key = f"openai:{(base_url or 'https://api.openai.com/v1').rstrip('/')}"
+        self.provider_key = (
+            f"openai:{(base_url or 'https://api.openai.com/v1').rstrip('/')}"
+        )
 
     def fingerprint(self) -> str:
         return stable_fingerprint(
@@ -60,7 +62,9 @@ class OpenAIGenerator:
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         client = self._client or self._build_client()
-        request_input = self.input_builder(case) if self.input_builder is not None else case.input
+        request_input = (
+            self.input_builder(case) if self.input_builder is not None else case.input
+        )
         payload: dict[str, object] = {"model": self.model_id, "input": request_input}
         if self.instructions is not None:
             payload["instructions"] = self.instructions
@@ -102,7 +106,10 @@ class OpenAIGenerator:
             ) from exc
 
         if self.base_url is not None and self.api_key is not None:
-            return cast(_OpenAIResponsesClient, AsyncOpenAI(base_url=self.base_url, api_key=self.api_key))
+            return cast(
+                _OpenAIResponsesClient,
+                AsyncOpenAI(base_url=self.base_url, api_key=self.api_key),
+            )
         if self.base_url is not None:
             return cast(_OpenAIResponsesClient, AsyncOpenAI(base_url=self.base_url))
         if self.api_key is not None:

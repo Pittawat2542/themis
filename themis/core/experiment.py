@@ -20,11 +20,23 @@ from themis.core.builtins import (
 from themis.core.base import FrozenModel
 from themis.core.base import JSONValue
 from themis.core.components import ComponentRef, component_ref_from_value
-from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    RuntimeConfig,
+    StorageConfig,
+)
 from themis.core.config_loading import ExperimentConfigMetadata
 from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
-from themis.core.protocols import LLMMetric, LifecycleSubscriber, PureMetric, SelectionMetric, TraceMetric, TracingProvider
+from themis.core.protocols import (
+    LLMMetric,
+    LifecycleSubscriber,
+    PureMetric,
+    SelectionMetric,
+    TraceMetric,
+    TracingProvider,
+)
 from themis.core.store import RunStore
 from themis.core.stores.factory import create_run_store
 from themis.core.tracing import NoOpTracingProvider
@@ -61,7 +73,9 @@ class Experiment(FrozenModel):
     _compiled_snapshot: RunSnapshot | None = PrivateAttr(default=None)
 
     @classmethod
-    def from_config(cls, path: str | Path, *, overrides: list[str] | None = None) -> Experiment:
+    def from_config(
+        cls, path: str | Path, *, overrides: list[str] | None = None
+    ) -> Experiment:
         """Load an experiment definition from YAML or TOML configuration."""
 
         from themis.core.config_loading import load_experiment_definition
@@ -87,9 +101,16 @@ class Experiment(FrozenModel):
             reducer=component_ref_from_value(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parsers=[component_ref_from_value(parser) for parser in self.evaluation.parsers],
-            metrics=[component_ref_from_value(metric) for metric in self.evaluation.metrics],
-            judge_models=[component_ref_from_value(judge_model) for judge_model in self.evaluation.judge_models],
+            parsers=[
+                component_ref_from_value(parser) for parser in self.evaluation.parsers
+            ],
+            metrics=[
+                component_ref_from_value(metric) for metric in self.evaluation.metrics
+            ],
+            judge_models=[
+                component_ref_from_value(judge_model)
+                for judge_model in self.evaluation.judge_models
+            ],
         )
         identity = RunIdentity(
             dataset_refs=[
@@ -116,8 +137,10 @@ class Experiment(FrozenModel):
             python_version=self.python_version,
             platform=self.platform,
             git_commit=self.git_commit or _detect_git_commit(),
-            dependency_versions=self.dependency_versions or _default_dependency_versions(self.themis_version),
-            provider_metadata=self.provider_metadata or _default_provider_metadata(self),
+            dependency_versions=self.dependency_versions
+            or _default_dependency_versions(self.themis_version),
+            provider_metadata=self.provider_metadata
+            or _default_provider_metadata(self),
             storage=self.storage,
             runtime=runtime,
             environment_metadata=self.environment_metadata,
@@ -127,7 +150,9 @@ class Experiment(FrozenModel):
             provenance=provenance,
             component_refs=component_refs,
             datasets=self.datasets,
-            metric_kinds=[self._metric_kind(metric) for metric in self.evaluation.metrics],
+            metric_kinds=[
+                self._metric_kind(metric) for metric in self.evaluation.metrics
+            ],
         )
 
     async def run_async(
@@ -157,9 +182,16 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parser=resolve_parser_component(self.evaluation.parsers[0]) if self.evaluation.parsers else None,
-            metrics=[resolve_metric_component(metric) for metric in self.evaluation.metrics],
-            judge_models=[resolve_judge_model_component(judge_model) for judge_model in self.evaluation.judge_models],
+            parser=resolve_parser_component(self.evaluation.parsers[0])
+            if self.evaluation.parsers
+            else None,
+            metrics=[
+                resolve_metric_component(metric) for metric in self.evaluation.metrics
+            ],
+            judge_models=[
+                resolve_judge_model_component(judge_model)
+                for judge_model in self.evaluation.judge_models
+            ],
             subscribers=subscribers or [],
             tracing_provider=tracing_provider or NoOpTracingProvider(),
             runtime=effective_runtime,
@@ -197,7 +229,9 @@ class Experiment(FrozenModel):
         if stage == "judge" and not requested_metric_ids:
             requested_metric_ids = {
                 component_ref.component_id
-                for component_ref, metric_kind in zip(snapshot.component_refs.metrics, snapshot.metric_kinds, strict=False)
+                for component_ref, metric_kind in zip(
+                    snapshot.component_refs.metrics, snapshot.metric_kinds, strict=False
+                )
                 if metric_kind != "pure"
             }
 
@@ -210,9 +244,16 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parser=resolve_parser_component(self.evaluation.parsers[0]) if self.evaluation.parsers else None,
-            metrics=[resolve_metric_component(metric) for metric in self.evaluation.metrics],
-            judge_models=[resolve_judge_model_component(judge_model) for judge_model in self.evaluation.judge_models],
+            parser=resolve_parser_component(self.evaluation.parsers[0])
+            if self.evaluation.parsers
+            else None,
+            metrics=[
+                resolve_metric_component(metric) for metric in self.evaluation.metrics
+            ],
+            judge_models=[
+                resolve_judge_model_component(judge_model)
+                for judge_model in self.evaluation.judge_models
+            ],
             subscribers=subscribers or [],
             tracing_provider=tracing_provider or NoOpTracingProvider(),
             runtime=effective_runtime,
@@ -332,17 +373,25 @@ class Experiment(FrozenModel):
             return compiled
         return compiled.model_copy(
             update={
-                "provenance": compiled.provenance.model_copy(update={"runtime": runtime}),
+                "provenance": compiled.provenance.model_copy(
+                    update={"runtime": runtime}
+                ),
             }
         )
 
     def _resolved_component_refs(self) -> ComponentRefs:
         return ComponentRefs(
-            generator=component_ref_from_value(resolve_generator_component(self.generation.generator)),
-            selector=component_ref_from_value(resolve_selector_component(self.generation.selector))
+            generator=component_ref_from_value(
+                resolve_generator_component(self.generation.generator)
+            ),
+            selector=component_ref_from_value(
+                resolve_selector_component(self.generation.selector)
+            )
             if self.generation.selector is not None
             else None,
-            reducer=component_ref_from_value(resolve_reducer_component(self.generation.reducer))
+            reducer=component_ref_from_value(
+                resolve_reducer_component(self.generation.reducer)
+            )
             if self.generation.reducer is not None
             else None,
             parsers=[
@@ -359,13 +408,27 @@ class Experiment(FrozenModel):
             ],
         )
 
-    def _validate_component_refs(self, snapshot: RunSnapshot, resolved: ComponentRefs) -> None:
-        self._validate_component_ref("generator", snapshot.component_refs.generator, resolved.generator)
-        self._validate_component_ref("selector", snapshot.component_refs.selector, resolved.selector)
-        self._validate_component_ref("reducer", snapshot.component_refs.reducer, resolved.reducer)
-        self._validate_component_ref_list("parser", snapshot.component_refs.parsers, resolved.parsers)
-        self._validate_component_ref_list("metric", snapshot.component_refs.metrics, resolved.metrics)
-        self._validate_component_ref_list("judge_model", snapshot.component_refs.judge_models, resolved.judge_models)
+    def _validate_component_refs(
+        self, snapshot: RunSnapshot, resolved: ComponentRefs
+    ) -> None:
+        self._validate_component_ref(
+            "generator", snapshot.component_refs.generator, resolved.generator
+        )
+        self._validate_component_ref(
+            "selector", snapshot.component_refs.selector, resolved.selector
+        )
+        self._validate_component_ref(
+            "reducer", snapshot.component_refs.reducer, resolved.reducer
+        )
+        self._validate_component_ref_list(
+            "parser", snapshot.component_refs.parsers, resolved.parsers
+        )
+        self._validate_component_ref_list(
+            "metric", snapshot.component_refs.metrics, resolved.metrics
+        )
+        self._validate_component_ref_list(
+            "judge_model", snapshot.component_refs.judge_models, resolved.judge_models
+        )
 
     def _validate_component_ref(
         self,
@@ -414,7 +477,10 @@ def _default_provider_metadata(experiment: Experiment) -> dict[str, JSONValue]:
     metadata: dict[str, JSONValue] = {}
     for label, value in (
         ("generator", experiment.generation.generator),
-        *[(f"judge_model:{index}", judge_model) for index, judge_model in enumerate(experiment.evaluation.judge_models)],
+        *[
+            (f"judge_model:{index}", judge_model)
+            for index, judge_model in enumerate(experiment.evaluation.judge_models)
+        ],
     ):
         provider_key = getattr(value, "provider_key", None)
         model_id = getattr(value, "model_id", None)

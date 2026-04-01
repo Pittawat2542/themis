@@ -15,7 +15,9 @@ class DemoGenerator:
         return "builtin-demo-generator-fingerprint"
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        answer = case.expected_output if case.expected_output is not None else case.input
+        answer = (
+            case.expected_output if case.expected_output is not None else case.input
+        )
         candidate_suffix = ctx.seed if ctx.seed is not None else 0
         return GenerationResult(
             candidate_id=f"{case.case_id}-candidate-{candidate_suffix}",

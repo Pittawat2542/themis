@@ -33,7 +33,9 @@ class JsonlRunStore(ProjectionRefreshingStore):
         run_root = self._run_root(event.run_id)
         run_root.mkdir(parents=True, exist_ok=True)
         with (run_root / "events.jsonl").open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event.model_dump(mode="json"), sort_keys=True) + "\n")
+            handle.write(
+                json.dumps(event.model_dump(mode="json"), sort_keys=True) + "\n"
+            )
         snapshot = self._load_snapshot(event.run_id)
         if snapshot is not None:
             self._refresh_projections_for_event(snapshot, event)
@@ -56,7 +58,9 @@ class JsonlRunStore(ProjectionRefreshingStore):
         return self._get_projection_with_backfill(run_id, projection_name)
 
     def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
-        projection_path = self._run_root(run_id) / "projections" / f"{projection_name}.json"
+        projection_path = (
+            self._run_root(run_id) / "projections" / f"{projection_name}.json"
+        )
         if not projection_path.is_file():
             return None
         return json.loads(projection_path.read_text(encoding="utf-8"))
@@ -69,7 +73,9 @@ class JsonlRunStore(ProjectionRefreshingStore):
         if not blob_path.exists():
             blob_path.write_bytes(blob)
         if not meta_path.exists():
-            meta_path.write_text(json.dumps({"media_type": media_type}, sort_keys=True), encoding="utf-8")
+            meta_path.write_text(
+                json.dumps({"media_type": media_type}, sort_keys=True), encoding="utf-8"
+            )
         return ref
 
     def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
@@ -93,7 +99,9 @@ class JsonlRunStore(ProjectionRefreshingStore):
             return None
         return snapshot_from_dict(json.loads(snapshot_path.read_text(encoding="utf-8")))
 
-    def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
+    def _write_projection(
+        self, run_id: str, projection_name: str, payload: JSONValue
+    ) -> None:
         projections_root = self._run_root(run_id) / "projections"
         projections_root.mkdir(parents=True, exist_ok=True)
         (projections_root / f"{projection_name}.json").write_text(

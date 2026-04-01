@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import uuid
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import pytest
@@ -15,10 +16,15 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _psycopg() -> Any:
+    import psycopg  # type: ignore[import-not-found]
+
+    return psycopg
+
+
 @pytest.fixture
 def postgres_database(tmp_path: Path):
-    import psycopg
-
+    psycopg = _psycopg()
     admin_url = os.environ["THEMIS_TEST_POSTGRES_ADMIN_URL"]
     database_name = f"themis_test_{uuid.uuid4().hex}"
     with psycopg.connect(admin_url, autocommit=True) as connection:
@@ -38,15 +44,16 @@ def postgres_database(tmp_path: Path):
             connection.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
 
 
-def test_postgres_initialize_creates_schema_version_and_is_idempotent(postgres_database) -> None:
+def test_postgres_initialize_creates_schema_version_and_is_idempotent(
+    postgres_database,
+) -> None:
     database_url, blob_root = postgres_database
     store = postgres_store(database_url, blob_root)
 
     store.initialize()
     store.initialize()
 
-    import psycopg
-
+    psycopg = _psycopg()
     with psycopg.connect(database_url) as connection:
         row = connection.execute(
             """
@@ -63,8 +70,7 @@ def test_postgres_initialize_creates_schema_version_and_is_idempotent(postgres_d
 
 def test_postgres_initialize_migrates_from_version_zero(postgres_database) -> None:
     database_url, blob_root = postgres_database
-    import psycopg
-
+    psycopg = _psycopg()
     with psycopg.connect(database_url) as connection:
         connection.execute(
             """

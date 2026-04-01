@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 import hashlib
 
-from themis.core.events import EvaluationCompletedEvent, GenerationCompletedEvent, ScoreCompletedEvent
+from themis.core.events import (
+    EvaluationCompletedEvent,
+    GenerationCompletedEvent,
+    ScoreCompletedEvent,
+)
 from themis.core.models import GenerationResult, Score
 from themis.core.results import (
     EvaluationBundle,
@@ -33,7 +37,11 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
                     candidate_id=event.candidate_id,
                     candidate_index=event.candidate_index,
                     seed=event.seed,
-                    result_blob_ref=_blob_ref(GenerationResult.model_validate(event.result).model_dump(mode="json")),
+                    result_blob_ref=_blob_ref(
+                        GenerationResult.model_validate(event.result).model_dump(
+                            mode="json"
+                        )
+                    ),
                     result=GenerationResult.model_validate(event.result),
                 )
             )
@@ -48,7 +56,9 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
 
-    valid_case_ids = {case.case_id for dataset in snapshot.datasets for case in dataset.cases}
+    valid_case_ids = {
+        case.case_id for dataset in snapshot.datasets for case in dataset.cases
+    }
     store.persist_snapshot(snapshot)
     for record in bundle.records:
         if record.case_id not in valid_case_ids:
@@ -59,7 +69,9 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
             "application/json",
         )
         if record.result_blob_ref is not None and blob_ref != record.result_blob_ref:
-            raise ValueError("Generation bundle blob ref does not match serialized result payload")
+            raise ValueError(
+                "Generation bundle blob ref does not match serialized result payload"
+            )
         store.persist_event(
             GenerationCompletedEvent(
                 run_id=bundle.run_id,
@@ -88,7 +100,11 @@ def export_evaluation_bundle(store: RunStore, run_id: str) -> EvaluationBundle:
                     case_id=event.case_id,
                     metric_id=event.metric_id,
                     candidate_id=event.candidate_id,
-                    execution_blob_ref=_blob_ref(EvaluationExecution.model_validate(event.execution).model_dump(mode="json")),
+                    execution_blob_ref=_blob_ref(
+                        EvaluationExecution.model_validate(event.execution).model_dump(
+                            mode="json"
+                        )
+                    ),
                     execution=EvaluationExecution.model_validate(event.execution),
                 )
             )
@@ -103,7 +119,9 @@ def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
 
-    valid_case_ids = {case.case_id for dataset in snapshot.datasets for case in dataset.cases}
+    valid_case_ids = {
+        case.case_id for dataset in snapshot.datasets for case in dataset.cases
+    }
     store.persist_snapshot(snapshot)
     for record in bundle.records:
         if record.case_id not in valid_case_ids:
@@ -113,8 +131,13 @@ def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
             json.dumps(execution_payload, sort_keys=True).encode("utf-8"),
             "application/json",
         )
-        if record.execution_blob_ref is not None and blob_ref != record.execution_blob_ref:
-            raise ValueError("Evaluation bundle blob ref does not match serialized execution payload")
+        if (
+            record.execution_blob_ref is not None
+            and blob_ref != record.execution_blob_ref
+        ):
+            raise ValueError(
+                "Evaluation bundle blob ref does not match serialized execution payload"
+            )
         store.persist_event(
             EvaluationCompletedEvent(
                 run_id=bundle.run_id,
@@ -139,7 +162,9 @@ def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
 
 
 def _final_score(metric_id: str, execution: EvaluationExecution) -> Score | None:
-    if execution.aggregation_output is not None and isinstance(execution.aggregation_output.value, (int, float)):
+    if execution.aggregation_output is not None and isinstance(
+        execution.aggregation_output.value, (int, float)
+    ):
         return Score(
             metric_id=metric_id,
             value=float(execution.aggregation_output.value),

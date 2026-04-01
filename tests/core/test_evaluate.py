@@ -5,11 +5,19 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 
 
-def test_evaluate_runs_one_off_experiment_with_same_run_id_as_explicit_experiment() -> None:
+def test_evaluate_runs_one_off_experiment_with_same_run_id_as_explicit_experiment() -> (
+    None
+):
     datasets = [
         Dataset(
             dataset_id="dataset-1",
-            cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+            cases=[
+                Case(
+                    case_id="case-1",
+                    input={"question": "2+2"},
+                    expected_output={"answer": "4"},
+                )
+            ],
             revision="r1",
         )
     ]
@@ -68,5 +76,7 @@ def test_evaluate_shorthand_supports_workflow_backed_metrics() -> None:
     stored = store.resume(result.run_id)
 
     assert stored is not None
-    execution = stored.execution_state.case_states["case-1"].evaluation_executions["builtin/llm_rubric"]
+    execution = stored.execution_state.case_states["case-1"].evaluation_executions[
+        "builtin/llm_rubric"
+    ]
     assert execution.status == "completed"

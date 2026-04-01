@@ -7,7 +7,9 @@ import sys
 from pathlib import Path
 
 
-def _run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_cli(
+    *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
@@ -20,7 +22,9 @@ def _run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.Comple
     )
 
 
-def _write_config(path: Path, *, store_path: Path, queue_root: Path, batch_root: Path, seed: int = 7) -> None:
+def _write_config(
+    path: Path, *, store_path: Path, queue_root: Path, batch_root: Path, seed: int = 7
+) -> None:
     path.write_text(
         f"""
 generation:
@@ -59,8 +63,12 @@ def test_acceptance_covers_quick_eval_report_export_and_resume(tmp_path: Path) -
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
     file_path = tmp_path / "cases.jsonl"
-    file_path.write_text('{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n')
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+    file_path.write_text(
+        '{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n'
+    )
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
 
     fake_datasets_root = tmp_path / "fakepkgs" / "datasets"
     fake_datasets_root.mkdir(parents=True)
@@ -71,7 +79,14 @@ def load_dataset(dataset_name, *, split):
 """.strip()
     )
 
-    inline = _run_cli("quick-eval", "inline", "--input-json", '{"question":"2+2"}', "--expected-output-json", '{"answer":"4"}')
+    inline = _run_cli(
+        "quick-eval",
+        "inline",
+        "--input-json",
+        '{"question":"2+2"}',
+        "--expected-output-json",
+        '{"answer":"4"}',
+    )
     file_eval = _run_cli("quick-eval", "file", "--path", str(file_path))
     benchmark = _run_cli("quick-eval", "benchmark", "--name", "mmlu_pro")
     huggingface = _run_cli(
@@ -87,7 +102,9 @@ def load_dataset(dataset_name, *, split):
         "answer",
         "--case-id-field",
         "id",
-        env={"PYTHONPATH": f"{tmp_path / 'fakepkgs'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"},
+        env={
+            "PYTHONPATH": f"{tmp_path / 'fakepkgs'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"
+        },
     )
     run = _run_cli("run", "--config", str(config_path))
     resume = _run_cli("resume", "--config", str(config_path))
@@ -95,7 +112,17 @@ def load_dataset(dataset_name, *, split):
     quickcheck = _run_cli("quickcheck", "--config", str(config_path))
     export_generation = _run_cli("export", "generation", "--config", str(config_path))
 
-    for result in (inline, file_eval, benchmark, huggingface, run, resume, report, quickcheck, export_generation):
+    for result in (
+        inline,
+        file_eval,
+        benchmark,
+        huggingface,
+        run,
+        resume,
+        report,
+        quickcheck,
+        export_generation,
+    ):
         assert result.returncode == 0, result.stderr
 
     assert json.loads(inline.stdout)["status"] == "completed"
@@ -106,7 +133,10 @@ def load_dataset(dataset_name, *, split):
     assert json.loads(resume.stdout)["status"] == "completed"
     assert json.loads(report.stdout)["run_result"]["status"] == "completed"
     assert json.loads(quickcheck.stdout)["metric_means"] == {"builtin/exact_match": 1.0}
-    assert json.loads(export_generation.stdout)["run_id"] == json.loads(run.stdout)["run_id"]
+    assert (
+        json.loads(export_generation.stdout)["run_id"]
+        == json.loads(run.stdout)["run_id"]
+    )
 
 
 def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> None:
@@ -115,19 +145,41 @@ def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> No
     store_path = tmp_path / "runs.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    _write_config(worker_config, store_path=store_path, queue_root=queue_root, batch_root=batch_root, seed=7)
-    _write_config(batch_config, store_path=store_path, queue_root=queue_root, batch_root=batch_root, seed=8)
+    _write_config(
+        worker_config,
+        store_path=store_path,
+        queue_root=queue_root,
+        batch_root=batch_root,
+        seed=7,
+    )
+    _write_config(
+        batch_config,
+        store_path=store_path,
+        queue_root=queue_root,
+        batch_root=batch_root,
+        seed=8,
+    )
 
-    worker_submit = _run_cli("submit", "--config", str(worker_config), "--mode", "worker-pool")
+    worker_submit = _run_cli(
+        "submit", "--config", str(worker_config), "--mode", "worker-pool"
+    )
     assert worker_submit.returncode == 0, worker_submit.stderr
-    assert json.loads(_run_cli("resume", "--config", str(worker_config)).stdout)["status"] == "pending"
+    assert (
+        json.loads(_run_cli("resume", "--config", str(worker_config)).stdout)["status"]
+        == "pending"
+    )
     worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root))
     assert worker_run.returncode == 0, worker_run.stderr
     assert json.loads(worker_run.stdout)["status"] == "completed"
 
     batch_submit = _run_cli("submit", "--config", str(batch_config), "--mode", "batch")
     assert batch_submit.returncode == 0, batch_submit.stderr
-    assert json.loads(_run_cli("resume", "--config", str(batch_config)).stdout)["status"] == "pending"
-    batch_run = _run_cli("batch", "run", "--request", json.loads(batch_submit.stdout)["manifest_path"])
+    assert (
+        json.loads(_run_cli("resume", "--config", str(batch_config)).stdout)["status"]
+        == "pending"
+    )
+    batch_run = _run_cli(
+        "batch", "run", "--request", json.loads(batch_submit.stdout)["manifest_path"]
+    )
     assert batch_run.returncode == 0, batch_run.stderr
     assert json.loads(batch_run.stdout)["status"] == "completed"

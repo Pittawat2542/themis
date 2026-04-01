@@ -11,7 +11,10 @@ def test_rubric_benchmark_adapter_configures_workflow_metrics() -> None:
 
     assert benchmark.metric_ids == ["builtin/llm_rubric"]
     assert benchmark.judge_model_ids == ["builtin/demo_judge"]
-    assert benchmark.workflow_overrides["rubric"] == "Judge whether the scientific answer is correct and well-supported."
+    assert (
+        benchmark.workflow_overrides["rubric"]
+        == "Judge whether the scientific answer is correct and well-supported."
+    )
     assert experiment.evaluation.metrics == ["builtin/llm_rubric"]
     assert experiment.evaluation.judge_models == ["builtin/demo_judge"]
 
@@ -23,10 +26,15 @@ def test_code_benchmark_adapter_configures_best_of_n_and_execution_metadata() ->
     assert benchmark.selector_id == "builtin/best_of_n"
     assert benchmark.judge_model_ids == ["builtin/demo_judge"]
     assert benchmark.candidate_policy == {"num_samples": 2}
-    assert benchmark.sample_case_input["problem"].startswith("Solve the programming task")
+    assert benchmark.sample_case_input["problem"].startswith(
+        "Solve the programming task"
+    )
     assert experiment.generation.selector == "builtin/best_of_n"
     assert experiment.generation.reducer is None
-    assert experiment.datasets[0].metadata["supported_execution_backends"] == "piston,sandbox_fusion"
+    assert (
+        experiment.datasets[0].metadata["supported_execution_backends"]
+        == "piston,sandbox_fusion"
+    )
 
 
 def test_catalog_run_executes_representative_adapter_backed_benchmarks() -> None:

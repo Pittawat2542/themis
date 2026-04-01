@@ -23,12 +23,20 @@ def _snapshot():
             candidate_policy={"num_samples": 2},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7, 11],
@@ -48,7 +56,10 @@ def test_export_generation_bundle_collects_generation_results_from_store() -> No
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         )
     )
     store.persist_event(
@@ -58,7 +69,10 @@ def test_export_generation_bundle_collects_generation_results_from_store() -> No
             candidate_id="case-1-candidate-11",
             candidate_index=1,
             seed=11,
-            result={"candidate_id": "case-1-candidate-11", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-11",
+                "final_output": {"answer": "4"},
+            },
         )
     )
 
@@ -84,7 +98,10 @@ def test_import_generation_bundle_round_trips_generation_events() -> None:
             candidate_id="case-1-candidate-7",
             candidate_index=0,
             seed=7,
-            result={"candidate_id": "case-1-candidate-7", "final_output": {"answer": "4"}},
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
         )
     )
     bundle = export_generation_bundle(source_store, snapshot.run_id)
@@ -220,6 +237,8 @@ def test_import_evaluation_bundle_preserves_partial_failures() -> None:
     resumed = target_store.resume(snapshot.run_id)
 
     assert resumed is not None
-    execution = resumed.execution_state.case_states["case-1"].evaluation_executions["metric/judge"]
+    execution = resumed.execution_state.case_states["case-1"].evaluation_executions[
+        "metric/judge"
+    ]
     assert execution.status == "partial_failure"
     assert execution.failures[0].error_message == "judge timeout"

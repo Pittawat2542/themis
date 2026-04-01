@@ -9,7 +9,12 @@ from themis.core.bundles import (
 )
 from themis.core.builtins import resolve_judge_model_component
 from themis.core.builtins import resolve_selector_component
-from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    RuntimeConfig,
+    StorageConfig,
+)
 from themis.core.contexts import (
     EvalScoreContext,
     GenerateContext,
@@ -40,7 +45,11 @@ from themis.core.events import (
 )
 from themis.core.evaluate import evaluate
 from themis.core.experiment import Experiment
-from themis.core.inspection import get_evaluation_execution, get_execution_state, get_run_snapshot
+from themis.core.inspection import (
+    get_evaluation_execution,
+    get_execution_state,
+    get_run_snapshot,
+)
 from themis.core.quickcheck import quickcheck
 from themis.core.read_models import BenchmarkResult, TimelineView, TraceView
 from themis.core.reporter import Reporter, snapshot_report

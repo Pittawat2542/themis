@@ -13,7 +13,9 @@ from themis.core.inspection import get_execution_state, get_run_snapshot
 from themis.core.store import RunStore
 
 
-def snapshot_report(snapshot, run_metadata: dict[str, JSONValue] | None = None) -> dict[str, JSONValue]:
+def snapshot_report(
+    snapshot, run_metadata: dict[str, JSONValue] | None = None
+) -> dict[str, JSONValue]:
     return {
         "run_id": snapshot.run_id,
         "identity": snapshot.identity.model_dump(mode="json"),
@@ -30,7 +32,9 @@ class Reporter:
     def export_json(self, run_id: str) -> str:
         payload = {
             "snapshot": get_run_snapshot(self.store, run_id).model_dump(mode="json"),
-            "execution_state": get_execution_state(self.store, run_id).model_dump(mode="json"),
+            "execution_state": get_execution_state(self.store, run_id).model_dump(
+                mode="json"
+            ),
             "run_result": self._projection(run_id, "run_result"),
             "benchmark_result": self._projection(run_id, "benchmark_result"),
             "timeline_view": self._projection(run_id, "timeline_view"),
@@ -41,8 +45,12 @@ class Reporter:
     def export_markdown(self, run_id: str) -> str:
         run_result = self._projection(run_id, "run_result")
         benchmark_result = self._projection(run_id, "benchmark_result")
-        progress = _require_mapping(run_result.get("progress"), name="run_result.progress")
-        score_rows = _require_rows(benchmark_result.get("score_rows"), name="benchmark_result.score_rows")
+        progress = _require_mapping(
+            run_result.get("progress"), name="run_result.progress"
+        )
+        score_rows = _require_rows(
+            benchmark_result.get("score_rows"), name="benchmark_result.score_rows"
+        )
         lines = [
             "# Run Report",
             "",
@@ -63,7 +71,9 @@ class Reporter:
 
     def export_csv(self, run_id: str) -> str:
         buffer = StringIO()
-        writer = csv.DictWriter(buffer, fieldnames=["case_id", "metric_id", "value", "candidate_id"])
+        writer = csv.DictWriter(
+            buffer, fieldnames=["case_id", "metric_id", "value", "candidate_id"]
+        )
         writer.writeheader()
         writer.writerows(self.export_score_table(run_id))
         return buffer.getvalue()
@@ -91,7 +101,9 @@ class Reporter:
 
     def export_score_table(self, run_id: str) -> list[dict[str, JSONValue]]:
         benchmark_result = self._projection(run_id, "benchmark_result")
-        score_rows = _require_rows(benchmark_result.get("score_rows"), name="benchmark_result.score_rows")
+        score_rows = _require_rows(
+            benchmark_result.get("score_rows"), name="benchmark_result.score_rows"
+        )
         return [
             {
                 "case_id": row["case_id"],
@@ -105,7 +117,9 @@ class Reporter:
     def _projection(self, run_id: str, projection_name: str) -> dict[str, JSONValue]:
         projection = self.store.get_projection(run_id, projection_name)
         if projection is None or not isinstance(projection, dict):
-            raise ValueError(f"Projection not found: {projection_name} for run_id={run_id}")
+            raise ValueError(
+                f"Projection not found: {projection_name} for run_id={run_id}"
+            )
         return projection
 
 

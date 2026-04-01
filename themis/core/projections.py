@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections import defaultdict
 
 from themis.core.base import JSONValue
-from themis.core.events import EvaluationCompletedEvent, GenerationCompletedEvent, RunEvent
+from themis.core.events import (
+    EvaluationCompletedEvent,
+    GenerationCompletedEvent,
+    RunEvent,
+)
 from themis.core.models import GenerationResult
 from themis.core.read_models import (
     BenchmarkResult,
@@ -32,10 +36,14 @@ STORE_PROJECTION_NAMES = PROJECTION_NAMES + ("execution_state",)
 
 
 def build_run_result(snapshot: RunSnapshot, events: list[RunEvent]) -> RunResult:
-    return build_run_result_from_state(snapshot, ExecutionState.from_events(snapshot.run_id, events))
+    return build_run_result_from_state(
+        snapshot, ExecutionState.from_events(snapshot.run_id, events)
+    )
 
 
-def build_run_result_from_state(snapshot: RunSnapshot, state: ExecutionState) -> RunResult:
+def build_run_result_from_state(
+    snapshot: RunSnapshot, state: ExecutionState
+) -> RunResult:
     case_results: list[CaseResult] = []
     failed_cases = 0
     completed_cases = 0
@@ -54,7 +62,8 @@ def build_run_result_from_state(snapshot: RunSnapshot, state: ExecutionState) ->
                     case_state.parse_error is not None,
                     case_state.evaluation_failures,
                     any(
-                        execution.status == "partial_failure" or bool(execution.failures)
+                        execution.status == "partial_failure"
+                        or bool(execution.failures)
                         for execution in case_state.evaluation_executions.values()
                     ),
                     case_state.score_failures,
@@ -70,16 +79,23 @@ def build_run_result_from_state(snapshot: RunSnapshot, state: ExecutionState) ->
                         for index in sorted(case_state.generated_candidates_by_index)
                     ]
                     or list(case_state.generated_candidates.values()),
-                    generated_candidate_blob_refs=dict(case_state.generated_candidate_blob_refs),
+                    generated_candidate_blob_refs=dict(
+                        case_state.generated_candidate_blob_refs
+                    ),
                     generation_failures=dict(case_state.generation_failures),
                     reduced_candidate=case_state.reduced_candidate,
                     reduction_error=case_state.reduction_error,
                     parsed_output=case_state.parsed_output,
                     parse_error=case_state.parse_error,
-                    evaluation_executions=list(case_state.evaluation_executions.values()),
-                    evaluation_execution_blob_refs=dict(case_state.evaluation_execution_blob_refs),
+                    evaluation_executions=list(
+                        case_state.evaluation_executions.values()
+                    ),
+                    evaluation_execution_blob_refs=dict(
+                        case_state.evaluation_execution_blob_refs
+                    ),
                     evaluation_failures=dict(case_state.evaluation_failures),
-                    scores=list(case_state.successful_scores.values()) + list(case_state.score_failures.values()),
+                    scores=list(case_state.successful_scores.values())
+                    + list(case_state.score_failures.values()),
                 )
             )
 
@@ -96,9 +112,15 @@ def build_run_result_from_state(snapshot: RunSnapshot, state: ExecutionState) ->
     )
 
 
-def build_benchmark_result(snapshot: RunSnapshot, events: list[RunEvent]) -> BenchmarkResult:
-    benchmark_result = build_benchmark_result_from_run_result(build_run_result(snapshot, events))
-    return benchmark_result.model_copy(update={"dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets]})
+def build_benchmark_result(
+    snapshot: RunSnapshot, events: list[RunEvent]
+) -> BenchmarkResult:
+    benchmark_result = build_benchmark_result_from_run_result(
+        build_run_result(snapshot, events)
+    )
+    return benchmark_result.model_copy(
+        update={"dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets]}
+    )
 
 
 def build_benchmark_result_from_run_result(run_result: RunResult) -> BenchmarkResult:
@@ -113,7 +135,9 @@ def build_benchmark_result_from_run_result(run_result: RunResult) -> BenchmarkRe
                 case_id=case.case_id,
                 metric_id=score.metric_id,
                 value=float(score.value),
-                candidate_id=case.reduced_candidate.candidate_id if case.reduced_candidate is not None else None,
+                candidate_id=case.reduced_candidate.candidate_id
+                if case.reduced_candidate is not None
+                else None,
             )
             score_rows.append(row)
             metric_scores[row.metric_id].append(row.value)
@@ -158,7 +182,9 @@ def build_trace_view(snapshot: RunSnapshot, events: list[RunEvent]) -> TraceView
     return view
 
 
-def build_projection_payloads(snapshot: RunSnapshot, events: list[RunEvent]) -> dict[str, JSONValue]:
+def build_projection_payloads(
+    snapshot: RunSnapshot, events: list[RunEvent]
+) -> dict[str, JSONValue]:
     store_payloads = build_store_projection_payloads(snapshot, events)
     return {
         projection_name: store_payloads[projection_name]
@@ -166,7 +192,9 @@ def build_projection_payloads(snapshot: RunSnapshot, events: list[RunEvent]) -> 
     }
 
 
-def build_store_projection_payloads(snapshot: RunSnapshot, events: list[RunEvent]) -> dict[str, JSONValue]:
+def build_store_projection_payloads(
+    snapshot: RunSnapshot, events: list[RunEvent]
+) -> dict[str, JSONValue]:
     state = ExecutionState.from_events(snapshot.run_id, events)
     run_result = build_run_result_from_state(snapshot, state)
     benchmark_result = build_benchmark_result_from_run_result(run_result).model_copy(
@@ -183,7 +211,9 @@ def build_store_projection_payloads(snapshot: RunSnapshot, events: list[RunEvent
     }
 
 
-def build_initial_store_projection_payloads(snapshot: RunSnapshot) -> dict[str, JSONValue]:
+def build_initial_store_projection_payloads(
+    snapshot: RunSnapshot,
+) -> dict[str, JSONValue]:
     return build_store_projection_payloads(snapshot, [])
 
 
@@ -198,7 +228,9 @@ def apply_event_to_store_projection_payloads(
         update={"dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets]}
     )
     snapshot_payload = _current_snapshot_payload(snapshot, projections.get("snapshot"))
-    timeline_view = _apply_event_to_timeline_view(snapshot, projections.get("timeline_view"), event)
+    timeline_view = _apply_event_to_timeline_view(
+        snapshot, projections.get("timeline_view"), event
+    )
     trace_view = _apply_event_to_trace_view(
         snapshot,
         _current_trace_view(snapshot, projections.get("trace_view")),
@@ -214,14 +246,18 @@ def apply_event_to_store_projection_payloads(
     }
 
 
-def _current_execution_state(snapshot: RunSnapshot, projections: dict[str, JSONValue]) -> ExecutionState:
+def _current_execution_state(
+    snapshot: RunSnapshot, projections: dict[str, JSONValue]
+) -> ExecutionState:
     payload = projections.get("execution_state")
     if isinstance(payload, dict):
         return ExecutionState.model_validate(payload)
     return ExecutionState(run_id=snapshot.run_id)
 
 
-def _current_snapshot_payload(snapshot: RunSnapshot, payload: JSONValue | None) -> JSONValue:
+def _current_snapshot_payload(
+    snapshot: RunSnapshot, payload: JSONValue | None
+) -> JSONValue:
     if isinstance(payload, dict):
         return payload
     return snapshot.model_dump(mode="json")
@@ -238,7 +274,11 @@ def _apply_event_to_timeline_view(
     payload: JSONValue | None,
     event: RunEvent,
 ) -> TimelineView:
-    view = TimelineView.model_validate(payload) if isinstance(payload, dict) else TimelineView(run_id=snapshot.run_id)
+    view = (
+        TimelineView.model_validate(payload)
+        if isinstance(payload, dict)
+        else TimelineView(run_id=snapshot.run_id)
+    )
     entries = list(view.entries)
     entries.append(
         TimelineEntry(
@@ -253,7 +293,9 @@ def _apply_event_to_timeline_view(
     return view.model_copy(update={"entries": entries})
 
 
-def _apply_event_to_trace_view(snapshot: RunSnapshot, view: TraceView, event: RunEvent) -> TraceView:
+def _apply_event_to_trace_view(
+    snapshot: RunSnapshot, view: TraceView, event: RunEvent
+) -> TraceView:
     generation_traces = list(view.generation_traces)
     conversation_traces = list(view.conversation_traces)
     evaluation_traces = list(view.evaluation_traces)
@@ -275,7 +317,10 @@ def _apply_event_to_trace_view(snapshot: RunSnapshot, view: TraceView, event: Ru
                     case_id=event.case_id,
                     candidate_id=event.candidate_id,
                     trace_id=f"{event.candidate_id}:conversation",
-                    messages=[message.model_dump(mode="json") for message in result.conversation],
+                    messages=[
+                        message.model_dump(mode="json")
+                        for message in result.conversation
+                    ],
                 )
             )
     elif isinstance(event, EvaluationCompletedEvent) and event.execution is not None:

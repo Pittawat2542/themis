@@ -15,7 +15,9 @@ async def test_manifest_registry_loads_builtin_components_with_stable_refs() -> 
     component_ref = component_ref_from_value("builtin/demo_generator")
 
     result = await component.generate(
-        Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
+        Case(
+            case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
+        ),
         GenerateContext(run_id="run-1", case_id="case-1", seed=7),
     )
 

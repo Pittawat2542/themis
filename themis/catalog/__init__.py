@@ -27,7 +27,9 @@ def run(name: str, *, model: object | None = None, store=None):
 
 
 def builtin_component_refs():
-    from themis.catalog.registry import builtin_component_refs as _builtin_component_refs
+    from themis.catalog.registry import (
+        builtin_component_refs as _builtin_component_refs,
+    )
 
     return _builtin_component_refs()
 

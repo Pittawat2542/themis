@@ -24,7 +24,14 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _write_config(path: Path, *, store_path: Path, queue_root: Path, batch_root: Path, seed: int | None) -> None:
+def _write_config(
+    path: Path,
+    *,
+    store_path: Path,
+    queue_root: Path,
+    batch_root: Path,
+    seed: int | None,
+) -> None:
     seeds_block = "" if seed is None else f"\nseeds: [{seed}]"
     path.write_text(
         f"""
@@ -58,20 +65,33 @@ datasets:
     )
 
 
-def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(tmp_path: Path) -> None:
+def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
+    tmp_path: Path,
+) -> None:
     cases_path = tmp_path / "cases.jsonl"
-    cases_path.write_text('{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n')
+    cases_path.write_text(
+        '{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n'
+    )
     store_path = tmp_path / "runs.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
     config_path = tmp_path / "experiment.yaml"
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root, seed=None)
+    _write_config(
+        config_path,
+        store_path=store_path,
+        queue_root=queue_root,
+        batch_root=batch_root,
+        seed=None,
+    )
 
     experiment = Experiment.from_config(config_path)
     python_store = create_run_store(experiment.storage)
     python_store.initialize()
     python_result = experiment.run(store=python_store)
-    python_benchmark = cast(dict[str, JSONValue], python_store.get_projection(python_result.run_id, "benchmark_result"))
+    python_benchmark = cast(
+        dict[str, JSONValue],
+        python_store.get_projection(python_result.run_id, "benchmark_result"),
+    )
 
     evaluate_result = evaluate(
         model="builtin/demo_generator",
@@ -83,7 +103,9 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(tmp_
 
     cli_run = _run_cli("run", "--config", str(config_path))
     cli_quick_eval = _run_cli("quick-eval", "file", "--path", str(cases_path))
-    worker_submit = _run_cli("submit", "--config", str(config_path), "--mode", "worker-pool")
+    worker_submit = _run_cli(
+        "submit", "--config", str(config_path), "--mode", "worker-pool"
+    )
     worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root))
     batch_submit = _run_cli("submit", "--config", str(config_path), "--mode", "batch")
     batch_manifest = json.loads(batch_submit.stdout)["manifest_path"]
@@ -108,11 +130,21 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(tmp_
     report_payload = json.loads(report.stdout)
 
     assert python_result.run_id == evaluate_result.run_id
-    assert python_result.run_id == cli_run_payload["run_id"] == cli_quick_eval_payload["run_id"]
-    assert python_result.run_id == worker_run_payload["run_id"] == batch_run_payload["run_id"]
+    assert (
+        python_result.run_id
+        == cli_run_payload["run_id"]
+        == cli_quick_eval_payload["run_id"]
+    )
+    assert (
+        python_result.run_id
+        == worker_run_payload["run_id"]
+        == batch_run_payload["run_id"]
+    )
     assert python_benchmark["metric_means"] == cli_quick_eval_payload["metric_means"]
     assert quickcheck_payload["metric_means"] == python_benchmark["metric_means"]
-    assert report_payload["benchmark_result"]["score_rows"] == Reporter(python_store).export_score_table(python_result.run_id)
+    assert report_payload["benchmark_result"]["score_rows"] == Reporter(
+        python_store
+    ).export_score_table(python_result.run_id)
 
 
 def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
@@ -121,8 +153,20 @@ def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
     batch_root = tmp_path / "batch"
     baseline_config = tmp_path / "baseline.yaml"
     candidate_config = tmp_path / "candidate.yaml"
-    _write_config(baseline_config, store_path=store_path, queue_root=queue_root, batch_root=batch_root, seed=7)
-    _write_config(candidate_config, store_path=store_path, queue_root=queue_root, batch_root=batch_root, seed=8)
+    _write_config(
+        baseline_config,
+        store_path=store_path,
+        queue_root=queue_root,
+        batch_root=batch_root,
+        seed=7,
+    )
+    _write_config(
+        candidate_config,
+        store_path=store_path,
+        queue_root=queue_root,
+        batch_root=batch_root,
+        seed=8,
+    )
 
     baseline_experiment = Experiment.from_config(baseline_config)
     candidate_experiment = Experiment.from_config(candidate_config)
@@ -142,8 +186,16 @@ def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
     assert cli_compare.returncode == 0, cli_compare.stderr
     cli_payload = json.loads(cli_compare.stdout)
     python_payload = StatsEngine().paired_compare(
-        BenchmarkResult.model_validate(store.get_projection(baseline_experiment.compile().run_id, "benchmark_result")),
-        BenchmarkResult.model_validate(store.get_projection(candidate_experiment.compile().run_id, "benchmark_result")),
+        BenchmarkResult.model_validate(
+            store.get_projection(
+                baseline_experiment.compile().run_id, "benchmark_result"
+            )
+        ),
+        BenchmarkResult.model_validate(
+            store.get_projection(
+                candidate_experiment.compile().run_id, "benchmark_result"
+            )
+        ),
     )
 
     assert cli_payload == python_payload

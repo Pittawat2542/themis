@@ -4,6 +4,7 @@ import json
 import os
 import uuid
 from pathlib import Path
+from typing import Any
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 import pytest
@@ -20,6 +21,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _psycopg() -> Any:
+    import psycopg  # type: ignore[import-not-found]
+
+    return psycopg
+
+
 def _snapshot():
     experiment = Experiment(
         generation=GenerationConfig(
@@ -27,13 +34,19 @@ def _snapshot():
             candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="postgres"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -43,8 +56,7 @@ def _snapshot():
 
 @pytest.fixture
 def postgres_store_backend(tmp_path: Path):
-    import psycopg
-
+    psycopg = _psycopg()
     admin_url = os.environ["THEMIS_TEST_POSTGRES_ADMIN_URL"]
     database_name = f"themis_test_{uuid.uuid4().hex}"
     with psycopg.connect(admin_url, autocommit=True) as connection:
@@ -67,7 +79,9 @@ def postgres_store_backend(tmp_path: Path):
             connection.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
 
 
-def test_postgres_store_round_trips_snapshot_events_projections_and_blobs(postgres_store_backend) -> None:
+def test_postgres_store_round_trips_snapshot_events_projections_and_blobs(
+    postgres_store_backend,
+) -> None:
     store, _database_url = postgres_store_backend
     snapshot = _snapshot()
 
@@ -77,7 +91,10 @@ def test_postgres_store_round_trips_snapshot_events_projections_and_blobs(postgr
     blob_ref = store.store_blob(b'{"answer":"4"}', "application/json")
 
     assert store.resume(snapshot.run_id) is not None
-    assert [event.event_type for event in store.query_events(snapshot.run_id)] == ["run_started", "run_completed"]
+    assert [event.event_type for event in store.query_events(snapshot.run_id)] == [
+        "run_started",
+        "run_completed",
+    ]
     assert store.get_projection(snapshot.run_id, "run_result") is not None
     assert store.load_blob(blob_ref) == ("application/json", b'{"answer":"4"}')
 
@@ -89,8 +106,7 @@ def test_postgres_store_backfills_missing_projection(postgres_store_backend) -> 
     store.persist_snapshot(snapshot)
     store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
 
-    import psycopg
-
+    psycopg = _psycopg()
     with psycopg.connect(database_url) as connection:
         connection.execute(
             """
@@ -107,15 +123,16 @@ def test_postgres_store_backfills_missing_projection(postgres_store_backend) -> 
     assert projection["status"] == "running"
 
 
-def test_postgres_store_skips_unknown_event_types_on_read(postgres_store_backend) -> None:
+def test_postgres_store_skips_unknown_event_types_on_read(
+    postgres_store_backend,
+) -> None:
     store, database_url = postgres_store_backend
     snapshot = _snapshot()
 
     store.persist_snapshot(snapshot)
     store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
 
-    import psycopg
-
+    psycopg = _psycopg()
     with psycopg.connect(database_url) as connection:
         connection.execute(
             """

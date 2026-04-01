@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext, ScoreContext
+from themis.core.contexts import (
+    EvalScoreContext,
+    GenerateContext,
+    ParseContext,
+    ReduceContext,
+    ScoreContext,
+)
 from themis.core.events import RunEvent
 from themis.core.models import (
     Case,
@@ -60,15 +66,21 @@ class DummyWorkflow:
     def judge_calls(self) -> list[JudgeCall]:
         return [JudgeCall(call_id="call-0", judge_model_id="builtin/demo_judge")]
 
-    def render_prompt(self, call: JudgeCall, subject: CandidateSetSubject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+    def render_prompt(
+        self, call: JudgeCall, subject: CandidateSetSubject, ctx: EvalScoreContext
+    ) -> RenderedJudgePrompt:
         del call, subject, ctx
         return RenderedJudgePrompt(prompt_id="prompt-0", content="demo")
 
-    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+    def parse_judgment(
+        self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext
+    ) -> ParsedJudgment:
         del call, ctx
         return ParsedJudgment(label=response.raw_response)
 
-    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+    def score_judgment(
+        self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
+    ) -> Score | None:
         del call, ctx
         return Score(metric_id="judge", value=float(judgment.label == "pass"))
 
@@ -79,7 +91,9 @@ class DummyWorkflow:
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
-        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+        return AggregationResult(
+            method="mean", value=sum(score.value for score in scores) / len(scores)
+        )
 
 
 class DummyGenerator:
@@ -90,7 +104,9 @@ class DummyGenerator:
         return "generator-fingerprint"
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed})
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed}
+        )
 
 
 class DummyParser:
@@ -101,7 +117,9 @@ class DummyParser:
         return "parser-fingerprint"
 
     def parse(self, candidate: ReducedCandidate, ctx: ParseContext) -> ParsedOutput:
-        return ParsedOutput(value={"candidate": candidate.candidate_id, "run": ctx.run_id})
+        return ParsedOutput(
+            value={"candidate": candidate.candidate_id, "run": ctx.run_id}
+        )
 
 
 class DummyReducer:
@@ -130,9 +148,13 @@ class DummyPureMetric:
     def fingerprint(self) -> str:
         return "pure-metric-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score | ScoreError:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> Score | ScoreError:
         del ctx
-        return Score(metric_id="exact_match", value=float(parsed.value == case.expected_output))
+        return Score(
+            metric_id="exact_match", value=float(parsed.value == case.expected_output)
+        )
 
 
 class DummyLLMMetric:
@@ -223,7 +245,9 @@ class DummySubscriber:
     def after_generate(self, result: GenerationResult, ctx: GenerateContext) -> None:
         del result, ctx
 
-    def before_reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> None:
+    def before_reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> None:
         del candidates, ctx
 
     def after_reduce(self, reduced: ReducedCandidate, ctx: ReduceContext) -> None:
@@ -241,10 +265,16 @@ class DummySubscriber:
     def after_score(self, score: Score | ScoreError, ctx: ScoreContext) -> None:
         del score, ctx
 
-    def before_judge(self, subject: CandidateSetSubject | TraceSubject | ConversationSubject, ctx: EvalScoreContext) -> None:
+    def before_judge(
+        self,
+        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        ctx: EvalScoreContext,
+    ) -> None:
         del subject, ctx
 
-    def after_judge(self, execution: EvaluationExecution, ctx: EvalScoreContext) -> None:
+    def after_judge(
+        self, execution: EvaluationExecution, ctx: EvalScoreContext
+    ) -> None:
         del execution, ctx
 
     def on_event(self, event: RunEvent) -> None:
@@ -260,7 +290,9 @@ class DummyTracingProvider:
 
 
 def _score_context() -> EvalScoreContext:
-    case = Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})
+    case = Case(
+        case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
+    )
     parsed = ParsedOutput(value={"answer": "4"})
     return EvalScoreContext(
         run_id="run-1",
@@ -316,7 +348,9 @@ def test_workflow_and_execution_models_capture_judge_artifacts() -> None:
     execution = EvaluationExecution(
         execution_id="execution-1",
         subject_kind="candidate_set",
-        rendered_prompts=[RenderedJudgePrompt(prompt_id="prompt-1", content="Grade this")],
+        rendered_prompts=[
+            RenderedJudgePrompt(prompt_id="prompt-1", content="Grade this")
+        ],
         judge_responses=[
             JudgeResponse(
                 judge_model_id="judge-demo",
@@ -377,4 +411,6 @@ def test_metric_protocols_accept_expected_subject_shapes() -> None:
     assert llm_metric.build_workflow(single, ctx).component_id == "workflow/demo"
     assert selection_metric.build_workflow(pair, ctx).component_id == "workflow/demo"
     assert trace_metric.build_workflow(trace, ctx).component_id == "workflow/demo"
-    assert trace_metric.build_workflow(conversation, ctx).component_id == "workflow/demo"
+    assert (
+        trace_metric.build_workflow(conversation, ctx).component_id == "workflow/demo"
+    )

@@ -21,7 +21,9 @@ def test_store_factory_can_build_postgres_backend(tmp_path) -> None:
     assert isinstance(store, PostgresRunStore)
 
 
-def test_postgres_store_raises_clear_import_error_when_dependency_is_missing(monkeypatch, tmp_path) -> None:
+def test_postgres_store_raises_clear_import_error_when_dependency_is_missing(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setattr(
         "themis.core.stores.postgres.importlib.import_module",
         lambda name: (_ for _ in ()).throw(ImportError(name)),

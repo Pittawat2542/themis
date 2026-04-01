@@ -81,7 +81,9 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_run_resume_estimate_and_quickcheck_use_config_driven_experiments(tmp_path: Path) -> None:
+def test_run_resume_estimate_and_quickcheck_use_config_driven_experiments(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "experiment.yaml"
     store_path = tmp_path / "run.sqlite3"
     _write_config(config_path, store_path=store_path)

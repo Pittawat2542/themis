@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from themis.cli.helpers import dump_json, initialize_store, load_benchmark_result, load_experiment
+from themis.cli.helpers import (
+    dump_json,
+    initialize_store,
+    load_benchmark_result,
+    load_experiment,
+)
 from themis.core.stats import StatsEngine
 
 

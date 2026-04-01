@@ -47,7 +47,12 @@ class FakeCollection:
     def __init__(self) -> None:
         self.rows: list[dict[str, object]] = []
 
-    def replace_one(self, query: dict[str, object], document: dict[str, object], upsert: bool = False) -> None:
+    def replace_one(
+        self,
+        query: dict[str, object],
+        document: dict[str, object],
+        upsert: bool = False,
+    ) -> None:
         for index, row in enumerate(self.rows):
             if all(row.get(key) == value for key, value in query.items()):
                 self.rows[index] = dict(document)
@@ -59,7 +64,11 @@ class FakeCollection:
         self.rows.append(dict(document))
 
     def find(self, query: dict[str, object]) -> list[dict[str, object]]:
-        return [row for row in self.rows if all(row.get(key) == value for key, value in query.items())]
+        return [
+            row
+            for row in self.rows
+            if all(row.get(key) == value for key, value in query.items())
+        ]
 
     def find_one(self, query: dict[str, object]) -> dict[str, object] | None:
         for row in self.rows:

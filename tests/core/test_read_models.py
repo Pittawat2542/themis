@@ -113,7 +113,9 @@ def _events(run_id: str):
             execution={
                 "execution_id": "execution-1",
                 "subject_kind": "candidate_set",
-                "judge_calls": [{"call_id": "call-1", "judge_model_id": "builtin/demo_judge"}],
+                "judge_calls": [
+                    {"call_id": "call-1", "judge_model_id": "builtin/demo_judge"}
+                ],
                 "rendered_prompts": [{"prompt_id": "prompt-1", "content": "grade"}],
                 "judge_responses": [
                     {
@@ -146,7 +148,11 @@ def _events(run_id: str):
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id="builtin/exact_match",
-            score={"metric_id": "builtin/exact_match", "value": 1.0, "details": {"matched": True}},
+            score={
+                "metric_id": "builtin/exact_match",
+                "value": 1.0,
+                "details": {"matched": True},
+            },
         ),
         RunCompletedEvent(run_id=run_id),
     ]
@@ -174,7 +180,9 @@ def test_build_run_result_projects_case_drill_down_from_events() -> None:
     assert case.reduced_candidate is not None
     assert case.parsed_output is not None
     assert case.evaluation_executions[0].execution_id == "execution-1"
-    assert case.evaluation_execution_blob_refs == {"metric/judge": "sha256:evaluation-1"}
+    assert case.evaluation_execution_blob_refs == {
+        "metric/judge": "sha256:evaluation-1"
+    }
     assert case.evaluation_failures == {"metric/trace": "judge unavailable"}
     assert case.scores[0].metric_id == "builtin/exact_match"
 

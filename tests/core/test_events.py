@@ -76,7 +76,11 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
             case_id="case-1",
             candidate_id="candidate-1",
             metric_id="exact_match",
-            score={"metric_id": "exact_match", "value": 1.0, "details": {"matched": True}},
+            score={
+                "metric_id": "exact_match",
+                "value": 1.0,
+                "details": {"matched": True},
+            },
         ),
         GenerationFailedEvent(
             run_id="run-1",

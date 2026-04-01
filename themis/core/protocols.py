@@ -135,7 +135,9 @@ class PureMetric(Protocol):
 
     def fingerprint(self) -> str: ...
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score | ScoreError: ...
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> Score | ScoreError: ...
 
 
 @runtime_checkable
@@ -198,12 +200,16 @@ class BeforeGenerate(Protocol):
 
 @runtime_checkable
 class AfterGenerate(Protocol):
-    def after_generate(self, result: GenerationResult, ctx: GenerateContext) -> None: ...
+    def after_generate(
+        self, result: GenerationResult, ctx: GenerateContext
+    ) -> None: ...
 
 
 @runtime_checkable
 class BeforeReduce(Protocol):
-    def before_reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> None: ...
+    def before_reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> None: ...
 
 
 @runtime_checkable
@@ -242,7 +248,9 @@ class BeforeJudge(Protocol):
 
 @runtime_checkable
 class AfterJudge(Protocol):
-    def after_judge(self, execution: EvaluationExecution, ctx: EvalScoreContext) -> None: ...
+    def after_judge(
+        self, execution: EvaluationExecution, ctx: EvalScoreContext
+    ) -> None: ...
 
 
 @runtime_checkable

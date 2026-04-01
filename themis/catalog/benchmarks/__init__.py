@@ -37,7 +37,9 @@ class BenchmarkDefinition(FrozenModel):
     selector_id: str | None = None
     reducer_id: str | None = "builtin/majority_vote"
     generator_id: str = "builtin/demo_generator"
-    candidate_policy: dict[str, JSONValue] = Field(default_factory=_default_candidate_policy)
+    candidate_policy: dict[str, JSONValue] = Field(
+        default_factory=_default_candidate_policy
+    )
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
     dataset_metadata: dict[str, str] = Field(default_factory=dict)
     sample_case_id: str = "sample-1"
@@ -51,7 +53,9 @@ class BenchmarkDefinition(FrozenModel):
         model: object | None = None,
         storage: StorageConfig | None = None,
     ) -> Experiment:
-        generator: Generator | str = cast(Generator | str, model) if model is not None else self.generator_id
+        generator: Generator | str = (
+            cast(Generator | str, model) if model is not None else self.generator_id
+        )
         seeds = list(range(7, 7 + _candidate_count(self.candidate_policy)))
         return Experiment(
             generation=GenerationConfig(
@@ -75,8 +79,12 @@ class BenchmarkDefinition(FrozenModel):
                         "split": self.split,
                         "benchmark_id": self.benchmark_id,
                         "dataset_revision": self.dataset_revision or "",
-                        "requires_code_execution": str(self.requires_code_execution).lower(),
-                        "supported_execution_backends": ",".join(self.supported_execution_backends),
+                        "requires_code_execution": str(
+                            self.requires_code_execution
+                        ).lower(),
+                        "supported_execution_backends": ",".join(
+                            self.supported_execution_backends
+                        ),
                         **self.dataset_metadata,
                     },
                     cases=[
@@ -111,7 +119,9 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         raise ValueError(f"Unknown catalog benchmark: {name}") from exc
 
     resolved_variant = _resolve_variant(base_name, variant if separator else None, spec)
-    benchmark_id = base_name if resolved_variant is None else f"{base_name}:{resolved_variant}"
+    benchmark_id = (
+        base_name if resolved_variant is None else f"{base_name}:{resolved_variant}"
+    )
     adapter_payload = apply_benchmark_adapter(
         _optional_str(spec.get("adapter")),
         base_name=base_name,
@@ -127,24 +137,59 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         split=_required_str(spec, "split"),
         variant=resolved_variant,
         requires_code_execution=bool(spec.get("requires_code_execution", False)),
-        supported_execution_backends=_string_list_from_value(spec.get("supported_execution_backends", [])),
-        metric_ids=_string_list_from_value(spec.get("metric_ids", adapter_payload.get("metric_ids", ["builtin/exact_match"]))),
-        parser_ids=_string_list_from_value(spec.get("parser_ids", adapter_payload.get("parser_ids", ["builtin/json_identity"]))),
-        judge_model_ids=_string_list_from_value(spec.get("judge_model_ids", adapter_payload.get("judge_model_ids", []))),
-        selector_id=_optional_str(spec.get("selector_id", adapter_payload.get("selector_id"))),
+        supported_execution_backends=_string_list_from_value(
+            spec.get("supported_execution_backends", [])
+        ),
+        metric_ids=_string_list_from_value(
+            spec.get(
+                "metric_ids", adapter_payload.get("metric_ids", ["builtin/exact_match"])
+            )
+        ),
+        parser_ids=_string_list_from_value(
+            spec.get(
+                "parser_ids",
+                adapter_payload.get("parser_ids", ["builtin/json_identity"]),
+            )
+        ),
+        judge_model_ids=_string_list_from_value(
+            spec.get("judge_model_ids", adapter_payload.get("judge_model_ids", []))
+        ),
+        selector_id=_optional_str(
+            spec.get("selector_id", adapter_payload.get("selector_id"))
+        ),
         reducer_id=_optional_str(
             spec.get(
                 "reducer_id",
-                adapter_payload.get("reducer_id", None if "selector_id" in adapter_payload else "builtin/majority_vote"),
+                adapter_payload.get(
+                    "reducer_id",
+                    None
+                    if "selector_id" in adapter_payload
+                    else "builtin/majority_vote",
+                ),
             )
         ),
-        generator_id=_string_from_value(spec.get("generator_id", adapter_payload.get("generator_id", "builtin/demo_generator"))),
-        candidate_policy=_json_mapping_from_value(adapter_payload.get("candidate_policy", {"num_samples": 1})),
-        workflow_overrides=_json_mapping_from_value(adapter_payload.get("workflow_overrides", {})),
-        dataset_metadata=_string_mapping_from_value(adapter_payload.get("dataset_metadata", {})),
-        sample_case_id=_string_from_value(adapter_payload.get("sample_case_id", f"{base_name}-sample-1")),
+        generator_id=_string_from_value(
+            spec.get(
+                "generator_id",
+                adapter_payload.get("generator_id", "builtin/demo_generator"),
+            )
+        ),
+        candidate_policy=_json_mapping_from_value(
+            adapter_payload.get("candidate_policy", {"num_samples": 1})
+        ),
+        workflow_overrides=_json_mapping_from_value(
+            adapter_payload.get("workflow_overrides", {})
+        ),
+        dataset_metadata=_string_mapping_from_value(
+            adapter_payload.get("dataset_metadata", {})
+        ),
+        sample_case_id=_string_from_value(
+            adapter_payload.get("sample_case_id", f"{base_name}-sample-1")
+        ),
         sample_case_input=_json_value_from_value(
-            adapter_payload.get("sample_case_input", {"prompt": f"sample prompt for {benchmark_id}"})
+            adapter_payload.get(
+                "sample_case_input", {"prompt": f"sample prompt for {benchmark_id}"}
+            )
         ),
         sample_case_expected_output=_json_optional_value_from_value(
             adapter_payload.get(
@@ -152,18 +197,24 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
                 {"answer": f"sample answer for {base_name}"},
             )
         ),
-        sample_case_metadata=_string_mapping_from_value(adapter_payload.get("sample_case_metadata", {})),
+        sample_case_metadata=_string_mapping_from_value(
+            adapter_payload.get("sample_case_metadata", {})
+        ),
     )
 
 
-def run_benchmark(name: str, *, model: object | None = None, store: RunStore | None = None):
+def run_benchmark(
+    name: str, *, model: object | None = None, store: RunStore | None = None
+):
     definition = load_benchmark(name)
     storage = StorageConfig(store="memory") if store is None else None
     experiment = definition.build_experiment(model=model, storage=storage)
     return experiment.run(store=store)
 
 
-def _resolve_variant(base_name: str, variant: str | None, spec: dict[str, object]) -> str | None:
+def _resolve_variant(
+    base_name: str, variant: str | None, spec: dict[str, object]
+) -> str | None:
     allowed = _string_list_from_value(spec.get("variants", []))
     variant_mode = str(spec.get("variant_mode", "none"))
     if variant is None:
@@ -205,7 +256,9 @@ def _string_list_from_value(value: object) -> list[str]:
 
 
 def _string_mapping_from_value(value: object) -> dict[str, str]:
-    if isinstance(value, dict) and all(isinstance(key, str) and isinstance(item, str) for key, item in value.items()):
+    if isinstance(value, dict) and all(
+        isinstance(key, str) and isinstance(item, str) for key, item in value.items()
+    ):
         return dict(value)
     raise ValueError(f"Expected dict[str, str], got {type(value).__name__}")
 

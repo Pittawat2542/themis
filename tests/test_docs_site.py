@@ -111,7 +111,9 @@ def test_docs_tree_contains_required_diataxis_entrypoints() -> None:
     )
 
     for required_path in required_paths:
-        assert required_path.is_file(), f"missing docs page: {required_path.relative_to(REPO_ROOT)}"
+        assert required_path.is_file(), (
+            f"missing docs page: {required_path.relative_to(REPO_ROOT)}"
+        )
 
 
 def test_docs_examples_are_file_backed_and_embedded() -> None:
@@ -138,7 +140,9 @@ def test_docs_examples_are_file_backed_and_embedded() -> None:
     )
 
     for example_path in expected_examples:
-        assert example_path.is_file(), f"missing example file: {example_path.relative_to(REPO_ROOT)}"
+        assert example_path.is_file(), (
+            f"missing example file: {example_path.relative_to(REPO_ROOT)}"
+        )
 
     snippets_root = DOCS_ROOT / "_snippets"
     embedded_docs = (
@@ -187,22 +191,37 @@ def test_reference_docs_cover_cli_public_api_and_catalogs() -> None:
     ):
         assert f"`{command}`" in cli_reference
 
-    python_reference = (DOCS_ROOT / "reference" / "python-api.md").read_text(encoding="utf-8")
+    python_reference = (DOCS_ROOT / "reference" / "python-api.md").read_text(
+        encoding="utf-8"
+    )
     assert "::: themis" in python_reference
     for symbol in themis.__all__:
-        assert symbol in python_reference, f"missing public symbol in reference docs: {symbol}"
+        assert symbol in python_reference, (
+            f"missing public symbol in reference docs: {symbol}"
+        )
 
-    builtins_reference = (DOCS_ROOT / "reference" / "builtins-and-adapters.md").read_text(encoding="utf-8")
+    builtins_reference = (
+        DOCS_ROOT / "reference" / "builtins-and-adapters.md"
+    ).read_text(encoding="utf-8")
     components_manifest = tomllib.loads(
-        (REPO_ROOT / "themis" / "catalog" / "manifests" / "components.toml").read_text(encoding="utf-8")
+        (REPO_ROOT / "themis" / "catalog" / "manifests" / "components.toml").read_text(
+            encoding="utf-8"
+        )
     )
     for component_id in components_manifest["components"]:
         assert f"`{component_id}`" in builtins_reference
 
-    benchmark_reference = (DOCS_ROOT / "reference" / "benchmark-catalog.md").read_text(encoding="utf-8")
+    benchmark_reference = (DOCS_ROOT / "reference" / "benchmark-catalog.md").read_text(
+        encoding="utf-8"
+    )
     benchmark_manifest = tomllib.loads(
         (
-            REPO_ROOT / "themis" / "catalog" / "benchmarks" / "manifests" / "benchmarks.toml"
+            REPO_ROOT
+            / "themis"
+            / "catalog"
+            / "benchmarks"
+            / "manifests"
+            / "benchmarks.toml"
         ).read_text(encoding="utf-8")
     )
     for benchmark_name in benchmark_manifest["benchmarks"]:
@@ -233,8 +252,17 @@ def test_docs_cover_required_topics_and_optional_extras() -> None:
         for marker in markers:
             assert marker in docs_text
 
-    install_guide = (DOCS_ROOT / "how-to" / "install-extras-and-configure-providers.md").read_text(encoding="utf-8")
-    for extra in (".[openai]", ".[vllm]", ".[langgraph]", ".[datasets]", ".[mongodb]", ".[postgres]"):
+    install_guide = (
+        DOCS_ROOT / "how-to" / "install-extras-and-configure-providers.md"
+    ).read_text(encoding="utf-8")
+    for extra in (
+        ".[openai]",
+        ".[vllm]",
+        ".[langgraph]",
+        ".[datasets]",
+        ".[mongodb]",
+        ".[postgres]",
+    ):
         assert extra in install_guide
 
 
@@ -243,10 +271,18 @@ def test_substantive_docs_pages_have_metadata_contract() -> None:
         if "_snippets" in path.parts:
             continue
         contents = path.read_text(encoding="utf-8")
-        assert contents.startswith("---\n"), f"missing front matter: {path.relative_to(REPO_ROOT)}"
-        assert "\ndiataxis:" in contents, f"missing diataxis metadata: {path.relative_to(REPO_ROOT)}"
-        assert "\naudience:" in contents, f"missing audience metadata: {path.relative_to(REPO_ROOT)}"
-        assert "\ngoal:" in contents, f"missing goal metadata: {path.relative_to(REPO_ROOT)}"
+        assert contents.startswith("---\n"), (
+            f"missing front matter: {path.relative_to(REPO_ROOT)}"
+        )
+        assert "\ndiataxis:" in contents, (
+            f"missing diataxis metadata: {path.relative_to(REPO_ROOT)}"
+        )
+        assert "\naudience:" in contents, (
+            f"missing audience metadata: {path.relative_to(REPO_ROOT)}"
+        )
+        assert "\ngoal:" in contents, (
+            f"missing goal metadata: {path.relative_to(REPO_ROOT)}"
+        )
 
 
 def test_tutorials_and_guides_follow_expected_structure() -> None:
@@ -261,7 +297,9 @@ def test_tutorials_and_guides_follow_expected_structure() -> None:
     for path in sorted((DOCS_ROOT / "tutorials").glob("*.md")):
         contents = path.read_text(encoding="utf-8")
         for heading in tutorial_required_sections:
-            assert heading in contents, f"missing tutorial section {heading}: {path.relative_to(REPO_ROOT)}"
+            assert heading in contents, (
+                f"missing tutorial section {heading}: {path.relative_to(REPO_ROOT)}"
+            )
 
     guide_required_sections = (
         "Goal:",
@@ -274,7 +312,9 @@ def test_tutorials_and_guides_follow_expected_structure() -> None:
     for path in sorted((DOCS_ROOT / "how-to").glob("*.md")):
         contents = path.read_text(encoding="utf-8")
         for heading in guide_required_sections:
-            assert heading in contents, f"missing guide section {heading}: {path.relative_to(REPO_ROOT)}"
+            assert heading in contents, (
+                f"missing guide section {heading}: {path.relative_to(REPO_ROOT)}"
+            )
 
 
 def test_readme_is_docs_landing_page_not_full_manual() -> None:

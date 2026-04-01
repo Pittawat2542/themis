@@ -42,7 +42,13 @@ from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.tracing import NoOpTracingProvider
-from themis.core.workflows import AggregationResult, JudgeCall, JudgeResponse, ParsedJudgment, RenderedJudgePrompt
+from themis.core.workflows import (
+    AggregationResult,
+    JudgeCall,
+    JudgeResponse,
+    ParsedJudgment,
+    RenderedJudgePrompt,
+)
 
 
 class RecordingSubscriber:
@@ -118,7 +124,9 @@ class ErrorMetric:
 
     def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> ScoreError:
         del parsed, case, ctx
-        return ScoreError(metric_id=self.component_id, reason="judge unavailable", retryable=True)
+        return ScoreError(
+            metric_id=self.component_id, reason="judge unavailable", retryable=True
+        )
 
 
 class TracedGenerator:
@@ -129,7 +137,9 @@ class TracedGenerator:
         return "generator-traced"
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        answer = case.expected_output if case.expected_output is not None else case.input
+        answer = (
+            case.expected_output if case.expected_output is not None else case.input
+        )
         return GenerationResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
             final_output=answer,
@@ -154,7 +164,9 @@ class DemoJudgeWorkflow:
     def judge_calls(self) -> list[JudgeCall]:
         return [JudgeCall(call_id="call-0", judge_model_id="builtin/demo_judge")]
 
-    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+    def render_prompt(
+        self, call: JudgeCall, subject, ctx: EvalScoreContext
+    ) -> RenderedJudgePrompt:
         del call, ctx
         if hasattr(subject, "candidates"):
             content = f"Grade {subject.candidates[0].final_output}"
@@ -164,14 +176,22 @@ class DemoJudgeWorkflow:
             content = f"Grade {subject.conversation.model_dump(mode='json')}"
         return RenderedJudgePrompt(prompt_id="prompt-0", content=content)
 
-    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+    def parse_judgment(
+        self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext
+    ) -> ParsedJudgment:
         del call, ctx
         label = response.raw_response.strip().split()[0].lower()
         return ParsedJudgment(label=label, score=1.0 if label == "pass" else 0.0)
 
-    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+    def score_judgment(
+        self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
+    ) -> Score | None:
         del call, ctx
-        return Score(metric_id="metric/llm", value=float(judgment.score or 0.0), details={"label": judgment.label})
+        return Score(
+            metric_id="metric/llm",
+            value=float(judgment.score or 0.0),
+            details={"label": judgment.label},
+        )
 
     def aggregate(
         self,
@@ -180,7 +200,9 @@ class DemoJudgeWorkflow:
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
-        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+        return AggregationResult(
+            method="mean", value=sum(score.value for score in scores) / len(scores)
+        )
 
 
 class PairwiseSelectionWorkflow:
@@ -200,20 +222,28 @@ class PairwiseSelectionWorkflow:
             )
         ]
 
-    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+    def render_prompt(
+        self, call: JudgeCall, subject, ctx: EvalScoreContext
+    ) -> RenderedJudgePrompt:
         del ctx
         return RenderedJudgePrompt(
             prompt_id=f"prompt-{call.call_id}",
             content=f"A={subject.candidates[0].final_output}; B={subject.candidates[1].final_output}",
         )
 
-    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+    def parse_judgment(
+        self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext
+    ) -> ParsedJudgment:
         del call, ctx
         return ParsedJudgment(label=response.raw_response.strip().lower())
 
-    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+    def score_judgment(
+        self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
+    ) -> Score | None:
         del call, ctx
-        return Score(metric_id="metric/select", value=1.0 if judgment.label == "a" else 0.0)
+        return Score(
+            metric_id="metric/select", value=1.0 if judgment.label == "a" else 0.0
+        )
 
     def aggregate(
         self,
@@ -222,8 +252,13 @@ class PairwiseSelectionWorkflow:
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del scores, ctx
-        winner = max(sorted({judgment.label for judgment in judgments}), key=[judgment.label for judgment in judgments].count)
-        return AggregationResult(method="majority_vote", value=winner, details={"winner": winner})
+        winner = max(
+            sorted({judgment.label for judgment in judgments}),
+            key=[judgment.label for judgment in judgments].count,
+        )
+        return AggregationResult(
+            method="majority_vote", value=winner, details={"winner": winner}
+        )
 
 
 class RecordingLLMMetric:
@@ -362,15 +397,23 @@ class PartialFailureWorkflow:
             JudgeCall(call_id="call-fail", judge_model_id="judge/fail"),
         ]
 
-    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+    def render_prompt(
+        self, call: JudgeCall, subject, ctx: EvalScoreContext
+    ) -> RenderedJudgePrompt:
         del subject, ctx
-        return RenderedJudgePrompt(prompt_id=f"prompt-{call.call_id}", content=call.call_id)
+        return RenderedJudgePrompt(
+            prompt_id=f"prompt-{call.call_id}", content=call.call_id
+        )
 
-    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+    def parse_judgment(
+        self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext
+    ) -> ParsedJudgment:
         del call, ctx
         return ParsedJudgment(label=response.raw_response, score=1.0)
 
-    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+    def score_judgment(
+        self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
+    ) -> Score | None:
         del call, ctx
         return Score(metric_id="metric/partial", value=float(judgment.score or 0.0))
 
@@ -383,7 +426,9 @@ class PartialFailureWorkflow:
         del judgments, ctx
         if not scores:
             return None
-        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+        return AggregationResult(
+            method="mean", value=sum(score.value for score in scores) / len(scores)
+        )
 
 
 class PartialFailureMetric:
@@ -434,7 +479,9 @@ class SlowSelector:
     def fingerprint(self) -> str:
         return "selector-slow"
 
-    async def select(self, candidates: list[GenerationResult], ctx) -> list[GenerationResult]:
+    async def select(
+        self, candidates: list[GenerationResult], ctx
+    ) -> list[GenerationResult]:
         del ctx
         self.active += 1
         self.max_active = max(self.max_active, self.active)
@@ -463,7 +510,9 @@ class SlowReducer:
             await asyncio.sleep(0.02)
             return ReducedCandidate(
                 candidate_id=f"{ctx.case_id}-reduced",
-                source_candidate_ids=[candidate.candidate_id for candidate in candidates],
+                source_candidate_ids=[
+                    candidate.candidate_id for candidate in candidates
+                ],
                 final_output=candidates[0].final_output,
             )
         finally:
@@ -530,7 +579,13 @@ def _experiment() -> Experiment:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )
@@ -565,7 +620,9 @@ async def test_orchestrator_writes_stage_events_and_dispatches_hooks() -> None:
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
-        metrics=[resolve_metric_component(metric) for metric in experiment.evaluation.metrics],
+        metrics=[
+            resolve_metric_component(metric) for metric in experiment.evaluation.metrics
+        ],
         subscribers=[subscriber],
     )
 
@@ -618,7 +675,9 @@ async def test_orchestrator_emits_tracing_spans_for_each_stage() -> None:
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
-        metrics=[resolve_metric_component(metric) for metric in experiment.evaluation.metrics],
+        metrics=[
+            resolve_metric_component(metric) for metric in experiment.evaluation.metrics
+        ],
         tracing_provider=tracer,
     )
 
@@ -643,7 +702,9 @@ async def test_orchestrator_emits_tracing_spans_for_each_stage() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_marks_score_errors_as_partial_failures_and_error_spans() -> None:
+async def test_orchestrator_marks_score_errors_as_partial_failures_and_error_spans() -> (
+    None
+):
     experiment = _experiment()
     snapshot = experiment.compile()
     store = InMemoryRunStore()
@@ -685,7 +746,9 @@ async def test_orchestrator_awaits_async_reducers() -> None:
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=reducer,
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
-        metrics=[resolve_metric_component(metric) for metric in experiment.evaluation.metrics],
+        metrics=[
+            resolve_metric_component(metric) for metric in experiment.evaluation.metrics
+        ],
     )
 
     result = await orchestrator.run(snapshot)
@@ -715,7 +778,13 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7, 11],
@@ -732,7 +801,9 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         generator=TracedGenerator(),
         reducer=resolve_reducer_component(experiment.generation.reducer),
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
-        metrics=[resolve_metric_component(metric) for metric in experiment.evaluation.metrics],
+        metrics=[
+            resolve_metric_component(metric) for metric in experiment.evaluation.metrics
+        ],
         judge_models=[
             resolve_judge_model_component("builtin/demo_judge"),
             resolve_judge_model_component("builtin/demo_judge"),
@@ -756,19 +827,26 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
     assert trace_metric.subject is not None
     assert isinstance(trace_metric.subject, TraceSubject)
     assert llm_metric.subject.candidates[0].candidate_id == "case-1-reduced"
-    assert [candidate.candidate_id for candidate in selection_metric.subject.candidates] == [
+    assert [
+        candidate.candidate_id for candidate in selection_metric.subject.candidates
+    ] == [
         "case-1-candidate-7",
         "case-1-candidate-11",
     ]
     assert trace_metric.subject.trace.steps[0].output["seed"] == 7
-    assert [ref.component_id for ref in llm_metric.ctx.judge_model_refs] == ["builtin/demo_judge", "builtin/demo_judge"]
+    assert [ref.component_id for ref in llm_metric.ctx.judge_model_refs] == [
+        "builtin/demo_judge",
+        "builtin/demo_judge",
+    ]
     assert "before_judge" in subscriber.calls
     assert "after_judge" in subscriber.calls
     assert any(isinstance(event, EvaluationCompletedEvent) for event in events)
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_persists_workflow_events_through_orchestrator_event_sink() -> None:
+async def test_orchestrator_persists_workflow_events_through_orchestrator_event_sink() -> (
+    None
+):
     llm_metric = RecordingLLMMetric()
     experiment = Experiment(
         generation=GenerationConfig(
@@ -785,7 +863,13 @@ async def test_orchestrator_persists_workflow_events_through_orchestrator_event_
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -816,7 +900,9 @@ async def test_orchestrator_persists_workflow_events_through_orchestrator_event_
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_persists_partial_workflow_failures_without_dropping_successful_calls() -> None:
+async def test_orchestrator_persists_partial_workflow_failures_without_dropping_successful_calls() -> (
+    None
+):
     metric = PartialFailureMetric()
     experiment = Experiment(
         generation=GenerationConfig(
@@ -827,13 +913,22 @@ async def test_orchestrator_persists_partial_workflow_failures_without_dropping_
         evaluation=EvaluationConfig(
             metrics=[metric],
             parsers=["builtin/json_identity"],
-            judge_models=[FlakyJudgeModel("judge/ok"), FlakyJudgeModel("judge/fail", fail=True)],
+            judge_models=[
+                FlakyJudgeModel("judge/ok"),
+                FlakyJudgeModel("judge/fail", fail=True),
+            ],
         ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -850,7 +945,10 @@ async def test_orchestrator_persists_partial_workflow_failures_without_dropping_
         reducer=resolve_reducer_component(experiment.generation.reducer),
         parser=resolve_parser_component(experiment.evaluation.parsers[0]),
         metrics=[metric],
-        judge_models=[FlakyJudgeModel("judge/ok"), FlakyJudgeModel("judge/fail", fail=True)],
+        judge_models=[
+            FlakyJudgeModel("judge/ok"),
+            FlakyJudgeModel("judge/fail", fail=True),
+        ],
     )
 
     result = await orchestrator.run(snapshot)
@@ -869,7 +967,9 @@ async def test_orchestrator_persists_partial_workflow_failures_without_dropping_
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_retries_retryable_generation_failures_and_persists_history() -> None:
+async def test_orchestrator_retries_retryable_generation_failures_and_persists_history() -> (
+    None
+):
     generator = RetryableGenerator(failures_before_success=2)
     experiment = Experiment(
         generation=GenerationConfig(
@@ -885,7 +985,13 @@ async def test_orchestrator_retries_retryable_generation_failures_and_persists_h
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -908,7 +1014,9 @@ async def test_orchestrator_retries_retryable_generation_failures_and_persists_h
     stored = store.resume(snapshot.run_id)
     assert stored is not None
     execution_state = stored.execution_state
-    artifacts = execution_state.case_states["case-1"].generated_candidates_by_index[0].artifacts
+    artifacts = (
+        execution_state.case_states["case-1"].generated_candidates_by_index[0].artifacts
+    )
 
     assert result.status is RunStatus.COMPLETED
     assert generator.calls == 3
@@ -919,7 +1027,9 @@ async def test_orchestrator_retries_retryable_generation_failures_and_persists_h
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_retries_retryable_judge_failures_and_persists_history() -> None:
+async def test_orchestrator_retries_retryable_judge_failures_and_persists_history() -> (
+    None
+):
     metric = RecordingLLMMetric()
     judge_model = RetryableJudgeModel(failures_before_success=1)
     experiment = Experiment(
@@ -937,7 +1047,13 @@ async def test_orchestrator_retries_retryable_judge_failures_and_persists_histor
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -960,7 +1076,9 @@ async def test_orchestrator_retries_retryable_judge_failures_and_persists_histor
     result = await orchestrator.run(snapshot)
     stored = store.resume(snapshot.run_id)
     assert stored is not None
-    execution = stored.execution_state.case_states["case-1"].evaluation_executions["metric/llm"]
+    execution = stored.execution_state.case_states["case-1"].evaluation_executions[
+        "metric/llm"
+    ]
 
     assert result.status is RunStatus.COMPLETED
     assert judge_model.calls == 2
@@ -983,7 +1101,11 @@ async def test_orchestrator_limits_parsing_stage_concurrency() -> None:
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    Case(
+                        case_id=f"case-{index}",
+                        input={"question": f"{index}+{index}"},
+                        expected_output={"answer": str(index * 2)},
+                    )
                     for index in range(6)
                 ],
             )
@@ -1021,13 +1143,19 @@ async def test_orchestrator_limits_selection_stage_concurrency() -> None:
             selector=selector,
             reducer=None,
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    Case(
+                        case_id=f"case-{index}",
+                        input={"question": f"{index}+{index}"},
+                        expected_output={"answer": str(index * 2)},
+                    )
                     for index in range(6)
                 ],
             )
@@ -1065,13 +1193,19 @@ async def test_orchestrator_limits_reduction_stage_concurrency() -> None:
             candidate_policy={"num_samples": 2},
             reducer=reducer,
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    Case(
+                        case_id=f"case-{index}",
+                        input={"question": f"{index}+{index}"},
+                        expected_output={"answer": str(index * 2)},
+                    )
                     for index in range(6)
                 ],
             )
@@ -1108,13 +1242,19 @@ async def test_orchestrator_limits_scoring_stage_concurrency() -> None:
             candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=[metric], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=[metric], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id=f"case-{index}", input={"question": f"{index}+{index}"}, expected_output={"answer": str(index * 2)})
+                    Case(
+                        case_id=f"case-{index}",
+                        input={"question": f"{index}+{index}"},
+                        expected_output={"answer": str(index * 2)},
+                    )
                     for index in range(6)
                 ],
             )

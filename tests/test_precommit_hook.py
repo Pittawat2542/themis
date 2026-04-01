@@ -7,7 +7,9 @@ import subprocess
 from pathlib import Path
 
 
-def _run(args: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run(
+    args: list[str], *, cwd: Path, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
         cwd=cwd,
@@ -27,7 +29,12 @@ def _init_repo(tmp_path: Path) -> tuple[Path, Path]:
 
     scripts_dir = repo / "scripts" / "ci"
     scripts_dir.mkdir(parents=True)
-    source_script = Path(__file__).resolve().parents[1] / "scripts" / "ci" / "check_staged_python.sh"
+    source_script = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "ci"
+        / "check_staged_python.sh"
+    )
     shutil.copy2(source_script, scripts_dir / "check_staged_python.sh")
     (scripts_dir / "check_staged_python.sh").chmod(
         (scripts_dir / "check_staged_python.sh").stat().st_mode | stat.S_IXUSR
@@ -54,7 +61,9 @@ done
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
 
 
-def test_check_staged_python_skips_when_no_python_files_are_staged(tmp_path: Path) -> None:
+def test_check_staged_python_skips_when_no_python_files_are_staged(
+    tmp_path: Path,
+) -> None:
     repo, script = _init_repo(tmp_path)
     log_path = tmp_path / "uv.log"
     _fake_uv(tmp_path / "bin", log_path)

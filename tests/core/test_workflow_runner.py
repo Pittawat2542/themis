@@ -37,7 +37,10 @@ class DemoEvaluationWorkflow:
     ) -> RenderedJudgePrompt:
         del call, ctx
         assert isinstance(subject, CandidateSetSubject)
-        return RenderedJudgePrompt(prompt_id="prompt-0", content=f"Grade candidate: {subject.candidates[0].final_output}")
+        return RenderedJudgePrompt(
+            prompt_id="prompt-0",
+            content=f"Grade candidate: {subject.candidates[0].final_output}",
+        )
 
     def parse_judgment(
         self,
@@ -47,7 +50,11 @@ class DemoEvaluationWorkflow:
     ) -> ParsedJudgment:
         del call, ctx
         label = response.raw_response.strip().split()[0].lower()
-        return ParsedJudgment(label=label, score=1.0 if label == "pass" else 0.0, rationale=response.raw_response)
+        return ParsedJudgment(
+            label=label,
+            score=1.0 if label == "pass" else 0.0,
+            rationale=response.raw_response,
+        )
 
     def score_judgment(
         self,
@@ -56,7 +63,11 @@ class DemoEvaluationWorkflow:
         ctx: EvalScoreContext,
     ) -> Score | None:
         del call, ctx
-        return Score(metric_id="metric/judge", value=float(judgment.score or 0.0), details={"label": judgment.label})
+        return Score(
+            metric_id="metric/judge",
+            value=float(judgment.score or 0.0),
+            details={"label": judgment.label},
+        )
 
     def aggregate(
         self,
@@ -65,7 +76,9 @@ class DemoEvaluationWorkflow:
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
-        return AggregationResult(method="mean", value=sum(score.value for score in scores) / len(scores))
+        return AggregationResult(
+            method="mean", value=sum(score.value for score in scores) / len(scores)
+        )
 
 
 class PairwiseSelectionWorkflow:
@@ -114,7 +127,10 @@ class PairwiseSelectionWorkflow:
         ctx: EvalScoreContext,
     ) -> ParsedJudgment:
         del ctx
-        return ParsedJudgment(label=response.raw_response.strip().lower(), details={"call_id": call.call_id})
+        return ParsedJudgment(
+            label=response.raw_response.strip().lower(),
+            details={"call_id": call.call_id},
+        )
 
     def score_judgment(
         self,
@@ -139,7 +155,9 @@ class PairwiseSelectionWorkflow:
         del ctx, scores
         labels = [judgment.label for judgment in judgments]
         winner = max(sorted(set(labels)), key=labels.count)
-        return AggregationResult(method="majority_vote", value=winner, details={"winner": winner})
+        return AggregationResult(
+            method="majority_vote", value=winner, details={"winner": winner}
+        )
 
 
 class FixedJudgeModel:
@@ -163,7 +181,9 @@ class FixedJudgeModel:
 
 
 @pytest.mark.asyncio
-async def test_default_workflow_runner_executes_single_judge_workflow_and_persists_step_events() -> None:
+async def test_default_workflow_runner_executes_single_judge_workflow_and_persists_step_events() -> (
+    None
+):
     store = InMemoryRunStore()
     store.initialize()
     runner = DefaultWorkflowRunner(
@@ -171,11 +191,15 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
         judge_models=[resolve_judge_model_component("builtin/demo_judge")],
     )
     subject = CandidateSetSubject(
-        candidates=[GenerationResult(candidate_id="candidate-1", final_output={"answer": "4"})]
+        candidates=[
+            GenerationResult(candidate_id="candidate-1", final_output={"answer": "4"})
+        ]
     )
     ctx = EvalScoreContext(
         run_id="run-1",
-        case=Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
+        case=Case(
+            case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
+        ),
         parsed_output=ParsedOutput(value={"answer": "4"}),
         judge_model_refs=[component_ref_from_value("builtin/demo_judge")],
         judge_seed=11,
@@ -211,7 +235,9 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
 
 
 @pytest.mark.asyncio
-async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vote_with_deterministic_seeds() -> None:
+async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vote_with_deterministic_seeds() -> (
+    None
+):
     subject = CandidateSetSubject(
         candidates=[
             GenerationResult(candidate_id="candidate-a", final_output={"answer": "4"}),
@@ -220,7 +246,9 @@ async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vo
     )
     ctx = EvalScoreContext(
         run_id="run-1",
-        case=Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
+        case=Case(
+            case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
+        ),
         parsed_output=ParsedOutput(value={"answer": "4"}),
         judge_model_refs=[
             component_ref_from_value("builtin/demo_judge"),
@@ -233,8 +261,12 @@ async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vo
         FixedJudgeModel("judge/selector-b", "a"),
     ]
 
-    first_runner = DefaultWorkflowRunner(store=InMemoryRunStore(), judge_models=judge_models)
-    second_runner = DefaultWorkflowRunner(store=InMemoryRunStore(), judge_models=judge_models)
+    first_runner = DefaultWorkflowRunner(
+        store=InMemoryRunStore(), judge_models=judge_models
+    )
+    second_runner = DefaultWorkflowRunner(
+        store=InMemoryRunStore(), judge_models=judge_models
+    )
 
     first = await first_runner.run_evaluation(
         workflow=PairwiseSelectionWorkflow(),

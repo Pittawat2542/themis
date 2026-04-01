@@ -9,7 +9,13 @@ from themis.core.builtins import (
     resolve_reducer_component,
     resolve_selector_component,
 )
-from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext, SelectContext
+from themis.core.contexts import (
+    GenerateContext,
+    ParseContext,
+    ReduceContext,
+    ScoreContext,
+    SelectContext,
+)
 from themis.core.models import Case, GenerationResult, ParsedOutput, ScoreError
 from themis.core.protocols import CandidateSelector, Generator, Parser, PureMetric
 from themis.core.workflows import JudgeResponse
@@ -38,9 +44,13 @@ class ChoosingJudgeModel:
 @pytest.mark.asyncio
 async def test_builtin_generator_component_is_executable() -> None:
     generator = resolve_generator_component("builtin/demo_generator")
-    case = Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})
+    case = Case(
+        case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
+    )
 
-    result = await generator.generate(case, GenerateContext(run_id="run-1", case_id="case-1", seed=7))
+    result = await generator.generate(
+        case, GenerateContext(run_id="run-1", case_id="case-1", seed=7)
+    )
 
     assert isinstance(generator, Generator)
     assert isinstance(result, GenerationResult)
@@ -54,10 +64,16 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
     reducer = resolve_reducer_component("builtin/majority_vote")
     parser = resolve_parser_component("builtin/json_identity")
     metric = resolve_metric_component("builtin/exact_match")
-    case = Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})
+    case = Case(
+        case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
+    )
     candidates = [
-        GenerationResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
-        GenerationResult(candidate_id="case-1-candidate-1", final_output={"answer": "4"}),
+        GenerationResult(
+            candidate_id="case-1-candidate-0", final_output={"answer": "4"}
+        ),
+        GenerationResult(
+            candidate_id="case-1-candidate-1", final_output={"answer": "4"}
+        ),
     ]
 
     reduced = await reducer.reduce(
@@ -71,7 +87,9 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
     )
     parsed = parser.parse(
         reduced,
-        ParseContext(run_id="run-1", case_id="case-1", candidate_id=reduced.candidate_id),
+        ParseContext(
+            run_id="run-1", case_id="case-1", candidate_id=reduced.candidate_id
+        ),
     )
     assert isinstance(metric, PureMetric)
     score = metric.score(
@@ -93,8 +111,12 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
 async def test_builtin_selector_component_is_executable() -> None:
     selector = resolve_selector_component("builtin/best_of_n")
     candidates = [
-        GenerationResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
-        GenerationResult(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
+        GenerationResult(
+            candidate_id="case-1-candidate-0", final_output={"answer": "4"}
+        ),
+        GenerationResult(
+            candidate_id="case-1-candidate-1", final_output={"answer": "5"}
+        ),
     ]
 
     selected = await selector.select(

@@ -13,7 +13,9 @@ export_app = App(name="export", help="Export stored run artifacts.")
 @export_app.command
 def generation(*, config: str) -> int:
     experiment = load_experiment(config)
-    bundle = export_generation_bundle(initialize_store(experiment), experiment.compile().run_id)
+    bundle = export_generation_bundle(
+        initialize_store(experiment), experiment.compile().run_id
+    )
     print(dump_json(bundle.model_dump(mode="json")))
     return 0
 
@@ -21,6 +23,8 @@ def generation(*, config: str) -> int:
 @export_app.command
 def evaluation(*, config: str) -> int:
     experiment = load_experiment(config)
-    bundle = export_evaluation_bundle(initialize_store(experiment), experiment.compile().run_id)
+    bundle = export_evaluation_bundle(
+        initialize_store(experiment), experiment.compile().run_id
+    )
     print(dump_json(bundle.model_dump(mode="json")))
     return 0

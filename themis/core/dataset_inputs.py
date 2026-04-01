@@ -24,11 +24,15 @@ def dataset_from_inline(
     return Dataset(
         dataset_id=dataset_id,
         revision=revision,
-        cases=[Case(case_id=case_id, input=input_value, expected_output=expected_output)],
+        cases=[
+            Case(case_id=case_id, input=input_value, expected_output=expected_output)
+        ],
     )
 
 
-def dataset_from_jsonl(path: str | Path, *, dataset_id: str | None = None, revision: str | None = None) -> Dataset:
+def dataset_from_jsonl(
+    path: str | Path, *, dataset_id: str | None = None, revision: str | None = None
+) -> Dataset:
     source_path = Path(path)
     cases: list[Case] = []
     for index, line in enumerate(source_path.read_text().splitlines()):
@@ -40,7 +44,10 @@ def dataset_from_jsonl(path: str | Path, *, dataset_id: str | None = None, revis
                 case_id=str(payload.get("case_id", f"case-{index + 1}")),
                 input=payload["input"],
                 expected_output=payload.get("expected_output"),
-                metadata={key: str(value) for key, value in payload.get("metadata", {}).items()},
+                metadata={
+                    key: str(value)
+                    for key, value in payload.get("metadata", {}).items()
+                },
             )
         )
     return Dataset(
@@ -70,9 +77,19 @@ def dataset_from_huggingface(
     cases: list[Case] = []
     for index, row in enumerate(rows):
         if input_field not in row:
-            raise ValueError(f"Missing input field '{input_field}' in dataset row {index}")
-        case_id = str(row.get(case_id_field, f"{split}-{index}")) if case_id_field is not None else f"{split}-{index}"
-        expected_output = row.get(expected_output_field) if expected_output_field is not None else None
+            raise ValueError(
+                f"Missing input field '{input_field}' in dataset row {index}"
+            )
+        case_id = (
+            str(row.get(case_id_field, f"{split}-{index}"))
+            if case_id_field is not None
+            else f"{split}-{index}"
+        )
+        expected_output = (
+            row.get(expected_output_field)
+            if expected_output_field is not None
+            else None
+        )
         metadata = {
             key: str(value)
             for key, value in row.items()

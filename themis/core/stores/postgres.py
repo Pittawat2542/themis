@@ -61,7 +61,10 @@ class PostgresRunStore(ProjectionRefreshingStore):
                 ON CONFLICT (run_id) DO UPDATE
                 SET snapshot_json = EXCLUDED.snapshot_json
                 """,
-                (snapshot.run_id, json.dumps(snapshot.model_dump(mode="json"), sort_keys=True)),
+                (
+                    snapshot.run_id,
+                    json.dumps(snapshot.model_dump(mode="json"), sort_keys=True),
+                ),
             )
             connection.commit()
         self._bootstrap_projections(snapshot)
@@ -73,7 +76,11 @@ class PostgresRunStore(ProjectionRefreshingStore):
                 INSERT INTO run_events (run_id, event_type, event_json)
                 VALUES (%s, %s, %s::jsonb)
                 """,
-                (event.run_id, event.event_type, json.dumps(event.model_dump(mode="json"), sort_keys=True)),
+                (
+                    event.run_id,
+                    event.event_type,
+                    json.dumps(event.model_dump(mode="json"), sort_keys=True),
+                ),
             )
             connection.commit()
         snapshot = self._load_snapshot(event.run_id)
@@ -124,7 +131,9 @@ class PostgresRunStore(ProjectionRefreshingStore):
         if not blob_path.exists():
             blob_path.write_bytes(blob)
         if not meta_path.exists():
-            meta_path.write_text(json.dumps({"media_type": media_type}, sort_keys=True), encoding="utf-8")
+            meta_path.write_text(
+                json.dumps({"media_type": media_type}, sort_keys=True), encoding="utf-8"
+            )
         return ref
 
     def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
@@ -133,7 +142,9 @@ class PostgresRunStore(ProjectionRefreshingStore):
         meta_path = self.blob_root / f"{digest}.meta.json"
         if not blob_path.is_file() or not meta_path.is_file():
             return None
-        return json.loads(meta_path.read_text(encoding="utf-8"))["media_type"], blob_path.read_bytes()
+        return json.loads(meta_path.read_text(encoding="utf-8"))[
+            "media_type"
+        ], blob_path.read_bytes()
 
     def resume(self, run_id: str) -> StoredRun | None:
         snapshot = self._load_snapshot(run_id)
@@ -155,7 +166,9 @@ class PostgresRunStore(ProjectionRefreshingStore):
             return None
         return snapshot_from_dict(json.loads(row["snapshot_json"]))
 
-    def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
+    def _write_projection(
+        self, run_id: str, projection_name: str, payload: JSONValue
+    ) -> None:
         with self._connect() as connection:
             connection.execute(
                 """
@@ -208,7 +221,9 @@ class PostgresRunStore(ProjectionRefreshingStore):
         try:
             psycopg = importlib.import_module("psycopg")
         except ImportError as exc:
-            raise ImportError("Postgres support requires the optional 'postgres' dependency.") from exc
+            raise ImportError(
+                "Postgres support requires the optional 'postgres' dependency."
+            ) from exc
         rows = getattr(psycopg, "rows", None)
         row_factory = getattr(rows, "dict_row", None) if rows is not None else None
         return psycopg.connect(self.url, row_factory=row_factory)

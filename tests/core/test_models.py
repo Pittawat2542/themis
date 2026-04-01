@@ -170,10 +170,16 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
     assert ReduceContext.model_validate_json(reduce.model_dump_json()) == reduce
     assert ParseContext.model_validate_json(parse.model_dump_json()) == parse
     assert ScoreContext.model_validate_json(score.model_dump_json()) == score
-    assert EvalScoreContext.model_validate_json(eval_score.model_dump_json()) == eval_score
+    assert (
+        EvalScoreContext.model_validate_json(eval_score.model_dump_json()) == eval_score
+    )
     assert isinstance(eval_score.judge_model_refs[0], ComponentRef)
-    assert GenerationConfig.model_validate_json(generation.model_dump_json()) == generation
-    assert EvaluationConfig.model_validate_json(evaluation.model_dump_json()) == evaluation
+    assert (
+        GenerationConfig.model_validate_json(generation.model_dump_json()) == generation
+    )
+    assert (
+        EvaluationConfig.model_validate_json(evaluation.model_dump_json()) == evaluation
+    )
     assert StorageConfig.model_validate_json(storage.model_dump_json()) == storage
 
 

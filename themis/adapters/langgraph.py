@@ -44,13 +44,17 @@ class LangGraphGenerator:
         )
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        payload = self.input_builder(case) if self.input_builder is not None else case.input
+        payload = (
+            self.input_builder(case) if self.input_builder is not None else case.input
+        )
         trace = await self._collect_trace(payload)
         output = await self._invoke(payload)
         final_output = output
         if self.output_key is not None:
             if not isinstance(output, Mapping):
-                raise TypeError("LangGraph adapter expected mapping output when output_key is provided.")
+                raise TypeError(
+                    "LangGraph adapter expected mapping output when output_key is provided."
+                )
             final_output = output[self.output_key]
         return GenerationResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
@@ -64,7 +68,9 @@ class LangGraphGenerator:
             return await self.graph.ainvoke(payload)
         if hasattr(self.graph, "invoke"):
             return await asyncio.to_thread(self.graph.invoke, payload)
-        raise TypeError("LangGraph adapter requires a graph with ainvoke() or invoke().")
+        raise TypeError(
+            "LangGraph adapter requires a graph with ainvoke() or invoke()."
+        )
 
     async def _collect_trace(self, payload: object) -> list[TraceStep]:
         if not hasattr(self.graph, "astream_events"):
@@ -78,7 +84,11 @@ class LangGraphGenerator:
                     step_type=event.get("event", "event"),
                     input={"input": data.get("input")} if "input" in data else {},
                     output={"output": data.get("output")} if "output" in data else {},
-                    metadata={key: value for key, value in event.items() if key not in {"name", "event", "data"}},
+                    metadata={
+                        key: value
+                        for key, value in event.items()
+                        if key not in {"name", "event", "data"}
+                    },
                 )
             )
         return steps

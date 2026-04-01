@@ -46,14 +46,18 @@ def _run_dataset(dataset) -> str:
     )
     benchmark = store.get_projection(result.run_id, "benchmark_result")
     metric_means = _metric_means_from_projection(benchmark)
-    return _result_payload(run_id=result.run_id, status=result.status.value, metric_means=metric_means)
+    return _result_payload(
+        run_id=result.run_id, status=result.status.value, metric_means=metric_means
+    )
 
 
 @quick_eval_app.command
 def inline(*, input_json: str, expected_output_json: str | None = None) -> int:
     dataset = dataset_from_inline(
         input_value=json.loads(input_json),
-        expected_output=None if expected_output_json is None else json.loads(expected_output_json),
+        expected_output=None
+        if expected_output_json is None
+        else json.loads(expected_output_json),
     )
     print(_run_dataset(dataset))
     return 0
@@ -95,7 +99,11 @@ def benchmark(*, name: str) -> int:
     result = run_catalog_benchmark(name, store=store)
     benchmark_result = store.get_projection(result.run_id, "benchmark_result")
     metric_means = _metric_means_from_projection(benchmark_result)
-    print(_result_payload(run_id=result.run_id, status=result.status.value, metric_means=metric_means))
+    print(
+        _result_payload(
+            run_id=result.run_id, status=result.status.value, metric_means=metric_means
+        )
+    )
     return 0
 
 

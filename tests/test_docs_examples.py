@@ -78,7 +78,10 @@ def test_custom_component_examples_run() -> None:
     assert langgraph_payload["trace_steps"] >= 1
     assert observability_payload["status"] == "completed"
     assert "run" in observability_payload["span_names"]
-    assert any(call.startswith("before_generate:") for call in observability_payload["subscriber_calls"])
+    assert any(
+        call.startswith("before_generate:")
+        for call in observability_payload["subscriber_calls"]
+    )
 
 
 def test_rejudge_bundle_example_round_trips() -> None:

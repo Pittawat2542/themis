@@ -21,7 +21,10 @@ class FakeResponsesAPI:
                 "usage": type("Usage", (), {"input_tokens": 4, "output_tokens": 1})(),
                 "id": "resp_vllm",
                 "headers": {"server": "vllm"},
-                "model_dump": lambda self, mode="json": {"output_text": "4", "id": "resp_vllm"},
+                "model_dump": lambda self, mode="json": {
+                    "output_text": "4",
+                    "id": "resp_vllm",
+                },
             },
         )()
 
@@ -32,7 +35,9 @@ class FakeChatCompletionsAPI:
 
     async def create(self, **kwargs):
         self.calls.append(kwargs)
-        choice = type("Choice", (), {"message": type("Message", (), {"content": "4"})()})()
+        choice = type(
+            "Choice", (), {"message": type("Message", (), {"content": "4"})()}
+        )()
         usage = type("Usage", (), {"prompt_tokens": 4, "completion_tokens": 1})()
         return type(
             "FakeChatResponse",
@@ -42,7 +47,10 @@ class FakeChatCompletionsAPI:
                 "usage": usage,
                 "id": "chatcmpl_vllm",
                 "headers": {"server": "vllm"},
-                "model_dump": lambda self, mode="json": {"id": "chatcmpl_vllm", "choices": [{"message": {"content": "4"}}]},
+                "model_dump": lambda self, mode="json": {
+                    "id": "chatcmpl_vllm",
+                    "choices": [{"message": {"content": "4"}}],
+                },
             },
         )()
 

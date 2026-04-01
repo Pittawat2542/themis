@@ -12,7 +12,12 @@ from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
-from themis.core.stores import InMemoryRunStore, jsonl_store, mongodb_store, sqlite_store
+from themis.core.stores import (
+    InMemoryRunStore,
+    jsonl_store,
+    mongodb_store,
+    sqlite_store,
+)
 from tests.core.store_fakes import fake_pymongo_module
 
 
@@ -32,7 +37,11 @@ def _snapshot() -> RunSnapshot:
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
                 revision="r1",
             )
         ],
@@ -53,8 +62,13 @@ def _store(label: str, tmp_path: Path, monkeypatch) -> RunStore:
     if label == "jsonl":
         return jsonl_store(tmp_path / "jsonl-store")
     if label == "mongodb":
-        monkeypatch.setattr("themis.core.stores.mongodb.importlib.import_module", lambda name: fake_pymongo_module())
-        return mongodb_store("mongodb://example", "themis_test", tmp_path / "mongodb-blobs")
+        monkeypatch.setattr(
+            "themis.core.stores.mongodb.importlib.import_module",
+            lambda name: fake_pymongo_module(),
+        )
+        return mongodb_store(
+            "mongodb://example", "themis_test", tmp_path / "mongodb-blobs"
+        )
     raise AssertionError(label)
 
 
@@ -62,7 +76,9 @@ def _store(label: str, tmp_path: Path, monkeypatch) -> RunStore:
     "label",
     ["memory", "sqlite", "jsonl", "mongodb"],
 )
-def test_run_store_contract_round_trips_snapshot_and_events(label: str, tmp_path: Path, monkeypatch) -> None:
+def test_run_store_contract_round_trips_snapshot_and_events(
+    label: str, tmp_path: Path, monkeypatch
+) -> None:
     store = _store(label, tmp_path, monkeypatch)
     snapshot = _snapshot()
 
@@ -83,7 +99,9 @@ def test_run_store_contract_round_trips_snapshot_and_events(label: str, tmp_path
     "label",
     ["memory", "sqlite", "jsonl", "mongodb"],
 )
-def test_run_store_contract_deduplicates_blob_content(label: str, tmp_path: Path, monkeypatch) -> None:
+def test_run_store_contract_deduplicates_blob_content(
+    label: str, tmp_path: Path, monkeypatch
+) -> None:
     store = _store(label, tmp_path, monkeypatch)
 
     store.initialize()
@@ -97,7 +115,9 @@ def test_run_store_contract_deduplicates_blob_content(label: str, tmp_path: Path
     "label",
     ["memory", "sqlite", "jsonl", "mongodb"],
 )
-def test_run_store_contract_loads_blob_content(label: str, tmp_path: Path, monkeypatch) -> None:
+def test_run_store_contract_loads_blob_content(
+    label: str, tmp_path: Path, monkeypatch
+) -> None:
     store = _store(label, tmp_path, monkeypatch)
 
     store.initialize()
@@ -110,7 +130,9 @@ def test_run_store_contract_loads_blob_content(label: str, tmp_path: Path, monke
     "label",
     ["memory", "sqlite", "jsonl", "mongodb"],
 )
-def test_run_store_exposes_snapshot_projection(label: str, tmp_path: Path, monkeypatch) -> None:
+def test_run_store_exposes_snapshot_projection(
+    label: str, tmp_path: Path, monkeypatch
+) -> None:
     store = _store(label, tmp_path, monkeypatch)
     snapshot = _snapshot()
 
@@ -126,7 +148,9 @@ def test_run_store_exposes_snapshot_projection(label: str, tmp_path: Path, monke
     "label",
     ["memory", "sqlite", "jsonl", "mongodb"],
 )
-def test_run_store_refreshes_read_model_projections_after_event_writes(label: str, tmp_path: Path, monkeypatch) -> None:
+def test_run_store_refreshes_read_model_projections_after_event_writes(
+    label: str, tmp_path: Path, monkeypatch
+) -> None:
     store = _store(label, tmp_path, monkeypatch)
     snapshot = _snapshot()
 
@@ -158,7 +182,9 @@ def test_run_store_refreshes_read_model_projections_after_event_writes(label: st
 def test_in_memory_store_updates_projections_without_resume_replay() -> None:
     class NoReplayInMemoryRunStore(InMemoryRunStore):
         def resume(self, run_id: str):
-            raise AssertionError(f"resume should not be used while persisting projections for {run_id}")
+            raise AssertionError(
+                f"resume should not be used while persisting projections for {run_id}"
+            )
 
     store = NoReplayInMemoryRunStore()
     snapshot = _snapshot()

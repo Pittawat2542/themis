@@ -22,7 +22,9 @@ def memory_store() -> InMemoryRunStore:
 
 _STORE_BUILDERS: dict[str, StoreBuilder] = {
     "memory": lambda config: memory_store(),
-    "jsonl": lambda config: jsonl_store(Path(str(config.parameters.get("root", "runs/jsonl")))),
+    "jsonl": lambda config: jsonl_store(
+        Path(str(config.parameters.get("root", "runs/jsonl")))
+    ),
     "mongodb": lambda config: mongodb_store(
         str(config.parameters.get("url", "mongodb://localhost:27017")),
         str(config.parameters.get("database", "themis")),
@@ -32,7 +34,9 @@ _STORE_BUILDERS: dict[str, StoreBuilder] = {
         str(config.parameters.get("url", "postgresql://localhost/themis")),
         Path(str(config.parameters.get("blob_root", "runs/postgres-blobs"))),
     ),
-    "sqlite": lambda config: sqlite_store(Path(str(config.parameters.get("path", "runs/themis.sqlite3")))),
+    "sqlite": lambda config: sqlite_store(
+        Path(str(config.parameters.get("path", "runs/themis.sqlite3")))
+    ),
 }
 
 

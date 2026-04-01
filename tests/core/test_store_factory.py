@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
@@ -15,31 +16,50 @@ from themis.core.stores import (
 from tests.core.store_fakes import fake_pymongo_module
 
 
-def _experiment(store: str, parameters: dict[str, object] | None = None) -> Experiment:
+def _experiment(
+    store: str, parameters: dict[str, JSONValue] | None = None
+) -> Experiment:
     return Experiment(
         generation=GenerationConfig(
             generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store=store, parameters=parameters or {}),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input="hi", expected_output="hi")])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input="hi", expected_output="hi")],
+            )
+        ],
     )
 
 
 def test_create_run_store_supports_builtin_backends(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("themis.core.stores.mongodb.importlib.import_module", lambda name: fake_pymongo_module())
+    monkeypatch.setattr(
+        "themis.core.stores.mongodb.importlib.import_module",
+        lambda name: fake_pymongo_module(),
+    )
 
     memory_store = create_run_store(StorageConfig(store="memory"))
-    jsonl = create_run_store(StorageConfig(store="jsonl", parameters={"root": str(tmp_path / "jsonl-store")}))
+    jsonl = create_run_store(
+        StorageConfig(store="jsonl", parameters={"root": str(tmp_path / "jsonl-store")})
+    )
     sqlite = create_run_store(
-        StorageConfig(store="sqlite", parameters={"path": str(tmp_path / "run_store.sqlite3")})
+        StorageConfig(
+            store="sqlite", parameters={"path": str(tmp_path / "run_store.sqlite3")}
+        )
     )
     postgres = create_run_store(
         StorageConfig(
             store="postgres",
-            parameters={"url": str(tmp_path / "postgres.sqlite3"), "blob_root": str(tmp_path / "postgres-blobs")},
+            parameters={
+                "url": str(tmp_path / "postgres.sqlite3"),
+                "blob_root": str(tmp_path / "postgres-blobs"),
+            },
         )
     )
     mongodb = create_run_store(
@@ -79,7 +99,9 @@ def test_experiment_build_store_routes_through_store_factory(monkeypatch) -> Non
         captured.append(config)
         return sentinel
 
-    monkeypatch.setattr("themis.core.experiment.create_run_store", fake_create_run_store)
+    monkeypatch.setattr(
+        "themis.core.experiment.create_run_store", fake_create_run_store
+    )
 
     store = _experiment("memory")._build_store()
 

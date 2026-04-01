@@ -6,10 +6,27 @@ from pathlib import Path
 import pytest
 
 from themis.core.base import JSONValue
-from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    RuntimeConfig,
+    StorageConfig,
+)
 from themis.core.experiment import Experiment
-from themis.core.contexts import GenerateContext, ParseContext, ReduceContext, ScoreContext
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score
+from themis.core.contexts import (
+    GenerateContext,
+    ParseContext,
+    ReduceContext,
+    ScoreContext,
+)
+from themis.core.models import (
+    Case,
+    Dataset,
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    Score,
+)
 from themis.core.snapshot import BUILTIN_COMPONENT_REFS, ComponentRef
 
 
@@ -24,7 +41,9 @@ class DummyGenerator:
         return self.fingerprint_value
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed})
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed}
+        )
 
 
 class DummyReducer:
@@ -54,7 +73,9 @@ class DummyParser:
         return "parser-fingerprint"
 
     def parse(self, candidate: ReducedCandidate, ctx: ParseContext) -> ParsedOutput:
-        return ParsedOutput(value={"candidate_id": candidate.candidate_id, "run_id": ctx.run_id})
+        return ParsedOutput(
+            value={"candidate_id": candidate.candidate_id, "run_id": ctx.run_id}
+        )
 
 
 class DummyMetric:
@@ -66,7 +87,10 @@ class DummyMetric:
 
     def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
         del ctx
-        return Score(metric_id="builtin/exact_match", value=float(parsed.value == case.expected_output))
+        return Score(
+            metric_id="builtin/exact_match",
+            value=float(parsed.value == case.expected_output),
+        )
 
 
 def _experiment(
@@ -87,7 +111,9 @@ def _experiment(
             judge_config={"panel_size": 1},
             workflow_overrides=workflow_overrides or {},
         ),
-        storage=StorageConfig(store="sqlite", parameters={"path": "runs/themis.sqlite3"}),
+        storage=StorageConfig(
+            store="sqlite", parameters={"path": "runs/themis.sqlite3"}
+        ),
         runtime=RuntimeConfig(
             max_concurrent_tasks=16,
             stage_concurrency={"generation": 8},
@@ -99,7 +125,11 @@ def _experiment(
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
                 revision=revision,
                 metadata={"owner": "tests"},
             )
@@ -178,12 +208,22 @@ def test_storage_dsn_credentials_are_redacted_in_snapshot_provenance() -> None:
         ),
         storage=StorageConfig(
             store="postgres",
-            parameters={"url": "postgresql://themis:swordfish@db.example.com:5432/themis"},
+            parameters={
+                "url": "postgresql://themis:swordfish@db.example.com:5432/themis"
+            },
         ),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     ).compile()
 
-    assert compiled.provenance.storage.parameters["url"] == "postgresql://themis:<redacted>@db.example.com:5432/themis"
+    assert (
+        compiled.provenance.storage.parameters["url"]
+        == "postgresql://themis:<redacted>@db.example.com:5432/themis"
+    )
 
 
 def test_snapshot_serialization_matches_golden_file() -> None:
@@ -208,15 +248,30 @@ def test_builtin_component_strings_resolve_to_registry_entries() -> None:
             judge_config={"panel_size": 1},
         ),
         storage=StorageConfig(store="memory", parameters={"path": ":memory:"}),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     )
 
     snapshot = experiment.compile()
 
-    assert snapshot.component_refs.generator == BUILTIN_COMPONENT_REFS["builtin/demo_generator"]
-    assert snapshot.component_refs.reducer == BUILTIN_COMPONENT_REFS["builtin/majority_vote"]
-    assert snapshot.component_refs.parsers == [BUILTIN_COMPONENT_REFS["builtin/json_identity"]]
-    assert snapshot.component_refs.metrics == [BUILTIN_COMPONENT_REFS["builtin/exact_match"]]
+    assert (
+        snapshot.component_refs.generator
+        == BUILTIN_COMPONENT_REFS["builtin/demo_generator"]
+    )
+    assert (
+        snapshot.component_refs.reducer
+        == BUILTIN_COMPONENT_REFS["builtin/majority_vote"]
+    )
+    assert snapshot.component_refs.parsers == [
+        BUILTIN_COMPONENT_REFS["builtin/json_identity"]
+    ]
+    assert snapshot.component_refs.metrics == [
+        BUILTIN_COMPONENT_REFS["builtin/exact_match"]
+    ]
 
 
 def test_unknown_builtin_component_strings_fail_fast() -> None:
@@ -224,7 +279,12 @@ def test_unknown_builtin_component_strings_fail_fast() -> None:
         generation=GenerationConfig(generator="generator/unknown"),
         evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     )
 
     with pytest.raises(ValueError, match="Unknown builtin component"):
@@ -239,7 +299,12 @@ def test_builtin_registry_changes_alter_component_identity(
         generation=GenerationConfig(generator="builtin/demo_generator"),
         evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     ).compile()
 
     monkeypatch.setitem(
@@ -256,7 +321,12 @@ def test_builtin_registry_changes_alter_component_identity(
         generation=GenerationConfig(generator="builtin/demo_generator"),
         evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[Case(case_id="case-1", input={"q": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"q": "2+2"})],
+            )
+        ],
     ).compile()
 
     assert first.component_refs.generator != second.component_refs.generator

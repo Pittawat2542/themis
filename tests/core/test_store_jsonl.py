@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-
+from typing import cast
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import RunCompletedEvent, RunStartedEvent
 from themis.core.experiment import Experiment
@@ -25,7 +25,11 @@ def _snapshot():
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -51,11 +55,19 @@ def test_jsonl_store_persists_snapshot_events_projections_and_blobs(tmp_path) ->
     assert (run_root / "projections" / "run_result.json").is_file()
     assert store.load_blob(blob_ref) == ("application/json", b'{"answer":"4"}')
     assert store.resume(snapshot.run_id) is not None
-    assert [event.event_type for event in store.query_events(snapshot.run_id)] == ["run_started", "run_completed"]
+    assert [event.event_type for event in store.query_events(snapshot.run_id)] == [
+        "run_started",
+        "run_completed",
+    ]
 
     timeline_view = store.get_projection(snapshot.run_id, "timeline_view")
     assert timeline_view is not None
-    assert [entry["event_type"] for entry in timeline_view["entries"]] == ["run_started", "run_completed"]
+    projection = cast(dict[str, list[dict[str, str]]], timeline_view)
+    entries = projection["entries"]
+    assert [entry["event_type"] for entry in entries] == [
+        "run_started",
+        "run_completed",
+    ]
 
 
 def test_jsonl_store_skips_unknown_event_types_on_read(tmp_path) -> None:
@@ -80,10 +92,14 @@ def test_jsonl_store_skips_unknown_event_types_on_read(tmp_path) -> None:
             + "\n"
         )
 
-    assert [event.event_type for event in store.query_events(snapshot.run_id)] == ["run_started"]
+    assert [event.event_type for event in store.query_events(snapshot.run_id)] == [
+        "run_started"
+    ]
 
 
 def test_store_factory_can_build_jsonl_backend(tmp_path) -> None:
-    store = create_run_store(StorageConfig(store="jsonl", parameters={"root": str(tmp_path / "jsonl-store")}))
+    store = create_run_store(
+        StorageConfig(store="jsonl", parameters={"root": str(tmp_path / "jsonl-store")})
+    )
 
     assert store.__class__.__name__ == "JsonlRunStore"

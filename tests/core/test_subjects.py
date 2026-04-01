@@ -68,7 +68,9 @@ def test_llm_metric_subject_factory_calls_validation(
         called = True
         assert subject.size == 1
 
-    monkeypatch.setattr(subjects_module, "validate_candidate_set_for_llm_metric", fake_validate)
+    monkeypatch.setattr(
+        subjects_module, "validate_candidate_set_for_llm_metric", fake_validate
+    )
 
     subject = candidate_set_subject_for_llm_metric(
         [GenerationResult(candidate_id="candidate-1", final_output="4")]

@@ -59,5 +59,7 @@ class InMemoryRunStore(ProjectionRefreshingStore):
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         return self._snapshots.get(run_id)
 
-    def _write_projection(self, run_id: str, projection_name: str, payload: JSONValue) -> None:
+    def _write_projection(
+        self, run_id: str, projection_name: str, payload: JSONValue
+    ) -> None:
         self._projections[(run_id, projection_name)] = payload

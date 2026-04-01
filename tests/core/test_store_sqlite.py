@@ -22,11 +22,17 @@ def _snapshot():
             parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
-        storage=StorageConfig(store="sqlite", parameters={"path": "runs/themis.sqlite3"}),
+        storage=StorageConfig(
+            store="sqlite", parameters={"path": "runs/themis.sqlite3"}
+        ),
         datasets=[
             Dataset(
                 dataset_id="dataset-1",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")],
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
                 revision="r1",
             )
         ],
@@ -73,7 +79,9 @@ def test_sqlite_store_skips_unknown_event_types_on_read(tmp_path) -> None:
     assert [event.event_type for event in events] == ["run_started"]
 
 
-def test_sqlite_store_backfills_missing_projection_from_snapshot_and_events(tmp_path) -> None:
+def test_sqlite_store_backfills_missing_projection_from_snapshot_and_events(
+    tmp_path,
+) -> None:
     path = tmp_path / "run_store.sqlite3"
     store = SqliteRunStore(path)
     snapshot = _snapshot()

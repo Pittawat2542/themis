@@ -48,7 +48,9 @@ class LoadedExperimentConfig:
     metadata: ExperimentConfigMetadata
 
 
-def load_experiment_definition(path: str | Path, *, overrides: list[str] | None = None) -> LoadedExperimentConfig:
+def load_experiment_definition(
+    path: str | Path, *, overrides: list[str] | None = None
+) -> LoadedExperimentConfig:
     config_path = Path(path).expanduser().resolve()
     config = _load_config(config_path)
     if overrides:
@@ -57,7 +59,9 @@ def load_experiment_definition(path: str | Path, *, overrides: list[str] | None 
     if not isinstance(payload, dict):
         raise ValueError(f"Experiment config must decode to a mapping: {config_path}")
 
-    normalized = _normalize_paths(cast(dict[str, Any], payload), base_dir=config_path.parent)
+    normalized = _normalize_paths(
+        cast(dict[str, Any], payload), base_dir=config_path.parent
+    )
     return LoadedExperimentConfig(
         payload=_materialize_components(normalized),
         metadata=ExperimentConfigMetadata(
@@ -68,7 +72,9 @@ def load_experiment_definition(path: str | Path, *, overrides: list[str] | None 
     )
 
 
-def load_experiment_payload(path: str | Path, *, overrides: list[str] | None = None) -> dict[str, Any]:
+def load_experiment_payload(
+    path: str | Path, *, overrides: list[str] | None = None
+) -> dict[str, Any]:
     return load_experiment_definition(path, overrides=overrides).payload
 
 
@@ -92,7 +98,9 @@ def _normalize_paths(payload: dict[str, Any], *, base_dir: Path) -> dict[str, An
             updated_parameters = dict(parameters)
             for key in _STORAGE_PATH_FIELDS:
                 if key in updated_parameters:
-                    updated_parameters[key] = _normalize_path_value(updated_parameters[key], base_dir=base_dir)
+                    updated_parameters[key] = _normalize_path_value(
+                        updated_parameters[key], base_dir=base_dir
+                    )
             updated_storage["parameters"] = updated_parameters
         normalized["storage"] = updated_storage
 
@@ -101,7 +109,9 @@ def _normalize_paths(payload: dict[str, Any], *, base_dir: Path) -> dict[str, An
         updated_runtime = dict(runtime_payload)
         for key in ("queue_root", "batch_root"):
             if key in updated_runtime:
-                updated_runtime[key] = _normalize_path_value(updated_runtime[key], base_dir=base_dir)
+                updated_runtime[key] = _normalize_path_value(
+                    updated_runtime[key], base_dir=base_dir
+                )
         normalized["runtime"] = updated_runtime
 
     return normalized
@@ -122,12 +132,24 @@ def _capture_component_targets(payload: dict[str, Any]) -> ExecutionComponentTar
     generation = _mapping(payload.get("generation"))
     evaluation = _mapping(payload.get("evaluation"))
 
-    generator = _require_component_target(generation.get("generator"), field="generation.generator")
-    selector = _optional_component_target(generation.get("selector"), field="generation.selector")
-    reducer = _optional_component_target(generation.get("reducer"), field="generation.reducer")
-    parsers = _component_target_list(evaluation.get("parsers"), field="evaluation.parsers")
-    metrics = _component_target_list(evaluation.get("metrics"), field="evaluation.metrics")
-    judge_models = _component_target_list(evaluation.get("judge_models"), field="evaluation.judge_models")
+    generator = _require_component_target(
+        generation.get("generator"), field="generation.generator"
+    )
+    selector = _optional_component_target(
+        generation.get("selector"), field="generation.selector"
+    )
+    reducer = _optional_component_target(
+        generation.get("reducer"), field="generation.reducer"
+    )
+    parsers = _component_target_list(
+        evaluation.get("parsers"), field="evaluation.parsers"
+    )
+    metrics = _component_target_list(
+        evaluation.get("metrics"), field="evaluation.metrics"
+    )
+    judge_models = _component_target_list(
+        evaluation.get("judge_models"), field="evaluation.judge_models"
+    )
 
     return ExecutionComponentTargets(
         generator=generator,
@@ -146,7 +168,9 @@ def _mapping(value: Any) -> dict[str, Any]:
 def _require_component_target(value: Any, *, field: str) -> str:
     target = _optional_component_target(value, field=field)
     if target is None:
-        raise ValueError(f"Config field {field} must be a builtin component id or importable module path")
+        raise ValueError(
+            f"Config field {field} must be a builtin component id or importable module path"
+        )
     return target
 
 
@@ -155,14 +179,18 @@ def _optional_component_target(value: Any, *, field: str) -> str | None:
         return None
     if isinstance(value, str):
         return value
-    raise ValueError(f"Config field {field} must be a builtin component id or importable module path")
+    raise ValueError(
+        f"Config field {field} must be a builtin component id or importable module path"
+    )
 
 
 def _component_target_list(value: Any, *, field: str) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list):
-        raise ValueError(f"Config field {field} must be a list of builtin component ids or importable module paths")
+        raise ValueError(
+            f"Config field {field} must be a list of builtin component ids or importable module paths"
+        )
     return [_require_component_target(item, field=field) for item in value]
 
 
@@ -177,9 +205,13 @@ def _materialize_components(payload: dict[str, Any]) -> dict[str, Any]:
 
     for group, field in _LIST_COMPONENT_FIELDS:
         group_payload = normalized.get(group)
-        if isinstance(group_payload, dict) and isinstance(group_payload.get(field), list):
+        if isinstance(group_payload, dict) and isinstance(
+            group_payload.get(field), list
+        ):
             updated_group = dict(group_payload)
-            updated_group[field] = [_maybe_load_component(item) for item in updated_group[field]]
+            updated_group[field] = [
+                _maybe_load_component(item) for item in updated_group[field]
+            ]
             normalized[group] = updated_group
 
     return normalized

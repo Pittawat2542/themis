@@ -10,7 +10,9 @@ def test_rolebench_variant_uses_variant_specific_rubric() -> None:
     experiment = benchmark.build_experiment()
 
     assert benchmark.metric_ids == ["builtin/llm_rubric"]
-    assert benchmark.workflow_overrides["rubric"].startswith("Judge whether the response follows the requested role behavior")
+    assert benchmark.workflow_overrides["rubric"].startswith(
+        "Judge whether the response follows the requested role behavior"
+    )
     assert benchmark.sample_case_metadata["variant"] == "instruction_generalization_eng"
     assert experiment.evaluation.metrics == ["builtin/llm_rubric"]
 

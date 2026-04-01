@@ -60,7 +60,9 @@ def _rubric_qa_adapter(base_name: str, benchmark_id: str) -> dict[str, object]:
             if base_name == "frontierscience"
             else "Judge whether the answer is correct, specific, and well-supported."
         },
-        "sample_case_input": {"question": f"Answer the benchmark question for {benchmark_id}."},
+        "sample_case_input": {
+            "question": f"Answer the benchmark question for {benchmark_id}."
+        },
         "sample_case_expected_output": {"answer": f"sample answer for {base_name}"},
     }
 
@@ -69,8 +71,12 @@ def _panel_qa_adapter(base_name: str, benchmark_id: str) -> dict[str, object]:
     return {
         "metric_ids": ["builtin/panel_of_judges"],
         "judge_model_ids": ["builtin/demo_judge", "builtin/demo_judge"],
-        "workflow_overrides": {"rubric": "Judge whether the answer is correct and sufficiently supported."},
-        "sample_case_input": {"question": f"Answer the benchmark question for {benchmark_id}."},
+        "workflow_overrides": {
+            "rubric": "Judge whether the answer is correct and sufficiently supported."
+        },
+        "sample_case_input": {
+            "question": f"Answer the benchmark question for {benchmark_id}."
+        },
         "sample_case_expected_output": {"answer": f"sample answer for {base_name}"},
     }
 
@@ -105,7 +111,9 @@ def _code_generation_adapter(
     }
 
 
-def _rolebench_adapter(base_name: str, benchmark_id: str, variant: str | None) -> dict[str, object]:
+def _rolebench_adapter(
+    base_name: str, benchmark_id: str, variant: str | None
+) -> dict[str, object]:
     variant_name = variant or "default"
     return {
         "metric_ids": ["builtin/llm_rubric"],
@@ -117,12 +125,16 @@ def _rolebench_adapter(base_name: str, benchmark_id: str, variant: str | None) -
             "instruction": f"Respond as required for {benchmark_id}.",
             "role": variant_name,
         },
-        "sample_case_expected_output": {"answer": f"sample role response for {base_name}"},
+        "sample_case_expected_output": {
+            "answer": f"sample role response for {base_name}"
+        },
         "sample_case_metadata": {"variant": variant_name},
     }
 
 
-def _procbench_adapter(base_name: str, benchmark_id: str, variant: str | None) -> dict[str, object]:
+def _procbench_adapter(
+    base_name: str, benchmark_id: str, variant: str | None
+) -> dict[str, object]:
     task_id = variant or "task01"
     return {
         "metric_ids": ["builtin/llm_rubric"],
@@ -133,12 +145,16 @@ def _procbench_adapter(base_name: str, benchmark_id: str, variant: str | None) -
         "sample_case_input": {
             "task": f"Complete procbench {task_id} for {benchmark_id}.",
         },
-        "sample_case_expected_output": {"answer": f"sample procedure result for {base_name}"},
+        "sample_case_expected_output": {
+            "answer": f"sample procedure result for {base_name}"
+        },
         "sample_case_metadata": {"task_id": task_id},
     }
 
 
-def _mmmlu_adapter(base_name: str, benchmark_id: str, variant: str | None) -> dict[str, object]:
+def _mmmlu_adapter(
+    base_name: str, benchmark_id: str, variant: str | None
+) -> dict[str, object]:
     language = variant or "default"
     return {
         "sample_case_input": {
@@ -150,19 +166,25 @@ def _mmmlu_adapter(base_name: str, benchmark_id: str, variant: str | None) -> di
     }
 
 
-def _superchem_adapter(base_name: str, benchmark_id: str, variant: str | None) -> dict[str, object]:
+def _superchem_adapter(
+    base_name: str, benchmark_id: str, variant: str | None
+) -> dict[str, object]:
     language = variant or "en"
     return {
         "sample_case_input": {
             "question": f"Answer the chemistry question for {benchmark_id}.",
             "language": language,
         },
-        "sample_case_expected_output": {"answer": f"sample chemistry answer for {base_name}"},
+        "sample_case_expected_output": {
+            "answer": f"sample chemistry answer for {base_name}"
+        },
         "sample_case_metadata": {"language": language},
     }
 
 
-def _hle_adapter(base_name: str, benchmark_id: str, variant: str | None) -> dict[str, object]:
+def _hle_adapter(
+    base_name: str, benchmark_id: str, variant: str | None
+) -> dict[str, object]:
     domains = variant or "default"
     return {
         "metric_ids": ["builtin/panel_of_judges"],
@@ -174,7 +196,9 @@ def _hle_adapter(base_name: str, benchmark_id: str, variant: str | None) -> dict
             "question": f"Answer the HLE question for {benchmark_id}.",
             "domains": domains,
         },
-        "sample_case_expected_output": {"answer": f"sample expert answer for {base_name}"},
+        "sample_case_expected_output": {
+            "answer": f"sample expert answer for {base_name}"
+        },
         "sample_case_metadata": {"domains": domains},
     }
 

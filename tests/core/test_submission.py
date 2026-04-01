@@ -6,12 +6,15 @@ from pathlib import Path
 import pytest
 
 from themis import Experiment
+from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, GenerationResult
 from themis.core.results import RunStatus
 from themis.core.submission import run_batch_request, run_worker_once, submit_experiment
 
 
-def _write_config(path: Path, *, store_path: Path, queue_root: Path, batch_root: Path) -> None:
+def _write_config(
+    path: Path, *, store_path: Path, queue_root: Path, batch_root: Path
+) -> None:
     path.write_text(
         f"""
 generation:
@@ -53,21 +56,29 @@ class SubmissionConfigGenerator:
 
     async def generate(self, case: Case, ctx: object) -> GenerationResult:
         del ctx
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output)
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output
+        )
 
 
 SUBMISSION_CONFIG_GENERATOR = SubmissionConfigGenerator()
 
 
-def test_submit_experiment_persists_snapshot_and_writes_worker_manifest(tmp_path: Path) -> None:
+def test_submit_experiment_persists_snapshot_and_writes_worker_manifest(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "experiment.yaml"
     store_path = tmp_path / "run.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
     experiment = Experiment.from_config(config_path)
 
-    manifest = submit_experiment(experiment, config_path=str(config_path), mode="worker_pool")
+    manifest = submit_experiment(
+        experiment, config_path=str(config_path), mode="worker_pool"
+    )
 
     assert manifest.run_id == experiment.compile().run_id
     assert manifest.manifest_path == queue_root / "queued" / f"{manifest.run_id}.json"
@@ -81,12 +92,16 @@ def test_submit_experiment_persists_snapshot_and_writes_worker_manifest(tmp_path
     assert (queue_root / "done" / f"{manifest.run_id}.json").is_file()
 
 
-def test_submit_experiment_writes_batch_request_and_runs_it_later(tmp_path: Path) -> None:
+def test_submit_experiment_writes_batch_request_and_runs_it_later(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "experiment.yaml"
     store_path = tmp_path / "run.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
     experiment = Experiment.from_config(config_path)
 
     manifest = submit_experiment(experiment, config_path=str(config_path), mode="batch")
@@ -105,10 +120,14 @@ def test_submit_experiment_is_immutable_after_config_changes(tmp_path: Path) -> 
     store_path = tmp_path / "run.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    _write_config(config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root)
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
     experiment = Experiment.from_config(config_path)
 
-    manifest = submit_experiment(experiment, config_path=str(config_path), mode="worker_pool")
+    manifest = submit_experiment(
+        experiment, config_path=str(config_path), mode="worker_pool"
+    )
     config_path.write_text(config_path.read_text().replace("seeds: [7]", "seeds: [8]"))
 
     result = run_worker_once(queue_root)
@@ -118,7 +137,9 @@ def test_submit_experiment_is_immutable_after_config_changes(tmp_path: Path) -> 
     assert result.status is RunStatus.COMPLETED
 
 
-def test_run_worker_once_uses_manifest_when_current_directory_changes(tmp_path: Path) -> None:
+def test_run_worker_once_uses_manifest_when_current_directory_changes(
+    tmp_path: Path,
+) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     config_path = workspace / "experiment.yaml"
@@ -132,7 +153,9 @@ def test_run_worker_once_uses_manifest_when_current_directory_changes(tmp_path: 
     )
 
     experiment = Experiment.from_config(config_path)
-    manifest = submit_experiment(experiment, config_path=str(Path("experiment.yaml")), mode="worker_pool")
+    manifest = submit_experiment(
+        experiment, config_path=str(Path("experiment.yaml")), mode="worker_pool"
+    )
 
     original_cwd = Path.cwd()
     other_cwd = tmp_path / "other"
@@ -149,7 +172,9 @@ def test_run_worker_once_uses_manifest_when_current_directory_changes(tmp_path: 
     assert store_path.is_file()
 
 
-def test_submit_experiment_accepts_config_loaded_importable_components(tmp_path: Path) -> None:
+def test_submit_experiment_accepts_config_loaded_importable_components(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "experiment.yaml"
     config_path.write_text(
         f"""
@@ -175,7 +200,9 @@ datasets:
     )
     experiment = Experiment.from_config(config_path)
 
-    manifest = submit_experiment(experiment, config_path=str(config_path), mode="worker_pool")
+    manifest = submit_experiment(
+        experiment, config_path=str(config_path), mode="worker_pool"
+    )
     result = run_worker_once(tmp_path / "queue")
 
     assert manifest.snapshot.run_id == manifest.run_id
@@ -184,16 +211,22 @@ datasets:
     assert result.status is RunStatus.COMPLETED
 
 
-def test_submit_experiment_rejects_non_importable_runtime_components(tmp_path: Path) -> None:
+def test_submit_experiment_rejects_non_importable_runtime_components(
+    tmp_path: Path,
+) -> None:
     experiment = Experiment(
-        generation={
-            "generator": SubmissionConfigGenerator(),
-            "candidate_policy": {"num_samples": 1},
-        },
-        evaluation={"metrics": [], "parsers": []},
-        storage={"store": "memory"},
+        generation=GenerationConfig(
+            generator=SubmissionConfigGenerator(),
+            candidate_policy={"num_samples": 1},
+        ),
+        evaluation=EvaluationConfig(metrics=[], parsers=[]),
+        storage=StorageConfig(store="memory"),
         datasets=[],
     )
 
     with pytest.raises(ValueError, match="importable config symbols"):
-        submit_experiment(experiment, config_path=str(tmp_path / "experiment.yaml"), mode="worker_pool")
+        submit_experiment(
+            experiment,
+            config_path=str(tmp_path / "experiment.yaml"),
+            mode="worker_pool",
+        )

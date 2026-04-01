@@ -79,8 +79,16 @@ def _experiment(
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}),
-                    Case(case_id="case-2", input={"question": "3+3"}, expected_output={"answer": "6"}),
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    ),
+                    Case(
+                        case_id="case-2",
+                        input={"question": "3+3"},
+                        expected_output={"answer": "6"},
+                    ),
                 ],
             )
         ],
@@ -89,7 +97,9 @@ def _experiment(
 
 
 @pytest.mark.asyncio
-async def test_planner_generates_lazy_candidate_work_items_with_deterministic_seeds() -> None:
+async def test_planner_generates_lazy_candidate_work_items_with_deterministic_seeds() -> (
+    None
+):
     planner = Planner()
     snapshot = _experiment(candidate_policy={"num_samples": 2}).compile()
 
@@ -119,12 +129,16 @@ async def test_planner_honors_explicit_seeds_per_candidate() -> None:
 
 def test_planner_rejects_multiple_parsers_for_phase_2() -> None:
     with pytest.raises(ValueError, match="at most one parser"):
-        _experiment(parsers=["builtin/json_identity", "builtin/json_identity"]).compile()
+        _experiment(
+            parsers=["builtin/json_identity", "builtin/json_identity"]
+        ).compile()
 
 
 def test_planner_requires_reducer_or_selector_for_multi_candidate_runs() -> None:
     planner = Planner()
-    snapshot = _experiment(candidate_policy={"num_samples": 2}, reducer=None, parsers=[]).compile()
+    snapshot = _experiment(
+        candidate_policy={"num_samples": 2}, reducer=None, parsers=[]
+    ).compile()
 
     with pytest.raises(ValueError, match="reducer or selector"):
         planner.validate_snapshot(snapshot)
@@ -132,14 +146,18 @@ def test_planner_requires_reducer_or_selector_for_multi_candidate_runs() -> None
 
 def test_planner_allows_selector_for_multi_candidate_runs() -> None:
     planner = Planner()
-    snapshot = _experiment(candidate_policy={"num_samples": 2}, selector="builtin/best_of_n", reducer=None).compile()
+    snapshot = _experiment(
+        candidate_policy={"num_samples": 2}, selector="builtin/best_of_n", reducer=None
+    ).compile()
 
     planner.validate_snapshot(snapshot)
 
 
 def test_planner_allows_workflow_backed_metrics_when_judge_models_are_present() -> None:
     planner = Planner()
-    snapshot = _experiment(metrics=[DummyLLMMetric()], judge_models=[DummyJudgeModel()]).compile()
+    snapshot = _experiment(
+        metrics=[DummyLLMMetric()], judge_models=[DummyJudgeModel()]
+    ).compile()
 
     planner.validate_snapshot(snapshot)
 
@@ -154,9 +172,13 @@ def test_planner_requires_judge_models_for_workflow_backed_metrics() -> None:
 
 def test_planner_requires_multiple_candidates_for_selection_metrics() -> None:
     planner = Planner()
-    snapshot = _experiment(metrics=[DummySelectionMetric()], judge_models=[DummyJudgeModel()]).compile()
+    snapshot = _experiment(
+        metrics=[DummySelectionMetric()], judge_models=[DummyJudgeModel()]
+    ).compile()
 
-    with pytest.raises(ValueError, match="Selection metrics require at least two candidates"):
+    with pytest.raises(
+        ValueError, match="Selection metrics require at least two candidates"
+    ):
         planner.validate_snapshot(snapshot)
 
 

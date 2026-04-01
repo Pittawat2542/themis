@@ -23,7 +23,9 @@ def _canonicalize(value: Any) -> Any:
     if all(hasattr(value, attr) for attr in ("component_id", "version")) and hasattr(
         value, "fingerprint"
     ):
-        fingerprint = value.fingerprint() if callable(value.fingerprint) else value.fingerprint
+        fingerprint = (
+            value.fingerprint() if callable(value.fingerprint) else value.fingerprint
+        )
         return {
             "component_id": value.component_id,
             "version": value.version,

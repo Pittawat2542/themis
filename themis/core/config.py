@@ -24,7 +24,9 @@ SelectorComponent: TypeAlias = CandidateSelector | str
 ReducerComponent: TypeAlias = CandidateReducer | str
 ParserComponent: TypeAlias = Parser | str
 JudgeModelComponent: TypeAlias = JudgeModel | str
-MetricComponent: TypeAlias = PureMetric | LLMMetric | SelectionMetric | TraceMetric | str
+MetricComponent: TypeAlias = (
+    PureMetric | LLMMetric | SelectionMetric | TraceMetric | str
+)
 
 
 class GenerationConfig(HashableModel):
