@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -91,6 +92,9 @@ def test_quick_eval_file_matches_python_api(tmp_path: Path) -> None:
 
 
 def test_quick_eval_huggingface_reports_missing_dependency() -> None:
+    if importlib.util.find_spec("datasets") is not None:
+        return
+
     cli_result = _run_cli(
         "quick-eval",
         "huggingface",

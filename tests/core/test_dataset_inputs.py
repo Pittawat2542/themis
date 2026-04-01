@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -44,6 +45,9 @@ def test_dataset_from_jsonl_reads_cases(tmp_path: Path) -> None:
 def test_dataset_from_huggingface_raises_clear_error_when_dependency_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if importlib.util.find_spec("datasets") is not None:
+        pytest.skip("missing-dependency path is only applicable without datasets")
+
     monkeypatch.delitem(sys.modules, "datasets", raising=False)
 
     with pytest.raises(
