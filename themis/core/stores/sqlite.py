@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import hashlib
 import json
 import sqlite3
@@ -22,7 +23,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
     def initialize(self) -> None:
         if self.path != Path(":memory:"):
             self.path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS run_snapshots (
@@ -64,7 +65,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
         snapshot_json = json.dumps(snapshot.model_dump(mode="json"), sort_keys=True)
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             connection.execute(
                 """
                 INSERT OR REPLACE INTO run_snapshots (run_id, snapshot_json)
@@ -84,7 +85,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
 
     def persist_event(self, event: RunEvent) -> None:
         event_json = json.dumps(event.model_dump(mode="json"), sort_keys=True)
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             connection.execute(
                 """
                 INSERT INTO run_events (run_id, event_type, event_json)
@@ -98,7 +99,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
             self._refresh_projections_for_event(snapshot, event)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             rows = connection.execute(
                 """
                 SELECT event_json
@@ -121,7 +122,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
         return self._get_projection_with_backfill(run_id, projection_name)
 
     def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             row = connection.execute(
                 """
                 SELECT projection_json
@@ -137,7 +138,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
     def store_blob(self, blob: bytes, media_type: str) -> str:
         digest = hashlib.sha256(blob).hexdigest()
         ref = f"sha256:{digest}"
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             connection.execute(
                 """
                 INSERT OR IGNORE INTO run_blobs (blob_ref, media_type, payload)
@@ -149,7 +150,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
         return ref
 
     def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             row = connection.execute(
                 """
                 SELECT media_type, payload
@@ -170,7 +171,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
 
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             row = connection.execute(
                 """
                 SELECT snapshot_json
@@ -186,7 +187,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
     def _write_projection(
         self, run_id: str, projection_name: str, payload: JSONValue
     ) -> None:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             connection.execute(
                 """
                 INSERT OR REPLACE INTO run_projections (run_id, projection_name, projection_json)
