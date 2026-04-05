@@ -105,7 +105,7 @@ def main() -> None:
                 "no config diff tooling",
                 "no first-class grid-search reuse",
                 "no storage-efficiency redesign for very large artifacts",
-                "no first-class long-term reproducibility/version-pinning workflow yet",
+                "cross-environment reproducibility still relies on user-managed dependency locking",
             ],
             "cache_behavior": [
                 "stage caches are keyed by stage inputs, not by `run_id`",

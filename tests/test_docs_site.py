@@ -34,6 +34,9 @@ def test_mkdocs_configuration_exposes_diataxis_navigation() -> None:
     ):
         assert required_entry in contents
 
+    assert "exclude_docs:" in contents
+    assert "_snippets/" in contents
+
 
 def test_docs_tree_contains_required_diataxis_entrypoints() -> None:
     required_paths = (
@@ -325,3 +328,10 @@ def test_readme_is_docs_landing_page_not_full_manual() -> None:
     assert "## Examples" not in readme
     assert "## Runtime controls" not in readme
     assert "## Resume and bundle behavior" not in readme
+
+
+def test_contributing_guide_uses_repository_relative_links() -> None:
+    contributing = (REPO_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert "/Users/" not in contributing
+    assert "(docs/project/index.md)" in contributing

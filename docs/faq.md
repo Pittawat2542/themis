@@ -39,7 +39,7 @@ Current non-goals and deferred areas are explicit:
 - no config diff tooling
 - no first-class grid-search reuse
 - no storage-efficiency redesign for very large artifacts
-- no first-class long-term reproducibility/version-pinning workflow yet
+- cross-environment reproducibility still relies on user-managed dependency locking
 
 ## How should I add docs for a new public surface?
 

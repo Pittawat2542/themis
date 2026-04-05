@@ -9,6 +9,7 @@ goal: Enumerate the main root-package exports and what each category is for.
 
 Primary public exports from `themis`:
 
+- package metadata: `__version__`
 - experiment authoring: `Experiment`, `evaluate`
 - prompt authoring: `PromptSpec`
 - persistence: `InMemoryRunStore`, `SqliteRunStore`, `RunStore`, `sqlite_store`

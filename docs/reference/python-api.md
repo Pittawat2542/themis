@@ -11,6 +11,7 @@ This page is the generated entry point into the public Python API. Use the small
 
 ## Root exports
 
+- `__version__`
 - `Experiment`
 - `InMemoryRunStore`
 - `PromptSpec`
