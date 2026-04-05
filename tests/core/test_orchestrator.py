@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 
 import pytest
@@ -38,7 +39,7 @@ from themis.core.models import (
     ScoreError,
     TraceStep,
 )
-from themis.core.orchestrator import Orchestrator
+from themis.core.orchestrator import Orchestrator, _retry_delay_seconds
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
@@ -1239,6 +1240,62 @@ async def test_orchestrator_retries_retryable_judge_failures_and_persists_histor
     assert result.status is RunStatus.COMPLETED
     assert judge_model.calls == 2
     assert len(execution.judge_responses[0].retry_history) == 1
+
+
+def test_retry_delay_seconds_uses_jitter_without_lockstep_attempt_seeding() -> None:
+    rng = random.Random(7)
+
+    first = _retry_delay_seconds(
+        base_delay=1.0,
+        backoff=2.0,
+        attempt=1,
+        rng=rng,
+    )
+    second = _retry_delay_seconds(
+        base_delay=1.0,
+        backoff=2.0,
+        attempt=1,
+        rng=rng,
+    )
+
+    assert first != second
+    assert 1.8 <= first <= 2.2
+    assert 1.8 <= second <= 2.2
+
+
+def test_retry_delay_seconds_honors_retry_after_floor() -> None:
+    delay = _retry_delay_seconds(
+        base_delay=1.0,
+        backoff=2.0,
+        attempt=1,
+        retry_after_s=3.0,
+        rng=random.Random(7),
+    )
+
+    assert delay >= 3.0
+
+
+def test_retry_delay_seconds_preserves_zero_delay_without_retry_after() -> None:
+    delay = _retry_delay_seconds(
+        base_delay=0.0,
+        backoff=2.0,
+        attempt=2,
+        rng=random.Random(7),
+    )
+
+    assert delay == 0.0
+
+
+def test_retry_delay_seconds_uses_retry_after_when_base_delay_is_zero() -> None:
+    delay = _retry_delay_seconds(
+        base_delay=0.0,
+        backoff=2.0,
+        attempt=2,
+        retry_after_s=0.25,
+        rng=random.Random(7),
+    )
+
+    assert delay == 0.25
 
 
 @pytest.mark.asyncio

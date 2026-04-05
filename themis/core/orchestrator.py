@@ -87,6 +87,7 @@ DEFAULT_PROVIDER_RATE_LIMIT = 60
 WorkflowMetric = LLMMetric | SelectionMetric | TraceMetric
 RuntimeMetric = PureMetric | WorkflowMetric
 ConnectionLikeErrors = (ConnectionError, OSError)
+_RETRY_JITTER_RNG = random.Random()
 
 
 def _is_pure_metric(metric: RuntimeMetric) -> TypeGuard[PureMetric]:
@@ -1501,14 +1502,16 @@ def _retry_delay_seconds(
     backoff: float,
     attempt: int,
     retry_after_s: JSONValue | None = None,
+    rng: random.Random | None = None,
 ) -> float:
     computed_delay = max(0.0, base_delay) * (max(1.0, backoff) ** attempt)
     jitter_window = computed_delay * 0.1
     jittered_delay = computed_delay
     if jitter_window > 0:
+        jitter_rng = rng or _RETRY_JITTER_RNG
         jittered_delay = max(
             0.0,
-            computed_delay + random.Random(attempt).uniform(-jitter_window, jitter_window),
+            computed_delay + jitter_rng.uniform(-jitter_window, jitter_window),
         )
     if isinstance(retry_after_s, (int, float)):
         return max(jittered_delay, float(retry_after_s))
