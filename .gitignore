@@ -1,4 +1,5 @@
 themis_output/
+temp/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
