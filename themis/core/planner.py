@@ -227,7 +227,9 @@ class Planner:
             prompt_tokens_per_call
         )
 
-    def _estimated_judge_call_count(self, snapshot: RunSnapshot, total_cases: int) -> int:
+    def _estimated_judge_call_count(
+        self, snapshot: RunSnapshot, total_cases: int
+    ) -> int:
         workflow_metric_count = sum(
             1 for metric_kind in snapshot.metric_kinds if metric_kind != "pure"
         )

@@ -213,7 +213,9 @@ class PostgresRunStore(ProjectionRefreshingStore):
     def clear_run(self, run_id: str) -> None:
         with self._connect() as connection:
             connection.execute("DELETE FROM run_events WHERE run_id = %s", (run_id,))
-            connection.execute("DELETE FROM run_projections WHERE run_id = %s", (run_id,))
+            connection.execute(
+                "DELETE FROM run_projections WHERE run_id = %s", (run_id,)
+            )
             connection.execute("DELETE FROM run_snapshots WHERE run_id = %s", (run_id,))
             connection.commit()
 

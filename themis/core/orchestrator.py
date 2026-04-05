@@ -813,7 +813,9 @@ class Orchestrator:
 
         expected_metric_ids = {
             metric.component_id
-            for metric, metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False)
+            for metric, metric_kind in zip(
+                self.metrics, snapshot.metric_kinds, strict=False
+            )
             if self.until_stage == "judge" or metric_kind == "pure"
         }
 
@@ -1393,7 +1395,9 @@ class Orchestrator:
                 "reducer_ref": snapshot.component_refs.reducer.model_dump(mode="json")
                 if snapshot.component_refs.reducer is not None
                 else None,
-                "candidate_hashes": [candidate.compute_hash() for candidate in candidates],
+                "candidate_hashes": [
+                    candidate.compute_hash() for candidate in candidates
+                ],
             }
         )
 
@@ -1528,5 +1532,7 @@ def _score_pure_metric(
 
 
 def _stable_hash(payload: dict[str, object]) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

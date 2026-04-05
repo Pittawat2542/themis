@@ -155,13 +155,9 @@ def build_benchmark_result_from_run_result(
             if isinstance(score, ScoreError)
         }
         execution_failures = _execution_failures_by_metric(case)
-        case_metric_ids = (
-            explicit_metric_ids
-            or set(score_results)
-            | set(score_errors)
-            | set(case.evaluation_failures)
-            | set(execution_failures)
-        )
+        case_metric_ids = explicit_metric_ids or set(score_results) | set(
+            score_errors
+        ) | set(case.evaluation_failures) | set(execution_failures)
         known_metric_ids.update(case_metric_ids)
 
         for metric_id in sorted(case_metric_ids):
@@ -249,7 +245,8 @@ def build_store_projection_payloads(
         update={
             "dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets],
             "metric_ids": [
-                metric_ref.component_id for metric_ref in snapshot.component_refs.metrics
+                metric_ref.component_id
+                for metric_ref in snapshot.component_refs.metrics
             ],
         }
     )
@@ -281,7 +278,8 @@ def apply_event_to_store_projection_payloads(
         update={
             "dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets],
             "metric_ids": [
-                metric_ref.component_id for metric_ref in snapshot.component_refs.metrics
+                metric_ref.component_id
+                for metric_ref in snapshot.component_refs.metrics
             ],
         }
     )
@@ -403,9 +401,10 @@ def _execution_failures_by_metric(case: CaseResult) -> dict[str, str]:
         metric_ids = {score.metric_id for score in execution.scores}
         if not metric_ids:
             continue
-        error_message = "; ".join(
-            failure.error_message for failure in execution.failures
-        ) or "Evaluation completed with workflow failures"
+        error_message = (
+            "; ".join(failure.error_message for failure in execution.failures)
+            or "Evaluation completed with workflow failures"
+        )
         for metric_id in metric_ids:
             failures[metric_id] = error_message
     return failures

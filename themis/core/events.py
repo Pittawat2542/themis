@@ -29,7 +29,9 @@ class RunStartedEvent(RunEvent):
 
 class RunCompletedEvent(RunEvent):
     event_type: Literal["run_completed"] = "run_completed"
-    completed_through_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge"
+    completed_through_stage: Literal[
+        "generate", "reduce", "parse", "score", "judge"
+    ] = "judge"
 
 
 class RunFailedEvent(RunEvent):

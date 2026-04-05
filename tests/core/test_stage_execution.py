@@ -1,8 +1,20 @@
 from __future__ import annotations
 
-from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    RuntimeConfig,
+    StorageConfig,
+)
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score
+from themis.core.models import (
+    Case,
+    Dataset,
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    Score,
+)
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.stores.sqlite import SqliteRunStore
 
@@ -146,7 +158,15 @@ class AlternateMetric:
         )
 
 
-def _cached_experiment(*, generator, reducer, parser, metric, store_path: str, existing_run_policy: str = "auto") -> Experiment:
+def _cached_experiment(
+    *,
+    generator,
+    reducer,
+    parser,
+    metric,
+    store_path: str,
+    existing_run_policy: str = "auto",
+) -> Experiment:
     return Experiment(
         generation=GenerationConfig(
             generator=generator,
@@ -172,7 +192,9 @@ def _cached_experiment(*, generator, reducer, parser, metric, store_path: str, e
     )
 
 
-def test_persistent_store_reuses_stage_cache_across_runs_when_only_metric_changes(tmp_path) -> None:
+def test_persistent_store_reuses_stage_cache_across_runs_when_only_metric_changes(
+    tmp_path,
+) -> None:
     generator = CountingGenerator()
     reducer = CountingReducer()
     parser = CountingParser()

@@ -20,7 +20,10 @@ def _cli_commands() -> list[str]:
     for command in root_commands:
         commands.append(command)
         if command == "quick-eval":
-            commands.extend(f"{command} {sub}" for sub in ("inline", "file", "huggingface", "benchmark"))
+            commands.extend(
+                f"{command} {sub}"
+                for sub in ("inline", "file", "huggingface", "benchmark")
+            )
         elif command == "export":
             commands.extend(f"{command} {sub}" for sub in ("generation", "evaluation"))
         elif command == "worker":
@@ -45,7 +48,12 @@ def main() -> None:
             "components",
         ),
         "benchmarks": _manifest_table(
-            REPO_ROOT / "themis" / "catalog" / "benchmarks" / "manifests" / "benchmarks.toml",
+            REPO_ROOT
+            / "themis"
+            / "catalog"
+            / "benchmarks"
+            / "manifests"
+            / "benchmarks.toml",
             "benchmarks",
         ),
         "docs_destinations": {

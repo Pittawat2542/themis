@@ -182,7 +182,9 @@ def test_stats_engine_reports_confidence_intervals_for_metric_means() -> None:
     )
 
     summary = StatsEngine().aggregate(benchmark_result)
-    metric = cast(dict[str, float | int], cast(dict[str, object], summary["metrics"])["accuracy"])
+    metric = cast(
+        dict[str, float | int], cast(dict[str, object], summary["metrics"])["accuracy"]
+    )
 
     assert metric["mean"] == 0.5
     assert metric["ci_lower"] == 0.0
