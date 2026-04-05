@@ -14,6 +14,8 @@ from themis.core.stores.base import ProjectionRefreshingStore
 
 
 class JsonlRunStore(ProjectionRefreshingStore):
+    """Persist runs to JSON files and JSONL event streams on local disk."""
+
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
 
@@ -134,4 +136,6 @@ class JsonlRunStore(ProjectionRefreshingStore):
 
 
 def jsonl_store(root: str | Path) -> JsonlRunStore:
+    """Create a JSONL-backed run store rooted at a filesystem path."""
+
     return JsonlRunStore(root)

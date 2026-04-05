@@ -1,5 +1,9 @@
 """Public package surface for Themis."""
 
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+import tomllib
+
 from themis.core import (
     Experiment,
     InMemoryRunStore,
@@ -32,6 +36,22 @@ from themis.core import (
     sqlite_store,
 )
 
+
+def _resolve_version() -> str:
+    """Resolve the installed package version with a source-tree fallback."""
+
+    try:
+        return version("themis-eval")
+    except PackageNotFoundError:
+        pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        if pyproject_path.is_file():
+            payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+            return str(payload["project"]["version"])
+        return "0+unknown"
+
+
+__version__ = _resolve_version()
+
 __all__ = [
     "Experiment",
     "InMemoryRunStore",
@@ -43,6 +63,7 @@ __all__ = [
     "RunSnapshot",
     "RunStatus",
     "RunStore",
+    "__version__",
     "SqliteRunStore",
     "StatsEngine",
     "evaluate",

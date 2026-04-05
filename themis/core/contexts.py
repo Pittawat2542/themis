@@ -13,6 +13,8 @@ from themis.core.prompts import PromptSpec
 
 
 class GenerateContext(HashableModel):
+    """Context passed to generators for one case execution."""
+
     run_id: str
     case_id: str
     seed: int | None = None
@@ -21,6 +23,8 @@ class GenerateContext(HashableModel):
 
 
 class SelectContext(HashableModel):
+    """Context passed to candidate selectors before reduction."""
+
     run_id: str
     case_id: str
     candidate_ids: list[str] = Field(default_factory=list)
@@ -30,6 +34,8 @@ class SelectContext(HashableModel):
 
 
 class ReduceContext(HashableModel):
+    """Context passed to reducers choosing a final candidate."""
+
     run_id: str
     case_id: str
     candidate_ids: list[str] = Field(default_factory=list)
@@ -38,6 +44,8 @@ class ReduceContext(HashableModel):
 
 
 class ParseContext(HashableModel):
+    """Context passed to parsers for a reduced candidate."""
+
     run_id: str
     case_id: str
     candidate_id: str
@@ -45,6 +53,8 @@ class ParseContext(HashableModel):
 
 
 class ScoreContext(HashableModel):
+    """Context passed to deterministic scoring metrics."""
+
     run_id: str
     case: Case
     parsed_output: ParsedOutput
@@ -53,6 +63,8 @@ class ScoreContext(HashableModel):
 
 
 class EvalScoreContext(ScoreContext):
+    """Score context extended with judge workflow configuration."""
+
     judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     judge_seed: int | None = None
     prompt_spec: PromptSpec | None = None

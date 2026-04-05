@@ -16,6 +16,8 @@ from themis.core.snapshot import RunSnapshot
 
 
 class ProjectionRefreshingStore(ABC):
+    """Mixin for stores that maintain projection documents alongside events."""
+
     @abstractmethod
     def resume(self, run_id: str): ...
 

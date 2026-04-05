@@ -15,6 +15,8 @@ def _now_utc() -> datetime:
 
 
 class RunEvent(HashableModel):
+    """Base event persisted for a compiled run."""
+
     model_config = ConfigDict(frozen=True, extra="allow", arbitrary_types_allowed=True)
 
     schema_version: str = "1"
@@ -24,10 +26,14 @@ class RunEvent(HashableModel):
 
 
 class RunStartedEvent(RunEvent):
+    """Event emitted when orchestration starts for a run."""
+
     event_type: Literal["run_started"] = "run_started"
 
 
 class RunCompletedEvent(RunEvent):
+    """Event emitted when orchestration completes successfully."""
+
     event_type: Literal["run_completed"] = "run_completed"
     completed_through_stage: Literal[
         "generate", "reduce", "parse", "score", "judge"
@@ -35,11 +41,15 @@ class RunCompletedEvent(RunEvent):
 
 
 class RunFailedEvent(RunEvent):
+    """Event emitted when orchestration aborts with an unrecoverable error."""
+
     event_type: Literal["run_failed"] = "run_failed"
     error_message: str
 
 
 class GenerationCompletedEvent(RunEvent):
+    """Event emitted when candidate generation finishes for a case."""
+
     event_type: Literal["generation_completed"] = "generation_completed"
     case_id: str
     candidate_id: str
@@ -53,6 +63,8 @@ class GenerationCompletedEvent(RunEvent):
 
 
 class GenerationFailedEvent(RunEvent):
+    """Event emitted when candidate generation fails for a case."""
+
     event_type: Literal["generation_failed"] = "generation_failed"
     case_id: str
     candidate_id: str
@@ -61,6 +73,8 @@ class GenerationFailedEvent(RunEvent):
 
 
 class SelectionCompletedEvent(RunEvent):
+    """Event emitted when candidate selection succeeds."""
+
     event_type: Literal["selection_completed"] = "selection_completed"
     case_id: str
     candidate_ids: list[str] = Field(default_factory=list)
@@ -68,12 +82,16 @@ class SelectionCompletedEvent(RunEvent):
 
 
 class SelectionFailedEvent(RunEvent):
+    """Event emitted when candidate selection fails."""
+
     event_type: Literal["selection_failed"] = "selection_failed"
     case_id: str
     error_message: str
 
 
 class ReductionCompletedEvent(RunEvent):
+    """Event emitted when candidate reduction succeeds."""
+
     event_type: Literal["reduction_completed"] = "reduction_completed"
     case_id: str
     candidate_id: str
@@ -84,12 +102,16 @@ class ReductionCompletedEvent(RunEvent):
 
 
 class ReductionFailedEvent(RunEvent):
+    """Event emitted when candidate reduction fails."""
+
     event_type: Literal["reduction_failed"] = "reduction_failed"
     case_id: str
     error_message: str
 
 
 class ParseCompletedEvent(RunEvent):
+    """Event emitted when parsing a reduced candidate succeeds."""
+
     event_type: Literal["parse_completed"] = "parse_completed"
     case_id: str
     candidate_id: str
@@ -99,6 +121,8 @@ class ParseCompletedEvent(RunEvent):
 
 
 class ParseFailedEvent(RunEvent):
+    """Event emitted when parsing a reduced candidate fails."""
+
     event_type: Literal["parse_failed"] = "parse_failed"
     case_id: str
     candidate_id: str
@@ -106,6 +130,8 @@ class ParseFailedEvent(RunEvent):
 
 
 class EvaluationCompletedEvent(RunEvent):
+    """Event emitted when a workflow-backed metric finishes."""
+
     event_type: Literal["evaluation_completed"] = "evaluation_completed"
     case_id: str
     candidate_id: str | None = None
@@ -115,6 +141,8 @@ class EvaluationCompletedEvent(RunEvent):
 
 
 class EvaluationFailedEvent(RunEvent):
+    """Event emitted when a workflow-backed metric fails."""
+
     event_type: Literal["evaluation_failed"] = "evaluation_failed"
     case_id: str
     candidate_id: str | None = None
@@ -123,6 +151,8 @@ class EvaluationFailedEvent(RunEvent):
 
 
 class ScoreCompletedEvent(RunEvent):
+    """Event emitted when a pure metric succeeds."""
+
     event_type: Literal["score_completed"] = "score_completed"
     case_id: str
     candidate_id: str
@@ -133,6 +163,8 @@ class ScoreCompletedEvent(RunEvent):
 
 
 class ScoreFailedEvent(RunEvent):
+    """Event emitted when a pure metric produces an error payload."""
+
     event_type: Literal["score_failed"] = "score_failed"
     case_id: str
     candidate_id: str
@@ -141,6 +173,8 @@ class ScoreFailedEvent(RunEvent):
 
 
 class StepStartedEvent(RunEvent):
+    """Event emitted when a workflow step starts."""
+
     event_type: Literal["step_started"] = "step_started"
     workflow_id: str
     step_id: str
@@ -148,6 +182,8 @@ class StepStartedEvent(RunEvent):
 
 
 class StepCompletedEvent(RunEvent):
+    """Event emitted when a workflow step completes."""
+
     event_type: Literal["step_completed"] = "step_completed"
     workflow_id: str
     step_id: str
@@ -156,6 +192,8 @@ class StepCompletedEvent(RunEvent):
 
 
 class StepFailedEvent(RunEvent):
+    """Event emitted when a workflow step fails."""
+
     event_type: Literal["step_failed"] = "step_failed"
     workflow_id: str
     step_id: str
@@ -187,5 +225,7 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
 
 
 def event_from_dict(payload: dict[str, Any]) -> RunEvent:
+    """Deserialize a stored event payload into the correct event model."""
+
     event_type = payload["event_type"]
     return EVENT_TYPES[event_type].model_validate(payload)

@@ -10,12 +10,15 @@ from typing import cast
 
 from themis.core.base import JSONValue
 from themis.core.inspection import get_execution_state, get_run_snapshot
+from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
 
 
 def snapshot_report(
-    snapshot, run_metadata: dict[str, JSONValue] | None = None
+    snapshot: RunSnapshot, run_metadata: dict[str, JSONValue] | None = None
 ) -> dict[str, JSONValue]:
+    """Return a JSON-serializable summary for a compiled snapshot."""
+
     return {
         "run_id": snapshot.run_id,
         "identity": snapshot.identity.model_dump(mode="json"),
@@ -26,10 +29,14 @@ def snapshot_report(
 
 
 class Reporter:
+    """Export persisted run projections in JSON, Markdown, CSV, or LaTeX."""
+
     def __init__(self, store: RunStore) -> None:
         self.store = store
 
     def export_json(self, run_id: str) -> str:
+        """Export all major persisted projections for a run as formatted JSON."""
+
         payload = {
             "snapshot": get_run_snapshot(self.store, run_id).model_dump(mode="json"),
             "execution_state": get_execution_state(self.store, run_id).model_dump(
@@ -43,6 +50,8 @@ class Reporter:
         return json.dumps(payload, indent=2, sort_keys=True)
 
     def export_markdown(self, run_id: str) -> str:
+        """Export a human-readable Markdown summary for a persisted run."""
+
         run_result = self._projection(run_id, "run_result")
         benchmark_result = self._projection(run_id, "benchmark_result")
         progress = _require_mapping(
@@ -70,6 +79,8 @@ class Reporter:
         return "\n".join(lines) + "\n"
 
     def export_csv(self, run_id: str) -> str:
+        """Export benchmark score rows as CSV."""
+
         buffer = StringIO()
         writer = csv.DictWriter(
             buffer,
@@ -89,6 +100,8 @@ class Reporter:
         return buffer.getvalue()
 
     def export_latex(self, run_id: str) -> str:
+        """Export benchmark score rows as a compact LaTeX table."""
+
         lines = [
             r"\begin{tabular}{llllllll}",
             r"case\_id & metric\_id & outcome & value & candidate\_id & error\_category & error\_message & details \\",
@@ -114,6 +127,8 @@ class Reporter:
         return "\n".join(lines) + "\n"
 
     def export_score_table(self, run_id: str) -> list[dict[str, JSONValue]]:
+        """Return benchmark score rows in a normalized table structure."""
+
         benchmark_result = self._projection(run_id, "benchmark_result")
         score_rows = _require_rows(
             benchmark_result.get("score_rows"), name="benchmark_result.score_rows"
@@ -133,6 +148,8 @@ class Reporter:
         ]
 
     def _projection(self, run_id: str, projection_name: str) -> dict[str, JSONValue]:
+        """Load a named stored projection and validate its JSON object shape."""
+
         projection = self.store.get_projection(run_id, projection_name)
         if projection is None or not isinstance(projection, dict):
             raise ValueError(

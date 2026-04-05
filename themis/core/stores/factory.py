@@ -17,6 +17,8 @@ StoreBuilder = Callable[[StorageConfig], RunStore]
 
 
 def memory_store() -> InMemoryRunStore:
+    """Create an in-memory run store."""
+
     return InMemoryRunStore()
 
 
@@ -41,14 +43,20 @@ _STORE_BUILDERS: dict[str, StoreBuilder] = {
 
 
 def register_store_backend(name: str, builder: StoreBuilder) -> None:
+    """Register a custom run-store backend for `create_run_store`."""
+
     _STORE_BUILDERS[name] = builder
 
 
 def available_store_backends() -> list[str]:
+    """Return the registered storage backend names."""
+
     return sorted(_STORE_BUILDERS)
 
 
 def create_run_store(config: StorageConfig) -> RunStore:
+    """Instantiate a run store from storage configuration."""
+
     try:
         builder = _STORE_BUILDERS[config.store]
     except KeyError as exc:

@@ -16,6 +16,8 @@ _SCHEMA_VERSION = "1"
 
 
 class PostgresRunStore(ProjectionRefreshingStore):
+    """Persist runs in Postgres while storing blobs on the filesystem."""
+
     def __init__(self, url: str, blob_root: str | Path) -> None:
         self.url = url
         self.blob_root = Path(blob_root)
@@ -278,4 +280,6 @@ class PostgresRunStore(ProjectionRefreshingStore):
 
 
 def postgres_store(url: str, blob_root: str | Path) -> PostgresRunStore:
+    """Create a Postgres-backed run store."""
+
     return PostgresRunStore(url, blob_root)

@@ -120,9 +120,12 @@ def main() -> int:
             str(python),
             "-c",
             (
-                "from themis import Experiment, __all__; "
+                "from importlib.metadata import version; "
+                "from themis import Experiment, __all__, __version__; "
                 "assert 'Experiment' in __all__; "
-                "assert Experiment is not None"
+                "assert '__version__' in __all__; "
+                "assert Experiment is not None; "
+                "assert __version__ == version('themis-eval')"
             ),
             cwd=temp_path,
         )

@@ -14,6 +14,8 @@ from themis.core.stores.base import ProjectionRefreshingStore
 
 
 class MongoDbRunStore(ProjectionRefreshingStore):
+    """Persist runs in MongoDB while storing blobs on the filesystem."""
+
     def __init__(self, url: str, database: str, blob_root: str | Path) -> None:
         self.url = url
         self.database = database
@@ -162,4 +164,6 @@ class MongoDbRunStore(ProjectionRefreshingStore):
 
 
 def mongodb_store(url: str, database: str, blob_root: str | Path) -> MongoDbRunStore:
+    """Create a MongoDB-backed run store."""
+
     return MongoDbRunStore(url, database, blob_root)

@@ -22,7 +22,9 @@ def run(
     benchmark = report_store.get_projection(result.run_id, "benchmark_result")
     metric_means = {}
     if isinstance(benchmark, dict):
-        metric_means = dict(benchmark.get("metric_means", {}))
+        metric_means_payload = benchmark.get("metric_means", {})
+        if isinstance(metric_means_payload, dict):
+            metric_means = dict(metric_means_payload)
     print(
         dump_json(
             {
@@ -88,7 +90,9 @@ def replay(
     benchmark = store.get_projection(result.run_id, "benchmark_result")
     metric_means = {}
     if isinstance(benchmark, dict):
-        metric_means = dict(benchmark.get("metric_means", {}))
+        metric_means_payload = benchmark.get("metric_means", {})
+        if isinstance(metric_means_payload, dict):
+            metric_means = dict(metric_means_payload)
     print(
         dump_json(
             {

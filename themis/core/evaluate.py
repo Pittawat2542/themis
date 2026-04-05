@@ -20,6 +20,7 @@ from themis.core.config import (
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.protocols import LifecycleSubscriber, TracingProvider
+from themis.core.results import RunResult
 from themis.core.store import RunStore
 
 
@@ -44,7 +45,7 @@ def evaluate(
     store: RunStore | None = None,
     subscribers: list[LifecycleSubscriber] | None = None,
     tracing_provider: TracingProvider | None = None,
-):
+) -> RunResult:
     """Compile and run a Themis experiment through the Layer 1 API."""
 
     datasets = _normalize_datasets(data)
