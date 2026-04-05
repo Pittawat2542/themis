@@ -21,9 +21,19 @@ Run the shortest benchmark workflow:
 themis quick-eval benchmark --name mmlu_pro
 ```
 
-Or run the same named benchmark from Python through the catalog API using `themis.catalog.run(...)`.
+Or run the same named benchmark from Python through the catalog API using
+`themis.catalog.run(...)`.
 
 Then inspect the benchmark catalog for prerequisites such as optional dataset dependencies or adapter-specific execution constraints.
+
+When you want to inspect or filter the benchmark dataset before running it:
+
+```python
+from themis.catalog import load
+
+benchmark = load("mmlu_pro")
+dataset = benchmark.materialize_dataset()
+```
 
 Benchmark slicing and downsampling are code-authored today. When you need a subset of a shipped benchmark, load or materialize a `Dataset`, then filter or sample its `cases` before compiling the experiment. Themis treats that filtered dataset as the benchmark you asked it to run.
 
@@ -71,3 +81,38 @@ You should get a completed run keyed by the named benchmark entry and know wheth
 
 - [Benchmark catalog](../reference/benchmark-catalog.md)
 - [Benchmark adapters](../explanation/benchmark-adapters.md)
+
+## Local smoke checks
+
+Use these optional commands when you want to validate benchmark wiring against
+local services instead of the demo generator.
+
+Judge-backed smoke check against your local OpenAI-compatible endpoint:
+
+```python
+from themis.adapters.openai import openai
+from themis.catalog import run
+from themis.core.stores import InMemoryRunStore
+
+result = run(
+    "frontierscience",
+    model=openai(
+        "google/gemma-4-26b-a4b",
+        base_url="http://127.0.0.1:1234/v1",
+    ),
+    store=InMemoryRunStore(),
+)
+print(result.status)
+```
+
+Code-benchmark smoke check with local sandbox services:
+
+```bash
+export THEMIS_CODE_SANDBOX_FUSION_URL=http://localhost:8080
+export THEMIS_CODE_PISTON_URL=http://localhost:2000
+themis quick-eval benchmark --name codeforces
+```
+
+These smoke checks are optional local verification only. The automated test
+suite should continue to use fixture-backed datasets and fake or demo
+components.
