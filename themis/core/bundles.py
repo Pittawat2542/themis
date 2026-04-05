@@ -121,8 +121,13 @@ def import_reduction_bundle(store: RunStore, bundle: ReductionBundle) -> None:
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
 
+    valid_case_ids = {
+        case.case_id for dataset in snapshot.datasets for case in dataset.cases
+    }
     store.persist_snapshot(snapshot)
     for record in bundle.records:
+        if record.case_id not in valid_case_ids:
+            raise ValueError(f"Unknown case_id in reduction bundle: {record.case_id}")
         store.persist_event(
             ReductionCompletedEvent(
                 run_id=bundle.run_id,
@@ -162,8 +167,13 @@ def import_parse_bundle(store: RunStore, bundle: ParseBundle) -> None:
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
 
+    valid_case_ids = {
+        case.case_id for dataset in snapshot.datasets for case in dataset.cases
+    }
     store.persist_snapshot(snapshot)
     for record in bundle.records:
+        if record.case_id not in valid_case_ids:
+            raise ValueError(f"Unknown case_id in parse bundle: {record.case_id}")
         store.persist_event(
             ParseCompletedEvent(
                 run_id=bundle.run_id,
@@ -203,8 +213,13 @@ def import_score_bundle(store: RunStore, bundle: ScoreBundle) -> None:
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
 
+    valid_case_ids = {
+        case.case_id for dataset in snapshot.datasets for case in dataset.cases
+    }
     store.persist_snapshot(snapshot)
     for record in bundle.records:
+        if record.case_id not in valid_case_ids:
+            raise ValueError(f"Unknown case_id in score bundle: {record.case_id}")
         store.persist_event(
             ScoreCompletedEvent(
                 run_id=bundle.run_id,

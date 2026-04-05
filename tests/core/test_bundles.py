@@ -314,3 +314,90 @@ def test_reduction_parse_and_score_bundles_round_trip_stage_artifacts() -> None:
     assert case_state.reduced_candidate is not None
     assert case_state.parsed_output is not None
     assert case_state.successful_scores["builtin/exact_match"].value == 1.0
+
+
+def test_import_reduction_bundle_rejects_unknown_case_ids() -> None:
+    snapshot = _snapshot()
+    from themis.core.models import ReducedCandidate
+    from themis.core.results import ReductionBundle, ReductionBundleRecord
+
+    bundle = ReductionBundle(
+        run_id=snapshot.run_id,
+        snapshot=snapshot,
+        records=[
+            ReductionBundleRecord(
+                case_id="missing-case",
+                candidate_id="case-1-reduced",
+                result=ReducedCandidate(
+                    candidate_id="case-1-reduced",
+                    source_candidate_ids=["case-1-candidate-7"],
+                    final_output={"answer": "4"},
+                ),
+            )
+        ],
+    )
+
+    store = InMemoryRunStore()
+    store.initialize()
+
+    try:
+        import_reduction_bundle(store, bundle)
+    except ValueError as exc:
+        assert str(exc) == "Unknown case_id in reduction bundle: missing-case"
+    else:
+        raise AssertionError("expected ValueError for unknown reduction case_id")
+
+
+def test_import_parse_bundle_rejects_unknown_case_ids() -> None:
+    snapshot = _snapshot()
+    from themis.core.models import ParsedOutput
+    from themis.core.results import ParseBundle, ParseBundleRecord
+
+    bundle = ParseBundle(
+        run_id=snapshot.run_id,
+        snapshot=snapshot,
+        records=[
+            ParseBundleRecord(
+                case_id="missing-case",
+                candidate_id="case-1-reduced",
+                result=ParsedOutput(value={"answer": "4"}, format="json"),
+            )
+        ],
+    )
+    store = InMemoryRunStore()
+    store.initialize()
+
+    try:
+        import_parse_bundle(store, bundle)
+    except ValueError as exc:
+        assert str(exc) == "Unknown case_id in parse bundle: missing-case"
+    else:
+        raise AssertionError("expected ValueError for unknown parse case_id")
+
+
+def test_import_score_bundle_rejects_unknown_case_ids() -> None:
+    snapshot = _snapshot()
+    from themis.core.models import Score
+    from themis.core.results import ScoreBundle, ScoreBundleRecord
+
+    bundle = ScoreBundle(
+        run_id=snapshot.run_id,
+        snapshot=snapshot,
+        records=[
+            ScoreBundleRecord(
+                case_id="missing-case",
+                candidate_id="case-1-reduced",
+                metric_id="builtin/exact_match",
+                score=Score(metric_id="builtin/exact_match", value=1.0),
+            )
+        ],
+    )
+    store = InMemoryRunStore()
+    store.initialize()
+
+    try:
+        import_score_bundle(store, bundle)
+    except ValueError as exc:
+        assert str(exc) == "Unknown case_id in score bundle: missing-case"
+    else:
+        raise AssertionError("expected ValueError for unknown score case_id")
