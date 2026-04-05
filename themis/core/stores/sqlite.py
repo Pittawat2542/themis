@@ -181,7 +181,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
 
     def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             row = connection.execute(
                 """
                 SELECT payload_json
@@ -197,7 +197,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
     def store_stage_cache(
         self, stage_name: str, cache_key: str, payload: JSONValue
     ) -> None:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             connection.execute(
                 """
                 INSERT OR REPLACE INTO stage_cache (stage_name, cache_key, payload_json)
@@ -208,7 +208,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
             connection.commit()
 
     def clear_run(self, run_id: str) -> None:
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             connection.execute("DELETE FROM run_events WHERE run_id = ?", (run_id,))
             connection.execute(
                 "DELETE FROM run_projections WHERE run_id = ?", (run_id,)

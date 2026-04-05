@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
+import themis.core.stores.sqlite as sqlite_module
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import RunStartedEvent
 from themis.core.experiment import Experiment
@@ -117,3 +118,52 @@ def test_sqlite_store_backfills_missing_projection_from_snapshot_and_events(
         ).fetchone()
 
     assert row is not None
+
+
+def test_sqlite_store_closes_connections_for_stage_cache_operations(
+    tmp_path, monkeypatch
+) -> None:
+    class FakeConnection:
+        def __init__(self, *, row: tuple[str] | None = None) -> None:
+            self.row = row
+            self.closed = False
+            self.executed: list[tuple[str, tuple[object, ...]]] = []
+
+        def __enter__(self) -> FakeConnection:
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+
+        def execute(self, query: str, params: tuple[object, ...] = ()) -> FakeConnection:
+            self.executed.append((query, params))
+            return self
+
+        def fetchone(self) -> tuple[str] | None:
+            return self.row
+
+        def commit(self) -> None:
+            return None
+
+        def close(self) -> None:
+            self.closed = True
+
+    queued_connections = [
+        FakeConnection(row=('{"ok": true}',)),
+        FakeConnection(),
+        FakeConnection(),
+    ]
+    all_connections = list(queued_connections)
+
+    def fake_connect(path: object) -> FakeConnection:
+        del path
+        return queued_connections.pop(0)
+
+    monkeypatch.setattr(sqlite_module.sqlite3, "connect", fake_connect)
+    store = SqliteRunStore(tmp_path / "run_store.sqlite3")
+
+    assert store.load_stage_cache("score", "cache-key") == {"ok": True}
+    store.store_stage_cache("score", "cache-key", {"ok": True})
+    store.clear_run("run-1")
+
+    assert all(connection.closed for connection in all_connections)
