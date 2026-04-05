@@ -9,11 +9,24 @@ Common shipped component ids:
 - generator: `builtin/demo_generator`
 - reducer: `builtin/majority_vote`
 - selector: `builtin/best_of_n`
-- parser: `builtin/json_identity`
-- metrics: `builtin/exact_match`, `builtin/f1`, `builtin/bleu`
-- workflow-backed judges: `builtin/demo_judge`, `builtin/llm_rubric`, `builtin/pairwise_judge`, `builtin/panel_of_judges`, `builtin/majority_vote_judge`
+- parsers: `builtin/json_identity`, `builtin/text`, `builtin/choice_letter`, `builtin/math_answer`, `builtin/code_text`
+- deterministic metrics: `builtin/exact_match`, `builtin/f1`, `builtin/bleu`, `builtin/choice_accuracy`, `builtin/math_equivalence`, `builtin/procbench_final_accuracy`
+- code-execution metrics: `builtin/codeforces_pass_rate`, `builtin/aethercode_pass_rate`, `builtin/livecodebench_pass_rate`
+- workflow-backed metrics: `builtin/llm_rubric`, `builtin/pairwise_judge`, `builtin/panel_of_judges`, `builtin/majority_vote_judge`
+- judge helper: `builtin/demo_judge`
 
 Use builtin ids for deterministic tests, docs examples, smoke tests, and simple baselines.
+
+Use `themis.catalog.list_component_ids(...)` when you need the exact current
+shipped ids from code instead of relying on memory.
+
+## Catalog Registry Notes
+
+- `themis.catalog.load(...)` loads builtin shipped components by id.
+- `themis.catalog.list_component_ids(kind=...)` lists ids filtered by kind.
+- `themis.catalog.builtin_component_refs()` exposes builtin component refs.
+- Benchmark recipes live in the catalog too, but they are a separate surface
+  from reusable component ids.
 
 ## Provider Adapters
 
@@ -27,11 +40,12 @@ Use adapters when Themis should still own planning, reduction, parsing, scoring,
 
 ### Extras
 
-- `.[openai]` for the OpenAI adapter
-- `.[vllm]` for vLLM on Linux
-- `.[langgraph]` for LangGraph
-- `.[datasets]` for Hugging Face dataset loading
-- `.[mongodb]` and `.[postgres]` for external stores
+- `themis-eval[openai]` for the OpenAI adapter
+- `themis-eval[vllm]` for vLLM on Linux
+- `themis-eval[langgraph]` for LangGraph
+- `themis-eval[datasets]` for Hugging Face dataset loading and benchmark materialization
+- `themis-eval[mongodb]` and `themis-eval[postgres]` for external stores
+- `themis-eval[docs]` for local docs builds when working in the Themis repo itself
 
 Prefer fake or injected clients in tests when the task is about integration shape instead of live provider behavior.
 
@@ -40,6 +54,17 @@ Prefer fake or injected clients in tests when the task is about integration shap
 - `GenerationConfig.prompt_spec` is identity-bearing. Prompt changes can invalidate generation-stage cache reuse.
 - `PromptSpec.blocks` is generic structured prompt material, not a special case/example abstraction.
 - Prompt specs flow into `GenerateContext`, so custom generators can consume them directly.
+- Builtin workflow-backed metrics also consume evaluation prompt specs; prompt changes for judge workflows are identity-bearing too.
+
+## Code-Execution Backends
+
+Reusable sandbox-backed metrics default to local HTTP services:
+
+- Piston: `THEMIS_CODE_PISTON_URL`, default `http://localhost:2000`
+- Sandbox Fusion: `THEMIS_CODE_SANDBOX_FUSION_URL`, default `http://localhost:8080`
+
+Prefer a fake sandbox executor in tests when you only need to validate metric or
+benchmark wiring.
 
 ## Config Target Syntax
 

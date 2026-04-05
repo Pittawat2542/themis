@@ -1,4 +1,4 @@
 interface:
   display_name: "Themis Eval"
   short_description: "Guide for projects that depend on themis-eval"
-  default_prompt: "Use $themis-eval to inspect this themis-eval-based project and make the required code or config changes."
+  default_prompt: "Use $themis-eval to inspect this themis-eval-based project and make the required code, config, catalog, or benchmark changes."

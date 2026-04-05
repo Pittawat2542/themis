@@ -14,6 +14,9 @@ Use `Experiment(...)` when the project needs one or more of these:
 - config loading with `Experiment.from_config(...)`
 - reusable experiment definitions that persist across commands or tests
 
+Use `themis.catalog` when the task is about shipped benchmark recipes or
+reusable builtin catalog components.
+
 Use custom extension protocols when builtin generators, reducers, parsers, or metrics are not sufficient.
 
 ## Python Versus Config And CLI
@@ -30,6 +33,13 @@ Prefer config plus CLI when the repo wants:
 - shell-friendly automation
 - worker or batch submission flows
 - environment-specific overrides without changing Python code
+
+Prefer `themis.catalog` when the repo wants:
+
+- shipped benchmark names instead of hand-authored datasets
+- reusable shipped parsers, metrics, reducers, selectors, or judge workflows
+- benchmark-materialization convenience through `themis.catalog.run(...)` or
+  `quick-eval benchmark`
 
 ### Config Rules
 
@@ -90,6 +100,16 @@ experiment = Experiment(
 result = experiment.run(runtime=RuntimeConfig(max_concurrent_tasks=4))
 ```
 
+Catalog-backed benchmark usage:
+
+```python
+from themis.catalog import load, run
+
+benchmark = load("mmlu_pro")
+dataset = benchmark.materialize_dataset()
+result = run("mmlu_pro")
+```
+
 Config-backed experiment skeleton:
 
 ```yaml
@@ -124,6 +144,14 @@ Prefer root-package exports from `themis` unless the project already depends on 
 - run inspection: `get_run_snapshot`, `get_execution_state`, `get_evaluation_execution`
 - reporting: `Reporter`, `StatsEngine`, `snapshot_report`, `quickcheck`
 - bundles: `export_*_bundle(...)` and `import_*_bundle(...)`
+
+Prefer catalog exports from `themis.catalog` when the task is about shipped
+components or benchmark recipes:
+
+- `load`
+- `run`
+- `list_component_ids`
+- `builtin_component_refs`
 
 Common data models that appear in user code:
 

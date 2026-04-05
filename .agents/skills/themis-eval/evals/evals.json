@@ -1,0 +1,23 @@
+{
+  "skill_name": "themis-eval",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm in a repo that imports `themis`. We need to add a new shipped benchmark to the catalog, wire the right parser and metric, and make sure `themis quick-eval benchmark --name ...` works. Please inspect the codebase and make the change without punting me to external docs.",
+      "expected_output": "The response should use the catalog surface, mention manifests plus recipe code, and keep the guidance self-contained instead of redirecting to repo docs.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Our Themis run keeps producing a different `run_id` after what I thought was a runtime-only change. Help me debug whether this belongs to identity or provenance, and suggest the smallest test to prove it.",
+      "expected_output": "The response should reason about `RunSnapshot`, identity-bearing inputs, runtime-only fields, and recommend a focused validation path rather than a broad end-to-end rerun.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I need to update a code benchmark in Themis that uses sandbox execution. The local services are Piston on port 2000 and Sandbox Fusion on port 8080. Show me which builtins and env vars matter and how to validate the change without overusing live sandboxes.",
+      "expected_output": "The response should mention the reusable code-execution metrics, the sandbox environment variables, and a fake-executor or fixture-first validation strategy.",
+      "files": []
+    }
+  ]
+}

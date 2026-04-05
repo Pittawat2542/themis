@@ -30,6 +30,8 @@ Provenance captures how and where the run happened without changing `run_id`. Im
 
 If `run_id` drift is unexpected, compare `RunSnapshot.identity` before debugging runtime behavior.
 
+Stage caches are keyed by stage inputs, not by `run_id`.
+
 ## Store Selection
 
 - `memory`: local and short-lived only
@@ -45,6 +47,13 @@ Persistent stores are required for:
 - cross-run cache reuse
 
 `InMemoryRunStore` does not provide cross-process persistence or cross-run stage-cache behavior.
+
+`existing_run_policy` controls what happens when the same compiled `run_id` is
+submitted again:
+
+- `auto`: reuse completed runs and resume incomplete runs
+- `error`: fail if the compiled run already exists
+- `rerun`: clear stored state and run again
 
 ## Replay And Rejudge
 
@@ -74,7 +83,11 @@ Primary command groups:
 
 Important behavior notes:
 
+- `quick-eval benchmark --name ...` executes a shipped named benchmark recipe
+  through the catalog runtime.
 - `run --config ... [--until-stage ...]` executes and prints compact JSON.
+- `replay --config ... --stage reduce|parse|score|judge` reruns downstream
+  stages from stored upstream artifacts.
 - `resume --config ...` and `inspect ...` require a persistent store unless the original memory store instance is still in process.
 - `report` and exported score tables include outcome and error fields alongside metric values.
 - The CLI currently exposes only `generation` and `evaluation` bundle export, even though Python APIs support reduction, parse, and score bundles too.
