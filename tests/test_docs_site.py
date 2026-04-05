@@ -38,6 +38,30 @@ def test_mkdocs_configuration_exposes_diataxis_navigation() -> None:
     assert "_snippets/" in contents
 
 
+def test_mkdocs_configuration_supports_dark_mode_and_mermaid_diagrams() -> None:
+    config_path = REPO_ROOT / "mkdocs.yml"
+
+    contents = config_path.read_text(encoding="utf-8")
+
+    for required_entry in (
+        "palette:",
+        "scheme: default",
+        "scheme: slate",
+        "toggle:",
+        "icon: material/brightness-7",
+        "icon: material/brightness-4",
+        "custom_fences:",
+        "name: mermaid",
+        "class: mermaid",
+        "extra_javascript:",
+        "https://unpkg.com/mermaid@11/dist/mermaid.min.js",
+        "javascripts/mermaid.mjs",
+    ):
+        assert required_entry in contents
+
+    assert (DOCS_ROOT / "javascripts" / "mermaid.mjs").is_file()
+
+
 def test_docs_tree_contains_required_diataxis_entrypoints() -> None:
     required_paths = (
         DOCS_ROOT / "index.md",
