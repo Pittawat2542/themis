@@ -15,7 +15,7 @@ class _FakeGraph:
         yield {
             "name": "plan",
             "event": "step",
-            "data": {"input": payload, "output": {"draft": "4"}},
+            "data": {"input": payload, "output": {"proposed_answer": "4"}},
         }
 
 

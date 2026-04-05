@@ -25,10 +25,10 @@ EXCLUDED_ARCHIVE_NAMES = {
     "coverage.json",
     "coverage.xml",
     "REQUIREMENTS.md",
-    "V4_PLAN.md",
     "skills-lock.json",
     "uv.lock",
 }
+EXCLUDED_ARCHIVE_SUFFIXES = ("_PLAN.md",)
 
 
 def _run(*args: str, cwd: Path | None = None) -> None:
@@ -46,6 +46,10 @@ def _assert_archive_contents(path: Path, names: list[str]) -> None:
             raise SystemExit(f"{path.name} unexpectedly contains excluded path: {normalized}")
         if normalized in EXCLUDED_ARCHIVE_NAMES:
             raise SystemExit(f"{path.name} unexpectedly contains excluded file: {normalized}")
+        if normalized.endswith(EXCLUDED_ARCHIVE_SUFFIXES):
+            raise SystemExit(
+                f"{path.name} unexpectedly contains excluded planning file: {normalized}"
+            )
 
 
 def _inspect_wheel(path: Path) -> None:

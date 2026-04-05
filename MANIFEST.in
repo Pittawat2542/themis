@@ -18,6 +18,6 @@ exclude .coverage
 exclude coverage.json
 exclude coverage.xml
 exclude REQUIREMENTS.md
-exclude V4_PLAN.md
+exclude *_PLAN.md
 exclude skills-lock.json
 exclude uv.lock
