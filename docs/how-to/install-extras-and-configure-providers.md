@@ -18,12 +18,12 @@ Use this guide before adopting OpenAI, vLLM, LangGraph, Hugging Face dataset loa
 Install only the extras you need:
 
 ```bash
-pip install "themis-eval[openai]"
-pip install "themis-eval[vllm]"  # Linux only
-pip install "themis-eval[langgraph]"
-pip install "themis-eval[datasets]"
-pip install "themis-eval[mongodb]"
-pip install "themis-eval[postgres]"
+uv add "themis-eval[openai]"
+uv add "themis-eval[vllm]"  # Linux only
+uv add "themis-eval[langgraph]"
+uv add "themis-eval[datasets]"
+uv add "themis-eval[mongodb]"
+uv add "themis-eval[postgres]"
 ```
 
 Provider specifics:

@@ -7,18 +7,18 @@ The published package name is `themis-eval`. The Python import namespace and CLI
 ## Install
 
 ```bash
-pip install themis-eval
+uv add themis-eval
 ```
 
 Optional extras:
 
-- `pip install "themis-eval[openai]"`
-- `pip install "themis-eval[vllm]"` on Linux
-- `pip install "themis-eval[langgraph]"`
-- `pip install "themis-eval[datasets]"`
-- `pip install "themis-eval[mongodb]"`
-- `pip install "themis-eval[postgres]"`
-- `pip install "themis-eval[docs]"` for local documentation builds
+- `uv add "themis-eval[openai]"`
+- `uv add "themis-eval[vllm]"` on Linux
+- `uv add "themis-eval[langgraph]"`
+- `uv add "themis-eval[datasets]"`
+- `uv add "themis-eval[mongodb]"`
+- `uv add "themis-eval[postgres]"`
+- `uv sync --extra docs` for local documentation builds from a repo checkout
 
 ## Quick Start
 
@@ -79,8 +79,8 @@ themis quick-eval inline \
 Build the docs locally with:
 
 ```bash
-pip install "themis-eval[docs]"
-mkdocs build --strict
+uv sync --extra docs
+uv run mkdocs build --strict
 ```
 
 ## Contributing
