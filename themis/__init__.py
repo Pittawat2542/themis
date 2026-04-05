@@ -2,7 +2,6 @@
 
 from themis.core import (
     Experiment,
-    FewShotExample,
     InMemoryRunStore,
     PromptSpec,
     Reporter,
@@ -35,7 +34,6 @@ from themis.core import (
 
 __all__ = [
     "Experiment",
-    "FewShotExample",
     "InMemoryRunStore",
     "PromptSpec",
     "Reporter",

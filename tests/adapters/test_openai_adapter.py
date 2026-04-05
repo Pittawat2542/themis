@@ -5,7 +5,7 @@ import pytest
 from themis.adapters.openai import openai
 from themis.core.contexts import GenerateContext
 from themis.core.models import Case, GenerationResult
-from themis.core.prompts import FewShotExample, PromptSpec
+from themis.core.prompts import PromptSpec
 
 
 class FakeUsage:
@@ -98,9 +98,7 @@ async def test_openai_adapter_can_take_prompt_spec_from_context() -> None:
             prompt_spec=PromptSpec(
                 instructions="Answer directly.",
                 prefix="Use the examples.",
-                few_shot_examples=[
-                    FewShotExample(input="1+1", output="2"),
-                ],
+                examples=[{"input": "1+1", "output": "2"}],
             ),
         ),
     )

@@ -3,7 +3,7 @@ from __future__ import annotations
 from themis import Experiment
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
-from themis.core.prompts import FewShotExample, PromptSpec
+from themis.core.prompts import PromptSpec
 
 
 def test_prompt_specs_change_run_identity_for_generation_and_evaluation() -> None:
@@ -20,9 +20,7 @@ def test_prompt_specs_change_run_identity_for_generation_and_evaluation() -> Non
             judge_models=["builtin/demo_judge"],
             prompt_spec=PromptSpec(
                 prefix="Grade carefully.",
-                few_shot_examples=[
-                    FewShotExample(input={"answer": "4"}, output="PASS")
-                ],
+                examples=[{"input": {"answer": "4"}, "output": "PASS"}],
             ),
         ),
         storage=StorageConfig(store="memory"),

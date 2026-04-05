@@ -12,7 +12,7 @@ from themis.core.contexts import (
     ReduceContext,
     ScoreContext,
 )
-from themis.core.prompts import FewShotExample, PromptSpec
+from themis.core.prompts import PromptSpec
 from themis.core.models import (
     Case,
     ConversationTrace,
@@ -126,8 +126,8 @@ def test_dataset_and_trace_models_embed_core_records() -> None:
 def test_contexts_and_configs_serialize_cleanly() -> None:
     prompt_spec = PromptSpec(
         instructions="Answer directly.",
-        few_shot_examples=[
-            FewShotExample(input={"question": "1+1"}, output={"answer": "2"})
+        examples=[
+            {"input": {"question": "1+1"}, "output": {"answer": "2"}}
         ],
     )
     generate = GenerateContext(

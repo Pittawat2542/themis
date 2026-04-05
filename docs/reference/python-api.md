@@ -12,7 +12,6 @@ This page is the generated entry point into the public Python API. Use the small
 ## Root exports
 
 - `Experiment`
-- `FewShotExample`
 - `InMemoryRunStore`
 - `PromptSpec`
 - `Reporter`

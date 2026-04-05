@@ -8,7 +8,7 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import EvalScoreContext, SelectContext
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput
-from themis.core.prompts import FewShotExample, PromptSpec
+from themis.core.prompts import PromptSpec
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject
@@ -88,9 +88,7 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
         ],
         prompt_spec=PromptSpec(
             instructions="Use the few-shot examples before grading.",
-            few_shot_examples=[
-                FewShotExample(input={"answer": "3"}, output="FAIL"),
-            ],
+            examples=[{"input": {"answer": "3"}, "output": "FAIL"}],
         ),
         eval_workflow_config={"rubric": "grade factual accuracy"},
     )

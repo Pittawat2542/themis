@@ -9,21 +9,13 @@ from pydantic import Field
 from themis.core.base import HashableModel, JSONValue
 
 
-class FewShotExample(HashableModel):
-    """One few-shot prompt example."""
-
-    input: JSONValue
-    output: JSONValue
-    metadata: dict[str, JSONValue] = Field(default_factory=dict)
-
-
 class PromptSpec(HashableModel):
     """Prompt instructions and few-shot examples for generation or judging."""
 
     instructions: str | None = None
     prefix: str | None = None
     suffix: str | None = None
-    few_shot_examples: list[FewShotExample] = Field(default_factory=list)
+    examples: list[dict[str, JSONValue]] = Field(default_factory=list)
 
     def render_input(self, prompt_input: JSONValue) -> JSONValue:
         """Render prompt-oriented input for provider adapters."""
@@ -33,7 +25,7 @@ class PromptSpec(HashableModel):
                 self.instructions,
                 self.prefix,
                 self.suffix,
-                self.few_shot_examples,
+                self.examples,
             )
         ):
             return prompt_input
@@ -49,14 +41,16 @@ class PromptSpec(HashableModel):
             sections.append(f"Instructions:\n{self.instructions}")
         if self.prefix:
             sections.append(self.prefix)
-        for index, example in enumerate(self.few_shot_examples, start=1):
+        for index, example in enumerate(self.examples, start=1):
+            example_input = example.get("input")
+            example_output = example.get("output")
             sections.append(
                 "\n".join(
                     [
                         f"Example {index} input:",
-                        _render_prompt_value(example.input),
+                        _render_prompt_value(example_input),
                         f"Example {index} output:",
-                        _render_prompt_value(example.output),
+                        _render_prompt_value(example_output),
                     ]
                 )
             )

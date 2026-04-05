@@ -100,7 +100,7 @@ from themis.core.protocols import (
 )
 from themis.core.orchestrator import Orchestrator
 from themis.core.planner import Planner
-from themis.core.prompts import FewShotExample, PromptSpec
+from themis.core.prompts import PromptSpec
 from themis.core.results import (
     CaseResult,
     EvaluationBundle,
@@ -185,7 +185,6 @@ __all__ = [
     "EvaluationWorkflow",
     "evaluate",
     "Experiment",
-    "FewShotExample",
     "FrozenModel",
     "Generator",
     "GenerateContext",
