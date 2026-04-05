@@ -1,402 +1,162 @@
 from __future__ import annotations
 
+import json
 import os
 import uuid
+from pathlib import Path
+from typing import Any
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 import pytest
 
-from themis.orchestration.run_manifest import (
-    RunManifest,
-    StageWorkItem,
-    WorkItemStatus,
+from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.events import RunCompletedEvent, RunStartedEvent
+from themis.core.experiment import Experiment
+from themis.core.models import Case, Dataset
+from themis.core.stores.postgres import PostgresRunStore, postgres_store
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("THEMIS_TEST_POSTGRES_ADMIN_URL"),
+    reason="THEMIS_TEST_POSTGRES_ADMIN_URL is required for Postgres integration tests",
 )
-from themis.records.observability import ObservabilityLink
-from themis.specs.experiment import (
-    ExperimentSpec,
-    InferenceGridSpec,
-    InferenceParamsSpec,
-    PostgresBlobStorageSpec,
-    PromptTemplateSpec,
-    TrialSpec,
-)
-from themis.specs.foundational import EvaluationSpec
-from themis.specs.foundational import DatasetSpec, GenerationSpec, ModelSpec, TaskSpec
-from themis.storage import build_storage_bundle
-from themis.storage.migrate import migrate_sqlite_to_postgres
-from themis.storage.observability import SqliteObservabilityStore
-from themis.storage.run_manifest_repo import RunManifestRepository
-from themis.storage.sqlite_schema import DatabaseManager
-from themis.types.enums import RecordStatus, DatasetSource, RunStage
-from themis.types.events import TrialEvent, TimelineStage
 
 
-def _require_postgres_env() -> tuple[object, str]:
-    psycopg = pytest.importorskip("psycopg")
-    admin_url = os.environ.get("THEMIS_TEST_POSTGRES_ADMIN_URL")
-    if not admin_url:
-        pytest.skip("THEMIS_TEST_POSTGRES_ADMIN_URL is not configured")
-    return psycopg, admin_url
+def _psycopg() -> Any:
+    import psycopg  # type: ignore[import-not-found]
+
+    return psycopg
 
 
-def _create_database(admin_url: str, psycopg) -> tuple[str, str]:
-    db_name = f"themis_{uuid.uuid4().hex[:10]}"
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        conn.execute(f'CREATE DATABASE "{db_name}"')
-    base_url = admin_url.rsplit("/", 1)[0]
-    return db_name, f"{base_url}/{db_name}"
+def _snapshot():
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
+        storage=StorageConfig(store="postgres"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                revision="r1",
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    return experiment.compile()
 
 
-def _drop_database(admin_url: str, db_name: str, psycopg) -> None:
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        conn.execute(
+@pytest.fixture
+def postgres_store_backend(tmp_path: Path):
+    psycopg = _psycopg()
+    admin_url = os.environ["THEMIS_TEST_POSTGRES_ADMIN_URL"]
+    database_name = f"themis_test_{uuid.uuid4().hex}"
+    with psycopg.connect(admin_url, autocommit=True) as connection:
+        connection.execute(f'CREATE DATABASE "{database_name}"')
+
+    parsed = urlsplit(admin_url)
+    database_url = _replace_database(parsed, database_name)
+    store = postgres_store(database_url, tmp_path / "postgres-blobs")
+    assert isinstance(store, PostgresRunStore)
+    store.initialize()
+
+    try:
+        yield store, database_url
+    finally:
+        with psycopg.connect(admin_url, autocommit=True) as connection:
+            connection.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s",
+                (database_name,),
+            )
+            connection.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+
+
+def test_postgres_store_round_trips_snapshot_events_projections_and_blobs(
+    postgres_store_backend,
+) -> None:
+    store, _database_url = postgres_store_backend
+    snapshot = _snapshot()
+
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+    blob_ref = store.store_blob(b'{"answer":"4"}', "application/json")
+
+    assert store.resume(snapshot.run_id) is not None
+    assert [event.event_type for event in store.query_events(snapshot.run_id)] == [
+        "run_started",
+        "run_completed",
+    ]
+    assert store.get_projection(snapshot.run_id, "run_result") is not None
+    assert store.load_blob(blob_ref) == ("application/json", b'{"answer":"4"}')
+
+
+def test_postgres_store_backfills_missing_projection(postgres_store_backend) -> None:
+    store, database_url = postgres_store_backend
+    snapshot = _snapshot()
+
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+
+    psycopg = _psycopg()
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
             """
-            SELECT pg_terminate_backend(pid)
-            FROM pg_stat_activity
-            WHERE datname = %s AND pid <> pg_backend_pid()
+            DELETE FROM run_projections
+            WHERE run_id = %s AND projection_name = %s
             """,
-            (db_name,),
+            (snapshot.run_id, "run_result"),
         )
-        conn.execute(f'DROP DATABASE IF EXISTS "{db_name}"')
+        connection.commit()
+
+    projection = store.get_projection(snapshot.run_id, "run_result")
+
+    assert projection is not None
+    assert projection["status"] == "running"
 
 
-def _fetch_scalar(database_url: str, query: str, params: tuple[object, ...], psycopg):
-    rows = getattr(psycopg, "rows")
-    with psycopg.connect(database_url, row_factory=rows.dict_row) as conn:
-        row = conn.execute(query, params).fetchone()
-    assert row is not None
-    return next(iter(row.values()))
+def test_postgres_store_skips_unknown_event_types_on_read(
+    postgres_store_backend,
+) -> None:
+    store, database_url = postgres_store_backend
+    snapshot = _snapshot()
 
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
 
-def test_postgres_bundle_materializes_trial_record_from_event_log(tmp_path):
-    psycopg, admin_url = _require_postgres_env()
-    db_name, database_url = _create_database(admin_url, psycopg)
-    try:
-        bundle = build_storage_bundle(
-            PostgresBlobStorageSpec(
-                database_url=database_url,
-                blob_root_dir=str(tmp_path / "blobs"),
-            )
-        )
-        trial = TrialSpec(
-            trial_id="trial_projection",
-            model=ModelSpec(model_id="test", provider="fake"),
-            task=TaskSpec(
-                task_id="task",
-                dataset=DatasetSpec(source=DatasetSource.MEMORY),
-                generation=GenerationSpec(),
-            ),
-            item_id="item-1",
-            prompt=PromptTemplateSpec(id="baseline", messages=[]),
-            params=InferenceParamsSpec(),
-        )
-        bundle.event_repo.save_spec(trial)
-        for event in [
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=1,
-                event_id="evt_1",
-                event_type="item_loaded",
-                stage=TimelineStage.ITEM_LOAD,
-                metadata={"item_id": trial.item_id, "dataset_source": "memory"},
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=2,
-                event_id="evt_2",
-                event_type="prompt_rendered",
-                stage=TimelineStage.PROMPT_RENDER,
-                metadata={"prompt_template_id": "baseline"},
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=3,
-                event_id="evt_3",
-                event_type="candidate_started",
-                candidate_id="candidate_1",
-                payload={"sample_index": 0},
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=4,
-                event_id="evt_4",
-                event_type="inference_completed",
-                candidate_id="candidate_1",
-                stage=TimelineStage.INFERENCE,
-                metadata={"provider": "fake", "model_id": "test"},
-                payload={"spec_hash": "inf_hash", "raw_text": "42"},
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=5,
-                event_id="evt_5",
-                event_type="evaluation_completed",
-                candidate_id="candidate_1",
-                stage="evaluation",
-                metadata={
-                    "metric_id": "exact_match",
-                    "score": 1.0,
-                    "transform_hash": None,
-                    "evaluation_hash": "eval_1",
-                },
-                payload={
-                    "spec_hash": "candidate_1",
-                    "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
-                },
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=6,
-                event_id="evt_6",
-                event_type="candidate_completed",
-                candidate_id="candidate_1",
-                payload={"status": "ok"},
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=7,
-                event_id="evt_7",
-                event_type="projection_completed",
-                stage=TimelineStage.PROJECTION,
-                metadata={
-                    "transform_hash": None,
-                    "evaluation_hash": "eval_1",
-                    "projection_version": "v1",
-                },
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=8,
-                event_id="evt_8",
-                event_type="trial_completed",
-                payload={"status": "ok"},
-            ),
-        ]:
-            bundle.event_repo.append_event(event)
-
-        record = bundle.projection_repo.materialize_trial_record(
-            trial.spec_hash,
-            evaluation_hash="eval_1",
-        )
-
-        assert record.status == RecordStatus.OK
-        assert record.candidates[0].evaluation.aggregate_scores["exact_match"] == 1.0
-    finally:
-        _drop_database(admin_url, db_name, psycopg)
-
-
-def test_postgres_bundle_commits_repo_and_store_writes_to_fresh_connections(tmp_path):
-    psycopg, admin_url = _require_postgres_env()
-    db_name, database_url = _create_database(admin_url, psycopg)
-    try:
-        bundle = build_storage_bundle(
-            PostgresBlobStorageSpec(
-                database_url=database_url,
-                blob_root_dir=str(tmp_path / "blobs"),
-            )
-        )
-        trial = TrialSpec(
-            trial_id="trial_commit_visibility",
-            model=ModelSpec(model_id="test", provider="fake"),
-            task=TaskSpec(
-                task_id="task",
-                dataset=DatasetSpec(source=DatasetSource.MEMORY),
-                generation=GenerationSpec(),
-                evaluations=[EvaluationSpec(name="default", metrics=["exact_match"])],
-            ),
-            item_id="item-1",
-            prompt=PromptTemplateSpec(id="baseline", messages=[]),
-            params=InferenceParamsSpec(),
-        )
-
-        bundle.event_repo.save_spec(trial)
-        assert (
-            _fetch_scalar(
-                database_url,
-                "SELECT COUNT(*) AS count FROM specs WHERE spec_hash = %s",
-                (trial.spec_hash,),
-                psycopg,
-            )
-            == 1
-        )
-
-        bundle.event_repo.append_event(
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=1,
-                event_id="evt_1",
-                event_type="candidate_started",
-                candidate_id="candidate_1",
-                payload={"sample_index": 0},
-            )
-        )
-        assert (
-            _fetch_scalar(
-                database_url,
-                "SELECT COUNT(*) AS count FROM trial_events WHERE trial_hash = %s",
-                (trial.spec_hash,),
-                psycopg,
-            )
-            == 1
-        )
-
-        manifest = RunManifest(
-            run_id="run_postgres_commit_visibility",
-            backend_kind="local",
-            experiment_spec=ExperimentSpec(
-                models=[ModelSpec(model_id="test", provider="fake")],
-                tasks=[
-                    TaskSpec(
-                        task_id="task",
-                        dataset=DatasetSpec(source=DatasetSource.MEMORY),
-                        generation=GenerationSpec(),
-                    )
-                ],
-                prompt_templates=[PromptTemplateSpec(id="baseline", messages=[])],
-                inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
+    psycopg = _psycopg()
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            """
+            INSERT INTO run_events (run_id, event_type, event_json)
+            VALUES (%s, %s, %s::jsonb)
+            """,
+            (
+                snapshot.run_id,
+                "future_event",
+                json.dumps(
+                    {
+                        "schema_version": "2",
+                        "event_type": "future_event",
+                        "run_id": snapshot.run_id,
+                    }
+                ),
             ),
         )
-        RunManifestRepository(bundle.manager).save_manifest(manifest)
-        assert (
-            _fetch_scalar(
-                database_url,
-                "SELECT COUNT(*) AS count FROM run_manifests WHERE run_id = %s",
-                (manifest.run_id,),
-                psycopg,
-            )
-            == 1
-        )
+        connection.commit()
 
-        SqliteObservabilityStore(bundle.manager).save_link(
-            trial.spec_hash,
-            "candidate_1",
-            "gen",
-            ObservabilityLink(
-                provider="langfuse",
-                external_id="trace-1",
-                url="https://langfuse.example/trace/trace-1",
-            ),
-        )
-        assert (
-            _fetch_scalar(
-                database_url,
-                "SELECT COUNT(*) AS count FROM observability_links WHERE trial_hash = %s",
-                (trial.spec_hash,),
-                psycopg,
-            )
-            == 1
-        )
+    events = store.query_events(snapshot.run_id)
 
-        for event in [
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=2,
-                event_id="evt_2",
-                event_type="evaluation_completed",
-                candidate_id="candidate_1",
-                stage="evaluation",
-                metadata={
-                    "metric_id": "exact_match",
-                    "score": 1.0,
-                    "evaluation_hash": "eval_1",
-                },
-                payload={
-                    "spec_hash": "candidate_1",
-                    "metric_scores": [{"metric_id": "exact_match", "value": 1.0}],
-                },
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=3,
-                event_id="evt_3",
-                event_type="candidate_completed",
-                candidate_id="candidate_1",
-                payload={"status": "ok"},
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=4,
-                event_id="evt_4",
-                event_type="projection_completed",
-                stage=TimelineStage.PROJECTION,
-                metadata={
-                    "evaluation_hash": "eval_1",
-                    "projection_version": "v1",
-                },
-            ),
-            TrialEvent(
-                trial_hash=trial.spec_hash,
-                event_seq=5,
-                event_id="evt_5",
-                event_type="trial_completed",
-                payload={"status": "ok"},
-            ),
-        ]:
-            bundle.event_repo.append_event(event)
-        bundle.projection_repo.materialize_trial_record(
-            trial.spec_hash,
-            evaluation_hash="eval_1",
-        )
-        assert (
-            _fetch_scalar(
-                database_url,
-                "SELECT COUNT(*) AS count FROM trial_summary WHERE trial_hash = %s AND overlay_key = %s",
-                (trial.spec_hash, "ev:eval_1"),
-                psycopg,
-            )
-            == 1
-        )
-    finally:
-        _drop_database(admin_url, db_name, psycopg)
+    assert [event.event_type for event in events] == ["run_started"]
 
 
-def test_migrate_sqlite_to_postgres_copies_run_manifests_and_stage_work_items(tmp_path):
-    psycopg, admin_url = _require_postgres_env()
-    db_name, database_url = _create_database(admin_url, psycopg)
-    try:
-        source_root = tmp_path / "source_sqlite"
-        source_root.mkdir()
-        source_manager = DatabaseManager(f"sqlite:///{source_root / 'themis.sqlite3'}")
-        source_manager.initialize()
-        source_repo = RunManifestRepository(source_manager)
-        manifest = RunManifest(
-            run_id="run_migrate_postgres",
-            backend_kind="batch",
-            experiment_spec=ExperimentSpec(
-                models=[ModelSpec(model_id="test", provider="fake")],
-                tasks=[
-                    TaskSpec(
-                        task_id="task",
-                        dataset=DatasetSpec(source=DatasetSource.MEMORY),
-                        generation=GenerationSpec(),
-                    )
-                ],
-                prompt_templates=[PromptTemplateSpec(id="baseline", messages=[])],
-                inference_grid=InferenceGridSpec(params=[InferenceParamsSpec()]),
-            ),
-            work_items=[
-                StageWorkItem(
-                    work_item_id="work_pending",
-                    stage=RunStage.GENERATION,
-                    status=WorkItemStatus.PENDING,
-                    trial_hash="trial_hash_1",
-                    candidate_index=0,
-                    candidate_id="candidate_1",
-                )
-            ],
-        )
-        source_repo.save_manifest(manifest)
-
-        destination_bundle = migrate_sqlite_to_postgres(
-            source_db_path=source_root / "themis.sqlite3",
-            database_url=database_url,
-            blob_root_dir=tmp_path / "postgres_blobs",
-        )
-
-        migrated = RunManifestRepository(destination_bundle.manager).get_manifest(
-            manifest.run_id
-        )
-
-        assert migrated is not None
-        assert migrated.model_dump(mode="json") == manifest.model_dump(mode="json")
-    finally:
-        _drop_database(admin_url, db_name, psycopg)
+def _replace_database(parsed: SplitResult, database_name: str) -> str:
+    return urlunsplit(parsed._replace(path=f"/{database_name}"))

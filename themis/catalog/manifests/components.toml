@@ -1,0 +1,131 @@
+[components."builtin/demo_generator"]
+kind = "generator"
+target = "themis.catalog.builtins.generators:DemoGenerator"
+version = "1.0"
+fingerprint = "builtin-demo-generator-fingerprint"
+
+[components."builtin/majority_vote"]
+kind = "reducer"
+target = "themis.catalog.builtins.reducers:MajorityVoteReducer"
+version = "1.0"
+fingerprint = "builtin-majority-vote-fingerprint"
+
+[components."builtin/best_of_n"]
+kind = "selector"
+target = "themis.catalog.builtins.selectors:BestOfNSelector"
+version = "1.0"
+fingerprint = "builtin-best-of-n-fingerprint"
+
+[components."builtin/json_identity"]
+kind = "parser"
+target = "themis.catalog.builtins.parsers:JsonIdentityParser"
+version = "1.0"
+fingerprint = "builtin-json-identity-fingerprint"
+
+[components."builtin/text"]
+kind = "parser"
+target = "themis.catalog.builtins.parsers:TextParser"
+version = "1.0"
+fingerprint = "builtin-text-fingerprint"
+
+[components."builtin/choice_letter"]
+kind = "parser"
+target = "themis.catalog.builtins.parsers:ChoiceLetterParser"
+version = "1.0"
+fingerprint = "builtin-choice-letter-fingerprint"
+
+[components."builtin/math_answer"]
+kind = "parser"
+target = "themis.catalog.builtins.parsers:MathAnswerParser"
+version = "1.0"
+fingerprint = "builtin-math-answer-fingerprint"
+
+[components."builtin/code_text"]
+kind = "parser"
+target = "themis.catalog.builtins.parsers:CodeTextParser"
+version = "1.0"
+fingerprint = "builtin-code-text-fingerprint"
+
+[components."builtin/exact_match"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:ExactMatchMetric"
+version = "1.0"
+fingerprint = "builtin-exact-match-fingerprint"
+
+[components."builtin/f1"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:F1Metric"
+version = "1.0"
+fingerprint = "builtin-f1-fingerprint"
+
+[components."builtin/bleu"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:BleuMetric"
+version = "1.0"
+fingerprint = "builtin-bleu-fingerprint"
+
+[components."builtin/choice_accuracy"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:ChoiceAccuracyMetric"
+version = "1.0"
+fingerprint = "builtin-choice-accuracy-fingerprint"
+
+[components."builtin/math_equivalence"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:MathEquivalenceMetric"
+version = "1.0"
+fingerprint = "builtin-math-equivalence-fingerprint"
+
+[components."builtin/procbench_final_accuracy"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:ProcbenchFinalAccuracyMetric"
+version = "1.0"
+fingerprint = "builtin-procbench-final-accuracy-fingerprint"
+
+[components."builtin/codeforces_pass_rate"]
+kind = "metric"
+target = "themis.catalog.builtins.code_execution:CodeforcesExecutionMetric"
+version = "1.0"
+fingerprint = "builtin/codeforces_pass_rate-fingerprint"
+
+[components."builtin/aethercode_pass_rate"]
+kind = "metric"
+target = "themis.catalog.builtins.code_execution:AetherCodeExecutionMetric"
+version = "1.0"
+fingerprint = "builtin/aethercode_pass_rate-fingerprint"
+
+[components."builtin/livecodebench_pass_rate"]
+kind = "metric"
+target = "themis.catalog.builtins.code_execution:LiveCodeBenchExecutionMetric"
+version = "1.0"
+fingerprint = "builtin/livecodebench_pass_rate-fingerprint"
+
+[components."builtin/demo_judge"]
+kind = "judge_model"
+target = "themis.catalog.builtins.generators:DemoJudgeModel"
+version = "1.0"
+fingerprint = "builtin-demo-judge-fingerprint"
+
+[components."builtin/llm_rubric"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:LLMRubricMetric"
+version = "1.0"
+fingerprint = "builtin-llm-rubric-fingerprint"
+
+[components."builtin/pairwise_judge"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:PairwiseJudgeMetric"
+version = "1.0"
+fingerprint = "builtin-pairwise-judge-fingerprint"
+
+[components."builtin/panel_of_judges"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:PanelOfJudgesMetric"
+version = "1.0"
+fingerprint = "builtin-panel-of-judges-fingerprint"
+
+[components."builtin/majority_vote_judge"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:MajorityVoteJudgeMetric"
+version = "1.0"
+fingerprint = "builtin-majority-vote-judge-fingerprint"

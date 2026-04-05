@@ -1,0 +1,143 @@
+{
+  "component_refs": {
+    "generator": {
+      "component_id": "builtin/demo_generator",
+      "fingerprint": "generator-fingerprint",
+      "version": "1.0"
+    },
+    "judge_models": [],
+    "metrics": [
+      {
+        "component_id": "builtin/exact_match",
+        "fingerprint": "metric-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "parsers": [
+      {
+        "component_id": "builtin/json_identity",
+        "fingerprint": "parser-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "reducer": {
+      "component_id": "builtin/majority_vote",
+      "fingerprint": "reducer-fingerprint",
+      "version": "1.0"
+    },
+    "selector": null
+  },
+  "datasets": [
+    {
+      "cases": [
+        {
+          "case_id": "case-1",
+          "expected_output": "4",
+          "input": {
+            "question": "2+2"
+          },
+          "metadata": {}
+        }
+      ],
+      "dataset_id": "dataset-1",
+      "metadata": {
+        "owner": "tests"
+      },
+      "revision": "r1"
+    }
+  ],
+  "identity": {
+    "candidate_policy": {
+      "num_samples": 2
+    },
+    "dataset_refs": [
+      {
+        "dataset_id": "dataset-1",
+        "fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+        "revision": "r1"
+      }
+    ],
+    "evaluation_prompt_spec": null,
+    "generation_prompt_spec": null,
+    "generator_ref": {
+      "component_id": "builtin/demo_generator",
+      "fingerprint": "generator-fingerprint",
+      "version": "1.0"
+    },
+    "judge_config": {
+      "panel_size": 1
+    },
+    "judge_model_refs": [],
+    "metric_refs": [
+      {
+        "component_id": "builtin/exact_match",
+        "fingerprint": "metric-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "parser_refs": [
+      {
+        "component_id": "builtin/json_identity",
+        "fingerprint": "parser-fingerprint",
+        "version": "1.0"
+      }
+    ],
+    "reducer_ref": {
+      "component_id": "builtin/majority_vote",
+      "fingerprint": "reducer-fingerprint",
+      "version": "1.0"
+    },
+    "seeds": [
+      7,
+      11
+    ],
+    "selector_ref": null,
+    "workflow_overrides": {}
+  },
+  "metric_kinds": [
+    "pure"
+  ],
+  "provenance": {
+    "dependency_versions": {
+      "themis-eval": "4.0.0"
+    },
+    "environment_metadata": {
+      "env": "test"
+    },
+    "git_commit": "abc123",
+    "platform": "macos",
+    "provider_metadata": {},
+    "python_version": "3.12.9",
+    "runtime": {
+      "batch_root": null,
+      "existing_run_policy": "auto",
+      "generation_retry_attempts": 3,
+      "generation_retry_backoff": 2.0,
+      "generation_retry_delay": 0.01,
+      "judge_retry_attempts": 3,
+      "judge_retry_backoff": 2.0,
+      "judge_retry_delay": 0.01,
+      "max_concurrent_tasks": 16,
+      "provider_concurrency": {
+        "openai:https://api.openai.com/v1": 4
+      },
+      "provider_rate_limits": {
+        "openai:https://api.openai.com/v1": 120
+      },
+      "queue_root": null,
+      "stage_concurrency": {
+        "generation": 8
+      },
+      "store_retry_attempts": 7,
+      "store_retry_delay": 0.25
+    },
+    "storage": {
+      "parameters": {
+        "path": "runs/themis.sqlite3"
+      },
+      "store": "sqlite"
+    },
+    "themis_version": "4.0.0"
+  },
+  "run_id": "8fae287c1cf1154ca8b7e6525e57d5ed28eecec31769c246147fc890751e019e"
+}

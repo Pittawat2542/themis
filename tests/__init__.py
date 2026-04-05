@@ -1,1 +1,1 @@
-"""Test support package for importable fixtures."""
+"""Test package for shared test helpers and package-scoped imports."""

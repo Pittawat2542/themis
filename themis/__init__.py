@@ -1,64 +1,86 @@
-"""Curated public package surface for the current Themis runtime."""
+"""Public package surface for Themis."""
 
-from themis._version import __version__
-from themis.benchmark import (
-    BenchmarkDefinition,
-    BenchmarkDefinitionConfig,
-    BenchmarkSpec,
-    DatasetQuerySpec,
-    ParseSpec,
-    PromptVariantSpec,
-    ScoreSpec,
-    SliceSpec,
-    TraceScoreSpec,
-    build_benchmark_definition_project,
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+import tomllib
+
+from themis.core import (
+    Experiment,
+    InMemoryRunStore,
+    PromptSpec,
+    Reporter,
+    RuntimeConfig,
+    RunEstimate,
+    RunResult,
+    RunSnapshot,
+    RunStatus,
+    RunStore,
+    SqliteRunStore,
+    StatsEngine,
+    evaluate,
+    export_evaluation_bundle,
+    export_generation_bundle,
+    export_parse_bundle,
+    export_reduction_bundle,
+    export_score_bundle,
+    get_evaluation_execution,
+    get_execution_state,
+    get_run_snapshot,
+    import_evaluation_bundle,
+    import_generation_bundle,
+    import_parse_bundle,
+    import_reduction_bundle,
+    import_score_bundle,
+    quickcheck,
+    snapshot_report,
+    sqlite_store,
 )
-from themis.config_report import generate_config_report
-from themis.orchestration.orchestrator import Orchestrator
-from themis.runtime import BenchmarkResult
-from themis.specs.experiment import (
-    ExecutionPolicySpec,
-    InferenceGridSpec,
-    InferenceParamsSpec,
-    PostgresBlobStorageSpec,
-    PromptMessage,
-    PromptTurnSpec,
-    ProjectSpec,
-    SqliteBlobStorageSpec,
-    StorageConfig,
-    StorageSpec,
-)
-from themis.registry.plugin_registry import EngineCapabilities, PluginRegistry
-from themis.specs.foundational import McpServerSpec, ModelSpec, ToolSpec
+
+
+def _resolve_version() -> str:
+    """Resolve the installed package version with a source-tree fallback."""
+
+    try:
+        return version("themis-eval")
+    except PackageNotFoundError:
+        pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        if pyproject_path.is_file():
+            payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+            return str(payload["project"]["version"])
+        return "0+unknown"
+
+
+__version__ = _resolve_version()
 
 __all__ = [
+    "Experiment",
+    "InMemoryRunStore",
+    "PromptSpec",
+    "Reporter",
+    "RuntimeConfig",
+    "RunEstimate",
+    "RunResult",
+    "RunSnapshot",
+    "RunStatus",
+    "RunStore",
     "__version__",
-    "Orchestrator",
-    "BenchmarkResult",
-    "BenchmarkDefinition",
-    "BenchmarkDefinitionConfig",
-    "BenchmarkSpec",
-    "SliceSpec",
-    "DatasetQuerySpec",
-    "PromptVariantSpec",
-    "ParseSpec",
-    "ScoreSpec",
-    "TraceScoreSpec",
-    "ProjectSpec",
-    "StorageConfig",
-    "StorageSpec",
-    "SqliteBlobStorageSpec",
-    "PostgresBlobStorageSpec",
-    "ExecutionPolicySpec",
-    "InferenceGridSpec",
-    "PromptMessage",
-    "PromptTurnSpec",
-    "InferenceParamsSpec",
-    "McpServerSpec",
-    "ModelSpec",
-    "ToolSpec",
-    "EngineCapabilities",
-    "PluginRegistry",
-    "build_benchmark_definition_project",
-    "generate_config_report",
+    "SqliteRunStore",
+    "StatsEngine",
+    "evaluate",
+    "export_evaluation_bundle",
+    "export_generation_bundle",
+    "export_parse_bundle",
+    "export_reduction_bundle",
+    "export_score_bundle",
+    "get_evaluation_execution",
+    "get_execution_state",
+    "get_run_snapshot",
+    "import_evaluation_bundle",
+    "import_generation_bundle",
+    "import_parse_bundle",
+    "import_reduction_bundle",
+    "import_score_bundle",
+    "quickcheck",
+    "snapshot_report",
+    "sqlite_store",
 ]

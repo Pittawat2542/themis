@@ -1,169 +1,146 @@
-"""Smoke-test the built wheel in a clean virtual environment."""
-
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import tempfile
-import tomllib
+import tarfile
+import zipfile
 from pathlib import Path
+import tomllib
 
 
-EXPECTED_ROOT_EXPORTS = {
-    "__version__",
-    "BenchmarkDefinition",
-    "BenchmarkDefinitionConfig",
-    "Orchestrator",
-    "BenchmarkResult",
-    "BenchmarkSpec",
-    "DatasetQuerySpec",
-    "ProjectSpec",
-    "ExecutionPolicySpec",
-    "InferenceGridSpec",
-    "InferenceParamsSpec",
-    "McpServerSpec",
-    "PromptMessage",
-    "PromptTurnSpec",
-    "PromptVariantSpec",
-    "ModelSpec",
-    "ToolSpec",
-    "ParseSpec",
-    "ScoreSpec",
-    "SliceSpec",
-    "TraceScoreSpec",
-    "StorageConfig",
-    "StorageSpec",
-    "SqliteBlobStorageSpec",
-    "PostgresBlobStorageSpec",
-    "EngineCapabilities",
-    "PluginRegistry",
-    "build_benchmark_definition_project",
-    "generate_config_report",
+EXCLUDED_ARCHIVE_PATHS = (
+    "tests/",
+    "docs/",
+    "examples/",
+    "site/",
+    "dist/",
+    "queue/",
+    "runs/",
+    ".agent/",
+    ".agents/",
+)
+EXCLUDED_ARCHIVE_NAMES = {
+    ".coverage",
+    "coverage.json",
+    "coverage.xml",
+    "REQUIREMENTS.md",
+    "skills-lock.json",
+    "uv.lock",
 }
+EXCLUDED_ARCHIVE_SUFFIXES = ("_PLAN.md",)
 
 
-def _venv_bin_dir(env_dir: Path) -> Path:
-    return env_dir / ("Scripts" if os.name == "nt" else "bin")
+def _run(*args: str, cwd: Path | None = None) -> None:
+    result = subprocess.run(args, cwd=cwd, check=False)
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
 
 
-def _python_name() -> str:
-    return "python.exe" if os.name == "nt" else "python"
+def _assert_archive_contents(path: Path, names: list[str]) -> None:
+    for name in names:
+        normalized = name
+        if path.suffixes[-2:] == [".tar", ".gz"] and "/" in name:
+            normalized = name.split("/", 1)[1]
+        if any(normalized.startswith(prefix) for prefix in EXCLUDED_ARCHIVE_PATHS):
+            raise SystemExit(
+                f"{path.name} unexpectedly contains excluded path: {normalized}"
+            )
+        if normalized in EXCLUDED_ARCHIVE_NAMES:
+            raise SystemExit(
+                f"{path.name} unexpectedly contains excluded file: {normalized}"
+            )
+        if normalized.endswith(EXCLUDED_ARCHIVE_SUFFIXES):
+            raise SystemExit(
+                f"{path.name} unexpectedly contains excluded planning file: {normalized}"
+            )
 
 
-def _quickcheck_name() -> str:
-    return "themis-quickcheck.exe" if os.name == "nt" else "themis-quickcheck"
-
-
-def _verification_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
-    env = dict(os.environ if base_env is None else base_env)
-    env.pop("PYTHONPATH", None)
-    env["PYTHONNOUSERSITE"] = "1"
-    return env
-
-
-def _import_check_snippet(site_packages_dir: Path) -> str:
-    site_packages = str(site_packages_dir.resolve())
-    expected_exports = sorted(EXPECTED_ROOT_EXPORTS)
-    return (
-        "from pathlib import Path; "
-        "import themis; "
-        f"expected = {expected_exports!r}; "
-        "missing = sorted(set(expected) - set(themis.__all__)); "
-        "assert not missing, missing; "
-        f"site_packages = Path({site_packages!r}).resolve(); "
-        "module_path = Path(themis.__file__).resolve(); "
-        "assert site_packages in module_path.parents, (module_path, site_packages)"
-    )
-
-
-def _site_packages_dir(python_exe: Path) -> Path:
-    result = subprocess.run(
-        [
-            str(python_exe),
-            "-c",
-            "import sysconfig; print(sysconfig.get_path('purelib'))",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return Path(result.stdout.strip())
-
-
-def _read_project_version(pyproject_path: Path) -> str:
-    with pyproject_path.open("rb") as handle:
-        data = tomllib.load(handle)
-    return str(data["project"]["version"])
-
-
-def _select_built_wheel(dist_dir: Path, *, project_version: str) -> Path:
-    wheel_name = f"themis_eval-{project_version}-py3-none-any.whl"
-    wheel_path = dist_dir / wheel_name
-    if not wheel_path.exists():
-        raise SystemExit(
-            f"Built wheel for version {project_version} not found under dist/. "
-            f"Expected {wheel_name}. Run `uv build` first."
+def _inspect_wheel(path: Path) -> None:
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        _assert_archive_contents(path, names)
+        if "themis/__init__.py" not in names:
+            raise SystemExit(f"{path.name} does not contain themis/__init__.py")
+        metadata_name = next(
+            (name for name in names if name.endswith(".dist-info/METADATA")),
+            None,
         )
-    return wheel_path.resolve()
+        entry_points_name = next(
+            (name for name in names if name.endswith(".dist-info/entry_points.txt")),
+            None,
+        )
+        if metadata_name is None or entry_points_name is None:
+            raise SystemExit(f"{path.name} is missing dist-info metadata")
+        metadata = archive.read(metadata_name).decode()
+        entry_points = archive.read(entry_points_name).decode()
+        if "Version: 4.0.0" not in metadata:
+            raise SystemExit(
+                f"{path.name} metadata does not contain the final release version"
+            )
+        if "themis = themis.cli:main" not in entry_points:
+            raise SystemExit(f"{path.name} is missing the themis CLI entry point")
+
+
+def _inspect_sdist(path: Path) -> None:
+    with tarfile.open(path, "r:gz") as archive:
+        names = archive.getnames()
+        _assert_archive_contents(path, names)
+        if not any(name.endswith("/themis/__init__.py") for name in names):
+            raise SystemExit(f"{path.name} does not contain the themis package")
 
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    dist_dir = Path("dist")
-    project_version = _read_project_version(repo_root / "pyproject.toml")
-    wheel_path = _select_built_wheel(dist_dir, project_version=project_version)
-    with tempfile.TemporaryDirectory(prefix="themis-wheel-smoke-") as tmpdir:
-        tmpdir_path = Path(tmpdir)
-        env_dir = Path(tmpdir) / "venv"
-        subprocess.run(
-            [
-                "uv",
-                "venv",
-                "--python",
-                sys.executable,
-                str(env_dir),
-            ],
-            check=True,
+    dist_dir = repo_root / "dist"
+    project_version = tomllib.loads(
+        (repo_root / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+    wheels = sorted(dist_dir.glob(f"themis_eval-{project_version}-*.whl"))
+    sdists = sorted(dist_dir.glob(f"themis_eval-{project_version}.tar.gz"))
+    if not wheels:
+        print(
+            f"no built wheel found in dist/ for version {project_version}",
+            file=sys.stderr,
         )
-        bin_dir = _venv_bin_dir(env_dir)
-        python_exe = bin_dir / _python_name()
-        quickcheck_exe = bin_dir / _quickcheck_name()
-        verification_env = _verification_env()
-        site_packages_dir = _site_packages_dir(python_exe)
+        return 1
+    if not sdists:
+        print(
+            f"no built sdist found in dist/ for version {project_version}",
+            file=sys.stderr,
+        )
+        return 1
 
-        subprocess.run(
-            [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                str(python_exe),
-                str(wheel_path),
-            ],
-            check=True,
-            cwd=tmpdir_path,
-            env=verification_env,
-        )
-        subprocess.run(
-            [
-                str(python_exe),
-                "-c",
-                _import_check_snippet(site_packages_dir),
-            ],
-            check=True,
-            cwd=tmpdir_path,
-            env=verification_env,
-        )
-        subprocess.run(
-            [str(quickcheck_exe), "--help"],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            cwd=tmpdir_path,
-            env=verification_env,
+    wheel = wheels[-1]
+    sdist = sdists[-1]
+    _inspect_wheel(wheel)
+    _inspect_sdist(sdist)
+
+    with tempfile.TemporaryDirectory(prefix="themis-wheel-smoke-") as temp_dir:
+        temp_path = Path(temp_dir)
+        venv_dir = temp_path / "venv"
+        _run(sys.executable, "-m", "venv", str(venv_dir))
+
+        bindir = "Scripts" if sys.platform == "win32" else "bin"
+        python = venv_dir / bindir / "python"
+        pip = venv_dir / bindir / "pip"
+
+        _run(str(pip), "install", str(wheel))
+        _run(
+            str(python),
+            "-c",
+            (
+                "from importlib.metadata import version; "
+                "from themis import Experiment, __all__, __version__; "
+                "assert 'Experiment' in __all__; "
+                "assert '__version__' in __all__; "
+                "assert Experiment is not None; "
+                "assert __version__ == version('themis-eval')"
+            ),
+            cwd=temp_path,
         )
 
-    print(f"Built wheel smoke test passed for {wheel_path.name}")
+    print(f"distribution smoke test passed for {wheel.name} and {sdist.name}")
     return 0
 
 

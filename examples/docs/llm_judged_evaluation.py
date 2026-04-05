@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+from themis import Experiment, InMemoryRunStore, get_evaluation_execution
+from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.models import Case, Dataset
+
+
+def run_example() -> dict[str, object]:
+    """Run a workflow-backed metric with builtin demo judges."""
+
+    store = InMemoryRunStore()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/llm_rubric"],
+            parsers=["builtin/json_identity"],
+            judge_models=["builtin/demo_judge", "builtin/demo_judge"],
+            workflow_overrides={"rubric": "pass if the answer is correct"},
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="sample",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+
+    result = experiment.run(store=store)
+    execution = get_evaluation_execution(
+        store, result.run_id, "case-1", "builtin/llm_rubric"
+    )
+    return {
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "judge_calls": 0 if execution is None else len(execution.judge_calls),
+        "score_count": 0 if execution is None else len(execution.scores),
+    }
+
+
+if __name__ == "__main__":
+    print(run_example())

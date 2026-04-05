@@ -1,0 +1,141 @@
+[benchmarks.aime_2025]
+dataset_id = "MathArena/aime_2025"
+split = "train"
+
+[benchmarks.aime_2026]
+dataset_id = "MathArena/aime_2026"
+split = "train"
+
+[benchmarks.aethercode]
+dataset_id = "m-a-p/AetherCode"
+dataset_revision = "v1_2024"
+split = "test"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
+
+[benchmarks.apex_2025]
+dataset_id = "MathArena/apex_2025"
+split = "train"
+
+[benchmarks.babe]
+dataset_id = "mediabiasgroup/BABE"
+split = "test"
+
+[benchmarks.beyond_aime]
+dataset_id = "ByteDance-Seed/BeyondAIME"
+split = "test"
+
+[benchmarks.encyclo_k]
+dataset_id = "m-a-p/Encyclo-K"
+split = "test"
+
+[benchmarks.frontierscience]
+dataset_id = "openai/frontierscience"
+split = "test"
+adapter = "rubric_qa"
+
+[benchmarks.gpqa_diamond]
+dataset_id = "fingertap/GPQA-Diamond"
+split = "test"
+
+[benchmarks.healthbench]
+dataset_id = "openai/healthbench"
+split = "test"
+adapter = "rubric_qa"
+
+[benchmarks.hle]
+dataset_id = "cais/hle"
+split = "test"
+variant_mode = "open"
+adapter = "hle"
+
+[benchmarks.hmmt_feb_2025]
+dataset_id = "MathArena/hmmt_feb_2025"
+split = "train"
+
+[benchmarks.hmmt_nov_2025]
+dataset_id = "MathArena/hmmt_nov_2025"
+split = "train"
+
+[benchmarks.humaneval]
+dataset_id = "evalplus/HumanEvalPlus"
+split = "test"
+variant_mode = "open"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
+
+[benchmarks.humaneval_plus]
+dataset_id = "evalplus/HumanEvalPlus"
+split = "test"
+variant_mode = "open"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
+
+[benchmarks.imo_answerbench]
+dataset_id = "Hwilner/imo-answerbench"
+split = "train"
+
+[benchmarks.livecodebench]
+dataset_id = "livecodebench/code_generation_lite"
+dataset_revision = "release_v6"
+split = "test"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
+
+[benchmarks.lpfqa]
+dataset_id = "m-a-p/LPFQA"
+split = "train"
+adapter = "rubric_qa"
+
+[benchmarks.mmlu_pro]
+dataset_id = "TIGER-Lab/MMLU-Pro"
+split = "test"
+
+[benchmarks.mmmlu]
+dataset_id = "openai/MMMLU"
+split = "test"
+variant_mode = "open"
+adapter = "mmmlu"
+
+[benchmarks.codeforces]
+dataset_id = "open-r1/codeforces"
+dataset_revision = "verifiable-prompts"
+split = "test"
+requires_code_execution = true
+supported_execution_backends = ["piston", "sandbox_fusion"]
+adapter = "code_generation"
+
+[benchmarks.phybench]
+dataset_id = "Eureka-Lab/PHYBench"
+split = "train"
+
+[benchmarks.procbench]
+dataset_id = "ifujisawa/procbench"
+split = "train"
+variant_mode = "open"
+adapter = "procbench"
+
+[benchmarks.rolebench]
+dataset_id = "ZenMoore/RoleBench"
+split = "test"
+variants = ["instruction_generalization_eng", "role_generalization_eng"]
+adapter = "rolebench"
+
+[benchmarks.simpleqa_verified]
+dataset_id = "google/simpleqa-verified"
+split = "eval"
+adapter = "panel_qa"
+
+[benchmarks.superchem]
+dataset_id = "ZehuaZhao/SUPERChem"
+split = "train"
+variants = ["en", "zh"]
+adapter = "superchem"
+
+[benchmarks.supergpqa]
+dataset_id = "m-a-p/SuperGPQA"
+split = "train"

@@ -143,6 +143,9 @@ jobs:
       - name: Validate package metadata
         run: uvx --from twine twine check dist/*
 
+      - name: Validate built package contents
+        run: uv run python scripts/ci/check_built_package.py
+
       - name: Upload package artifacts
         uses: actions/upload-artifact@v7
         with:

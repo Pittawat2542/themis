@@ -1,54 +1,74 @@
-#!/usr/bin/env python3
-"""Enforce module-level coverage thresholds from a coverage JSON report."""
-
 from __future__ import annotations
 
 import json
 import sys
+from collections import defaultdict
 from pathlib import Path
 
-THRESHOLDS = {
-    "themis/cli/quickcheck.py": 80.0,
-    "themis/extractors/builtin.py": 80.0,
-    "themis/orchestration/orchestrator.py": 90.0,
-    "themis/registry/plugin_registry.py": 75.0,
-    "themis/stats/stats_engine.py": 85.0,
-    "themis/storage/projection_repo.py": 70.0,
+
+MODULE_THRESHOLDS = {
+    "themis/adapters": 75.0,
+    "themis/catalog": 85.0,
+    "themis/core": 85.0,
 }
 
 
-def main(argv: list[str]) -> int:
-    coverage_path = Path(argv[1]) if len(argv) > 1 else Path("coverage.json")
-    if not coverage_path.exists():
-        print(f"[coverage-gate] coverage file not found: {coverage_path}")
+def _number(value: object) -> float:
+    if isinstance(value, int | float):
+        return float(value)
+    return 0.0
+
+
+def _coverage_percent(summary: dict[str, object]) -> float:
+    covered = _number(summary.get("covered_lines", 0))
+    total = _number(summary.get("num_statements", 0))
+    if total == 0:
+        return 100.0
+    return covered / total * 100.0
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("usage: check_coverage_thresholds.py <coverage.json>", file=sys.stderr)
         return 2
 
-    payload = json.loads(coverage_path.read_text(encoding="utf-8"))
+    payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     files = payload.get("files", {})
-
+    module_stats: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
     failures: list[str] = []
-    for module, threshold in THRESHOLDS.items():
-        summary = files.get(module, {}).get("summary")
-        if summary is None:
-            failures.append(f"{module}: missing from coverage report")
+
+    for filename, entry in sorted(files.items()):
+        if not isinstance(filename, str) or not filename.startswith("themis/"):
             continue
-        percent = float(summary.get("percent_covered", 0.0))
+        if not isinstance(entry, dict):
+            continue
+        summary = entry.get("summary", {})
+        if not isinstance(summary, dict):
+            continue
+
+        parts = filename.split("/")
+        module = "/".join(parts[:2]) if len(parts) > 1 else filename
+        if module not in MODULE_THRESHOLDS:
+            continue
+
+        module_stats[module][0] += _number(summary.get("covered_lines", 0))
+        module_stats[module][1] += _number(summary.get("num_statements", 0))
+
+    for module, threshold in MODULE_THRESHOLDS.items():
+        covered, total = module_stats[module]
+        percent = 100.0 if total == 0 else covered / total * 100.0
         if percent < threshold:
-            failures.append(f"{module}: {percent:.2f}% < required {threshold:.2f}%")
-        else:
-            print(
-                f"[coverage-gate] {module}: {percent:.2f}% (threshold {threshold:.2f}%)"
-            )
+            failures.append(f"{module}: {percent:.1f}% < {threshold:.1f}%")
 
     if failures:
-        print("[coverage-gate] Module coverage check failed:")
+        print("coverage threshold failures:", file=sys.stderr)
         for failure in failures:
-            print(f"  - {failure}")
+            print(f"  {failure}", file=sys.stderr)
         return 1
 
-    print("[coverage-gate] All module thresholds satisfied.")
+    print("module-level coverage thresholds satisfied")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())

@@ -1,42 +1,39 @@
-# Themis
+---
+title: Themis docs
+diataxis: landing
+audience: users and contributors
+goal: Help readers choose the right documentation track for learning, execution, lookup, or understanding.
+---
 
-Themis is a benchmark-first evaluation framework for LLM systems.
+# Themis docs
 
-The public workflow is intentionally small:
+Themis is a Python-first evaluation runtime built around a compiled `RunSnapshot`, typed generation and evaluation boundaries, and inspectable stored artifacts.
 
-- author one `ProjectSpec`
-- author one `BenchmarkSpec`
-- register engines, parsers, metrics, judges, and hooks in `PluginRegistry`
-- run with `Orchestrator`
-- inspect a `BenchmarkResult`
+Use this map when you need to decide which kind of document to open first.
 
 ```mermaid
-flowchart LR
-    A["BenchmarkSpec"] --> B["compile_benchmark(...)"]
-    B --> C["Trial planning"]
-    C --> D["Generation / Parse / Score"]
-    D --> E["SQLite projections"]
-    E --> F["BenchmarkResult"]
+flowchart TD
+    A["What do you need right now?"]
+    A --> B["Tutorials"]
+    A --> C["How-To"]
+    A --> D["Reference"]
+    A --> E["Explanation"]
+    B --> B1["Learn by doing"]
+    C --> C1["Solve one task"]
+    D --> D1["Look up exact details"]
+    E --> E1["Build the mental model"]
 ```
 
-## What Changed
+Each quadrant answers a different kind of question, so pick the page type before you pick the topic.
 
-- Benchmarks are now first-class. `slice_id`, `prompt_variant_id`, and benchmark dimensions are persisted and queryable.
-- Dataset access is query-aware through `DatasetProvider.scan(slice_spec, query)`.
-- Parse pipelines are public authoring concepts, not metric-local hacks.
-- Reporting is aggregation-first through `BenchmarkResult.aggregate(...)` and `paired_compare(...)`.
-- Quick-start paths now include `themis quick-eval`, `themis init`, and a
-  built-in benchmark catalog for standard benchmark definitions.
-- Agent-style runs support bootstrap message sequences, local tool selection,
-  and OpenAI-hosted MCP server selection inside the benchmark model.
-- Reproducibility metadata now includes deterministic seed-aware planning,
-  streamed benchmark execution helpers, and persisted runtime provenance such as
-  tool-handler versions.
+This documentation set is organized by user need:
 
-## Start Here
+- Learn by doing: [Tutorials](tutorials/first-evaluate.md)
+- Solve a specific task: [How-To guides](how-to/choose-the-right-api-layer.md)
+- Look up exact behavior: [Reference](reference/index.md)
+- Build a correct mental model: [Explanation](explanation/index.md)
+- Share terminology: [Glossary](glossary.md)
+- Resolve common confusion quickly: [FAQ](faq.md)
+- Contribute to the docs system: [Project](project/index.md)
 
-- New user: [Quick Start](quick-start/index.md)
-- Need the mental model: [Public Surface](introduction/index.md)
-- Want worked scripts: [Tutorials](tutorials/index.md)
-- Want task-oriented recipes: [Guides](guides/index.md)
-- Need exact types and signatures: [API Reference](api-reference/index.md)
+If you are new to Themis, start with [Start Here](start-here/index.md).

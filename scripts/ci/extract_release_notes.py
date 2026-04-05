@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Extract release notes for a version from CHANGELOG.md."""
-
 from __future__ import annotations
 
 import argparse
@@ -8,71 +5,46 @@ import re
 import sys
 from pathlib import Path
 
-HEADER_RE = re.compile(r"^## \[(?P<version>[^\]]+)\] - (?P<date>\d{4}-\d{2}-\d{2})$")
 
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--tag", required=True, help="Release tag (for example: v1.2.3)"
-    )
-    parser.add_argument(
-        "--changelog", required=True, type=Path, help="Path to CHANGELOG"
-    )
-    parser.add_argument(
-        "--output", required=True, type=Path, help="Output markdown file"
-    )
-    return parser.parse_args()
-
-
-def normalize_version(tag: str) -> str:
-    value = tag.strip()
-    if value.startswith("refs/tags/"):
-        value = value.removeprefix("refs/tags/")
-    if value.startswith("v"):
-        value = value[1:]
-    return value
-
-
-def extract_release_section(changelog_lines: list[str], version: str) -> list[str]:
-    start_idx: int | None = None
-    end_idx: int | None = None
-
-    for idx, line in enumerate(changelog_lines):
-        match = HEADER_RE.match(line.strip())
-        if match and match.group("version") == version:
-            start_idx = idx
-            continue
-        if start_idx is not None and match:
-            end_idx = idx
-            break
-
-    if start_idx is None:
-        raise ValueError(f"No changelog entry found for version {version}")
-
-    section = changelog_lines[start_idx : end_idx or len(changelog_lines)]
-    return section
+TAG_PATTERN = re.compile(r"^v(?P<version>[0-9]+(?:\.[0-9]+){2}(?:[A-Za-z0-9.-]+)?)$")
 
 
 def main() -> int:
-    args = parse_args()
-    version = normalize_version(args.tag)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tag", required=True)
+    parser.add_argument("--changelog", required=True)
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
 
-    if not args.changelog.exists():
-        print(f"Changelog not found: {args.changelog}", file=sys.stderr)
+    match = TAG_PATTERN.fullmatch(args.tag)
+    if match is None:
+        print(f"unsupported release tag format: {args.tag}", file=sys.stderr)
         return 1
 
-    lines = args.changelog.read_text(encoding="utf-8").splitlines()
+    version = match.group("version")
+    changelog_lines = Path(args.changelog).read_text(encoding="utf-8").splitlines()
+    start: int | None = None
+    end = len(changelog_lines)
 
-    try:
-        section = extract_release_section(lines, version)
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+    for index, line in enumerate(changelog_lines):
+        if not line.startswith("## "):
+            continue
+        heading = line[3:].strip()
+        heading_version = heading.split(" - ", 1)[0].strip().strip("[]")
+        if heading_version == version:
+            start = index
+            continue
+        if start is not None:
+            end = index
+            break
+
+    if start is None:
+        print(f"could not find changelog section for {version}", file=sys.stderr)
         return 1
 
-    content = "\n".join(section).strip()
-    args.output.write_text(content + "\n", encoding="utf-8")
-    print(f"Wrote release notes for {version} to {args.output}")
+    body = "\n".join(changelog_lines[start:end]).strip()
+    Path(args.output).write_text(body + "\n", encoding="utf-8")
+    print(f"wrote release notes for {args.tag} to {args.output}")
     return 0
 
 

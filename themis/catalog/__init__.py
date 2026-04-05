@@ -1,75 +1,56 @@
-"""Public catalog helpers and built-in benchmark catalog."""
+"""Manifest-backed catalog entry points."""
 
 from __future__ import annotations
 
-from themis import BenchmarkDefinition, BenchmarkDefinitionConfig
+from typing import TYPE_CHECKING, Any
 
-from . import metrics
-from .benchmarks import get_catalog_benchmark, list_catalog_benchmarks
-from .datasets import CatalogDatasetProvider, CatalogNormalizedRows
-from .runtime import (
-    build_catalog_registry,
-    register_catalog_engine,
-    register_catalog_metrics,
-)
-
-from .common import (
-    build_catalog_benchmark_project as _build_catalog_benchmark_project,
-    inspect_huggingface_dataset,
-    load_huggingface_rows,
-    load_local_rows,
-)
-
-
-def build_catalog_benchmark_project(
-    *,
-    benchmark_id: str,
-    model_id: str,
-    provider: str,
-    storage_root,
-    max_tokens: int = 8192,
-    temperature: float = 0.0,
-    top_p: float | None = None,
-    seed: int | None = None,
-    num_samples: int = 1,
-    subset: int | None = None,
-    dataset_revision: str | None = None,
-    judge_model_id: str | None = None,
-    judge_provider: str | None = None,
-    huggingface_loader=None,
-):
-    return _build_catalog_benchmark_project(
-        benchmark_id=benchmark_id,
-        model_id=model_id,
-        provider=provider,
-        storage_root=storage_root,
-        get_catalog_benchmark=get_catalog_benchmark,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        top_p=top_p,
-        seed=seed,
-        num_samples=num_samples,
-        subset=subset,
-        dataset_revision=dataset_revision,
-        judge_model_id=judge_model_id,
-        judge_provider=judge_provider,
-        huggingface_loader=huggingface_loader,
-    )
-
+if TYPE_CHECKING:
+    from themis.core.results import RunResult
+    from themis.core.store import RunStore
 
 __all__ = [
-    "BenchmarkDefinition",
-    "BenchmarkDefinitionConfig",
-    "CatalogDatasetProvider",
-    "CatalogNormalizedRows",
-    "build_catalog_benchmark_project",
-    "build_catalog_registry",
-    "get_catalog_benchmark",
-    "inspect_huggingface_dataset",
-    "list_catalog_benchmarks",
-    "load_huggingface_rows",
-    "load_local_rows",
-    "metrics",
-    "register_catalog_engine",
-    "register_catalog_metrics",
+    "builtin_component_refs",
+    "list_component_ids",
+    "load",
+    "run",
 ]
+
+
+def load(name: str) -> object:
+    """Load a builtin component or named benchmark from the shipped catalog."""
+
+    from themis.catalog.benchmarks import load_benchmark
+    from themis.catalog.registry import load as load_component
+
+    try:
+        return load_component(name)
+    except ValueError:
+        return load_benchmark(name)
+
+
+def run(
+    name: str, *, model: object | None = None, store: RunStore | None = None
+) -> RunResult:
+    """Execute a named benchmark through the catalog convenience layer."""
+
+    from themis.catalog.benchmarks import run_benchmark
+
+    return run_benchmark(name, model=model, store=store)
+
+
+def builtin_component_refs() -> dict[str, Any]:
+    """Return component references for the builtin shipped catalog entries."""
+
+    from themis.catalog.registry import (
+        builtin_component_refs as _builtin_component_refs,
+    )
+
+    return _builtin_component_refs()
+
+
+def list_component_ids(*, kind: str | None = None) -> list[str]:
+    """List builtin component identifiers, optionally filtered by kind."""
+
+    from themis.catalog.registry import list_component_ids as _list_component_ids
+
+    return _list_component_ids(kind=kind)

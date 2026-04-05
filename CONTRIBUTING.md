@@ -1,113 +1,62 @@
 # Contributing to Themis
 
-This repository now centers on the typed spec + orchestrator runtime. Use this
-guide when you need the current local workflow, quality gates, and release
-checks.
+Themis treats code, docs, runnable examples, and release metadata as one product surface. A change is not finished until the user-facing docs, examples, and checks reflect it.
 
-## Development Setup
+## Setup
 
-- Python `3.12+`
-- [`uv`](https://github.com/astral-sh/uv) for environment and dependency management
-
-Clone the repository and install the current dev environment:
+Install the dev environment with all optional integrations and docs tooling:
 
 ```bash
-git clone https://github.com/yourusername/themis.git
-cd themis
-uv sync --all-extras --dev
+uv sync --frozen --all-extras --dev
 ```
 
-## Project Shape
+The published package name is `themis-eval`. The Python import namespace and CLI command are both `themis`.
 
-- `themis/`: runtime, storage, specs, registry, telemetry, and reporting code
-- `tests/`: pytest coverage for contracts, orchestration, records, storage, CLI, and telemetry
-- `examples/`: progressive runnable examples for the current implementation
-- `docs/`: MkDocs site and API reference
-- `scripts/ci/`: release, example, and lint helper scripts used by automation
+## Contributor references
 
-## Local Checks
+Start with these project docs:
 
-Run these before opening a pull request:
+- Product docs overview: [docs/project/index.md](docs/project/index.md)
+- Docs architecture: [docs/project/docs-architecture.md](docs/project/docs-architecture.md)
+- Writing guide: [docs/project/writing-guide.md](docs/project/writing-guide.md)
+- Example authoring: [docs/project/example-authoring.md](docs/project/example-authoring.md)
+- Coverage expectations: [docs/project/adding-new-docs-coverage.md](docs/project/adding-new-docs-coverage.md)
+- Release/versioning policy: [docs/project/release-and-versioning.md](docs/project/release-and-versioning.md)
+
+## Minimum checks
+
+Run these before opening a PR:
 
 ```bash
-# Full test suite
-uv run pytest -q
-
-# Example smoke tests
-uv run python scripts/ci/run_examples.py
-
-# Lint and format
-uv run ruff format --check .
-uv run ruff check .
-
-# Docs must build in strict mode
-uv run mkdocs build --strict
+uv run --extra dev ruff check themis tests examples scripts
+uv run --extra dev mypy themis tests
+uv run --extra dev pytest -q
+uv run --extra dev pytest tests/test_docs_site.py tests/test_docs_examples.py tests/test_docs_inventory.py -q
+uv run --extra docs mkdocs build --strict
 ```
 
-When you change docs or public API reference surfaces, also run:
+If you changed packaging or release metadata, also run:
 
 ```bash
-uv run pytest tests/docs/test_docs_consistency.py \
-  tests/docs/test_public_docstrings.py \
-  tests/docs/test_documented_workflows.py
+uv build
+uv run --extra dev python scripts/ci/check_built_package.py
 ```
 
-If you only changed a few Python files, matching CI's changed-file checks is
-fine too:
+## Docs and examples
 
-```bash
-uv run ruff format --check path/to/file.py
-uv run ruff check path/to/file.py
-```
+- Keep public docs in `docs/` aligned with the exported Python and CLI surface.
+- Prefer runnable examples under `examples/docs/` over pseudo-code snippets.
+- Keep examples deterministic when provider behavior is not the thing being demonstrated.
+- When you add public API surface, update the relevant reference page and any affected tutorials or how-to guides.
 
-To enable the repository Git hook for staged Python validation:
+## Tests and fixtures
 
-```bash
-git config core.hooksPath .githooks
-```
+- Reuse existing fake providers and deterministic builtin components whenever possible.
+- Add focused tests for new public behavior, then expand integration coverage only where it adds confidence.
+- Keep store-backed tests explicit about which backend behavior they are exercising.
 
-That hook runs `scripts/ci/check_staged_python.sh`.
+## Release expectations
 
-## Pull Requests
-
-1. Create a branch from `main`.
-2. Make the smallest coherent change you can.
-3. Run the relevant local checks.
-4. Open a pull request against `main` with a clear summary and any migration notes.
-
-## Docs QA
-
-Before merging docs changes, do one rendered-site pass for:
-
-- Beginner flow: install, run the quick start, and confirm the expected output matches the page.
-- Researcher flow: find compare/export/reproduce guidance without reading the whole site.
-- Power-user flow: find errors, progress, run-planning, and types reference pages directly from nav/search.
-
-Maintenance rules:
-
-- Any new example requires a docs link, expected output, and API-reference decision before merge.
-- Any new public namespace requires a docs link, expected output, and API-reference decision before merge.
-
-## Versioning & Releases
-
-- Release tags follow `vX.Y.Z` or `vX.Y.Z.postN`.
-- Keep `pyproject.toml` and `CHANGELOG.md` in sync.
-- Validate release metadata locally:
-
-```bash
-uv run python scripts/ci/validate_release.py --tag vX.Y.Z
-```
-
-- Preview generated release notes:
-
-```bash
-uv run python scripts/ci/extract_release_notes.py \
-  --tag vX.Y.Z \
-  --changelog CHANGELOG.md \
-  --output /tmp/release_notes.md
-```
-
-## License
-
-By contributing, you agree that your contributions will be licensed under the
-MIT License.
+- Public release text should refer to the project as `Themis`, not by an internal version nickname.
+- Releases require a matching `pyproject.toml` version, a `CHANGELOG.md` entry, green quality checks, and clean built artifacts.
+- Do not ship internal planning files, machine-local paths, or repo-only assets in package artifacts.

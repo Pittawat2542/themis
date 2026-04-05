@@ -1,0 +1,23 @@
+include LICENSE
+include README.md
+include pyproject.toml
+recursive-include themis *.py
+recursive-include themis *.toml
+include themis/py.typed
+prune .agent
+prune .agents
+prune dist
+prune docs
+prune examples
+prune queue
+prune runs
+prune site
+prune tests
+prune themis_eval.egg-info
+exclude .coverage
+exclude coverage.json
+exclude coverage.xml
+exclude REQUIREMENTS.md
+exclude *_PLAN.md
+exclude skills-lock.json
+exclude uv.lock
