@@ -75,6 +75,35 @@ def main() -> None:
                 "overrides",
                 "relative to the config file directory",
             ],
+            "stage_execution": [
+                "until_stage",
+                "completed_through_stage",
+                "existing_run_policy",
+                "Python-only",
+            ],
+            "prompt_and_estimates": [
+                "PromptSpec.blocks",
+                "estimated_total_tokens",
+                "assumptions",
+            ],
+            "reporting_shape": [
+                "error_category",
+                "error_message",
+                "outcome_counts",
+                "error_counts",
+            ],
+            "limitations": [
+                "no native provider batch API orchestration",
+                "no config diff tooling",
+                "no first-class grid-search reuse",
+                "no storage-efficiency redesign for very large artifacts",
+                "no first-class long-term reproducibility/version-pinning workflow yet",
+            ],
+            "cache_behavior": [
+                "stage caches are keyed by stage inputs, not by `run_id`",
+                "persistent stores are required for cross-run cache reuse",
+                "`InMemoryRunStore` does not provide cross-run stage cache behavior",
+            ],
         },
     }
     print(json.dumps(payload, sort_keys=True))

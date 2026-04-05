@@ -29,7 +29,13 @@ sequenceDiagram
     E-->>T: write new evaluation executions
 ```
 
-The crucial boundary is that generation artifacts stay fixed while evaluation moves or reruns.
+The crucial boundary is that upstream artifacts stay fixed while downstream work moves or reruns.
+
+Stage handoff boundaries:
+
+- CLI-visible bundle export currently covers `generation` and `evaluation`
+- reduction, parse, and score bundle handoff is Python-only today through `export_reduction_bundle(...)`, `export_parse_bundle(...)`, `export_score_bundle(...)`, and their matching import helpers
+- imported artifacts are normalized back into standard event history, so `resume`, `report`, `compare`, and cache reuse see the imported data exactly like locally produced data
 
 ```python
 --8<-- "examples/docs/rejudge_bundle.py"
@@ -40,9 +46,11 @@ The crucial boundary is that generation artifacts stay fixed while evaluation mo
 ## Variants
 
 - portable generation artifacts only: generation bundle export/import
+- portable reduction, parse, or score artifacts: Python-only stage bundle export/import
 - portable evaluation artifacts too: evaluation bundle export/import
 - rerun workflow-backed metrics in place: `Experiment.replay(stage="judge")`
 - rerun pure scoring from parsed outputs: `Experiment.replay(stage="score")`
+- stop a run intentionally at a boundary first: `Experiment.run(..., until_stage="generate"|"reduce"|"parse"|"score")`
 
 ## Expected result
 

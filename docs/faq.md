@@ -31,6 +31,16 @@ The runtime persists generation results, evaluation executions, snapshots, execu
 
 Resume continues unfinished work for the same run. Replay re-runs downstream stages from stored upstream artifacts without regenerating candidates. `rejudge()` is the workflow-metric specialization of `replay(stage="judge")`.
 
+## What is intentionally not supported yet?
+
+Current non-goals and deferred areas are explicit:
+
+- no native provider batch API orchestration
+- no config diff tooling
+- no first-class grid-search reuse
+- no storage-efficiency redesign for very large artifacts
+- no first-class long-term reproducibility/version-pinning workflow yet
+
 ## How should I add docs for a new public surface?
 
 Update the relevant page in `docs/`, add or expand a runnable example when the change is user-facing, and make sure the coverage still appears in the docs inventory script and tests.

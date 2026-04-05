@@ -54,6 +54,8 @@ Provide:
 
 The run should persist evaluation executions with judge calls, prompts, responses, and final scores or aggregation output.
 
+Builtin judge workflows consume `PromptSpec.blocks` directly. Custom workflow metrics should read `ctx.prompt_spec` themselves when they need benchmark-derived context, retrieved context, reference judgments, or any other prompt material that should travel with the experiment identity.
+
 ## Troubleshooting
 
 - [First LLM-judged evaluation](../tutorials/first-llm-judged-evaluation.md)

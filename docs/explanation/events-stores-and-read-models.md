@@ -29,4 +29,10 @@ flowchart LR
 
 The store preserves what happened, and the read models turn that durable event history into faster inspection surfaces.
 
+stage caches are keyed by stage inputs, not by `run_id`. A generation cache key follows the generation inputs, a parse cache key follows the reduced candidate plus parser, and so on.
+
+Persistent stores are required for cross-run cache reuse. `InMemoryRunStore` keeps only the in-process event history and does not provide cross-run stage cache behavior.
+
+Imported stage artifacts are written back as normal persisted events, so the write side and read side do not need a separate import-only path.
+
 What to inspect when it goes wrong: raw stored runs first, then derived projections such as `run_result`, `benchmark_result`, and `trace_view`.

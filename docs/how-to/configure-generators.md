@@ -35,6 +35,7 @@ Use provider adapters when Themis should still own fan-out, reduction, storage, 
 Prompt-focused experiments:
 
 - set `GenerationConfig.prompt_spec` when you want prompt instructions, prefixes, suffixes, or generic prompt blocks to be part of the experiment identity
+- `PromptSpec.blocks` is intentionally generic prompt material, not an example-specific feature
 - prompt specs flow into `GenerateContext`, so custom generators can consume them directly
 - provider-backed adapters such as OpenAI also consume prompt specs, which means prompt changes invalidate generation-stage cache reuse as expected
 

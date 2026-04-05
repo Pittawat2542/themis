@@ -34,6 +34,7 @@ Retry behavior:
 - generation retries classify explicit retryable errors, timeouts, connection failures, `429` rate limits, and `5xx` provider failures
 - judge retries use the same classification and preserve retry history, including `retry_after_s` hints when available
 - retry metadata is persisted on generation artifacts and workflow failures so later inspection can distinguish a hard failure from a transient recovery
+- retry is transient same-stage recovery; it is different from `resume`, `replay`, or `existing_run_policy`
 
 Estimate behavior:
 
@@ -41,6 +42,7 @@ Estimate behavior:
 - generation estimates report input and assumed output tokens
 - judge estimates report estimated prompt and assumed output tokens
 - Themis does not price those tokens; use the estimate JSON as input to an external cost model
+- the estimate payload includes `estimated_total_tokens` plus its assumptions, so external pricing can remain versioned outside Themis
 
 ## Variants
 

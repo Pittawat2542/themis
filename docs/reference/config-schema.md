@@ -23,6 +23,7 @@ Component target syntax:
 - `generator`: required; builtin component id or importable module path in config files, or a live generator object in Python authoring
 - `candidate_policy`: defaults to `{}`; affects `run_id`
 - `prompt_spec`: optional prompt instructions, prefixes, suffixes, and generic prompt blocks; affects `run_id`
+- `PromptSpec.blocks`: arbitrary structured prompt material; Themis does not assign example-specific semantics to those blocks
 - `reducer`: optional; affects `run_id`
 
 ## `EvaluationConfig`

@@ -27,6 +27,34 @@ Then inspect the benchmark catalog for prerequisites such as optional dataset de
 
 Benchmark slicing and downsampling are code-authored today. When you need a subset of a shipped benchmark, load or materialize a `Dataset`, then filter or sample its `cases` before compiling the experiment. Themis treats that filtered dataset as the benchmark you asked it to run.
 
+One concrete pattern is:
+
+```python
+from themis import Experiment
+from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.models import Dataset
+
+source_dataset = Dataset(...)
+filtered_dataset = source_dataset.model_copy(
+    update={
+        "cases": [
+            case
+            for case in source_dataset.cases
+            if case.metadata.get("category") == "hard"
+        ][:100]
+    }
+)
+
+experiment = Experiment(
+    generation=GenerationConfig(...),
+    evaluation=EvaluationConfig(...),
+    storage=StorageConfig(store="sqlite", parameters={"path": "runs.sqlite3"}),
+    datasets=[filtered_dataset],
+)
+```
+
+This is the current supported way to run just a slice or downsample of a benchmark.
+
 ## Variants
 
 - quick local check: `quick-eval benchmark`

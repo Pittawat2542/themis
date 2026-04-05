@@ -37,4 +37,11 @@ Benchmark projections now separate scored outcomes from pipeline errors:
 
 This is the intended export boundary for external reporting. Use `benchmark_result` and `Reporter.export_csv(...)` when you want to build leaderboards, prompt sweep comparisons, or warehouse-backed dashboards outside Themis.
 
+The important semantic boundary is:
+
+- `correct` and `incorrect` mean the metric produced a usable score
+- `error` means the pipeline failed before a usable score existed
+
+That distinction is why `error_counts` and `outcome_counts` are the intended downstream analysis surface for failure-mode tracking, parser debugging, and qualitative tagging built on top of custom metric `details`.
+
 What to inspect when it goes wrong: compare the raw stored run with the benchmark and trace projections to determine whether the issue is in execution or in derived reporting.

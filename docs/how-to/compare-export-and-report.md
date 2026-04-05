@@ -35,6 +35,15 @@ Reporting output is now outcome-aware. `benchmark_result.score_rows` and CSV exp
 - `outcome`: `correct`, `incorrect`, or `error`
 - `error_category`: for example `parse_failure`, `parse_null`, `parse_invalid`, `evaluation_failure`, `evaluation_partial_failure`, or `score_failure`
 - `error_message`: the stored failure reason when the row is an error
+- `details`: metric-specific structured payload for downstream qualitative analysis
+
+Outside Themis workflows:
+
+- external leaderboard construction: export JSON or CSV, then aggregate `benchmark_result` across runs in your notebook, warehouse, or dashboard job
+- prompt sweep aggregation: run one experiment per prompt variant, then compare the exported `benchmark_result` payloads outside Themis
+- external LM-judge handoff: export generation artifacts, run your own judge or provider batch API outside Themis, then convert the results back with a custom script and import the matching evaluation-stage artifacts
+
+Artifact-interop support for `R3-R4` is intentional but scriptable. Themis owns the persistent stage artifacts and downstream replay path, while the mapping from an external job result into Themis-compatible bundle records still happens in your code.
 
 Use this output shape when you build downstream leaderboards or prompt-sweep dashboards outside Themis. Themis owns the per-run read models; cross-run aggregation is expected to happen in your notebook, warehouse, or reporting job.
 
@@ -45,6 +54,7 @@ Use this output shape when you build downstream leaderboards or prompt-sweep das
 - side-by-side benchmark comparison: `compare`
 - external leaderboard or dashboard: consume JSON or CSV exports outside Themis
 - prompt sweep analysis: run multiple experiments and aggregate exported `benchmark_result` payloads outside Themis
+- external judge pipeline: custom script around exported/imported artifacts
 
 ## Expected result
 

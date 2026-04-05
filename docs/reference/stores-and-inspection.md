@@ -23,5 +23,12 @@ Inspection and export helpers:
 - `snapshot_report`
 - `quickcheck`
 - generation/evaluation bundle export and import helpers
+- reduction/parse/score bundle export and import helpers in Python
+
+Persistence boundaries:
+
+- persistent stores are required for cross-run cache reuse
+- `InMemoryRunStore` does not provide cross-run stage cache behavior
+- use persistent stores whenever you need resume, reporting, comparison, export, imported-artifact replay, or cache-aware incremental reuse
 
 Use persistent stores whenever the workflow needs resume, reporting, comparison, export, or later inspection from another process.

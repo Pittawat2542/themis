@@ -56,4 +56,10 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 
 JSON-producing commands generally emit compact machine-readable JSON to stdout. Commands that inspect stored runs require a persistent store unless the current process still owns the original memory store.
 
-`report` and exported score tables include `outcome`, `error_category`, and `error_message` columns alongside metric values.
+`report` and exported score tables include `outcome`, `error_category`, `error_message`, and `details` columns alongside metric values.
+
+Current CLI boundary:
+
+- `run` exposes `--until-stage`
+- `export` CLI exposes only `generation` and `evaluation`
+- reduction, parse, and score bundle handoff is Python-only today even though the runtime supports those stages as first-class artifacts
