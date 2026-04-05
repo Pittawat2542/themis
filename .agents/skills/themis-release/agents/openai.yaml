@@ -1,4 +1,0 @@
-interface:
-  display_name: "Themis Release"
-  short_description: "Prepare and validate a Themis release"
-  default_prompt: "Use $themis-release to prepare and validate the next Themis release from the latest commits."
