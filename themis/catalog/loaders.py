@@ -33,3 +33,33 @@ def load_symbol(target: str) -> Any:
         raise ValueError(f"Invalid load target: {target}")
     module = _import_module(module_name)
     return getattr(module, symbol_name)
+
+
+class MissingOptionalDependencyError(RuntimeError):
+    """Raised when an optional dependency is unavailable."""
+
+
+def load_huggingface_rows(
+    dataset_id: str,
+    split: str,
+    revision: str | None = None,
+    *,
+    config_name: str | None = None,
+) -> list[dict[str, object]]:
+    try:
+        datasets_module = importlib.import_module("datasets")
+    except ModuleNotFoundError as exc:
+        raise MissingOptionalDependencyError(
+            "Catalog dataset loading requires the optional datasets dependency. "
+            'Install it with: uv add "themis-eval[datasets]"'
+        ) from exc
+
+    args: list[object] = [dataset_id]
+    if config_name is not None:
+        args.append(config_name)
+    dataset = datasets_module.load_dataset(
+        *args,
+        split=split,
+        revision=revision,
+    )
+    return [dict(row) for row in dataset]

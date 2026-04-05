@@ -9,6 +9,7 @@ from typing import cast
 from pydantic import Field
 
 from themis.catalog.benchmarks.adapters import apply_benchmark_adapter
+from themis.catalog.benchmarks.materializers import materialize_benchmark_dataset
 from themis.catalog.loaders import load_toml
 from themis.core.base import FrozenModel, JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
@@ -47,9 +48,13 @@ class BenchmarkDefinition(FrozenModel):
     sample_case_expected_output: JSONValue | None = None
     sample_case_metadata: dict[str, str] = Field(default_factory=dict)
 
+    def materialize_dataset(self, *, loader=None) -> Dataset:
+        return materialize_benchmark_dataset(self, loader=loader)
+
     def build_experiment(
         self,
         *,
+        dataset: Dataset | None = None,
         model: object | None = None,
         storage: StorageConfig | None = None,
     ) -> Experiment:
@@ -57,6 +62,28 @@ class BenchmarkDefinition(FrozenModel):
             cast(Generator | str, model) if model is not None else self.generator_id
         )
         seeds = list(range(7, 7 + _candidate_count(self.candidate_policy)))
+        resolved_dataset = dataset or Dataset(
+            dataset_id=self.dataset_id,
+            revision=self.variant or self.dataset_revision or self.split,
+            metadata={
+                "split": self.split,
+                "benchmark_id": self.benchmark_id,
+                "dataset_revision": self.dataset_revision or "",
+                "requires_code_execution": str(self.requires_code_execution).lower(),
+                "supported_execution_backends": ",".join(
+                    self.supported_execution_backends
+                ),
+                **self.dataset_metadata,
+            },
+            cases=[
+                Case(
+                    case_id=self.sample_case_id,
+                    input=self.sample_case_input,
+                    expected_output=self.sample_case_expected_output,
+                    metadata=self.sample_case_metadata,
+                )
+            ],
+        )
         return Experiment(
             generation=GenerationConfig(
                 generator=generator,
@@ -71,32 +98,7 @@ class BenchmarkDefinition(FrozenModel):
                 workflow_overrides=self.workflow_overrides,
             ),
             storage=storage or StorageConfig(store="memory"),
-            datasets=[
-                Dataset(
-                    dataset_id=self.dataset_id,
-                    revision=self.variant or self.dataset_revision or self.split,
-                    metadata={
-                        "split": self.split,
-                        "benchmark_id": self.benchmark_id,
-                        "dataset_revision": self.dataset_revision or "",
-                        "requires_code_execution": str(
-                            self.requires_code_execution
-                        ).lower(),
-                        "supported_execution_backends": ",".join(
-                            self.supported_execution_backends
-                        ),
-                        **self.dataset_metadata,
-                    },
-                    cases=[
-                        Case(
-                            case_id=self.sample_case_id,
-                            input=self.sample_case_input,
-                            expected_output=self.sample_case_expected_output,
-                            metadata=self.sample_case_metadata,
-                        )
-                    ],
-                )
-            ],
+            datasets=[resolved_dataset],
             seeds=seeds,
         )
 
@@ -129,6 +131,8 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         spec=spec,
         variant=resolved_variant,
     )
+    recipe_payload = _recipe_defaults(base_name, variant=resolved_variant)
+    resolved_payload = {**recipe_payload, **adapter_payload}
     return BenchmarkDefinition(
         benchmark_id=benchmark_id,
         base_benchmark_id=base_name,
@@ -142,63 +146,61 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         ),
         metric_ids=_string_list_from_value(
             spec.get(
-                "metric_ids", adapter_payload.get("metric_ids", ["builtin/exact_match"])
+                "metric_ids", resolved_payload.get("metric_ids", ["builtin/exact_match"])
             )
         ),
         parser_ids=_string_list_from_value(
             spec.get(
                 "parser_ids",
-                adapter_payload.get("parser_ids", ["builtin/json_identity"]),
+                resolved_payload.get("parser_ids", ["builtin/json_identity"]),
             )
         ),
         judge_model_ids=_string_list_from_value(
-            spec.get("judge_model_ids", adapter_payload.get("judge_model_ids", []))
+            spec.get("judge_model_ids", resolved_payload.get("judge_model_ids", []))
         ),
         selector_id=_optional_str(
-            spec.get("selector_id", adapter_payload.get("selector_id"))
+            spec.get("selector_id", resolved_payload.get("selector_id"))
         ),
         reducer_id=_optional_str(
             spec.get(
                 "reducer_id",
-                adapter_payload.get(
+                resolved_payload.get(
                     "reducer_id",
-                    None
-                    if "selector_id" in adapter_payload
-                    else "builtin/majority_vote",
+                    None if "selector_id" in resolved_payload else "builtin/majority_vote",
                 ),
             )
         ),
         generator_id=_string_from_value(
             spec.get(
                 "generator_id",
-                adapter_payload.get("generator_id", "builtin/demo_generator"),
+                resolved_payload.get("generator_id", "builtin/demo_generator"),
             )
         ),
         candidate_policy=_json_mapping_from_value(
-            adapter_payload.get("candidate_policy", {"num_samples": 1})
+            resolved_payload.get("candidate_policy", {"num_samples": 1})
         ),
         workflow_overrides=_json_mapping_from_value(
-            adapter_payload.get("workflow_overrides", {})
+            resolved_payload.get("workflow_overrides", {})
         ),
         dataset_metadata=_string_mapping_from_value(
-            adapter_payload.get("dataset_metadata", {})
+            resolved_payload.get("dataset_metadata", {})
         ),
         sample_case_id=_string_from_value(
-            adapter_payload.get("sample_case_id", f"{base_name}-sample-1")
+            resolved_payload.get("sample_case_id", f"{base_name}-sample-1")
         ),
         sample_case_input=_json_value_from_value(
-            adapter_payload.get(
+            resolved_payload.get(
                 "sample_case_input", {"prompt": f"sample prompt for {benchmark_id}"}
             )
         ),
         sample_case_expected_output=_json_optional_value_from_value(
-            adapter_payload.get(
+            resolved_payload.get(
                 "sample_case_expected_output",
                 {"answer": f"sample answer for {base_name}"},
             )
         ),
         sample_case_metadata=_string_mapping_from_value(
-            adapter_payload.get("sample_case_metadata", {})
+            resolved_payload.get("sample_case_metadata", {})
         ),
     )
 
@@ -207,8 +209,11 @@ def run_benchmark(
     name: str, *, model: object | None = None, store: RunStore | None = None
 ):
     definition = load_benchmark(name)
+    dataset = definition.materialize_dataset()
     storage = StorageConfig(store="memory") if store is None else None
-    experiment = definition.build_experiment(model=model, storage=storage)
+    experiment = definition.build_experiment(
+        dataset=dataset, model=model, storage=storage
+    )
     return experiment.run(store=store)
 
 
@@ -231,6 +236,43 @@ def _resolve_variant(
 def _candidate_count(candidate_policy: dict[str, JSONValue]) -> int:
     count = candidate_policy.get("num_samples", 1)
     return int(count) if isinstance(count, int) and count > 0 else 1
+
+
+def _recipe_defaults(base_name: str, *, variant: str | None) -> dict[str, object]:
+    del variant
+    if base_name in {
+        "mmlu_pro",
+        "supergpqa",
+        "encyclo_k",
+        "babe",
+        "gpqa_diamond",
+        "mmmlu",
+        "superchem",
+    }:
+        return {
+            "metric_ids": ["builtin/choice_accuracy"],
+            "parser_ids": ["builtin/choice_letter"],
+        }
+    if base_name in {
+        "aime_2025",
+        "aime_2026",
+        "apex_2025",
+        "beyond_aime",
+        "hmmt_feb_2025",
+        "hmmt_nov_2025",
+        "imo_answerbench",
+        "phybench",
+    }:
+        return {
+            "metric_ids": ["builtin/math_equivalence"],
+            "parser_ids": ["builtin/math_answer"],
+        }
+    if base_name == "procbench":
+        return {
+            "metric_ids": ["builtin/procbench_final_accuracy"],
+            "parser_ids": ["builtin/text"],
+        }
+    return {}
 
 
 def _required_str(payload: dict[str, object], key: str) -> str:

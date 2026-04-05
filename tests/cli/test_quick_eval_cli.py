@@ -150,10 +150,39 @@ def load_dataset(dataset_name, *, split):
     assert payload["metric_means"] == {"builtin/exact_match": 1.0}
 
 
-def test_quick_eval_benchmark_delegates_to_catalog_run() -> None:
-    cli_result = _run_cli("quick-eval", "benchmark", "--name", "mmlu_pro")
+def test_quick_eval_benchmark_delegates_to_catalog_run(tmp_path: Path) -> None:
+    package_root = tmp_path / "fakepkgs" / "datasets"
+    package_root.mkdir(parents=True, exist_ok=True)
+    (package_root / "__init__.py").write_text(
+        """
+def load_dataset(dataset_name, *args, split=None, revision=None, **kwargs):
+    del args, revision, kwargs
+    assert dataset_name == "TIGER-Lab/MMLU-Pro"
+    assert split == "test"
+    return [
+        {
+            "item_id": "mmlu-pro-1",
+            "question": "Which planet is known as the Red Planet?",
+            "options": ["Venus", "Mars", "Jupiter", "Mercury"],
+            "answer": "B",
+            "category": "astronomy",
+            "src": "fixture",
+        }
+    ]
+""".strip()
+    )
+
+    cli_result = _run_cli(
+        "quick-eval",
+        "benchmark",
+        "--name",
+        "mmlu_pro",
+        env={
+            "PYTHONPATH": f"{package_root.parent}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"
+        },
+    )
 
     assert cli_result.returncode == 0, cli_result.stderr
     payload = json.loads(cli_result.stdout)
     assert payload["status"] == "completed"
-    assert payload["metric_means"] == {"builtin/exact_match": 1.0}
+    assert payload["metric_means"] == {"builtin/choice_accuracy": 1.0}

@@ -15,7 +15,8 @@ def test_catalog_load_returns_benchmark_definition_for_manifest_entry() -> None:
     assert benchmark.benchmark_id == "mmlu_pro"
     assert benchmark.dataset_id == "TIGER-Lab/MMLU-Pro"
     assert benchmark.split == "test"
-    assert benchmark.metric_ids == ["builtin/exact_match"]
+    assert benchmark.metric_ids == ["builtin/choice_accuracy"]
+    assert benchmark.parser_ids == ["builtin/choice_letter"]
     assert benchmark.requires_code_execution is False
 
 
