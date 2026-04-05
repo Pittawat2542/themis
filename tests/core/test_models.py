@@ -126,8 +126,12 @@ def test_dataset_and_trace_models_embed_core_records() -> None:
 def test_contexts_and_configs_serialize_cleanly() -> None:
     prompt_spec = PromptSpec(
         instructions="Answer directly.",
-        examples=[
-            {"input": {"question": "1+1"}, "output": {"answer": "2"}}
+        blocks=[
+            {
+                "title": "Reference pair",
+                "input": {"question": "1+1"},
+                "output": {"answer": "2"},
+            }
         ],
     )
     generate = GenerateContext(

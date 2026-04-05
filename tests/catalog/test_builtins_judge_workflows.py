@@ -87,8 +87,14 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
             component_ref_from_value("builtin/demo_judge"),
         ],
         prompt_spec=PromptSpec(
-            instructions="Use the few-shot examples before grading.",
-            examples=[{"input": {"answer": "3"}, "output": "FAIL"}],
+            instructions="Use the supplied prompt blocks before grading.",
+            blocks=[
+                {
+                    "title": "Prior judgment",
+                    "input": {"answer": "3"},
+                    "output": "FAIL",
+                }
+            ],
         ),
         eval_workflow_config={"rubric": "grade factual accuracy"},
     )
@@ -120,8 +126,8 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
         CandidateSetSubject(candidates=[candidate]),
         ctx,
     ).content
-    assert "Use the few-shot examples before grading." in rendered
-    assert "Example 1 input:" in rendered
+    assert "Use the supplied prompt blocks before grading." in rendered
+    assert "Prior judgment:" in rendered
     assert len(panel_workflow.judge_calls()) == 2
     assert len(majority_workflow.judge_calls()) == 2
     assert pairwise_workflow.judge_calls()[0].candidate_indices == [0, 1]

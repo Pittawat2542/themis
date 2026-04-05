@@ -20,7 +20,13 @@ def test_prompt_specs_change_run_identity_for_generation_and_evaluation() -> Non
             judge_models=["builtin/demo_judge"],
             prompt_spec=PromptSpec(
                 prefix="Grade carefully.",
-                examples=[{"input": {"answer": "4"}, "output": "PASS"}],
+                blocks=[
+                    {
+                        "title": "Reference judgment",
+                        "input": {"answer": "4"},
+                        "output": "PASS",
+                    }
+                ],
             ),
         ),
         storage=StorageConfig(store="memory"),

@@ -98,7 +98,7 @@ async def test_openai_adapter_can_take_prompt_spec_from_context() -> None:
             prompt_spec=PromptSpec(
                 instructions="Answer directly.",
                 prefix="Use the examples.",
-                examples=[{"input": "1+1", "output": "2"}],
+                blocks=[{"title": "Reference pair", "input": "1+1", "output": "2"}],
             ),
         ),
     )
@@ -109,8 +109,7 @@ async def test_openai_adapter_can_take_prompt_spec_from_context() -> None:
             "input": (
                 "Instructions:\nAnswer directly.\n\n"
                 "Use the examples.\n\n"
-                "Example 1 input:\n1+1\n"
-                "Example 1 output:\n2\n\n"
+                'Reference pair:\n{"input": "1+1", "output": "2"}\n\n'
                 "Input:\nWhat is 2+2?"
             ),
             "instructions": "Answer directly.",

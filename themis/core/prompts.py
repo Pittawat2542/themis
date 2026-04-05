@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from pydantic import Field
 
@@ -10,12 +11,12 @@ from themis.core.base import HashableModel, JSONValue
 
 
 class PromptSpec(HashableModel):
-    """Prompt instructions and few-shot examples for generation or judging."""
+    """Generic prompt instructions and structured prompt material."""
 
     instructions: str | None = None
     prefix: str | None = None
     suffix: str | None = None
-    examples: list[dict[str, JSONValue]] = Field(default_factory=list)
+    blocks: list[dict[str, JSONValue]] = Field(default_factory=list)
 
     def render_input(self, prompt_input: JSONValue) -> JSONValue:
         """Render prompt-oriented input for provider adapters."""
@@ -25,7 +26,7 @@ class PromptSpec(HashableModel):
                 self.instructions,
                 self.prefix,
                 self.suffix,
-                self.examples,
+                self.blocks,
             )
         ):
             return prompt_input
@@ -41,16 +42,24 @@ class PromptSpec(HashableModel):
             sections.append(f"Instructions:\n{self.instructions}")
         if self.prefix:
             sections.append(self.prefix)
-        for index, example in enumerate(self.examples, start=1):
-            example_input = example.get("input")
-            example_output = example.get("output")
+        for index, block in enumerate(self.blocks, start=1):
+            title = block.get("title")
+            if isinstance(title, str) and title:
+                payload = {key: value for key, value in block.items() if key != "title"}
+                sections.append(
+                    "\n".join(
+                        [
+                            f"{title}:",
+                            _render_prompt_value(cast(JSONValue, payload)),
+                        ]
+                    )
+                )
+                continue
             sections.append(
                 "\n".join(
                     [
-                        f"Example {index} input:",
-                        _render_prompt_value(example_input),
-                        f"Example {index} output:",
-                        _render_prompt_value(example_output),
+                        f"Block {index}:",
+                        _render_prompt_value(cast(JSONValue, block)),
                     ]
                 )
             )

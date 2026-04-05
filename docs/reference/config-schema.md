@@ -22,7 +22,7 @@ Component target syntax:
 
 - `generator`: required; builtin component id or importable module path in config files, or a live generator object in Python authoring
 - `candidate_policy`: defaults to `{}`; affects `run_id`
-- `prompt_spec`: optional prompt instructions, prefixes, suffixes, and few-shot examples; affects `run_id`
+- `prompt_spec`: optional prompt instructions, prefixes, suffixes, and generic prompt blocks; affects `run_id`
 - `reducer`: optional; affects `run_id`
 
 ## `EvaluationConfig`
@@ -30,7 +30,7 @@ Component target syntax:
 - `metrics`: list of pure or workflow-backed metrics; affects `run_id`
 - `parsers`: list of parsers; affects `run_id`
 - `judge_models`: workflow judge models; affects `run_id`
-- `prompt_spec`: optional prompt instructions, prefixes, suffixes, and few-shot examples for builtin judge workflows; affects `run_id`
+- `prompt_spec`: optional prompt instructions, prefixes, suffixes, and generic prompt blocks for builtin judge workflows; affects `run_id`
 - `judge_config`: workflow evaluation config; affects `run_id`
 - `workflow_overrides`: additional workflow config; affects `run_id`
 
