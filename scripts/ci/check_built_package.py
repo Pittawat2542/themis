@@ -43,9 +43,13 @@ def _assert_archive_contents(path: Path, names: list[str]) -> None:
         if path.suffixes[-2:] == [".tar", ".gz"] and "/" in name:
             normalized = name.split("/", 1)[1]
         if any(normalized.startswith(prefix) for prefix in EXCLUDED_ARCHIVE_PATHS):
-            raise SystemExit(f"{path.name} unexpectedly contains excluded path: {normalized}")
+            raise SystemExit(
+                f"{path.name} unexpectedly contains excluded path: {normalized}"
+            )
         if normalized in EXCLUDED_ARCHIVE_NAMES:
-            raise SystemExit(f"{path.name} unexpectedly contains excluded file: {normalized}")
+            raise SystemExit(
+                f"{path.name} unexpectedly contains excluded file: {normalized}"
+            )
         if normalized.endswith(EXCLUDED_ARCHIVE_SUFFIXES):
             raise SystemExit(
                 f"{path.name} unexpectedly contains excluded planning file: {normalized}"
@@ -71,7 +75,9 @@ def _inspect_wheel(path: Path) -> None:
         metadata = archive.read(metadata_name).decode()
         entry_points = archive.read(entry_points_name).decode()
         if "Version: 4.0.0" not in metadata:
-            raise SystemExit(f"{path.name} metadata does not contain the final release version")
+            raise SystemExit(
+                f"{path.name} metadata does not contain the final release version"
+            )
         if "themis = themis.cli:main" not in entry_points:
             raise SystemExit(f"{path.name} is missing the themis CLI entry point")
 

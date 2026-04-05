@@ -25,7 +25,9 @@ def test_rolebench_variant_uses_variant_specific_rubric() -> None:
 
     assert benchmark.metric_ids == ["builtin/llm_rubric"]
     assert isinstance(rubric, str)
-    assert rubric.startswith("Judge whether the response follows the requested role behavior")
+    assert rubric.startswith(
+        "Judge whether the response follows the requested role behavior"
+    )
     assert benchmark.sample_case_metadata["variant"] == "instruction_generalization_eng"
     assert experiment.evaluation.metrics == ["builtin/llm_rubric"]
 

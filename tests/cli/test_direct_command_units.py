@@ -68,10 +68,13 @@ def test_report_export_and_compare_commands(
     assert report(config=str(baseline_config), format="latex") == 0
     assert "\\begin{tabular}" in capsys.readouterr().out
 
-    assert compare(
-        baseline_config=str(baseline_config),
-        candidate_config=str(candidate_config),
-    ) == 0
+    assert (
+        compare(
+            baseline_config=str(baseline_config),
+            candidate_config=str(candidate_config),
+        )
+        == 0
+    )
     compare_payload = json.loads(capsys.readouterr().out)
     assert compare_payload["metrics"]["builtin/exact_match"]["ties"] == 1
 
@@ -120,7 +123,10 @@ def test_inspect_commands_and_replay_command(
     else:
         raise AssertionError("expected inspect.evaluation to report missing execution")
 
-    assert Experiment.from_config(config_path).compile().run_id == experiment.compile().run_id
+    assert (
+        Experiment.from_config(config_path).compile().run_id
+        == experiment.compile().run_id
+    )
 
 
 def test_quick_eval_and_init_commands(tmp_path: Path, capsys) -> None:
@@ -130,10 +136,13 @@ def test_quick_eval_and_init_commands(tmp_path: Path, capsys) -> None:
         encoding="utf-8",
     )
 
-    assert quick_eval_inline(
-        input_json='{"question":"2+2"}',
-        expected_output_json='{"answer":"4"}',
-    ) == 0
+    assert (
+        quick_eval_inline(
+            input_json='{"question":"2+2"}',
+            expected_output_json='{"answer":"4"}',
+        )
+        == 0
+    )
     inline_payload = json.loads(capsys.readouterr().out)
     assert inline_payload["status"] == "completed"
 
