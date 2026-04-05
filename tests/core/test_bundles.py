@@ -4,13 +4,25 @@ import json
 
 from themis.core.base import JSONValue
 from themis.core.bundles import (
+    export_parse_bundle,
+    export_reduction_bundle,
+    export_score_bundle,
     export_evaluation_bundle,
     export_generation_bundle,
+    import_parse_bundle,
+    import_reduction_bundle,
+    import_score_bundle,
     import_evaluation_bundle,
     import_generation_bundle,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.events import EvaluationCompletedEvent, GenerationCompletedEvent
+from themis.core.events import (
+    EvaluationCompletedEvent,
+    GenerationCompletedEvent,
+    ParseCompletedEvent,
+    ReductionCompletedEvent,
+    ScoreCompletedEvent,
+)
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.stores.memory import InMemoryRunStore
@@ -242,3 +254,63 @@ def test_import_evaluation_bundle_preserves_partial_failures() -> None:
     ]
     assert execution.status == "partial_failure"
     assert execution.failures[0].error_message == "judge timeout"
+
+
+def test_reduction_parse_and_score_bundles_round_trip_stage_artifacts() -> None:
+    snapshot = _snapshot()
+    source_store = InMemoryRunStore()
+    source_store.initialize()
+    source_store.persist_snapshot(snapshot)
+    source_store.persist_event(
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["case-1-candidate-7", "case-1-candidate-11"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["case-1-candidate-7", "case-1-candidate-11"],
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    source_store.persist_event(
+        ParseCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            result={"value": {"answer": "4"}, "format": "json"},
+        )
+    )
+    source_store.persist_event(
+        ScoreCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="builtin/exact_match",
+            score={"metric_id": "builtin/exact_match", "value": 1.0},
+        )
+    )
+
+    reduction_bundle = export_reduction_bundle(source_store, snapshot.run_id)
+    parse_bundle = export_parse_bundle(source_store, snapshot.run_id)
+    score_bundle = export_score_bundle(source_store, snapshot.run_id)
+
+    target_store = InMemoryRunStore()
+    target_store.initialize()
+    import_reduction_bundle(target_store, reduction_bundle)
+    import_parse_bundle(target_store, parse_bundle)
+    import_score_bundle(target_store, score_bundle)
+
+    resumed = target_store.resume(snapshot.run_id)
+
+    assert resumed is not None
+    assert [event.event_type for event in resumed.events] == [
+        "reduction_completed",
+        "parse_completed",
+        "score_completed",
+    ]
+    case_state = resumed.execution_state.case_states["case-1"]
+    assert case_state.reduced_candidate is not None
+    assert case_state.parsed_output is not None
+    assert case_state.successful_scores["builtin/exact_match"].value == 1.0

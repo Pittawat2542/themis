@@ -4,8 +4,14 @@ from themis.core.base import FrozenModel, HashableModel, JSONValue
 from themis.core.bundles import (
     export_evaluation_bundle,
     export_generation_bundle,
+    export_parse_bundle,
+    export_reduction_bundle,
+    export_score_bundle,
     import_evaluation_bundle,
     import_generation_bundle,
+    import_parse_bundle,
+    import_reduction_bundle,
+    import_score_bundle,
 )
 from themis.core.builtins import resolve_judge_model_component
 from themis.core.builtins import resolve_selector_component
@@ -94,6 +100,7 @@ from themis.core.protocols import (
 )
 from themis.core.orchestrator import Orchestrator
 from themis.core.planner import Planner
+from themis.core.prompts import FewShotExample, PromptSpec
 from themis.core.results import (
     CaseResult,
     EvaluationBundle,
@@ -102,10 +109,16 @@ from themis.core.results import (
     GenerationBundle,
     GenerationBundleRecord,
     GenerationWorkItem,
+    ParseBundle,
+    ParseBundleRecord,
     ProgressSnapshot,
+    ReductionBundle,
+    ReductionBundleRecord,
     RunEstimate,
     RunResult,
     RunStatus,
+    ScoreBundle,
+    ScoreBundleRecord,
 )
 from themis.core.store import RunStore
 from themis.core.snapshot import (
@@ -172,6 +185,7 @@ __all__ = [
     "EvaluationWorkflow",
     "evaluate",
     "Experiment",
+    "FewShotExample",
     "FrozenModel",
     "Generator",
     "GenerateContext",
@@ -200,10 +214,13 @@ __all__ = [
     "Parser",
     "PureMetric",
     "Planner",
+    "PromptSpec",
     "RenderedJudgePrompt",
     "ReduceContext",
     "SelectContext",
     "ReducedCandidate",
+    "ReductionBundle",
+    "ReductionBundleRecord",
     "ReductionCompletedEvent",
     "ReductionFailedEvent",
     "RunCompletedEvent",
@@ -224,6 +241,9 @@ __all__ = [
     "ExecutionState",
     "export_evaluation_bundle",
     "export_generation_bundle",
+    "export_parse_bundle",
+    "export_reduction_bundle",
+    "export_score_bundle",
     "GenerationBundle",
     "GenerationBundleRecord",
     "get_evaluation_execution",
@@ -262,8 +282,15 @@ __all__ = [
     "InMemoryRunStore",
     "import_evaluation_bundle",
     "import_generation_bundle",
+    "import_parse_bundle",
+    "import_reduction_bundle",
+    "import_score_bundle",
+    "ParseBundle",
+    "ParseBundleRecord",
     "resolve_judge_model_component",
     "resolve_selector_component",
+    "ScoreBundle",
+    "ScoreBundleRecord",
     "sqlite_store",
     "validate_candidate_set_for_llm_metric",
     "validate_candidate_set_for_selection_metric",

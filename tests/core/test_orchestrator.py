@@ -13,6 +13,7 @@ from themis.core.builtins import (
     resolve_reducer_component,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.config import RuntimeConfig
 from themis.core.contexts import EvalScoreContext, GenerateContext, ScoreContext
 from themis.core.events import (
     EvaluationCompletedEvent,
@@ -339,6 +340,15 @@ class RetryableFailure(RuntimeError):
     retryable = True
 
 
+class RateLimitedFailure(RuntimeError):
+    retryable = False
+
+    def __init__(self, message: str, *, retry_after_s: float | None = None) -> None:
+        super().__init__(message)
+        self.status_code = 429
+        self.retry_after_s = retry_after_s
+
+
 class RetryableGenerator:
     component_id = "generator/retryable"
     version = "1.0"
@@ -376,6 +386,49 @@ class RetryableJudgeModel:
         self.calls += 1
         if self.calls <= self.failures_before_success:
             raise RetryableFailure("temporary judge failure")
+        return JudgeResponse(
+            judge_model_id=self.component_id,
+            judge_model_version=self.version,
+            judge_model_fingerprint=self.fingerprint(),
+            raw_response="pass",
+        )
+
+
+class TimeoutThenSuccessGenerator:
+    component_id = "generator/timeout"
+    version = "1.0"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def fingerprint(self) -> str:
+        return "generator-timeout"
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        self.calls += 1
+        if self.calls == 1:
+            raise TimeoutError("provider timeout")
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
+            final_output=case.expected_output,
+        )
+
+
+class RateLimitedJudgeModel:
+    component_id = "builtin/demo_judge"
+    version = "1.0"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def fingerprint(self) -> str:
+        return "judge-rate-limited"
+
+    async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
+        del prompt, seed
+        self.calls += 1
+        if self.calls == 1:
+            raise RateLimitedFailure("rate limit", retry_after_s=0.25)
         return JudgeResponse(
             judge_model_id=self.component_id,
             judge_model_version=self.version,
@@ -1024,6 +1077,109 @@ async def test_orchestrator_retries_retryable_generation_failures_and_persists_h
     retry_history = artifacts["retry_history"]
     assert isinstance(retry_history, list)
     assert len(retry_history) == 2
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retries_timeout_generation_failures_by_default() -> None:
+    generator = TimeoutThenSuccessGenerator()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator=generator,
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=generator,
+        reducer=resolve_reducer_component(experiment.generation.reducer),
+        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        metrics=[resolve_metric_component("builtin/exact_match")],
+        runtime=RuntimeConfig(generation_retry_delay=0),
+    )
+
+    result = await orchestrator.run(snapshot)
+
+    assert result.status is RunStatus.COMPLETED
+    assert generator.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retries_rate_limited_judge_failures_and_persists_retry_after() -> (
+    None
+):
+    metric = RecordingLLMMetric()
+    judge_model = RateLimitedJudgeModel()
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[metric],
+            parsers=["builtin/json_identity"],
+            judge_models=[judge_model],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    store.initialize()
+    store.persist_snapshot(snapshot)
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component(experiment.generation.generator),
+        reducer=resolve_reducer_component(experiment.generation.reducer),
+        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        metrics=[metric],
+        judge_models=[judge_model],
+        runtime=RuntimeConfig(judge_retry_delay=0),
+    )
+
+    result = await orchestrator.run(snapshot)
+    execution = result.cases[0].evaluation_executions[0]
+
+    assert result.status is RunStatus.COMPLETED
+    assert judge_model.calls == 2
+    assert execution.judge_responses[0].retry_history[0]["retry_after_s"] == 0.25
 
 
 @pytest.mark.asyncio

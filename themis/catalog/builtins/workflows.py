@@ -6,6 +6,7 @@ from collections import Counter
 
 from themis.core.contexts import EvalScoreContext
 from themis.core.models import Score
+from themis.core.prompts import render_prompt_spec
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.workflows import (
     AggregationResult,
@@ -129,11 +130,14 @@ class _RubricWorkflow:
         template_ctx = build_prompt_template_context(subject, ctx, call)
         return RenderedJudgePrompt(
             prompt_id=f"{self.metric_id}:{call.call_id}",
-            content=(
-                f"Rubric: {self.rubric}\n"
-                f"Case input: {template_ctx['case_input']}\n"
-                f"Candidate output: {template_ctx['candidate_output']}\n"
-                "Respond with PASS or FAIL."
+            content=render_prompt_spec(
+                ctx.prompt_spec,
+                (
+                    f"Rubric: {self.rubric}\n"
+                    f"Case input: {template_ctx['case_input']}\n"
+                    f"Candidate output: {template_ctx['candidate_output']}\n"
+                    "Respond with PASS or FAIL."
+                ),
             ),
         )
 
@@ -226,11 +230,14 @@ class _PairwiseWorkflow:
         template_ctx = build_prompt_template_context(subject, ctx, call)
         return RenderedJudgePrompt(
             prompt_id=f"{self.metric_id}:{call.call_id}",
-            content=(
-                f"Rubric: {self.rubric}\n"
-                f"Candidate A: {template_ctx['candidate_a_output']}\n"
-                f"Candidate B: {template_ctx['candidate_b_output']}\n"
-                "Respond with A, B, or TIE."
+            content=render_prompt_spec(
+                ctx.prompt_spec,
+                (
+                    f"Rubric: {self.rubric}\n"
+                    f"Candidate A: {template_ctx['candidate_a_output']}\n"
+                    f"Candidate B: {template_ctx['candidate_b_output']}\n"
+                    "Respond with A, B, or TIE."
+                ),
             ),
         )
 

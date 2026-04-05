@@ -29,6 +29,7 @@ class RunStartedEvent(RunEvent):
 
 class RunCompletedEvent(RunEvent):
     event_type: Literal["run_completed"] = "run_completed"
+    completed_through_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge"
 
 
 class RunFailedEvent(RunEvent):
@@ -45,6 +46,8 @@ class GenerationCompletedEvent(RunEvent):
     provider_key: str | None = None
     result: dict[str, JSONValue] | None = None
     result_blob_ref: str | None = None
+    cache_hit: bool = False
+    source_run_id: str | None = None
 
 
 class GenerationFailedEvent(RunEvent):
@@ -74,6 +77,8 @@ class ReductionCompletedEvent(RunEvent):
     candidate_id: str
     source_candidate_ids: list[str] = Field(default_factory=list)
     result: dict[str, JSONValue] | None = None
+    cache_hit: bool = False
+    source_run_id: str | None = None
 
 
 class ReductionFailedEvent(RunEvent):
@@ -87,6 +92,8 @@ class ParseCompletedEvent(RunEvent):
     case_id: str
     candidate_id: str
     result: dict[str, JSONValue] | None = None
+    cache_hit: bool = False
+    source_run_id: str | None = None
 
 
 class ParseFailedEvent(RunEvent):
@@ -119,6 +126,8 @@ class ScoreCompletedEvent(RunEvent):
     candidate_id: str
     metric_id: str
     score: dict[str, JSONValue] | None = None
+    cache_hit: bool = False
+    source_run_id: str | None = None
 
 
 class ScoreFailedEvent(RunEvent):

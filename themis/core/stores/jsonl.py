@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 from themis.core.base import JSONValue
@@ -111,6 +112,25 @@ class JsonlRunStore(ProjectionRefreshingStore):
 
     def _run_root(self, run_id: str) -> Path:
         return self.root / "runs" / run_id
+
+    def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+        path = self.root / "stage_cache" / stage_name / f"{cache_key}.json"
+        if not path.is_file():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def store_stage_cache(
+        self, stage_name: str, cache_key: str, payload: JSONValue
+    ) -> None:
+        path = self.root / "stage_cache" / stage_name / f"{cache_key}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    def clear_run(self, run_id: str) -> None:
+        shutil.rmtree(self._run_root(run_id), ignore_errors=True)
 
 
 def jsonl_store(root: str | Path) -> JsonlRunStore:

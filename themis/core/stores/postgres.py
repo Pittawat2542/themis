@@ -181,6 +181,42 @@ class PostgresRunStore(ProjectionRefreshingStore):
             )
             connection.commit()
 
+    def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT payload_json::text AS payload_json
+                FROM stage_cache
+                WHERE stage_name = %s AND cache_key = %s
+                """,
+                (stage_name, cache_key),
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["payload_json"])
+
+    def store_stage_cache(
+        self, stage_name: str, cache_key: str, payload: JSONValue
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO stage_cache (stage_name, cache_key, payload_json)
+                VALUES (%s, %s, %s::jsonb)
+                ON CONFLICT (stage_name, cache_key) DO UPDATE
+                SET payload_json = EXCLUDED.payload_json
+                """,
+                (stage_name, cache_key, json.dumps(payload, sort_keys=True)),
+            )
+            connection.commit()
+
+    def clear_run(self, run_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM run_events WHERE run_id = %s", (run_id,))
+            connection.execute("DELETE FROM run_projections WHERE run_id = %s", (run_id,))
+            connection.execute("DELETE FROM run_snapshots WHERE run_id = %s", (run_id,))
+            connection.commit()
+
     def _migrate_to_v1(self, connection) -> None:
         connection.execute(
             """
@@ -213,6 +249,16 @@ class PostgresRunStore(ProjectionRefreshingStore):
                 projection_name TEXT NOT NULL,
                 projection_json JSONB NOT NULL,
                 PRIMARY KEY (run_id, projection_name)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stage_cache (
+                stage_name TEXT NOT NULL,
+                cache_key TEXT NOT NULL,
+                payload_json JSONB NOT NULL,
+                PRIMARY KEY (stage_name, cache_key)
             )
             """
         )

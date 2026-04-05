@@ -65,14 +65,24 @@ class Reporter:
         ]
         for row in score_rows:
             lines.append(
-                f"- case={row['case_id']} metric={row['metric_id']} value={row['value']} candidate={row['candidate_id']}"
+                f"- case={row['case_id']} metric={row['metric_id']} outcome={row['outcome']} value={row['value']} candidate={row['candidate_id']} error_category={row.get('error_category')} error_message={row.get('error_message')}"
             )
         return "\n".join(lines) + "\n"
 
     def export_csv(self, run_id: str) -> str:
         buffer = StringIO()
         writer = csv.DictWriter(
-            buffer, fieldnames=["case_id", "metric_id", "value", "candidate_id"]
+            buffer,
+            fieldnames=[
+                "case_id",
+                "metric_id",
+                "outcome",
+                "value",
+                "candidate_id",
+                "error_category",
+                "error_message",
+                "details",
+            ],
         )
         writer.writeheader()
         writer.writerows(self.export_score_table(run_id))
@@ -80,8 +90,8 @@ class Reporter:
 
     def export_latex(self, run_id: str) -> str:
         lines = [
-            r"\begin{tabular}{llll}",
-            r"case\_id & metric\_id & value & candidate\_id \\",
+            r"\begin{tabular}{llllllll}",
+            r"case\_id & metric\_id & outcome & value & candidate\_id & error\_category & error\_message & details \\",
             r"\hline",
         ]
         for row in self.export_score_table(run_id):
@@ -90,8 +100,12 @@ class Reporter:
                     [
                         _latex_cell(row["case_id"]),
                         _latex_cell(row["metric_id"]),
+                        _latex_cell(row["outcome"]),
                         _latex_cell(row["value"]),
                         _latex_cell(row["candidate_id"]),
+                        _latex_cell(row["error_category"]),
+                        _latex_cell(row["error_message"]),
+                        _latex_cell(row["details"]),
                     ]
                 )
                 + r" \\"
@@ -108,8 +122,12 @@ class Reporter:
             {
                 "case_id": row["case_id"],
                 "metric_id": row["metric_id"],
+                "outcome": row["outcome"],
                 "value": row["value"],
                 "candidate_id": row["candidate_id"],
+                "error_category": row.get("error_category"),
+                "error_message": row.get("error_message"),
+                "details": row.get("details", {}),
             }
             for row in score_rows
         ]

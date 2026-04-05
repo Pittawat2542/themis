@@ -63,3 +63,23 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         self, run_id: str, projection_name: str, payload: JSONValue
     ) -> None:
         self._projections[(run_id, projection_name)] = payload
+
+    def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+        del stage_name, cache_key
+        return None
+
+    def store_stage_cache(
+        self, stage_name: str, cache_key: str, payload: JSONValue
+    ) -> None:
+        del stage_name, cache_key, payload
+
+    def clear_run(self, run_id: str) -> None:
+        self._snapshots.pop(run_id, None)
+        self._events.pop(run_id, None)
+        stale_projection_keys = [
+            projection_key
+            for projection_key in self._projections
+            if projection_key[0] == run_id
+        ]
+        for projection_key in stale_projection_keys:
+            self._projections.pop(projection_key, None)

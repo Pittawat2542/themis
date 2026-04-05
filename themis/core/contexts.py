@@ -9,12 +9,14 @@ from pydantic import Field
 from themis.core.base import HashableModel, JSONValue
 from themis.core.components import ComponentRef
 from themis.core.models import Case, ParsedOutput
+from themis.core.prompts import PromptSpec
 
 
 class GenerateContext(HashableModel):
     run_id: str
     case_id: str
     seed: int | None = None
+    prompt_spec: PromptSpec | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
@@ -53,4 +55,5 @@ class ScoreContext(HashableModel):
 class EvalScoreContext(ScoreContext):
     judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     judge_seed: int | None = None
+    prompt_spec: PromptSpec | None = None
     eval_workflow_config: dict[str, JSONValue] = Field(default_factory=dict)

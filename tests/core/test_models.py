@@ -12,6 +12,7 @@ from themis.core.contexts import (
     ReduceContext,
     ScoreContext,
 )
+from themis.core.prompts import FewShotExample, PromptSpec
 from themis.core.models import (
     Case,
     ConversationTrace,
@@ -123,7 +124,15 @@ def test_dataset_and_trace_models_embed_core_records() -> None:
 
 
 def test_contexts_and_configs_serialize_cleanly() -> None:
-    generate = GenerateContext(run_id="run-1", case_id="case-1", seed=7)
+    prompt_spec = PromptSpec(
+        instructions="Answer directly.",
+        few_shot_examples=[
+            FewShotExample(input={"question": "1+1"}, output={"answer": "2"})
+        ],
+    )
+    generate = GenerateContext(
+        run_id="run-1", case_id="case-1", seed=7, prompt_spec=prompt_spec
+    )
     reduce = ReduceContext(
         run_id="run-1",
         case_id="case-1",
@@ -152,16 +161,19 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
             )
         ],
         judge_seed=9,
+        prompt_spec=prompt_spec,
         eval_workflow_config={"rubric": "pass_fail"},
     )
     generation = GenerationConfig(
         generator="demo-generator",
         candidate_policy={"num_samples": 2},
+        prompt_spec=prompt_spec,
         reducer="demo-reducer",
     )
     evaluation = EvaluationConfig(
         metrics=["exact_match"],
         parsers=["json"],
+        prompt_spec=prompt_spec,
         judge_config={"panel_size": 1},
     )
     storage = StorageConfig(store="memory", parameters={"path": ":memory:"})

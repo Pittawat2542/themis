@@ -137,8 +137,12 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
         {
             "case_id": "case-1",
             "metric_id": "builtin/exact_match",
+            "outcome": "correct",
             "value": 1.0,
             "candidate_id": "case-1-reduced",
+            "error_category": None,
+            "error_message": None,
+            "details": {"matched": True},
         }
     ]
 
@@ -156,11 +160,16 @@ def test_reporter_escapes_latex_special_characters() -> None:
             {
                 "case_id": r"case_1%&${}\path",
                 "metric_id": "metric_^~#",
+                "outcome": "error",
                 "value": r"value_1%&${}\path",
                 "candidate_id": None,
+                "error_category": "parse_failure",
+                "error_message": r"bad_%&${}\path",
             }
         ],
         "metric_means": {"builtin/exact_match": 1.0},
+        "outcome_counts": {"builtin/exact_match": {"error": 1}},
+        "error_counts": {"builtin/exact_match": {"parse_failure": 1}},
     }
     reporter = Reporter(store)
 
@@ -169,7 +178,7 @@ def test_reporter_escapes_latex_special_characters() -> None:
     assert r"case\_1\%\&\$\{\}\textbackslash{}path" in exported_latex
     assert r"metric\_\textasciicircum{}\textasciitilde{}\#" in exported_latex
     assert r"value\_1\%\&\$\{\}\textbackslash{}path" in exported_latex
-    assert " &  \\\\" in exported_latex
+    assert r"bad\_\%\&\$\{\}\textbackslash{}path" in exported_latex
 
 
 def test_snapshot_report_includes_identity_and_provenance() -> None:

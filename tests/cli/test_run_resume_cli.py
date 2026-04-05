@@ -111,6 +111,24 @@ def test_run_resume_estimate_and_quickcheck_use_config_driven_experiments(
     assert quickcheck_payload["metric_means"] == {"builtin/exact_match": 1.0}
 
 
+def test_run_supports_stage_limited_execution(tmp_path: Path) -> None:
+    config_path = tmp_path / "experiment.yaml"
+    store_path = tmp_path / "run.sqlite3"
+    _write_config(config_path, store_path=store_path)
+
+    run = _run_cli("run", "--config", str(config_path), "--until-stage", "generate")
+    assert run.returncode == 0, run.stderr
+    run_payload = json.loads(run.stdout)
+
+    assert run_payload["status"] == "completed"
+    assert run_payload["completed_through_stage"] == "generate"
+
+    resume = _run_cli("resume", "--config", str(config_path))
+    assert resume.returncode == 0, resume.stderr
+    resume_payload = json.loads(resume.stdout)
+    assert resume_payload["completed_through_stage"] == "generate"
+
+
 def test_inspect_and_replay_commands_expose_persisted_state(tmp_path: Path) -> None:
     config_path = tmp_path / "experiment.yaml"
     store_path = tmp_path / "run.sqlite3"

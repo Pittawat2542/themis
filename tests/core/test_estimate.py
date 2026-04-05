@@ -51,6 +51,14 @@ def test_planner_estimate_returns_deterministic_counts_for_compiled_snapshot() -
     assert estimate.planned_reduction_tasks == 2
     assert estimate.planned_parse_tasks == 2
     assert estimate.planned_score_tasks == 4
+    assert estimate.estimated_generation_input_tokens == 24
+    assert estimate.estimated_generation_output_tokens == 1536
+    assert estimate.estimated_total_tokens == 1560
+    assert estimate.assumptions == {
+        "generation_input_tokens_per_case": 4,
+        "generation_output_tokens_per_candidate": 256,
+        "judge_output_tokens_per_call": 64,
+    }
 
 
 def test_runtime_submission_paths_do_not_affect_run_identity() -> None:

@@ -63,12 +63,16 @@ def test_stats_engine_aggregates_rows_by_metric() -> None:
         "mean": 0.5,
         "min": 0.0,
         "max": 1.0,
+        "ci_lower": 0.0,
+        "ci_upper": 1.0,
     }
     assert metrics["f1"] == {
         "count": 2,
         "mean": 0.5,
         "min": 0.25,
         "max": 0.75,
+        "ci_lower": 0.25,
+        "ci_upper": 0.75,
     }
 
 
@@ -128,6 +132,9 @@ def test_stats_engine_paired_compare_aligns_rows_by_case_and_metric() -> None:
         "losses": 0,
         "ties": 1,
         "mean_delta": 0.5,
+        "ci_lower": 0.0,
+        "ci_upper": 1.0,
+        "p_value": 1.0,
     }
     assert metrics["f1"] == {
         "pairs": 1,
@@ -135,4 +142,48 @@ def test_stats_engine_paired_compare_aligns_rows_by_case_and_metric() -> None:
         "losses": 0,
         "ties": 0,
         "mean_delta": 0.4,
+        "ci_lower": 0.4,
+        "ci_upper": 0.4,
+        "p_value": 1.0,
     }
+
+
+def test_stats_engine_reports_confidence_intervals_for_metric_means() -> None:
+    benchmark_result = _benchmark_result(
+        "run-2",
+        [
+            BenchmarkScoreRow(
+                case_id="case-1",
+                metric_id="accuracy",
+                value=1.0,
+                candidate_id="candidate-a",
+            ),
+            BenchmarkScoreRow(
+                case_id="case-2",
+                metric_id="accuracy",
+                value=0.0,
+                candidate_id="candidate-b",
+            ),
+            BenchmarkScoreRow(
+                case_id="case-3",
+                metric_id="accuracy",
+                value=1.0,
+                candidate_id="candidate-c",
+            ),
+            BenchmarkScoreRow(
+                case_id="case-4",
+                metric_id="accuracy",
+                value=0.0,
+                candidate_id="candidate-d",
+            ),
+        ],
+        total_cases=4,
+        completed_cases=4,
+    )
+
+    summary = StatsEngine().aggregate(benchmark_result)
+    metric = cast(dict[str, float | int], cast(dict[str, object], summary["metrics"])["accuracy"])
+
+    assert metric["mean"] == 0.5
+    assert metric["ci_lower"] == 0.0
+    assert metric["ci_upper"] == 1.0

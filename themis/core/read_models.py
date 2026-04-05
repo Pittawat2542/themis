@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
-from themis.core.base import FrozenModel
+from themis.core.base import FrozenModel, JSONValue
 from themis.core.workflows import EvaluationExecution
 
 
@@ -15,8 +16,12 @@ class BenchmarkScoreRow(FrozenModel):
 
     case_id: str
     metric_id: str
-    value: float
+    value: float | None = None
     candidate_id: str | None = None
+    outcome: Literal["correct", "incorrect", "error"] = "incorrect"
+    error_category: str | None = None
+    error_message: str | None = None
+    details: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class BenchmarkResult(FrozenModel):
@@ -30,6 +35,8 @@ class BenchmarkResult(FrozenModel):
     failed_cases: int = 0
     score_rows: list[BenchmarkScoreRow] = Field(default_factory=list)
     metric_means: dict[str, float] = Field(default_factory=dict)
+    outcome_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
+    error_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 class TimelineEntry(FrozenModel):

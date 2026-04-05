@@ -8,10 +8,14 @@ from themis.cli.helpers import dump_json, initialize_store, load_experiment
 from themis.core.planner import Planner
 
 
-def run(*, config: str) -> int:
+def run(
+    *,
+    config: str,
+    until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
+) -> int:
     experiment = load_experiment(config)
     store = initialize_store(experiment)
-    result = experiment.run(store=store)
+    result = experiment.run(store=store, until_stage=until_stage)
     report_store = (
         store if experiment.storage.store == "memory" else initialize_store(experiment)
     )
@@ -24,6 +28,7 @@ def run(*, config: str) -> int:
             {
                 "run_id": result.run_id,
                 "status": result.status.value,
+                "completed_through_stage": result.completed_through_stage,
                 "metric_means": metric_means,
             }
         )
@@ -43,6 +48,7 @@ def resume(*, config: str) -> int:
             {
                 "run_id": snapshot.run_id,
                 "status": stored.execution_state.status.value,
+                "completed_through_stage": stored.execution_state.completed_through_stage,
                 "total_cases": sum(
                     len(dataset.cases) for dataset in stored.snapshot.datasets
                 ),

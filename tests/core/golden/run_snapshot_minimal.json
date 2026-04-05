@@ -57,6 +57,8 @@
         "revision": "r1"
       }
     ],
+    "evaluation_prompt_spec": null,
+    "generation_prompt_spec": null,
     "generator_ref": {
       "component_id": "builtin/demo_generator",
       "fingerprint": "generator-fingerprint",
@@ -108,6 +110,7 @@
     "python_version": "3.12.9",
     "runtime": {
       "batch_root": null,
+      "existing_run_policy": "auto",
       "generation_retry_attempts": 3,
       "generation_retry_backoff": 2.0,
       "generation_retry_delay": 0.01,
@@ -136,5 +139,5 @@
     },
     "themis_version": "4.0.0rc1"
   },
-  "run_id": "1789ea0462d89e8962ed09464f41779f1c7ecbdd9ad23e54ececcbe41abbef03"
+  "run_id": "8fae287c1cf1154ca8b7e6525e57d5ed28eecec31769c246147fc890751e019e"
 }

@@ -8,12 +8,20 @@ import hashlib
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
+    ParseCompletedEvent,
+    ReductionCompletedEvent,
     ScoreCompletedEvent,
 )
-from themis.core.models import GenerationResult, Score
+from themis.core.models import GenerationResult, ParsedOutput, ReducedCandidate, Score
 from themis.core.results import (
     EvaluationBundle,
     EvaluationBundleRecord,
+    ParseBundle,
+    ParseBundleRecord,
+    ReductionBundle,
+    ReductionBundleRecord,
+    ScoreBundle,
+    ScoreBundleRecord,
     GenerationBundle,
     GenerationBundleRecord,
 )
@@ -81,6 +89,129 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
                 seed=record.seed,
                 result=result_payload,
                 result_blob_ref=record.result_blob_ref or blob_ref,
+            )
+        )
+
+
+def export_reduction_bundle(store: RunStore, run_id: str) -> ReductionBundle:
+    """Export stored reduction artifacts into a portable bundle."""
+
+    stored = store.resume(run_id)
+    if stored is None:
+        raise ValueError(f"Unknown run_id: {run_id}")
+
+    records: list[ReductionBundleRecord] = []
+    for event in stored.events:
+        if isinstance(event, ReductionCompletedEvent) and event.result is not None:
+            records.append(
+                ReductionBundleRecord(
+                    case_id=event.case_id,
+                    candidate_id=event.candidate_id,
+                    result=ReducedCandidate.model_validate(event.result),
+                )
+            )
+
+    return ReductionBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+
+
+def import_reduction_bundle(store: RunStore, bundle: ReductionBundle) -> None:
+    """Import reduction artifacts from a bundle into a store."""
+
+    snapshot = bundle.snapshot
+    if snapshot.run_id != bundle.run_id:
+        raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
+
+    store.persist_snapshot(snapshot)
+    for record in bundle.records:
+        store.persist_event(
+            ReductionCompletedEvent(
+                run_id=bundle.run_id,
+                case_id=record.case_id,
+                candidate_id=record.candidate_id,
+                source_candidate_ids=list(record.result.source_candidate_ids),
+                result=record.result.model_dump(mode="json"),
+            )
+        )
+
+
+def export_parse_bundle(store: RunStore, run_id: str) -> ParseBundle:
+    """Export stored parse artifacts into a portable bundle."""
+
+    stored = store.resume(run_id)
+    if stored is None:
+        raise ValueError(f"Unknown run_id: {run_id}")
+
+    records: list[ParseBundleRecord] = []
+    for event in stored.events:
+        if isinstance(event, ParseCompletedEvent) and event.result is not None:
+            records.append(
+                ParseBundleRecord(
+                    case_id=event.case_id,
+                    candidate_id=event.candidate_id,
+                    result=ParsedOutput.model_validate(event.result),
+                )
+            )
+
+    return ParseBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+
+
+def import_parse_bundle(store: RunStore, bundle: ParseBundle) -> None:
+    """Import parse artifacts from a bundle into a store."""
+
+    snapshot = bundle.snapshot
+    if snapshot.run_id != bundle.run_id:
+        raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
+
+    store.persist_snapshot(snapshot)
+    for record in bundle.records:
+        store.persist_event(
+            ParseCompletedEvent(
+                run_id=bundle.run_id,
+                case_id=record.case_id,
+                candidate_id=record.candidate_id,
+                result=record.result.model_dump(mode="json"),
+            )
+        )
+
+
+def export_score_bundle(store: RunStore, run_id: str) -> ScoreBundle:
+    """Export stored score artifacts into a portable bundle."""
+
+    stored = store.resume(run_id)
+    if stored is None:
+        raise ValueError(f"Unknown run_id: {run_id}")
+
+    records: list[ScoreBundleRecord] = []
+    for event in stored.events:
+        if isinstance(event, ScoreCompletedEvent) and event.score is not None:
+            records.append(
+                ScoreBundleRecord(
+                    case_id=event.case_id,
+                    candidate_id=event.candidate_id,
+                    metric_id=event.metric_id,
+                    score=Score.model_validate(event.score),
+                )
+            )
+
+    return ScoreBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+
+
+def import_score_bundle(store: RunStore, bundle: ScoreBundle) -> None:
+    """Import score artifacts from a bundle into a store."""
+
+    snapshot = bundle.snapshot
+    if snapshot.run_id != bundle.run_id:
+        raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
+
+    store.persist_snapshot(snapshot)
+    for record in bundle.records:
+        store.persist_event(
+            ScoreCompletedEvent(
+                run_id=bundle.run_id,
+                case_id=record.case_id,
+                candidate_id=record.candidate_id,
+                metric_id=record.metric_id,
+                score=record.score.model_dump(mode="json"),
             )
         )
 

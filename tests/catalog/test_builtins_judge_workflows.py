@@ -8,6 +8,7 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import EvalScoreContext, SelectContext
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput
+from themis.core.prompts import FewShotExample, PromptSpec
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject
@@ -85,6 +86,12 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
             component_ref_from_value("builtin/demo_judge"),
             component_ref_from_value("builtin/demo_judge"),
         ],
+        prompt_spec=PromptSpec(
+            instructions="Use the few-shot examples before grading.",
+            few_shot_examples=[
+                FewShotExample(input={"answer": "3"}, output="FAIL"),
+            ],
+        ),
         eval_workflow_config={"rubric": "grade factual accuracy"},
     )
 
@@ -110,6 +117,13 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
             ctx,
         ).content
     )
+    rendered = llm_workflow.render_prompt(
+        llm_workflow.judge_calls()[0],
+        CandidateSetSubject(candidates=[candidate]),
+        ctx,
+    ).content
+    assert "Use the few-shot examples before grading." in rendered
+    assert "Example 1 input:" in rendered
     assert len(panel_workflow.judge_calls()) == 2
     assert len(majority_workflow.judge_calls()) == 2
     assert pairwise_workflow.judge_calls()[0].candidate_indices == [0, 1]

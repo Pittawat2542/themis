@@ -62,12 +62,21 @@ class OpenAIGenerator:
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         client = self._client or self._build_client()
+        prompt_spec = ctx.prompt_spec
         request_input = (
             self.input_builder(case) if self.input_builder is not None else case.input
         )
-        payload: dict[str, object] = {"model": self.model_id, "input": request_input}
-        if self.instructions is not None:
-            payload["instructions"] = self.instructions
+        rendered_input = (
+            prompt_spec.render_input(request_input)
+            if prompt_spec is not None
+            else request_input
+        )
+        instructions = self.instructions or (
+            prompt_spec.instructions if prompt_spec is not None else None
+        )
+        payload: dict[str, object] = {"model": self.model_id, "input": rendered_input}
+        if instructions is not None:
+            payload["instructions"] = instructions
 
         response = await client.responses.create(**payload)
         raw_response = dump_response(response)
@@ -75,9 +84,9 @@ class OpenAIGenerator:
         final_output = getattr(response, "output_text", raw_response)
 
         conversation: list[Message] = []
-        if self.instructions is not None:
-            conversation.append(Message(role="system", content=self.instructions))
-        conversation.append(Message(role="user", content=request_input))
+        if instructions is not None:
+            conversation.append(Message(role="system", content=instructions))
+        conversation.append(Message(role="user", content=rendered_input))
         conversation.append(Message(role="assistant", content=final_output))
 
         artifacts = {

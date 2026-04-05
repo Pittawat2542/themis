@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import random
 from time import monotonic
 from collections.abc import Mapping
 from typing import Literal, TypeGuard, cast
@@ -70,6 +72,7 @@ from themis.core.results import (
 )
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
+from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import (
     ConversationSubject,
     TraceSubject,
@@ -83,6 +86,7 @@ from themis.core.workflows import JudgeResponse
 DEFAULT_PROVIDER_RATE_LIMIT = 60
 WorkflowMetric = LLMMetric | SelectionMetric | TraceMetric
 RuntimeMetric = PureMetric | WorkflowMetric
+ConnectionLikeErrors = (ConnectionError, OSError)
 
 
 def _is_pure_metric(metric: RuntimeMetric) -> TypeGuard[PureMetric]:
@@ -159,6 +163,7 @@ class Orchestrator:
         store_retry_attempts: int | None = None,
         force_workflow_metrics: set[str] | None = None,
         replay_stage: Literal["reduce", "parse", "score", "judge"] | None = None,
+        until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
     ) -> None:
         self.store = store
         self.generator = generator
@@ -169,6 +174,7 @@ class Orchestrator:
         self.judge_models = list(judge_models or [])
         self.force_workflow_metrics = set(force_workflow_metrics or set())
         self.replay_stage = replay_stage
+        self.until_stage = until_stage
         self.planner = planner or Planner()
         self.subscribers = list(subscribers or [])
         self.tracing_provider = tracing_provider or NoOpTracingProvider()
@@ -265,7 +271,12 @@ class Orchestrator:
             status = (
                 RunStatus.PARTIAL_FAILURE if any(case_failures) else RunStatus.COMPLETED
             )
-            await self._persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+            await self._persist_event(
+                RunCompletedEvent(
+                    run_id=snapshot.run_id,
+                    completed_through_stage=self.until_stage,
+                )
+            )
             self.tracing_provider.end_span(
                 run_span, "error" if status is RunStatus.PARTIAL_FAILURE else "ok"
             )
@@ -353,6 +364,14 @@ class Orchestrator:
         ]
         if not generated_candidates and prior_case_state.reduced_candidate is None:
             return CaseResult(case_id=case.case_id), True
+        if self.until_stage == "generate":
+            return (
+                CaseResult(
+                    case_id=case.case_id,
+                    generated_candidates=generated_candidates,
+                ),
+                had_failure,
+            )
 
         selected_candidates = self._selected_candidates_from_state(
             prior_case_state, generated_candidates
@@ -405,6 +424,28 @@ class Orchestrator:
 
         reduced = prior_case_state.reduced_candidate
         if reduced is None:
+            cached_reduction = self._load_stage_cache(
+                "reduce",
+                self._reduction_cache_key(snapshot, selected_candidates),
+            )
+            if isinstance(cached_reduction, dict) and isinstance(
+                cached_reduction.get("result"), dict
+            ):
+                reduced = ReducedCandidate.model_validate(cached_reduction["result"])
+                await self._persist_event(
+                    ReductionCompletedEvent(
+                        run_id=snapshot.run_id,
+                        case_id=case.case_id,
+                        candidate_id=reduced.candidate_id,
+                        source_candidate_ids=reduced.source_candidate_ids,
+                        result=reduced.model_dump(mode="json"),
+                        cache_hit=True,
+                        source_run_id=cast(
+                            str | None, cached_reduction.get("source_run_id")
+                        ),
+                    )
+                )
+        if reduced is None:
             reduce_ctx = ReduceContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
@@ -432,6 +473,14 @@ class Orchestrator:
                         result=reduced.model_dump(mode="json"),
                     )
                 )
+                self._store_stage_cache(
+                    "reduce",
+                    self._reduction_cache_key(snapshot, selected_candidates),
+                    {
+                        "source_run_id": snapshot.run_id,
+                        "result": reduced.model_dump(mode="json"),
+                    },
+                )
                 self.tracing_provider.end_span(span, "ok")
             except Exception as exc:
                 await self._persist_event(
@@ -445,8 +494,38 @@ class Orchestrator:
                 return CaseResult(
                     case_id=case.case_id, generated_candidates=generated_candidates
                 ), True
+        if self.until_stage == "reduce":
+            return (
+                CaseResult(
+                    case_id=case.case_id,
+                    generated_candidates=generated_candidates,
+                    reduced_candidate=reduced,
+                ),
+                had_failure,
+            )
 
         parsed = prior_case_state.parsed_output
+        if parsed is None:
+            cached_parse = self._load_stage_cache(
+                "parse",
+                self._parse_cache_key(snapshot, reduced),
+            )
+            if isinstance(cached_parse, dict) and isinstance(
+                cached_parse.get("result"), dict
+            ):
+                parsed = ParsedOutput.model_validate(cached_parse["result"])
+                await self._persist_event(
+                    ParseCompletedEvent(
+                        run_id=snapshot.run_id,
+                        case_id=case.case_id,
+                        candidate_id=reduced.candidate_id,
+                        result=parsed.model_dump(mode="json"),
+                        cache_hit=True,
+                        source_run_id=cast(
+                            str | None, cached_parse.get("source_run_id")
+                        ),
+                    )
+                )
         if parsed is None:
             parse_ctx = ParseContext(
                 run_id=snapshot.run_id,
@@ -470,6 +549,14 @@ class Orchestrator:
                         result=parsed.model_dump(mode="json"),
                     )
                 )
+                self._store_stage_cache(
+                    "parse",
+                    self._parse_cache_key(snapshot, reduced),
+                    {
+                        "source_run_id": snapshot.run_id,
+                        "result": parsed.model_dump(mode="json"),
+                    },
+                )
                 self.tracing_provider.end_span(span, "ok")
             except Exception as exc:
                 await self._persist_event(
@@ -489,10 +576,22 @@ class Orchestrator:
                     ),
                     True,
                 )
+        if self.until_stage == "parse":
+            return (
+                CaseResult(
+                    case_id=case.case_id,
+                    generated_candidates=generated_candidates,
+                    reduced_candidate=reduced,
+                    parsed_output=parsed,
+                ),
+                had_failure,
+            )
 
         for metric, metric_kind in zip(
             self.metrics, snapshot.metric_kinds, strict=False
         ):
+            if self.until_stage == "score" and metric_kind != "pure":
+                continue
             if (
                 metric_kind != "pure"
                 and metric.component_id not in self.force_workflow_metrics
@@ -509,6 +608,28 @@ class Orchestrator:
                     raise TypeError(
                         f"Metric {metric.component_id} does not implement PureMetric"
                     )
+                cache_key = self._score_cache_key(snapshot, case, parsed, metric)
+                cached_score = self._load_stage_cache("score", cache_key)
+                if isinstance(cached_score, dict) and isinstance(
+                    cached_score.get("score"), dict
+                ):
+                    cached_score_result = Score.model_validate(cached_score["score"])
+                    successful_scores[metric.component_id] = cached_score_result
+                    score_failures.pop(metric.component_id, None)
+                    await self._persist_event(
+                        ScoreCompletedEvent(
+                            run_id=snapshot.run_id,
+                            case_id=case.case_id,
+                            candidate_id=reduced.candidate_id,
+                            metric_id=cached_score_result.metric_id,
+                            score=cached_score_result.model_dump(mode="json"),
+                            cache_hit=True,
+                            source_run_id=cast(
+                                str | None, cached_score.get("source_run_id")
+                            ),
+                        )
+                    )
+                    continue
                 score_ctx = ScoreContext(
                     run_id=snapshot.run_id,
                     case=case,
@@ -522,35 +643,47 @@ class Orchestrator:
                 )
                 try:
                     async with self._stage_semaphores["scoring"]:
-                        score = await asyncio.to_thread(
-                            metric.score, parsed, case, score_ctx
+                        score_result = await asyncio.to_thread(
+                            _score_pure_metric,
+                            metric,
+                            parsed,
+                            case,
+                            score_ctx,
                         )
-                    self._notify("after_score", score, score_ctx)
-                    if isinstance(score, ScoreError):
-                        score_failures[metric.component_id] = score
+                    self._notify("after_score", score_result, score_ctx)
+                    if isinstance(score_result, ScoreError):
+                        score_failures[metric.component_id] = score_result
                         successful_scores.pop(metric.component_id, None)
                         await self._persist_event(
                             ScoreFailedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=case.case_id,
                                 candidate_id=reduced.candidate_id,
-                                metric_id=score.metric_id,
-                                error=score.model_dump(mode="json"),
+                                metric_id=score_result.metric_id,
+                                error=score_result.model_dump(mode="json"),
                             )
                         )
                         had_failure = True
                         self.tracing_provider.end_span(span, "error")
                         continue
-                    successful_scores[metric.component_id] = score
+                    successful_scores[metric.component_id] = score_result
                     score_failures.pop(metric.component_id, None)
                     await self._persist_event(
                         ScoreCompletedEvent(
                             run_id=snapshot.run_id,
                             case_id=case.case_id,
                             candidate_id=reduced.candidate_id,
-                            metric_id=score.metric_id,
-                            score=score.model_dump(mode="json"),
+                            metric_id=score_result.metric_id,
+                            score=score_result.model_dump(mode="json"),
                         )
+                    )
+                    self._store_stage_cache(
+                        "score",
+                        cache_key,
+                        {
+                            "source_run_id": snapshot.run_id,
+                            "score": score_result.model_dump(mode="json"),
+                        },
                     )
                     self.tracing_provider.end_span(span, "ok")
                 except Exception as exc:
@@ -677,6 +810,12 @@ class Orchestrator:
                 self.tracing_provider.end_span(span, "error")
                 had_failure = True
 
+        expected_metric_ids = {
+            metric.component_id
+            for metric, metric_kind in zip(self.metrics, snapshot.metric_kinds, strict=False)
+            if self.until_stage == "judge" or metric_kind == "pure"
+        }
+
         return (
             CaseResult(
                 case_id=case.case_id,
@@ -703,7 +842,7 @@ class Orchestrator:
                     if score is not None
                 ],
             ),
-            had_failure or len(successful_scores) != len(self.metrics),
+            had_failure or len(successful_scores) != len(expected_metric_ids),
         )
 
     async def _generate_candidate(
@@ -713,8 +852,42 @@ class Orchestrator:
         item: GenerationWorkItem,
     ) -> tuple[int, GenerationResult | None, bool]:
         generate_ctx = GenerateContext(
-            run_id=snapshot.run_id, case_id=item.case_id, seed=item.seed
+            run_id=snapshot.run_id,
+            case_id=item.case_id,
+            seed=item.seed,
+            prompt_spec=snapshot.identity.generation_prompt_spec,
         )
+        cache_key = self._generation_cache_key(snapshot, case, item)
+        cached_generation = self._load_stage_cache("generate", cache_key)
+        if isinstance(cached_generation, dict) and isinstance(
+            cached_generation.get("result"), dict
+        ):
+            generated = GenerationResult.model_validate(cached_generation["result"])
+            blob_ref = await self._store_blob(
+                json.dumps(generated.model_dump(mode="json"), sort_keys=True).encode(
+                    "utf-8"
+                ),
+                "application/json",
+            )
+            await self._persist_event(
+                GenerationCompletedEvent(
+                    run_id=snapshot.run_id,
+                    case_id=item.case_id,
+                    candidate_id=generated.candidate_id,
+                    candidate_index=item.candidate_index,
+                    seed=item.seed,
+                    provider_key=cast(
+                        str | None, cached_generation.get("provider_key")
+                    ),
+                    result=generated.model_dump(mode="json"),
+                    result_blob_ref=blob_ref,
+                    cache_hit=True,
+                    source_run_id=cast(
+                        str | None, cached_generation.get("source_run_id")
+                    ),
+                )
+            )
+            return item.candidate_index, generated, False
         async with self._global_semaphore:
             async with self._stage_semaphores["generation"]:
                 provider_key = self._provider_key()
@@ -760,6 +933,15 @@ class Orchestrator:
                                 result=generated.model_dump(mode="json"),
                                 result_blob_ref=blob_ref,
                             )
+                        )
+                        self._store_stage_cache(
+                            "generate",
+                            cache_key,
+                            {
+                                "source_run_id": snapshot.run_id,
+                                "provider_key": provider_key,
+                                "result": generated.model_dump(mode="json"),
+                            },
                         )
                         self.tracing_provider.end_span(span, "ok")
                         return item.candidate_index, generated, False
@@ -834,6 +1016,7 @@ class Orchestrator:
             seed=seed,
             judge_model_refs=list(snapshot.identity.judge_model_refs),
             judge_seed=seed,
+            prompt_spec=snapshot.identity.evaluation_prompt_spec,
             eval_workflow_config=snapshot.identity.workflow_overrides,
         )
 
@@ -1032,22 +1215,28 @@ class Orchestrator:
                     generated = generated.model_copy(update={"artifacts": artifacts})
                 return generated
             except Exception as exc:
-                if (
-                    attempt + 1 == self.runtime.generation_retry_attempts
-                    or not _is_retryable_error(exc)
+                retry_classification = _classify_retryable_error(exc)
+                if attempt + 1 == self.runtime.generation_retry_attempts or (
+                    retry_classification is None
                 ):
                     setattr(exc, "retry_history", retry_history)
                     raise
-                delay = self.runtime.generation_retry_delay * (
-                    self.runtime.generation_retry_backoff**attempt
+                delay = _retry_delay_seconds(
+                    base_delay=self.runtime.generation_retry_delay,
+                    backoff=self.runtime.generation_retry_backoff,
+                    attempt=attempt,
+                    retry_after_s=retry_classification.get("retry_after_s"),
                 )
-                retry_history.append(
-                    {
-                        "attempt": attempt + 1,
-                        "error_message": str(exc),
-                        "delay_s": delay,
-                    }
-                )
+                retry_entry: dict[str, JSONValue] = {
+                    "attempt": attempt + 1,
+                    "error_message": str(exc),
+                    "delay_s": delay,
+                    "reason": retry_classification["reason"],
+                }
+                retry_after_s = retry_classification.get("retry_after_s")
+                if retry_after_s is not None:
+                    retry_entry["retry_after_s"] = retry_after_s
+                retry_history.append(retry_entry)
                 await asyncio.sleep(delay)
         raise RuntimeError("unreachable")
 
@@ -1068,22 +1257,28 @@ class Orchestrator:
                     )
                 return response
             except Exception as exc:
-                if (
-                    attempt + 1 == self.runtime.judge_retry_attempts
-                    or not _is_retryable_error(exc)
+                retry_classification = _classify_retryable_error(exc)
+                if attempt + 1 == self.runtime.judge_retry_attempts or (
+                    retry_classification is None
                 ):
                     setattr(exc, "retry_history", retry_history)
                     raise
-                delay = self.runtime.judge_retry_delay * (
-                    self.runtime.judge_retry_backoff**attempt
+                delay = _retry_delay_seconds(
+                    base_delay=self.runtime.judge_retry_delay,
+                    backoff=self.runtime.judge_retry_backoff,
+                    attempt=attempt,
+                    retry_after_s=retry_classification.get("retry_after_s"),
                 )
-                retry_history.append(
-                    {
-                        "attempt": attempt + 1,
-                        "error_message": str(exc),
-                        "delay_s": delay,
-                    }
-                )
+                retry_entry: dict[str, JSONValue] = {
+                    "attempt": attempt + 1,
+                    "error_message": str(exc),
+                    "delay_s": delay,
+                    "reason": retry_classification["reason"],
+                }
+                retry_after_s = retry_classification.get("retry_after_s")
+                if retry_after_s is not None:
+                    retry_entry["retry_after_s"] = retry_after_s
+                retry_history.append(retry_entry)
                 await asyncio.sleep(delay)
         raise RuntimeError("unreachable")
 
@@ -1153,6 +1348,89 @@ class Orchestrator:
         if isinstance(requests_per_minute, int):
             await self._provider_limiter(provider_key).update_limit(requests_per_minute)
 
+    def _load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+        if isinstance(self.store, InMemoryRunStore):
+            return None
+        return self.store.load_stage_cache(stage_name, cache_key)
+
+    def _store_stage_cache(
+        self, stage_name: str, cache_key: str, payload: JSONValue
+    ) -> None:
+        if isinstance(self.store, InMemoryRunStore):
+            return
+        self.store.store_stage_cache(stage_name, cache_key, payload)
+
+    def _generation_cache_key(
+        self, snapshot: RunSnapshot, case, item: GenerationWorkItem
+    ) -> str:
+        return _stable_hash(
+            {
+                "stage": "generate",
+                "case_hash": case.compute_hash(),
+                "generator_ref": snapshot.component_refs.generator.model_dump(
+                    mode="json"
+                ),
+                "candidate_policy": snapshot.identity.candidate_policy,
+                "prompt_spec": snapshot.identity.generation_prompt_spec.model_dump(
+                    mode="json"
+                )
+                if snapshot.identity.generation_prompt_spec is not None
+                else None,
+                "seed": item.seed,
+            }
+        )
+
+    def _reduction_cache_key(
+        self, snapshot: RunSnapshot, candidates: list[GenerationResult]
+    ) -> str:
+        return _stable_hash(
+            {
+                "stage": "reduce",
+                "selector_ref": snapshot.component_refs.selector.model_dump(mode="json")
+                if snapshot.component_refs.selector is not None
+                else None,
+                "reducer_ref": snapshot.component_refs.reducer.model_dump(mode="json")
+                if snapshot.component_refs.reducer is not None
+                else None,
+                "candidate_hashes": [candidate.compute_hash() for candidate in candidates],
+            }
+        )
+
+    def _parse_cache_key(self, snapshot: RunSnapshot, reduced: ReducedCandidate) -> str:
+        return _stable_hash(
+            {
+                "stage": "parse",
+                "reduced_hash": reduced.compute_hash(),
+                "parser_ref": snapshot.component_refs.parsers[0].model_dump(mode="json")
+                if snapshot.component_refs.parsers
+                else None,
+            }
+        )
+
+    def _score_cache_key(
+        self, snapshot: RunSnapshot, case, parsed: ParsedOutput, metric: PureMetric
+    ) -> str:
+        metric_index = next(
+            index
+            for index, candidate_metric in enumerate(self.metrics)
+            if candidate_metric.component_id == metric.component_id
+        )
+        return _stable_hash(
+            {
+                "stage": "score",
+                "case_hash": case.compute_hash(),
+                "parsed_hash": parsed.compute_hash(),
+                "metric_ref": snapshot.component_refs.metrics[metric_index].model_dump(
+                    mode="json"
+                ),
+                "prompt_spec": snapshot.identity.evaluation_prompt_spec.model_dump(
+                    mode="json"
+                )
+                if snapshot.identity.evaluation_prompt_spec is not None
+                else None,
+            }
+        )
+
     def _resolve_runtime(
         self,
         *,
@@ -1195,5 +1473,57 @@ class Orchestrator:
         return base.model_copy(update=updates)
 
 
-def _is_retryable_error(exc: Exception) -> bool:
-    return bool(getattr(exc, "retryable", False))
+def _classify_retryable_error(exc: Exception) -> dict[str, JSONValue] | None:
+    if bool(getattr(exc, "retryable", False)):
+        return {"reason": "explicit_retryable"}
+    if isinstance(exc, TimeoutError | asyncio.TimeoutError):
+        return {"reason": "timeout"}
+    if isinstance(exc, ConnectionLikeErrors):
+        return {"reason": "connection"}
+    status_code = getattr(exc, "status_code", None)
+    retry_after_s = getattr(exc, "retry_after_s", None)
+    if status_code == 429:
+        payload: dict[str, JSONValue] = {"reason": "rate_limit"}
+        if isinstance(retry_after_s, (int, float)):
+            payload["retry_after_s"] = float(retry_after_s)
+        return payload
+    if isinstance(status_code, int) and 500 <= status_code < 600:
+        payload = {"reason": "server_error"}
+        if isinstance(retry_after_s, (int, float)):
+            payload["retry_after_s"] = float(retry_after_s)
+        return payload
+    return None
+
+
+def _retry_delay_seconds(
+    *,
+    base_delay: float,
+    backoff: float,
+    attempt: int,
+    retry_after_s: JSONValue | None = None,
+) -> float:
+    computed_delay = max(0.0, base_delay) * (max(1.0, backoff) ** attempt)
+    jitter_window = computed_delay * 0.1
+    jittered_delay = computed_delay
+    if jitter_window > 0:
+        jittered_delay = max(
+            0.0,
+            computed_delay + random.Random(attempt).uniform(-jitter_window, jitter_window),
+        )
+    if isinstance(retry_after_s, (int, float)):
+        return max(jittered_delay, float(retry_after_s))
+    return jittered_delay
+
+
+def _score_pure_metric(
+    metric: PureMetric,
+    parsed: ParsedOutput,
+    case,
+    score_ctx: ScoreContext,
+) -> Score | ScoreError:
+    return metric.score(parsed, case, score_ctx)
+
+
+def _stable_hash(payload: dict[str, object]) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

@@ -5,6 +5,7 @@ import pytest
 from themis.adapters.openai import openai
 from themis.core.contexts import GenerateContext
 from themis.core.models import Case, GenerationResult
+from themis.core.prompts import FewShotExample, PromptSpec
 
 
 class FakeUsage:
@@ -80,3 +81,40 @@ def test_openai_adapter_fingerprint_is_deterministic() -> None:
 
     assert left.fingerprint() == right.fingerprint()
     assert left.fingerprint() != changed.fingerprint()
+
+
+@pytest.mark.asyncio
+async def test_openai_adapter_can_take_prompt_spec_from_context() -> None:
+    client = FakeClient()
+    generator = openai("gpt-5.4-mini", client=client)
+    case = Case(case_id="case-1", input="What is 2+2?", expected_output="4")
+
+    await generator.generate(
+        case,
+        GenerateContext(
+            run_id="run-1",
+            case_id="case-1",
+            seed=7,
+            prompt_spec=PromptSpec(
+                instructions="Answer directly.",
+                prefix="Use the examples.",
+                few_shot_examples=[
+                    FewShotExample(input="1+1", output="2"),
+                ],
+            ),
+        ),
+    )
+
+    assert client.responses.calls == [
+        {
+            "model": "gpt-5.4-mini",
+            "input": (
+                "Instructions:\nAnswer directly.\n\n"
+                "Use the examples.\n\n"
+                "Example 1 input:\n1+1\n"
+                "Example 1 output:\n2\n\n"
+                "Input:\nWhat is 2+2?"
+            ),
+            "instructions": "Answer directly.",
+        }
+    ]

@@ -7,6 +7,7 @@ from typing import TypeAlias
 from pydantic import Field, model_validator
 
 from themis.core.base import HashableModel, JSONValue
+from themis.core.prompts import PromptSpec
 from themis.core.protocols import (
     CandidateReducer,
     CandidateSelector,
@@ -34,6 +35,7 @@ class GenerationConfig(HashableModel):
 
     generator: GeneratorComponent
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
+    prompt_spec: PromptSpec | None = None
     selector: SelectorComponent | None = None
     reducer: ReducerComponent | None = None
 
@@ -44,6 +46,7 @@ class EvaluationConfig(HashableModel):
     metrics: list[MetricComponent] = Field(default_factory=list)
     parsers: list[ParserComponent] = Field(default_factory=list)
     judge_models: list[JudgeModelComponent] = Field(default_factory=list)
+    prompt_spec: PromptSpec | None = None
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
 
@@ -76,5 +79,6 @@ class RuntimeConfig(HashableModel):
     judge_retry_backoff: float = 2.0
     store_retry_attempts: int = 5
     store_retry_delay: float = 0.01
+    existing_run_policy: str = "auto"
     queue_root: str | None = None
     batch_root: str | None = None

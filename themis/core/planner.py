@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import json
 
 from themis.core.results import GenerationWorkItem, RunEstimate
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import JudgeCall
+
+DEFAULT_GENERATION_INPUT_TOKENS_PER_CASE = 4
+DEFAULT_GENERATION_OUTPUT_TOKENS_PER_CANDIDATE = 256
+DEFAULT_JUDGE_OUTPUT_TOKENS_PER_CALL = 64
 
 
 class Planner:
@@ -121,6 +126,23 @@ class Planner:
         metric_count = len(snapshot.component_refs.metrics)
         pure_metric_count = sum(1 for kind in snapshot.metric_kinds if kind == "pure")
         workflow_metric_count = metric_count - pure_metric_count
+        planned_generation_tasks = total_cases * candidate_count
+        planned_reduction_tasks = total_cases if candidate_count > 1 else 0
+        planned_parse_tasks = total_cases if snapshot.component_refs.parsers else 0
+        planned_score_tasks = total_cases * metric_count
+        estimated_generation_input_tokens = (
+            planned_generation_tasks * DEFAULT_GENERATION_INPUT_TOKENS_PER_CASE
+        )
+        estimated_generation_output_tokens = (
+            planned_generation_tasks * DEFAULT_GENERATION_OUTPUT_TOKENS_PER_CANDIDATE
+        )
+        estimated_judge_prompt_tokens = self._estimated_judge_prompt_tokens(
+            snapshot, total_cases
+        )
+        estimated_judge_output_tokens = (
+            self._estimated_judge_call_count(snapshot, total_cases)
+            * DEFAULT_JUDGE_OUTPUT_TOKENS_PER_CALL
+        )
         return RunEstimate(
             run_id=snapshot.run_id,
             total_cases=total_cases,
@@ -128,10 +150,29 @@ class Planner:
             metric_count=metric_count,
             pure_metric_count=pure_metric_count,
             workflow_metric_count=workflow_metric_count,
-            planned_generation_tasks=total_cases * candidate_count,
-            planned_reduction_tasks=total_cases if candidate_count > 1 else 0,
-            planned_parse_tasks=total_cases if snapshot.component_refs.parsers else 0,
-            planned_score_tasks=total_cases * metric_count,
+            planned_generation_tasks=planned_generation_tasks,
+            planned_reduction_tasks=planned_reduction_tasks,
+            planned_parse_tasks=planned_parse_tasks,
+            planned_score_tasks=planned_score_tasks,
+            estimated_generation_input_tokens=estimated_generation_input_tokens,
+            estimated_generation_output_tokens=estimated_generation_output_tokens,
+            estimated_judge_prompt_tokens=estimated_judge_prompt_tokens,
+            estimated_judge_output_tokens=estimated_judge_output_tokens,
+            estimated_total_tokens=(
+                estimated_generation_input_tokens
+                + estimated_generation_output_tokens
+                + estimated_judge_prompt_tokens
+                + estimated_judge_output_tokens
+            ),
+            assumptions={
+                "generation_input_tokens_per_case": (
+                    DEFAULT_GENERATION_INPUT_TOKENS_PER_CASE
+                ),
+                "generation_output_tokens_per_candidate": (
+                    DEFAULT_GENERATION_OUTPUT_TOKENS_PER_CANDIDATE
+                ),
+                "judge_output_tokens_per_call": DEFAULT_JUDGE_OUTPUT_TOKENS_PER_CALL,
+            },
         )
 
     async def iter_work_items(self, snapshot: RunSnapshot):
@@ -165,3 +206,32 @@ class Planner:
             ).hexdigest()
             seeds.append(int(digest[:8], 16))
         return seeds
+
+    def _estimated_judge_prompt_tokens(
+        self, snapshot: RunSnapshot, total_cases: int
+    ) -> int:
+        if not snapshot.identity.judge_model_refs:
+            return 0
+        prompt_tokens_per_call = max(
+            1,
+            len(
+                json.dumps(
+                    snapshot.identity.judge_config,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
+            // 4,
+        )
+        return self._estimated_judge_call_count(snapshot, total_cases) * (
+            prompt_tokens_per_call
+        )
+
+    def _estimated_judge_call_count(self, snapshot: RunSnapshot, total_cases: int) -> int:
+        workflow_metric_count = sum(
+            1 for metric_kind in snapshot.metric_kinds if metric_kind != "pure"
+        )
+        if workflow_metric_count == 0:
+            return 0
+        judge_model_count = max(1, len(snapshot.identity.judge_model_refs))
+        return total_cases * workflow_metric_count * judge_model_count

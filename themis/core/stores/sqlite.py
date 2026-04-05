@@ -61,6 +61,16 @@ class SqliteRunStore(ProjectionRefreshingStore):
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS stage_cache (
+                    stage_name TEXT NOT NULL,
+                    cache_key TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (stage_name, cache_key)
+                )
+                """
+            )
             connection.commit()
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
@@ -169,6 +179,40 @@ class SqliteRunStore(ProjectionRefreshingStore):
         if snapshot is None:
             return None
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+
+    def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute(
+                """
+                SELECT payload_json
+                FROM stage_cache
+                WHERE stage_name = ? AND cache_key = ?
+                """,
+                (stage_name, cache_key),
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row[0])
+
+    def store_stage_cache(
+        self, stage_name: str, cache_key: str, payload: JSONValue
+    ) -> None:
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO stage_cache (stage_name, cache_key, payload_json)
+                VALUES (?, ?, ?)
+                """,
+                (stage_name, cache_key, json.dumps(payload, sort_keys=True)),
+            )
+            connection.commit()
+
+    def clear_run(self, run_id: str) -> None:
+        with sqlite3.connect(self.path) as connection:
+            connection.execute("DELETE FROM run_events WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM run_projections WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM run_snapshots WHERE run_id = ?", (run_id,))
+            connection.commit()
 
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         with closing(sqlite3.connect(self.path)) as connection:

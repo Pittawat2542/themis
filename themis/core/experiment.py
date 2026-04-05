@@ -29,6 +29,7 @@ from themis.core.config import (
 from themis.core.config_loading import ExperimentConfigMetadata
 from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
+from themis.core.projections import build_run_result
 from themis.core.protocols import (
     LLMMetric,
     LifecycleSubscriber,
@@ -128,6 +129,8 @@ class Experiment(FrozenModel):
             metric_refs=component_refs.metrics,
             judge_model_refs=component_refs.judge_models,
             candidate_policy=self.generation.candidate_policy,
+            generation_prompt_spec=self.generation.prompt_spec,
+            evaluation_prompt_spec=self.evaluation.prompt_spec,
             judge_config=self.evaluation.judge_config,
             workflow_overrides=self.evaluation.workflow_overrides,
             seeds=self.seeds,
@@ -158,6 +161,7 @@ class Experiment(FrozenModel):
     async def run_async(
         self,
         *,
+        until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
@@ -169,7 +173,22 @@ class Experiment(FrozenModel):
         snapshot = self._snapshot_for_runtime(effective_runtime)
         run_store = store or self._build_store()
         run_store.initialize()
-        if run_store.resume(snapshot.run_id) is None:
+        stored_run = run_store.resume(snapshot.run_id)
+        if stored_run is not None:
+            existing_run_policy = effective_runtime.existing_run_policy
+            if existing_run_policy == "error":
+                raise ValueError(f"Run already exists for run_id={snapshot.run_id}")
+            if existing_run_policy == "rerun":
+                run_store.clear_run(snapshot.run_id)
+                stored_run = None
+            elif (
+                existing_run_policy == "auto"
+                and stored_run.execution_state.status.value == "completed"
+                and _stage_index(stored_run.execution_state.completed_through_stage)
+                >= _stage_index(until_stage)
+            ):
+                return build_run_result(stored_run.snapshot, stored_run.events)
+        if stored_run is None:
             run_store.persist_snapshot(snapshot)
         resolved_component_refs = self._resolved_component_refs()
         self._validate_component_refs(snapshot, resolved_component_refs)
@@ -195,6 +214,7 @@ class Experiment(FrozenModel):
             subscribers=subscribers or [],
             tracing_provider=tracing_provider or NoOpTracingProvider(),
             runtime=effective_runtime,
+            until_stage=until_stage,
         )
         return await orchestrator.run(snapshot)
 
@@ -284,6 +304,7 @@ class Experiment(FrozenModel):
     def run(
         self,
         *,
+        until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
         subscribers: list[LifecycleSubscriber] | None = None,
@@ -293,6 +314,7 @@ class Experiment(FrozenModel):
 
         return asyncio.run(
             self.run_async(
+                until_stage=until_stage,
                 runtime=runtime,
                 store=store,
                 subscribers=subscribers,
@@ -467,6 +489,17 @@ def _detect_git_commit() -> str | None:
         return None
     commit = completed.stdout.strip()
     return commit or None
+
+
+def _stage_index(stage: str | None) -> int:
+    order = {
+        "generate": 0,
+        "reduce": 1,
+        "parse": 2,
+        "score": 3,
+        "judge": 4,
+    }
+    return order.get(stage or "judge", 4)
 
 
 def _default_dependency_versions(themis_version: str) -> dict[str, str]:

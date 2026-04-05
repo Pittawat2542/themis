@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from pydantic import Field
 
-from themis.core.base import FrozenModel
+from themis.core.base import FrozenModel, JSONValue
 from themis.core.events import (
     EvaluationCompletedEvent,
     EvaluationFailedEvent,
@@ -105,6 +105,7 @@ class ExecutionState(FrozenModel):
 
     run_id: str
     status: RunStatus = RunStatus.PENDING
+    completed_through_stage: str | None = None
     case_states: dict[str, CaseExecutionState] = Field(default_factory=dict)
 
     @classmethod
@@ -129,7 +130,12 @@ class ExecutionState(FrozenModel):
             status = (
                 RunStatus.COMPLETED if not saw_failures else RunStatus.PARTIAL_FAILURE
             )
-            return self.model_copy(update={"status": status})
+            return self.model_copy(
+                update={
+                    "status": status,
+                    "completed_through_stage": event.completed_through_stage,
+                }
+            )
         if isinstance(event, RunFailedEvent):
             return self.model_copy(update={"status": RunStatus.FAILED})
         if not isinstance(event, CaseStageEvent):
@@ -311,6 +317,7 @@ class RunResult(FrozenModel):
 
     run_id: str
     status: RunStatus
+    completed_through_stage: str | None = None
     progress: ProgressSnapshot = Field(default_factory=ProgressSnapshot)
     cases: list[CaseResult] = Field(default_factory=list)
 
@@ -328,6 +335,64 @@ class RunEstimate(FrozenModel):
     planned_reduction_tasks: int
     planned_parse_tasks: int
     planned_score_tasks: int
+    estimated_generation_input_tokens: int = 0
+    estimated_generation_output_tokens: int = 0
+    estimated_judge_prompt_tokens: int = 0
+    estimated_judge_output_tokens: int = 0
+    estimated_total_tokens: int = 0
+    assumptions: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class ReductionBundleRecord(FrozenModel):
+    """One portable reduction artifact record."""
+
+    case_id: str
+    candidate_id: str
+    result: ReducedCandidate
+
+
+class ReductionBundle(FrozenModel):
+    """Portable bundle of reduction artifacts for a run."""
+
+    schema_version: str = "1"
+    run_id: str
+    snapshot: RunSnapshot
+    records: list[ReductionBundleRecord] = Field(default_factory=list)
+
+
+class ParseBundleRecord(FrozenModel):
+    """One portable parse artifact record."""
+
+    case_id: str
+    candidate_id: str
+    result: ParsedOutput
+
+
+class ParseBundle(FrozenModel):
+    """Portable bundle of parse artifacts for a run."""
+
+    schema_version: str = "1"
+    run_id: str
+    snapshot: RunSnapshot
+    records: list[ParseBundleRecord] = Field(default_factory=list)
+
+
+class ScoreBundleRecord(FrozenModel):
+    """One portable score artifact record."""
+
+    case_id: str
+    candidate_id: str
+    metric_id: str
+    score: Score
+
+
+class ScoreBundle(FrozenModel):
+    """Portable bundle of score artifacts for a run."""
+
+    schema_version: str = "1"
+    run_id: str
+    snapshot: RunSnapshot
+    records: list[ScoreBundleRecord] = Field(default_factory=list)
 
 
 class GenerationBundleRecord(FrozenModel):

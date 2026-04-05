@@ -121,6 +121,32 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             upsert=True,
         )
 
+    def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+        row = self._db()["stage_cache"].find_one(
+            {"stage_name": stage_name, "cache_key": cache_key}
+        )
+        if row is None:
+            return None
+        return row["payload_json"]
+
+    def store_stage_cache(
+        self, stage_name: str, cache_key: str, payload: JSONValue
+    ) -> None:
+        self._db()["stage_cache"].replace_one(
+            {"stage_name": stage_name, "cache_key": cache_key},
+            {
+                "stage_name": stage_name,
+                "cache_key": cache_key,
+                "payload_json": payload,
+            },
+            upsert=True,
+        )
+
+    def clear_run(self, run_id: str) -> None:
+        self._db()["run_events"].delete_many({"run_id": run_id})
+        self._db()["run_projections"].delete_many({"run_id": run_id})
+        self._db()["run_snapshots"].delete_many({"run_id": run_id})
+
     def _db(self):
         if self._database_handle is not None:
             return self._database_handle

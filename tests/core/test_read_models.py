@@ -7,10 +7,12 @@ from themis.core.events import (
     GenerationCompletedEvent,
     GenerationFailedEvent,
     ParseCompletedEvent,
+    ParseFailedEvent,
     ReductionCompletedEvent,
     RunCompletedEvent,
     RunStartedEvent,
     ScoreCompletedEvent,
+    ScoreFailedEvent,
 )
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
@@ -202,7 +204,107 @@ def test_build_benchmark_result_aggregates_scores_from_run_result() -> None:
     assert result.score_rows[0].case_id == "case-1"
     assert result.score_rows[0].metric_id == "builtin/exact_match"
     assert result.score_rows[0].value == 1.0
+    assert result.score_rows[0].outcome == "correct"
+    assert result.outcome_counts == {"builtin/exact_match": {"correct": 1}}
+    assert result.error_counts == {}
     assert result.metric_means == {"builtin/exact_match": 1.0}
+
+
+def test_build_benchmark_result_marks_incorrect_scores_separately_from_errors() -> None:
+    snapshot = _snapshot()
+    events = _events(snapshot.run_id)
+    events[7] = ScoreCompletedEvent(
+        run_id=snapshot.run_id,
+        case_id="case-1",
+        candidate_id="case-1-reduced",
+        metric_id="builtin/exact_match",
+        score={
+            "metric_id": "builtin/exact_match",
+            "value": 0.0,
+            "details": {"matched": False},
+        },
+    )
+
+    result = build_benchmark_result(snapshot, events)
+
+    assert result.score_rows[0].outcome == "incorrect"
+    assert result.score_rows[0].error_category is None
+    assert result.outcome_counts == {"builtin/exact_match": {"incorrect": 1}}
+    assert result.metric_means == {"builtin/exact_match": 0.0}
+
+
+def test_build_benchmark_result_surfaces_parse_and_score_errors_as_error_rows() -> None:
+    snapshot = _snapshot()
+    events = [
+        RunStartedEvent(run_id=snapshot.run_id),
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="candidate-1",
+            candidate_index=0,
+            seed=7,
+            result={"candidate_id": "candidate-1", "final_output": {"answer": "4"}},
+        ),
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["candidate-1"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["candidate-1"],
+                "final_output": {"answer": "4"},
+            },
+        ),
+        ParseFailedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            error_message="invalid json",
+        ),
+        RunCompletedEvent(run_id=snapshot.run_id),
+    ]
+
+    result = build_benchmark_result(snapshot, events)
+
+    assert result.score_rows == [
+        result.score_rows[0].model_copy(
+            update={
+                "case_id": "case-1",
+                "metric_id": "builtin/exact_match",
+                "value": None,
+                "candidate_id": "case-1-reduced",
+                "outcome": "error",
+                "error_category": "parse_failure",
+                "error_message": "invalid json",
+                "details": {},
+            }
+        )
+    ]
+    assert result.metric_means == {}
+    assert result.outcome_counts == {"builtin/exact_match": {"error": 1}}
+    assert result.error_counts == {"builtin/exact_match": {"parse_failure": 1}}
+
+
+def test_build_benchmark_result_marks_score_failures_as_error_rows() -> None:
+    snapshot = _snapshot()
+    events = _events(snapshot.run_id)
+    events[7] = ScoreFailedEvent(
+        run_id=snapshot.run_id,
+        case_id="case-1",
+        candidate_id="case-1-reduced",
+        metric_id="builtin/exact_match",
+        error={"metric_id": "builtin/exact_match", "reason": "missing expected output"},
+    )
+
+    result = build_benchmark_result(snapshot, events)
+
+    assert result.score_rows[0].outcome == "error"
+    assert result.score_rows[0].error_category == "score_failure"
+    assert result.score_rows[0].error_message == "missing expected output"
+    assert result.metric_means == {}
+    assert result.outcome_counts == {"builtin/exact_match": {"error": 1}}
+    assert result.error_counts == {"builtin/exact_match": {"score_failure": 1}}
 
 
 def test_build_timeline_view_preserves_event_order_and_case_scope() -> None:

@@ -11,6 +11,7 @@ from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef
 from themis.core.config import RuntimeConfig, StorageConfig
 from themis.core.events import RunEvent
 from themis.core.models import Dataset
+from themis.core.prompts import PromptSpec
 from themis.core.security import (
     sanitize_persisted_json_value,
     sanitize_persisted_string_mapping,
@@ -62,6 +63,8 @@ class RunIdentity(HashableModel):
     metric_refs: list[ComponentRef] = Field(default_factory=list)
     judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
+    generation_prompt_spec: PromptSpec | None = None
+    evaluation_prompt_spec: PromptSpec | None = None
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
     seeds: list[int] = Field(default_factory=list)
