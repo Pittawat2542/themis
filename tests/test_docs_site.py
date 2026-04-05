@@ -256,12 +256,12 @@ def test_docs_cover_required_topics_and_optional_extras() -> None:
         DOCS_ROOT / "how-to" / "install-extras-and-configure-providers.md"
     ).read_text(encoding="utf-8")
     for extra in (
-        ".[openai]",
-        ".[vllm]",
-        ".[langgraph]",
-        ".[datasets]",
-        ".[mongodb]",
-        ".[postgres]",
+        "themis-eval[openai]",
+        "themis-eval[vllm]",
+        "themis-eval[langgraph]",
+        "themis-eval[datasets]",
+        "themis-eval[mongodb]",
+        "themis-eval[postgres]",
     ):
         assert extra in install_guide
 

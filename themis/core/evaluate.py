@@ -38,7 +38,7 @@ def evaluate(
     workflow_overrides: dict[str, object] | None = None,
     judge_config: dict[str, object] | None = None,
     environment_metadata: dict[str, str] | None = None,
-    themis_version: str = "4.0.0rc1",
+    themis_version: str = "4.0.0",
     python_version: str = "3.12",
     platform: str = "unknown",
     store: RunStore | None = None,

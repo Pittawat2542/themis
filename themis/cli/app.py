@@ -18,7 +18,7 @@ from themis.cli.commands.worker import worker_app
 from themis.cli.helpers import dump_json, load_experiment
 from themis.core.submission import submit_experiment
 
-app = App(name="themis", help="Themis v4 CLI")
+app = App(name="themis", help="Themis CLI")
 
 
 @app.command

@@ -136,11 +136,11 @@ def _experiment(
         ],
         seeds=[7, 11],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0rc1",
+        themis_version="4.0.0",
         python_version="3.12.9",
         platform="macos",
         git_commit="abc123",
-        dependency_versions={"themis-eval": "4.0.0rc1"},
+        dependency_versions={"themis-eval": "4.0.0"},
         provider_metadata={},
     )
 

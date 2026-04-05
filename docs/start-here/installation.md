@@ -7,18 +7,19 @@ goal: Explain the default install path, optional extras, and the prerequisites n
 
 # Installation
 
-Install the base package when you want the core runtime, builtin components, docs tooling, and local deterministic examples.
+Install the base package when you want the core runtime, builtin components, and deterministic local examples.
 
 ```bash
-uv pip install -e ".[dev]"
+pip install themis-eval
 ```
 
 Optional extras:
 
-- `.[openai]` for the OpenAI adapter
-- `.[vllm]` for vLLM on Linux
-- `.[langgraph]` for the LangGraph adapter
-- `.[datasets]` for Hugging Face quick-eval loading
-- `.[mongodb]` or `.[postgres]` for external persistent stores
+- `themis-eval[openai]` for the OpenAI adapter
+- `themis-eval[vllm]` for vLLM on Linux
+- `themis-eval[langgraph]` for the LangGraph adapter
+- `themis-eval[datasets]` for Hugging Face quick-eval loading
+- `themis-eval[mongodb]` or `themis-eval[postgres]` for external persistent stores
+- `themis-eval[docs]` for local docs builds
 
 Use the base install first unless you already know you need a provider integration. The tutorials in this docs set default to deterministic local examples and builtin demo components.

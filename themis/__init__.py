@@ -1,4 +1,4 @@
-"""Public package surface for the Themis v4 runtime."""
+"""Public package surface for Themis."""
 
 from themis.core import (
     Experiment,

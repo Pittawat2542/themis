@@ -51,7 +51,7 @@ from themis.core.snapshot import (
 
 
 class Experiment(FrozenModel):
-    """Authoring model for a Themis v4 experiment.
+    """Authoring model for a Themis experiment.
 
     An experiment owns the compile-time inputs required to build a `RunSnapshot`
     and provides sync and async helpers for running or rejudging that snapshot.
@@ -64,7 +64,7 @@ class Experiment(FrozenModel):
     datasets: list[Dataset] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
-    themis_version: str = "4.0.0rc1"
+    themis_version: str = "4.0.0"
     python_version: str = "3.12"
     platform: str = "unknown"
     git_commit: str | None = None

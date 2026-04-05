@@ -259,6 +259,33 @@ jobs:
       - name: Run docs verification tests
         run: uv run pytest tests/test_docs_site.py tests/test_docs_inventory.py tests/test_docs_examples.py tests/test_readme_examples.py -q
 
+  package-build:
+    name: Build Package
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: 'latest'
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Validate built distributions
+        run: uv run python scripts/ci/check_built_package.py
+
       - name: Build documentation (strict)
         run: uv run mkdocs build --strict
 

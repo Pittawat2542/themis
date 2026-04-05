@@ -53,7 +53,7 @@ def _snapshot():
         ],
         seeds=[7, 11],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0rc1",
+        themis_version="4.0.0",
         python_version="3.12.9",
         platform="macos",
     )

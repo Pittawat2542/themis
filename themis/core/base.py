@@ -1,4 +1,4 @@
-"""Shared immutable model and hashing helpers for Themis v4."""
+"""Shared immutable model and hashing helpers for Themis."""
 
 from __future__ import annotations
 

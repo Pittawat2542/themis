@@ -1,4 +1,4 @@
-"""Core namespace for the Themis v4 runtime."""
+"""Core namespace for Themis."""
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
 from themis.core.bundles import (

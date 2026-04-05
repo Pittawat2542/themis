@@ -4,12 +4,12 @@ Themis uses the in-repo documentation system as part of the product surface. Con
 
 Start here:
 
-- Product docs overview: [docs/project/index.md](/Users/pittawat/projects/themis/docs/project/index.md)
-- Docs architecture: [docs/project/docs-architecture.md](/Users/pittawat/projects/themis/docs/project/docs-architecture.md)
-- Writing guide: [docs/project/writing-guide.md](/Users/pittawat/projects/themis/docs/project/writing-guide.md)
-- Example authoring: [docs/project/example-authoring.md](/Users/pittawat/projects/themis/docs/project/example-authoring.md)
-- Coverage expectations: [docs/project/adding-new-docs-coverage.md](/Users/pittawat/projects/themis/docs/project/adding-new-docs-coverage.md)
-- Release/versioning policy: [docs/project/release-and-versioning.md](/Users/pittawat/projects/themis/docs/project/release-and-versioning.md)
+- Product docs overview: [docs/project/index.md](docs/project/index.md)
+- Docs architecture: [docs/project/docs-architecture.md](docs/project/docs-architecture.md)
+- Writing guide: [docs/project/writing-guide.md](docs/project/writing-guide.md)
+- Example authoring: [docs/project/example-authoring.md](docs/project/example-authoring.md)
+- Coverage expectations: [docs/project/adding-new-docs-coverage.md](docs/project/adding-new-docs-coverage.md)
+- Release/versioning policy: [docs/project/release-and-versioning.md](docs/project/release-and-versioning.md)
 
 Minimum local checks:
 

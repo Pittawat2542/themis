@@ -1,4 +1,4 @@
-"""Lazy work-item planner for the Themis v4 runtime."""
+"""Lazy work-item planner for Themis."""
 
 from __future__ import annotations
 

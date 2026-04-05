@@ -18,22 +18,22 @@ Use this guide before adopting OpenAI, vLLM, LangGraph, Hugging Face dataset loa
 Install only the extras you need:
 
 ```bash
-uv pip install -e ".[openai]"
-uv pip install -e ".[vllm]"  # Linux only
-uv pip install -e ".[langgraph]"
-uv pip install -e ".[datasets]"
-uv pip install -e ".[mongodb]"
-uv pip install -e ".[postgres]"
+pip install "themis-eval[openai]"
+pip install "themis-eval[vllm]"  # Linux only
+pip install "themis-eval[langgraph]"
+pip install "themis-eval[datasets]"
+pip install "themis-eval[mongodb]"
+pip install "themis-eval[postgres]"
 ```
 
 Provider specifics:
 
-- OpenAI: install `.[openai]` and either inject a client or provide credentials to the adapter
-- vLLM: install `.[vllm]` on Linux, or inject an OpenAI-compatible client when you cannot install the Linux-only dependency
-- LangGraph: install `.[langgraph]` and pass a graph with `invoke()` or `ainvoke()`
-- Hugging Face quick-eval: install `.[datasets]`
-- MongoDB store: install `.[mongodb]` before using the `mongodb` backend
-- Postgres store: install `.[postgres]` before using the `postgres` backend
+- OpenAI: install `themis-eval[openai]` and either inject a client or provide credentials to the adapter
+- vLLM: install `themis-eval[vllm]` on Linux, or inject an OpenAI-compatible client when you cannot install the Linux-only dependency
+- LangGraph: install `themis-eval[langgraph]` and pass a graph with `invoke()` or `ainvoke()`
+- Hugging Face quick-eval: install `themis-eval[datasets]`
+- MongoDB store: install `themis-eval[mongodb]` before using the `mongodb` backend
+- Postgres store: install `themis-eval[postgres]` before using the `postgres` backend
 
 If you only need builtin components with `memory` or `sqlite`, the base install is enough.
 

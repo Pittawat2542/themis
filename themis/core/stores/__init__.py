@@ -1,4 +1,4 @@
-"""Concrete run store backends for Themis v4."""
+"""Concrete run store backends for Themis."""
 
 from themis.core.stores.factory import (
     available_store_backends,

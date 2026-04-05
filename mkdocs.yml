@@ -1,5 +1,5 @@
-site_name: Themis v4
-site_description: Python-first evaluation runtime documentation for Themis v4.
+site_name: Themis
+site_description: Documentation for the Themis evaluation scaffold for LLM research.
 repo_url: https://github.com/Pittawat2542/themis
 theme:
   name: material

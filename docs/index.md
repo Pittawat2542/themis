@@ -1,13 +1,13 @@
 ---
-title: Themis v4 docs
+title: Themis docs
 diataxis: landing
 audience: users and contributors
 goal: Help readers choose the right documentation track for learning, execution, lookup, or understanding.
 ---
 
-# Themis v4 docs
+# Themis docs
 
-Themis v4 is a Python-first evaluation runtime built around a compiled `RunSnapshot`, typed generation and evaluation boundaries, and inspectable stored artifacts.
+Themis is a Python-first evaluation runtime built around a compiled `RunSnapshot`, typed generation and evaluation boundaries, and inspectable stored artifacts.
 
 Use this map when you need to decide which kind of document to open first.
 

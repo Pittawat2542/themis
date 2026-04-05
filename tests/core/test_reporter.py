@@ -49,7 +49,7 @@ def _snapshot():
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0rc1",
+        themis_version="4.0.0",
         python_version="3.12.9",
         platform="macos",
     )
@@ -192,7 +192,7 @@ def test_snapshot_report_includes_identity_and_provenance() -> None:
 
     assert report["run_id"] == snapshot.run_id
     assert first_dataset_ref["dataset_id"] == "dataset-1"
-    assert provenance["themis_version"] == "4.0.0rc1"
+    assert provenance["themis_version"] == "4.0.0"
     assert report["run_metadata"] == {"stored_events": 6}
 
 

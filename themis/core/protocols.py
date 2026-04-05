@@ -1,4 +1,4 @@
-"""Runtime-checkable extension protocols for Themis v4."""
+"""Runtime-checkable extension protocols for Themis."""
 
 from __future__ import annotations
 

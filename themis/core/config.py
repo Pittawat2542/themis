@@ -1,4 +1,4 @@
-"""Composed configuration models for Themis v4 experiments."""
+"""Composed configuration models for Themis experiments."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ class EvaluationConfig(HashableModel):
     @model_validator(mode="after")
     def _validate_single_parser(self) -> EvaluationConfig:
         if len(self.parsers) > 1:
-            raise ValueError("Themis v4 supports at most one parser")
+            raise ValueError("Themis supports at most one parser")
         return self
 
 

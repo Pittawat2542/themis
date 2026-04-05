@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file.
 
 - No unreleased changes documented yet.
 
-## 4.0.0rc1 - 2026-04-01
+## 4.0.0 - 2026-04-05
 
-- Introduced the Themis v4 CLI and evaluation runtime.
-- Added docs, examples, storage backends, and release automation for the v4 line.
+- First stable public release of Themis.
+- Added the CLI, documentation set, examples, storage backends, and release automation.

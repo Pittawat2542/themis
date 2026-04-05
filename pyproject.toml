@@ -4,36 +4,43 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "themis-eval"
-version = "4.0.0rc1"
-description = "Themis v4 CLI and evaluation runtime"
+version = "4.0.0"
+description = "Evaluation scaffold for LLM research, benchmarking, and reproducible experiment runs."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Pittawat Taveekitworachai" }]
 license = "MIT"
-keywords = ["llm", "evaluation", "benchmark", "ai"]
+keywords = ["llm", "evaluation", "benchmark", "research", "ai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
 ]
 dependencies = [
     "cyclopts>=3.24.0",
     "omegaconf>=2.3.0",
     "pydantic>=2.12.5",
-    "mkdocs>=1.6.1",
-    "mkdocs-material>=9.6.14",
-    "mkdocstrings[python]>=0.30.1",
-    "pymdown-extensions>=10.15",
 ]
 
 [project.scripts]
 themis = "themis.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/Pittawat2542/themis"
 Repository = "https://github.com/Pittawat2542/themis"
+Documentation = "https://github.com/Pittawat2542/themis/tree/main/docs"
+Changelog = "https://github.com/Pittawat2542/themis/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Pittawat2542/themis/issues"
+
+[tool.setuptools]
+include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["themis*"]
@@ -53,8 +60,14 @@ dev = [
     "ruff>=0.15.8",
     "mypy>=1.19.1",
 ]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.14",
+    "mkdocstrings[python]>=0.30.1",
+    "pymdown-extensions>=10.15",
+]
 openai = [
-    "openai>=2.24.0,<2.25.0",
+    "openai>=2.24.0",
 ]
 vllm = [
     "vllm>=0.18.0; platform_system == 'Linux'",
@@ -75,3 +88,10 @@ datasets = [
 [tool.pytest.ini_options]
 addopts = "-q"
 pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+src = ["themis", "tests", "examples", "scripts"]
+
+[tool.mypy]
+python_version = "3.12"
