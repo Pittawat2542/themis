@@ -70,7 +70,7 @@ def dataset_from_huggingface(
     except ModuleNotFoundError as exc:
         raise MissingOptionalDependencyError(
             "Hugging Face quick-eval requires the optional datasets dependency. "
-            "Install it with: pip install themis-eval[datasets]"
+            'Install it with: uv add "themis-eval[datasets]"'
         ) from exc
 
     rows = datasets_module.load_dataset(dataset_name, split=split)

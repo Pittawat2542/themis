@@ -109,7 +109,7 @@ def test_quick_eval_huggingface_reports_missing_dependency() -> None:
     )
 
     assert cli_result.returncode != 0
-    assert "pip install themis-eval[datasets]" in cli_result.stderr
+    assert 'uv add "themis-eval[datasets]"' in cli_result.stderr
 
 
 def test_quick_eval_huggingface_uses_optional_datasets_module(tmp_path: Path) -> None:

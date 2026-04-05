@@ -69,6 +69,6 @@ def test_readme_uses_public_install_instructions_and_no_repo_local_links() -> No
 
     assert "# Themis" in readme
     assert "Themis v4" not in readme
-    assert "pip install themis-eval" in readme
+    assert "uv add themis-eval" in readme
     assert "/Users/" not in readme
     assert 'uv pip install -e ".[dev]"' not in readme
