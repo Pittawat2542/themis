@@ -365,3 +365,23 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
             return [dict(row) for row in rows_by_dataset[(dataset_id, None)]]
 
     monkeypatch.setattr(materializers, "_default_loader", fake_loader)
+
+
+@pytest.fixture(autouse=True)
+def _mock_code_executors(monkeypatch: pytest.MonkeyPatch) -> None:
+    from themis.catalog.builtins.code_execution import (
+        PistonSandboxExecutor,
+        SandboxExecutionResult,
+        SandboxFusionExecutor,
+    )
+
+    def mock_execute(*args: object, **kwargs: object) -> SandboxExecutionResult:
+        return SandboxExecutionResult(
+            stdout="mocked",
+            stderr="",
+            return_code=0,
+            status="ok",
+        )
+
+    monkeypatch.setattr(PistonSandboxExecutor, "execute", mock_execute)
+    monkeypatch.setattr(SandboxFusionExecutor, "execute", mock_execute)
