@@ -9,9 +9,7 @@ from themis.catalog.loaders import load_huggingface_rows
 from themis.core.base import JSONValue
 from themis.core.models import Case, Dataset
 
-DatasetRowLoader = Callable[
-    [str, str, str | None, str | None], list[dict[str, object]]
-]
+DatasetRowLoader = Callable[[str, str, str | None, str | None], list[dict[str, object]]]
 
 _MATH_FAMILY_IDS = {
     "aime_2025",
@@ -90,10 +88,14 @@ def _default_loader(
 
 
 def _materialize_math_family(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = [
         Case(
-            case_id=str(row.get("problem_idx", row.get("id", f"{definition.split}-{index}"))),
+            case_id=str(
+                row.get("problem_idx", row.get("id", f"{definition.split}-{index}"))
+            ),
             input=(
                 "Solve the following math problem. "
                 "Return only the final answer in \\boxed{...}.\n\n"
@@ -110,7 +112,9 @@ def _materialize_math_family(definition, *, row_loader: DatasetRowLoader) -> Dat
 def _materialize_imo_answerbench(
     definition, *, row_loader: DatasetRowLoader
 ) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         cases.append(
@@ -122,7 +126,9 @@ def _materialize_imo_answerbench(
                     f"Problem:\n{str(row.get('Problem', ''))}"
                 ),
                 expected_output={
-                    "answer": str(row.get("Short Answer", row.get("answer", ""))).strip()
+                    "answer": str(
+                        row.get("Short Answer", row.get("answer", ""))
+                    ).strip()
                 },
                 metadata={
                     key: str(row[source_key])
@@ -144,7 +150,9 @@ def _materialize_mmlu_pro(definition, *, row_loader: DatasetRowLoader) -> Datase
         definition,
         [
             Case(
-                case_id=str(row.get("item_id", row.get("id", f"{definition.split}-{index}"))),
+                case_id=str(
+                    row.get("item_id", row.get("id", f"{definition.split}-{index}"))
+                ),
                 input=_mcq_prompt(
                     question=str(row.get("question", "")),
                     options=_normalize_options(row.get("options")),
@@ -158,7 +166,9 @@ def _materialize_mmlu_pro(definition, *, row_loader: DatasetRowLoader) -> Datase
 
 
 def _materialize_mcq_family(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases: list[Case] = []
     for index, row in enumerate(rows, start=1):
         options = _normalize_options(row.get("options"))
@@ -166,7 +176,9 @@ def _materialize_mcq_family(definition, *, row_loader: DatasetRowLoader) -> Data
         cases.append(
             Case(
                 case_id=str(row.get("item_id", f"{definition.split}-{index}")),
-                input=_mcq_prompt(question=str(row.get("question", "")), options=options),
+                input=_mcq_prompt(
+                    question=str(row.get("question", "")), options=options
+                ),
                 expected_output={"choice": answer},
                 metadata=_string_metadata(
                     row, ["discipline", "field", "subfield", "difficulty"]
@@ -177,7 +189,9 @@ def _materialize_mcq_family(definition, *, row_loader: DatasetRowLoader) -> Data
 
 
 def _materialize_babe(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         label_value = row.get("label", 0)
@@ -197,10 +211,10 @@ def _materialize_babe(definition, *, row_loader: DatasetRowLoader) -> Dataset:
     return _dataset(definition, cases)
 
 
-def _materialize_gpqa_diamond(
-    definition, *, row_loader: DatasetRowLoader
-) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+def _materialize_gpqa_diamond(definition, *, row_loader: DatasetRowLoader) -> Dataset:
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         question, options = _parse_gpqa_diamond_question(str(row.get("question", "")))
@@ -217,7 +231,12 @@ def _materialize_gpqa_diamond(
 
 def _materialize_mmmlu(definition, *, row_loader: DatasetRowLoader) -> Dataset:
     config_name = definition.variant or "default"
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, config_name)
+    rows = row_loader(
+        definition.dataset_id,
+        definition.split,
+        definition.dataset_revision,
+        config_name,
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         options = [
@@ -229,9 +248,14 @@ def _materialize_mmmlu(definition, *, row_loader: DatasetRowLoader) -> Dataset:
         cases.append(
             Case(
                 case_id=str(row.get("Unnamed: 0", f"{definition.split}-{index}")),
-                input=_mcq_prompt(question=str(row.get("Question", "")), options=options),
+                input=_mcq_prompt(
+                    question=str(row.get("Question", "")), options=options
+                ),
                 expected_output={"choice": str(row.get("Answer", "")).strip().upper()},
-                metadata={"subject": str(row.get("Subject", "")), "language": config_name},
+                metadata={
+                    "subject": str(row.get("Subject", "")),
+                    "language": config_name,
+                },
             )
         )
     return _dataset(definition, cases)
@@ -239,7 +263,9 @@ def _materialize_mmmlu(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 def _materialize_superchem(definition, *, row_loader: DatasetRowLoader) -> Dataset:
     language = definition.variant or "en"
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, "default")
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, "default"
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         options = _superchem_options(row, language=language)
@@ -247,7 +273,9 @@ def _materialize_superchem(definition, *, row_loader: DatasetRowLoader) -> Datas
         image_urls = _string_list(row.get("question_images"))
         prompt_text = _mcq_prompt(question=question, options=options)
         if image_urls:
-            prompt_text = "\n\n".join([prompt_text, "Images:\n" + "\n".join(image_urls)])
+            prompt_text = "\n\n".join(
+                [prompt_text, "Images:\n" + "\n".join(image_urls)]
+            )
         cases.append(
             Case(
                 case_id=str(row.get("uuid", f"{definition.split}-{index}")),
@@ -265,7 +293,9 @@ def _materialize_superchem(definition, *, row_loader: DatasetRowLoader) -> Datas
 def _materialize_frontierscience(
     definition, *, row_loader: DatasetRowLoader
 ) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = [
         Case(
             case_id=str(row.get("item_id", f"{definition.split}-{index}")),
@@ -279,24 +309,30 @@ def _materialize_frontierscience(
 
 
 def _materialize_healthbench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         prompt_messages = _prompt_messages_from_payload(row)
         prompt_text = "\n\n".join(
             f"{message['role']}: {message['content']}" for message in prompt_messages
         )
-        expected_output = _json_dict({
-            "rubrics": row.get("rubrics", []),
-            "ideal_completion": _ideal_completion(row),
-        })
+        expected_output = _json_dict(
+            {
+                "rubrics": row.get("rubrics", []),
+                "ideal_completion": _ideal_completion(row),
+            }
+        )
         cases.append(
             Case(
                 case_id=str(row.get("prompt_id", f"{definition.split}-{index}")),
                 input=prompt_text,
                 expected_output=expected_output,
                 metadata={
-                    "prompt_id": str(row.get("prompt_id", f"{definition.split}-{index}")),
+                    "prompt_id": str(
+                        row.get("prompt_id", f"{definition.split}-{index}")
+                    ),
                     "example_tags": ", ".join(_string_list(row.get("example_tags"))),
                 },
             )
@@ -305,20 +341,27 @@ def _materialize_healthbench(definition, *, row_loader: DatasetRowLoader) -> Dat
 
 
 def _materialize_lpfqa(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         cases.append(
             Case(
                 case_id=str(row.get("prompt_id", f"{definition.split}-{index}")),
                 input=str(row.get("prompt", "")),
-                expected_output=_json_dict({
-                    "response_reference": str(row.get("response_reference", "")),
-                    "judge_prompt_template": str(
-                        row.get("judge_prompt_template", "{response_reference}\n{response}")
-                    ),
-                    "judge_system_prompt": str(row.get("judge_system_prompt", "")),
-                }),
+                expected_output=_json_dict(
+                    {
+                        "response_reference": str(row.get("response_reference", "")),
+                        "judge_prompt_template": str(
+                            row.get(
+                                "judge_prompt_template",
+                                "{response_reference}\n{response}",
+                            )
+                        ),
+                        "judge_system_prompt": str(row.get("judge_system_prompt", "")),
+                    }
+                ),
                 metadata=_string_metadata(row, ["primary_domain"]),
             )
         )
@@ -326,7 +369,9 @@ def _materialize_lpfqa(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 
 def _materialize_simpleqa(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         cases.append(
@@ -345,7 +390,9 @@ def _materialize_simpleqa(definition, *, row_loader: DatasetRowLoader) -> Datase
 def _materialize_hle(definition, *, row_loader: DatasetRowLoader) -> Dataset:
     variant = definition.variant or ""
     variant_tokens = {token.strip() for token in variant.split(",") if token.strip()}
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         image = row.get("image")
@@ -363,7 +410,9 @@ def _materialize_hle(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 
 def _materialize_procbench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     requested_task = definition.variant
     cases = []
     for index, row in enumerate(rows, start=1):
@@ -384,14 +433,25 @@ def _materialize_procbench(definition, *, row_loader: DatasetRowLoader) -> Datas
 
 
 def _materialize_rolebench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    variants = [definition.variant] if definition.variant else ["instruction_generalization_eng", "role_generalization_eng"]
+    variants = (
+        [definition.variant]
+        if definition.variant
+        else ["instruction_generalization_eng", "role_generalization_eng"]
+    )
     cases: list[Case] = []
     for variant in variants:
         assert variant is not None
-        rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, variant)
+        rows = row_loader(
+            definition.dataset_id,
+            definition.split,
+            definition.dataset_revision,
+            variant,
+        )
         for index, row in enumerate(rows, start=1):
             generated = row.get("generated")
-            expected = str(generated[0]) if isinstance(generated, list) and generated else ""
+            expected = (
+                str(generated[0]) if isinstance(generated, list) and generated else ""
+            )
             prompt = (
                 f"You are {str(row.get('role', ''))}, your description is: {str(row.get('desc', ''))}. "
                 "Answer the following question while staying fully in character.\n\n"
@@ -418,7 +478,9 @@ def _materialize_rolebench(definition, *, row_loader: DatasetRowLoader) -> Datas
 
 
 def _materialize_codeforces(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, None, definition.dataset_revision)
+    rows = row_loader(
+        definition.dataset_id, definition.split, None, definition.dataset_revision
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         if str(row.get("input_mode", "")).strip().lower() != "stdio":
@@ -431,23 +493,29 @@ def _materialize_codeforces(definition, *, row_loader: DatasetRowLoader) -> Data
             Case(
                 case_id=str(row.get("id", f"{definition.split}-{index}")),
                 input=str(row.get("prompt", "")),
-                expected_output=_json_dict({
-                    "language": str(row.get("language", "python")),
-                    "execution_mode": str(row.get("input_mode", "stdio")),
-                    "official_tests": row.get("official_tests", []),
-                    "time_limit": row.get("time_limit"),
-                    "memory_limit": row.get("memory_limit"),
-                    "generated_checker": row.get("generated_checker"),
-                    "checker_language": row.get("checker_language"),
-                }),
-                metadata=_string_metadata(row, ["contest_id", "language", "rating", "input_mode"]),
+                expected_output=_json_dict(
+                    {
+                        "language": str(row.get("language", "python")),
+                        "execution_mode": str(row.get("input_mode", "stdio")),
+                        "official_tests": row.get("official_tests", []),
+                        "time_limit": row.get("time_limit"),
+                        "memory_limit": row.get("memory_limit"),
+                        "generated_checker": row.get("generated_checker"),
+                        "checker_language": row.get("checker_language"),
+                    }
+                ),
+                metadata=_string_metadata(
+                    row, ["contest_id", "language", "rating", "input_mode"]
+                ),
             )
         )
     return _dataset(definition, cases)
 
 
 def _materialize_aethercode(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, None, definition.dataset_revision)
+    rows = row_loader(
+        definition.dataset_id, definition.split, None, definition.dataset_revision
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         tests = _normalize_tests(row.get("test_cases", row.get("official_tests")))
@@ -461,14 +529,18 @@ def _materialize_aethercode(definition, *, row_loader: DatasetRowLoader) -> Data
             Case(
                 case_id=str(row.get("id", f"{definition.split}-{index}")),
                 input=prompt,
-                expected_output=_json_dict({
-                    "language": "cpp",
-                    "execution_mode": "stdio",
-                    "official_tests": tests,
-                    "time_limit": row.get("time_limit"),
-                    "generated_checker": row.get("checker", row.get("generated_checker")),
-                    "checker_language": "cpp",
-                }),
+                expected_output=_json_dict(
+                    {
+                        "language": "cpp",
+                        "execution_mode": "stdio",
+                        "official_tests": tests,
+                        "time_limit": row.get("time_limit"),
+                        "generated_checker": row.get(
+                            "checker", row.get("generated_checker")
+                        ),
+                        "checker_language": "cpp",
+                    }
+                ),
                 metadata=_string_metadata(
                     row,
                     ["difficulty", "contest_category", "contest_name", "date", "year"],
@@ -478,10 +550,10 @@ def _materialize_aethercode(definition, *, row_loader: DatasetRowLoader) -> Data
     return _dataset(definition, cases)
 
 
-def _materialize_livecodebench(
-    definition, *, row_loader: DatasetRowLoader
-) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, None)
+def _materialize_livecodebench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
+    rows = row_loader(
+        definition.dataset_id, definition.split, definition.dataset_revision, None
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         tests = _normalize_tests(row.get("public_tests", row.get("official_tests")))
@@ -490,15 +562,23 @@ def _materialize_livecodebench(
         prompt = str(row.get("prompt", row.get("question_content", "")))
         cases.append(
             Case(
-                case_id=str(row.get("question_id", row.get("item_id", f"{definition.split}-{index}"))),
+                case_id=str(
+                    row.get(
+                        "question_id", row.get("item_id", f"{definition.split}-{index}")
+                    )
+                ),
                 input=prompt,
-                expected_output=_json_dict({
-                    "language": str(row.get("language", "python")),
-                    "execution_mode": str(row.get("execution_mode", row.get("input_mode", "stdio"))),
-                    "official_tests": tests,
-                    "function_name": row.get("function_name"),
-                    "time_limit": row.get("time_limit"),
-                }),
+                expected_output=_json_dict(
+                    {
+                        "language": str(row.get("language", "python")),
+                        "execution_mode": str(
+                            row.get("execution_mode", row.get("input_mode", "stdio"))
+                        ),
+                        "official_tests": tests,
+                        "function_name": row.get("function_name"),
+                        "time_limit": row.get("time_limit"),
+                    }
+                ),
                 metadata=_string_metadata(
                     row, ["platform", "contest_id", "difficulty", "contest_date"]
                 ),
@@ -508,14 +588,25 @@ def _materialize_livecodebench(
 
 
 def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, definition.dataset_revision, definition.variant)
+    rows = row_loader(
+        definition.dataset_id,
+        definition.split,
+        definition.dataset_revision,
+        definition.variant,
+    )
     cases = []
-    score_variant = "plus" if definition.base_benchmark_id == "humaneval_plus" else "base"
+    score_variant = (
+        "plus" if definition.base_benchmark_id == "humaneval_plus" else "base"
+    )
     for index, row in enumerate(rows, start=1):
         prompt = str(row.get("prompt", "")).rstrip()
         entry_point = str(row.get("entry_point", ""))
-        tests = _humaneval_tests(row.get("base_input", []), row.get("canonical_solution"))
-        plus_tests = _humaneval_tests(row.get("plus_input", []), row.get("canonical_solution"))
+        tests = _humaneval_tests(
+            row.get("base_input", []), row.get("canonical_solution")
+        )
+        plus_tests = _humaneval_tests(
+            row.get("plus_input", []), row.get("canonical_solution")
+        )
         cases.append(
             Case(
                 case_id=str(row.get("task_id", f"{definition.split}-{index}")),
@@ -524,15 +615,20 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
                     "Return only Python code.\n\n"
                     f"{prompt}\n"
                 ),
-                expected_output=_json_dict({
-                    "language": "python",
-                    "execution_mode": "function",
-                    "function_name": entry_point,
-                    "official_tests": tests,
-                    "plus_tests": plus_tests,
-                    "score_variant": score_variant,
-                }),
-                metadata={"variant": definition.variant or "", "entry_point": entry_point},
+                expected_output=_json_dict(
+                    {
+                        "language": "python",
+                        "execution_mode": "function",
+                        "function_name": entry_point,
+                        "official_tests": tests,
+                        "plus_tests": plus_tests,
+                        "score_variant": score_variant,
+                    }
+                ),
+                metadata={
+                    "variant": definition.variant or "",
+                    "entry_point": entry_point,
+                },
             )
         )
     return _dataset(definition, cases)

@@ -146,7 +146,8 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         ),
         metric_ids=_string_list_from_value(
             spec.get(
-                "metric_ids", resolved_payload.get("metric_ids", ["builtin/exact_match"])
+                "metric_ids",
+                resolved_payload.get("metric_ids", ["builtin/exact_match"]),
             )
         ),
         parser_ids=_string_list_from_value(
@@ -166,7 +167,9 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
                 "reducer_id",
                 resolved_payload.get(
                     "reducer_id",
-                    None if "selector_id" in resolved_payload else "builtin/majority_vote",
+                    None
+                    if "selector_id" in resolved_payload
+                    else "builtin/majority_vote",
                 ),
             )
         ),

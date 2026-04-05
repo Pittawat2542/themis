@@ -159,10 +159,12 @@ class ProcbenchFinalAccuracyMetric:
         return Score(
             metric_id=self.component_id,
             value=float(actual == expected),
-            details=_json_details({
-                "canonical_actual": actual,
-                "canonical_expected": expected,
-            }),
+            details=_json_details(
+                {
+                    "canonical_actual": actual,
+                    "canonical_expected": expected,
+                }
+            ),
         )
 
 
@@ -217,6 +219,8 @@ def _normalize_math_text(value: str) -> str:
 
 def _json_details(value: dict[str, object]) -> dict[str, JSONValue]:
     return {
-        key: item if isinstance(item, (str, int, float, bool)) or item is None else str(item)
+        key: item
+        if isinstance(item, (str, int, float, bool)) or item is None
+        else str(item)
         for key, item in value.items()
     }

@@ -76,7 +76,9 @@ def test_catalog_exposes_reusable_parser_and_metric_components() -> None:
     assert "builtin/choice_accuracy" in list_component_ids(kind="metric")
 
 
-def test_catalog_math_answer_and_metric_are_reusable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_catalog_math_answer_and_metric_are_reusable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _FakeMathVerify:
         @staticmethod
         def parse(value: str) -> str:

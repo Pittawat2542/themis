@@ -93,7 +93,8 @@ class PistonSandboxExecutor:
         )
         status = (
             "ok"
-            if int(run_payload.get("code", 1) or 0) == 0 and not compile_payload.get("stderr")
+            if int(run_payload.get("code", 1) or 0) == 0
+            and not compile_payload.get("stderr")
             else "error"
         )
         return SandboxExecutionResult(
@@ -202,7 +203,9 @@ class CodeExecutionMetric:
         execution_mode = str(payload.get("execution_mode", "stdio")).strip().lower()
         tests = _normalize_tests(payload.get("official_tests"))
         if execution_mode not in self._supported_modes:
-            return _score(self.component_id, 0.0, {"reason": "unsupported_execution_mode"})
+            return _score(
+                self.component_id, 0.0, {"reason": "unsupported_execution_mode"}
+            )
         if language not in self._supported_languages:
             return _score(self.component_id, 0.0, {"reason": "unsupported_language"})
         if not code or not tests:
@@ -223,7 +226,11 @@ class CodeExecutionMetric:
         return _score(
             self.component_id,
             passed / total if total else 0.0,
-            {"passed_tests": passed, "total_tests": total, "benchmark": self._benchmark_name},
+            {
+                "passed_tests": passed,
+                "total_tests": total,
+                "benchmark": self._benchmark_name,
+            },
         )
 
 
