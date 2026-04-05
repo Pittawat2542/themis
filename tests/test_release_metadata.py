@@ -15,6 +15,17 @@ def _project_metadata() -> dict[str, object]:
     return project
 
 
+def _lock_packages() -> list[dict[str, object]]:
+    payload = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    packages = payload["package"]
+    assert isinstance(packages, list)
+    return packages
+
+
+def _parse_version(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
 def test_pyproject_has_release_ready_public_metadata() -> None:
     project = _project_metadata()
 
@@ -72,3 +83,17 @@ def test_readme_uses_public_install_instructions_and_no_repo_local_links() -> No
     assert "uv add themis-eval" in readme
     assert "/Users/" not in readme
     assert 'uv pip install -e ".[dev]"' not in readme
+
+
+def test_lockfile_excludes_vulnerable_anthropic_release() -> None:
+    anthropic_versions = {
+        str(package["version"])
+        for package in _lock_packages()
+        if package.get("name") == "anthropic"
+    }
+
+    assert anthropic_versions
+    assert all(
+        _parse_version(version) < (0, 86, 0) or _parse_version(version) >= (0, 87, 0)
+        for version in anthropic_versions
+    )
