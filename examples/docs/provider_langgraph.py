@@ -12,7 +12,11 @@ class _FakeGraph:
 
     async def astream_events(self, payload: object, *, version: str):
         del version
-        yield {"name": "plan", "event": "step", "data": {"input": payload, "output": {"draft": "4"}}}
+        yield {
+            "name": "plan",
+            "event": "step",
+            "data": {"input": payload, "output": {"draft": "4"}},
+        }
 
 
 def run_example() -> dict[str, object]:
@@ -23,7 +27,12 @@ def run_example() -> dict[str, object]:
         generation=GenerationConfig(generator=generator),
         evaluation=EvaluationConfig(),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="sample", cases=[Case(case_id="case-1", input={"question": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="sample",
+                cases=[Case(case_id="case-1", input={"question": "2+2"})],
+            )
+        ],
         seeds=[7],
     )
     result = experiment.run()

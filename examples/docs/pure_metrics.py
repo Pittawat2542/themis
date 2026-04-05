@@ -9,7 +9,9 @@ def run_example() -> dict[str, object]:
     """Execute builtin pure metrics together."""
 
     experiment = Experiment(
-        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+        generation=GenerationConfig(
+            generator="builtin/demo_generator", reducer="builtin/majority_vote"
+        ),
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match", "builtin/f1", "builtin/bleu"],
             parsers=["builtin/json_identity"],
@@ -18,7 +20,13 @@ def run_example() -> dict[str, object]:
         datasets=[
             Dataset(
                 dataset_id="sample",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )

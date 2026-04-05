@@ -27,7 +27,9 @@ def run_example() -> dict[str, object]:
 
     experiment = Experiment(
         generation=GenerationConfig(generator=CustomGenerator()),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(

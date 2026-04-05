@@ -43,7 +43,9 @@ def run_example() -> dict[str, object]:
         config_path = root / "experiment.yaml"
         config_path.write_text(CONFIG_TEMPLATE, encoding="utf-8")
         experiment = Experiment.from_config(config_path)
-        manifest = submit_experiment(experiment, config_path=str(config_path), mode="worker_pool")
+        manifest = submit_experiment(
+            experiment, config_path=str(config_path), mode="worker_pool"
+        )
         result = run_worker_once(root / "runs" / "queue")
         assert result is not None
         return {

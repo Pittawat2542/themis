@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from themis import Experiment, Reporter, get_execution_state, get_run_snapshot, sqlite_store
+from themis import (
+    Experiment,
+    Reporter,
+    get_execution_state,
+    get_run_snapshot,
+    sqlite_store,
+)
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 

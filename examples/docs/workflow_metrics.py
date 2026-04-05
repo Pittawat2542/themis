@@ -30,13 +30,21 @@ def run_example() -> dict[str, object]:
         datasets=[
             Dataset(
                 dataset_id="sample",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7, 11],
     )
     result = experiment.run(store=store)
-    execution = get_evaluation_execution(store, result.run_id, "case-1", "builtin/llm_rubric")
+    execution = get_evaluation_execution(
+        store, result.run_id, "case-1", "builtin/llm_rubric"
+    )
     return {
         "run_id": result.run_id,
         "status": result.status.value,

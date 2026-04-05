@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Profile a synthetic load scenario and emit JSON."""
+# ruff: noqa: E402
 
 from __future__ import annotations
 
@@ -14,15 +15,38 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from themis.core.config import EvaluationConfig, GenerationConfig, RuntimeConfig, StorageConfig  # noqa: E402
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    RuntimeConfig,
+    StorageConfig,
+)  # noqa: E402
 from themis.core.events import RunEvent  # noqa: E402
 from themis.core.experiment import Experiment  # noqa: E402
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput, ReducedCandidate, Score  # noqa: E402
+from themis.core.models import (
+    Case,
+    Dataset,
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    Score,
+)  # noqa: E402
 from themis.core.protocols import JudgeModel  # noqa: E402
-from themis.core.contexts import EvalScoreContext, GenerateContext, ParseContext, ReduceContext  # noqa: E402
+from themis.core.contexts import (
+    EvalScoreContext,
+    GenerateContext,
+    ParseContext,
+    ReduceContext,
+)  # noqa: E402
 from themis.core.snapshot import RunSnapshot, StoredRun  # noqa: E402
 from themis.core.store import RunStore  # noqa: E402
-from themis.core.workflows import AggregationResult, JudgeCall, JudgeResponse, ParsedJudgment, RenderedJudgePrompt  # noqa: E402
+from themis.core.workflows import (
+    AggregationResult,
+    JudgeCall,
+    JudgeResponse,
+    ParsedJudgment,
+    RenderedJudgePrompt,
+)  # noqa: E402
 
 
 class ProfileGenerator:
@@ -55,7 +79,9 @@ class ProfileReducer:
     def fingerprint(self) -> str:
         return "reducer-profile"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
+    async def reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> ReducedCandidate:
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
             source_candidate_ids=[candidate.candidate_id for candidate in candidates],
@@ -117,18 +143,24 @@ class ProfileWorkflow:
             for index, model in enumerate(self._judge_models)
         ]
 
-    def render_prompt(self, call: JudgeCall, subject, ctx: EvalScoreContext) -> RenderedJudgePrompt:
+    def render_prompt(
+        self, call: JudgeCall, subject, ctx: EvalScoreContext
+    ) -> RenderedJudgePrompt:
         del ctx
         return RenderedJudgePrompt(
             prompt_id=f"prompt-{call.call_id}",
             content=str(subject.candidates[0].final_output),
         )
 
-    def parse_judgment(self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext) -> ParsedJudgment:
+    def parse_judgment(
+        self, call: JudgeCall, response: JudgeResponse, ctx: EvalScoreContext
+    ) -> ParsedJudgment:
         del call, ctx
         return ParsedJudgment(label=response.raw_response, score=1.0)
 
-    def score_judgment(self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext) -> Score | None:
+    def score_judgment(
+        self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
+    ) -> Score | None:
         del call, ctx
         return Score(metric_id="metric/profile", value=float(judgment.score or 0.0))
 
@@ -168,6 +200,7 @@ class ProfileStore(RunStore):
         self._snapshots: dict[str, RunSnapshot] = {}
         self._events: dict[str, list[RunEvent]] = {}
         self._blobs: dict[str, tuple[str, bytes]] = {}
+        self._stage_cache: dict[tuple[str, str], object] = {}
 
     def initialize(self) -> None:
         return None
@@ -200,6 +233,16 @@ class ProfileStore(RunStore):
         if snapshot is None:
             return None
         return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+
+    def load_stage_cache(self, stage_name: str, cache_key: str):
+        return self._stage_cache.get((stage_name, cache_key))
+
+    def store_stage_cache(self, stage_name: str, cache_key: str, payload) -> None:
+        self._stage_cache[(stage_name, cache_key)] = payload
+
+    def clear_run(self, run_id: str) -> None:
+        self._snapshots.pop(run_id, None)
+        self._events.pop(run_id, None)
 
 
 def _build_experiment(
@@ -276,7 +319,9 @@ def main() -> int:
         "completed_cases": result.progress.completed_cases,
         "failed_cases": result.progress.failed_cases,
         "max_generation_concurrency": generator.max_active,
-        "max_judge_concurrency": max((model.max_active for model in judge_models), default=0),
+        "max_judge_concurrency": max(
+            (model.max_active for model in judge_models), default=0
+        ),
     }
     print(json.dumps(payload, sort_keys=True))
     return 0

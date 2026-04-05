@@ -38,7 +38,12 @@ def run_example() -> dict[str, object]:
         generation=GenerationConfig(generator=generator),
         evaluation=EvaluationConfig(),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="sample", cases=[Case(case_id="case-1", input={"question": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="sample",
+                cases=[Case(case_id="case-1", input={"question": "2+2"})],
+            )
+        ],
         seeds=[7],
     )
     result = experiment.run(store=store)

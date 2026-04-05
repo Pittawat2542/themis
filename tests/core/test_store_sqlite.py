@@ -135,7 +135,9 @@ def test_sqlite_store_closes_connections_for_stage_cache_operations(
         def __exit__(self, exc_type, exc, tb) -> None:
             del exc_type, exc, tb
 
-        def execute(self, query: str, params: tuple[object, ...] = ()) -> FakeConnection:
+        def execute(
+            self, query: str, params: tuple[object, ...] = ()
+        ) -> FakeConnection:
             self.executed.append((query, params))
             return self
 

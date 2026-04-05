@@ -42,7 +42,12 @@ def run_example() -> dict[str, object]:
         generation=GenerationConfig(generator=TracedGenerator()),
         evaluation=EvaluationConfig(),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="sample", cases=[Case(case_id="case-1", input={"question": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="sample",
+                cases=[Case(case_id="case-1", input={"question": "2+2"})],
+            )
+        ],
     )
     result = experiment.run(store=store)
     trace_view = store.get_projection(result.run_id, "trace_view")

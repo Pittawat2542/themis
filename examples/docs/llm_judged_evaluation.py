@@ -38,7 +38,9 @@ def run_example() -> dict[str, object]:
     )
 
     result = experiment.run(store=store)
-    execution = get_evaluation_execution(store, result.run_id, "case-1", "builtin/llm_rubric")
+    execution = get_evaluation_execution(
+        store, result.run_id, "case-1", "builtin/llm_rubric"
+    )
     return {
         "run_id": result.run_id,
         "status": result.status.value,

@@ -26,7 +26,10 @@ class _FakeChatCompletions:
             choices=[SimpleNamespace(message=SimpleNamespace(content="4"))],
             usage=SimpleNamespace(prompt_tokens=3, completion_tokens=1),
             headers={"x-ratelimit-limit-requests": "120"},
-            model_dump=lambda mode="json": {"request": kwargs, "choices": [{"message": {"content": "4"}}]},
+            model_dump=lambda mode="json": {
+                "request": kwargs,
+                "choices": [{"message": {"content": "4"}}],
+            },
         )
 
 
@@ -59,7 +62,12 @@ def run_example() -> dict[str, object]:
         generation=GenerationConfig(generator=generator),
         evaluation=EvaluationConfig(),
         storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="sample", cases=[Case(case_id="case-1", input={"question": "2+2"})])],
+        datasets=[
+            Dataset(
+                dataset_id="sample",
+                cases=[Case(case_id="case-1", input={"question": "2+2"})],
+            )
+        ],
         seeds=[7],
     )
     result = experiment.run()

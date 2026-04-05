@@ -48,8 +48,12 @@ def run_example() -> dict[str, object]:
         seeds=[7],
     )
     initial = experiment.run(store=source_store)
-    import_generation_bundle(target_store, export_generation_bundle(source_store, initial.run_id))
-    import_evaluation_bundle(target_store, export_evaluation_bundle(source_store, initial.run_id))
+    import_generation_bundle(
+        target_store, export_generation_bundle(source_store, initial.run_id)
+    )
+    import_evaluation_bundle(
+        target_store, export_evaluation_bundle(source_store, initial.run_id)
+    )
     replayed = experiment.replay(stage="judge", store=source_store)
     return {
         "run_id": initial.run_id,

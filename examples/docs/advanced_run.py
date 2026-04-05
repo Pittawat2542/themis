@@ -16,7 +16,11 @@ def run_example() -> dict[str, object]:
             reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match", "builtin/llm_rubric", "builtin/pairwise_judge"],
+            metrics=[
+                "builtin/exact_match",
+                "builtin/llm_rubric",
+                "builtin/pairwise_judge",
+            ],
             parsers=["builtin/json_identity"],
             judge_models=["builtin/demo_judge", "builtin/demo_judge"],
             workflow_overrides={"rubric": "prefer correct and concise answers"},

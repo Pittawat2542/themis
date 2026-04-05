@@ -19,7 +19,10 @@ class SeededGenerator:
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         answer = "4" if (ctx.seed or 0) % 2 else "5"
-        return GenerationResult(candidate_id=f"{case.case_id}-candidate-{ctx.seed or 0}", final_output={"answer": answer})
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed or 0}",
+            final_output={"answer": answer},
+        )
 
 
 class PreferCorrectReducer:
@@ -31,7 +34,9 @@ class PreferCorrectReducer:
     def fingerprint(self) -> str:
         return "reducer-prefer-correct"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx: ReduceContext) -> ReducedCandidate:
+    async def reduce(
+        self, candidates: list[GenerationResult], ctx: ReduceContext
+    ) -> ReducedCandidate:
         winner = sorted(candidates, key=_answer_value)[0]
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
@@ -57,12 +62,20 @@ def run_example() -> dict[str, object]:
             candidate_policy={"num_samples": 2},
             reducer=PreferCorrectReducer(),
         ),
-        evaluation=EvaluationConfig(metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
                 dataset_id="sample",
-                cases=[Case(case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"})],
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7, 8],

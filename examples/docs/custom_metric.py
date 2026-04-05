@@ -30,8 +30,12 @@ def run_example() -> dict[str, object]:
     """Execute an experiment with a custom metric object."""
 
     experiment = Experiment(
-        generation=GenerationConfig(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
-        evaluation=EvaluationConfig(metrics=[ExactAnswerMetric()], parsers=["builtin/json_identity"]),
+        generation=GenerationConfig(
+            generator="builtin/demo_generator", reducer="builtin/majority_vote"
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[ExactAnswerMetric()], parsers=["builtin/json_identity"]
+        ),
         storage=StorageConfig(store="memory"),
         datasets=[
             Dataset(
