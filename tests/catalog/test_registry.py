@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from themis.catalog import load as load_catalog_component
@@ -7,11 +9,12 @@ from themis.catalog.registry import builtin_component_refs, list_component_ids
 from themis.core.components import component_ref_from_value
 from themis.core.contexts import GenerateContext
 from themis.core.models import Case, GenerationResult
+from themis.core.protocols import Generator
 
 
 @pytest.mark.asyncio
 async def test_manifest_registry_loads_builtin_components_with_stable_refs() -> None:
-    component = load_catalog_component("builtin/demo_generator")
+    component = cast(Generator, load_catalog_component("builtin/demo_generator"))
     component_ref = component_ref_from_value("builtin/demo_generator")
 
     result = await component.generate(

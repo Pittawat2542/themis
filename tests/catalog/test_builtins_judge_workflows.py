@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from themis.catalog import load
@@ -9,6 +11,7 @@ from themis.core.contexts import EvalScoreContext, SelectContext
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput
 from themis.core.prompts import PromptSpec
+from themis.core.protocols import CandidateSelector, LLMMetric, SelectionMetric
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject
@@ -37,7 +40,7 @@ class ChoosingJudgeModel:
 
 @pytest.mark.asyncio
 async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> None:
-    selector = load("builtin/best_of_n")
+    selector = cast(CandidateSelector, load("builtin/best_of_n"))
     candidates = [
         GenerationResult(
             candidate_id="case-1-candidate-0", final_output={"answer": "4"}
@@ -63,10 +66,10 @@ async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> N
 
 
 def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
-    llm_rubric = load("builtin/llm_rubric")
-    panel = load("builtin/panel_of_judges")
-    majority = load("builtin/majority_vote_judge")
-    pairwise = load("builtin/pairwise_judge")
+    llm_rubric = cast(LLMMetric, load("builtin/llm_rubric"))
+    panel = cast(LLMMetric, load("builtin/panel_of_judges"))
+    majority = cast(LLMMetric, load("builtin/majority_vote_judge"))
+    pairwise = cast(SelectionMetric, load("builtin/pairwise_judge"))
     candidate = GenerationResult(
         candidate_id="case-1-reduced", final_output={"answer": "4"}
     )

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from themis.catalog import load
+from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.core.builtins import resolve_generator_component
 from themis.core.contexts import GenerateContext
 from themis.core.models import GenerationResult
@@ -21,7 +24,7 @@ def test_benchmark_catalog_smoke_ids_cover_manifest_entries() -> None:
 async def test_benchmark_catalog_smoke_loads_experiment_and_invokes_generator(
     benchmark_id: str,
 ) -> None:
-    benchmark = load(benchmark_id)
+    benchmark = cast(BenchmarkDefinition, load(benchmark_id))
     experiment = benchmark.build_experiment()
     dataset = experiment.datasets[0]
     case = dataset.cases[0]

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+from typing import cast
+
 from themis.catalog import load, run
+from themis.catalog.benchmarks import BenchmarkDefinition
+from themis.core.base import JSONValue
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
 
 
+def _sample_input(benchmark: BenchmarkDefinition) -> dict[str, JSONValue]:
+    sample_input = benchmark.sample_case_input
+    assert isinstance(sample_input, dict)
+    return sample_input
+
+
 def test_rubric_benchmark_adapter_configures_workflow_metrics() -> None:
-    benchmark = load("frontierscience")
+    benchmark = cast(BenchmarkDefinition, load("frontierscience"))
     experiment = benchmark.build_experiment()
 
     assert benchmark.metric_ids == ["builtin/llm_rubric"]
@@ -20,15 +30,16 @@ def test_rubric_benchmark_adapter_configures_workflow_metrics() -> None:
 
 
 def test_code_benchmark_adapter_configures_best_of_n_and_execution_metadata() -> None:
-    benchmark = load("codeforces")
+    benchmark = cast(BenchmarkDefinition, load("codeforces"))
     experiment = benchmark.build_experiment()
+    sample_input = _sample_input(benchmark)
 
     assert benchmark.selector_id == "builtin/best_of_n"
     assert benchmark.judge_model_ids == ["builtin/demo_judge"]
     assert benchmark.candidate_policy == {"num_samples": 2}
-    assert benchmark.sample_case_input["problem"].startswith(
-        "Solve the programming task"
-    )
+    problem = sample_input["problem"]
+    assert isinstance(problem, str)
+    assert problem.startswith("Solve the programming task")
     assert experiment.generation.selector == "builtin/best_of_n"
     assert experiment.generation.reducer is None
     assert (

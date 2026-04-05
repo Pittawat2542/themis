@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from themis.catalog import load
 from themis.core.contexts import GenerateContext, ParseContext, ScoreContext
-from themis.core.models import Case, ParsedOutput, ReducedCandidate
+from themis.core.models import Case, ParsedOutput, ReducedCandidate, Score
+from themis.core.protocols import Generator, Parser, PureMetric
 
 
 @pytest.mark.asyncio
 async def test_catalog_builtin_generator_and_parser_execute_through_manifest() -> None:
-    generator = load("builtin/demo_generator")
-    parser = load("builtin/json_identity")
+    generator = cast(Generator, load("builtin/demo_generator"))
+    parser = cast(Parser, load("builtin/json_identity"))
     case = Case(
         case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
     )
@@ -32,9 +35,9 @@ async def test_catalog_builtin_generator_and_parser_execute_through_manifest() -
 
 
 def test_catalog_builtin_pure_metrics_score_expected_values() -> None:
-    exact_match = load("builtin/exact_match")
-    f1 = load("builtin/f1")
-    bleu = load("builtin/bleu")
+    exact_match = cast(PureMetric, load("builtin/exact_match"))
+    f1 = cast(PureMetric, load("builtin/f1"))
+    bleu = cast(PureMetric, load("builtin/bleu"))
     case = Case(
         case_id="case-1",
         input={"question": "2+2"},
@@ -52,6 +55,9 @@ def test_catalog_builtin_pure_metrics_score_expected_values() -> None:
     f1_score = f1.score(ParsedOutput(value="quick fox"), case, exact_ctx)
     bleu_score = bleu.score(ParsedOutput(value="the quick fox"), case, exact_ctx)
 
+    assert isinstance(exact_score, Score)
+    assert isinstance(f1_score, Score)
+    assert isinstance(bleu_score, Score)
     assert exact_score.value == 1.0
     assert f1_score.value == 2 / 3
     assert bleu_score.value == 1.0

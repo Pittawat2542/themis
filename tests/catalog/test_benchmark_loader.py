@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from themis.catalog import load
+from themis.catalog.benchmarks import BenchmarkDefinition
 from tests.catalog_ids import catalog_benchmark_ids
 
 
 def test_catalog_load_returns_benchmark_definition_for_manifest_entry() -> None:
-    benchmark = load("mmlu_pro")
+    benchmark = cast(BenchmarkDefinition, load("mmlu_pro"))
 
     assert benchmark.benchmark_id == "mmlu_pro"
     assert benchmark.dataset_id == "TIGER-Lab/MMLU-Pro"
@@ -17,7 +20,9 @@ def test_catalog_load_returns_benchmark_definition_for_manifest_entry() -> None:
 
 
 def test_catalog_load_supports_declared_variants() -> None:
-    benchmark = load("rolebench:instruction_generalization_eng")
+    benchmark = cast(
+        BenchmarkDefinition, load("rolebench:instruction_generalization_eng")
+    )
 
     assert benchmark.benchmark_id == "rolebench:instruction_generalization_eng"
     assert benchmark.base_benchmark_id == "rolebench"
@@ -30,7 +35,7 @@ def test_catalog_load_rejects_invalid_variants() -> None:
 
 
 def test_catalog_load_marks_code_benchmarks_and_supported_backends() -> None:
-    benchmark = load("codeforces")
+    benchmark = cast(BenchmarkDefinition, load("codeforces"))
 
     assert benchmark.benchmark_id == "codeforces"
     assert benchmark.dataset_revision == "verifiable-prompts"
@@ -39,14 +44,17 @@ def test_catalog_load_marks_code_benchmarks_and_supported_backends() -> None:
 
 
 def test_catalog_load_preserves_dataset_revisions_from_catalog_notes() -> None:
-    aethercode = load("aethercode")
-    livecodebench = load("livecodebench")
+    aethercode = cast(BenchmarkDefinition, load("aethercode"))
+    livecodebench = cast(BenchmarkDefinition, load("livecodebench"))
 
     assert aethercode.dataset_revision == "v1_2024"
     assert livecodebench.dataset_revision == "release_v6"
 
 
 def test_catalog_manifest_covers_representative_benchmark_families() -> None:
-    loaded = [load(benchmark_id) for benchmark_id in catalog_benchmark_ids()]
+    loaded = [
+        cast(BenchmarkDefinition, load(benchmark_id))
+        for benchmark_id in catalog_benchmark_ids()
+    ]
 
     assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
