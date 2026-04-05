@@ -78,6 +78,26 @@ def load_dataset(dataset_name, *, split):
     return [{"id": "row-1", "prompt": {"question": "2+2"}, "answer": {"answer": "4"}}]
 """.strip()
     )
+    fake_benchmark_datasets_root = tmp_path / "benchmarkpkgs" / "datasets"
+    fake_benchmark_datasets_root.mkdir(parents=True)
+    (fake_benchmark_datasets_root / "__init__.py").write_text(
+        """
+def load_dataset(dataset_name, *args, split=None, revision=None, **kwargs):
+    del args, revision, kwargs
+    assert dataset_name == "TIGER-Lab/MMLU-Pro"
+    assert split == "test"
+    return [
+        {
+            "item_id": "mmlu-pro-1",
+            "question": "Which planet is known as the Red Planet?",
+            "options": ["Venus", "Mars", "Jupiter", "Mercury"],
+            "answer": "B",
+            "category": "astronomy",
+            "src": "fixture",
+        }
+    ]
+""".strip()
+    )
 
     inline = _run_cli(
         "quick-eval",
@@ -88,7 +108,15 @@ def load_dataset(dataset_name, *, split):
         '{"answer":"4"}',
     )
     file_eval = _run_cli("quick-eval", "file", "--path", str(file_path))
-    benchmark = _run_cli("quick-eval", "benchmark", "--name", "mmlu_pro")
+    benchmark = _run_cli(
+        "quick-eval",
+        "benchmark",
+        "--name",
+        "mmlu_pro",
+        env={
+            "PYTHONPATH": f"{tmp_path / 'benchmarkpkgs'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"
+        },
+    )
     huggingface = _run_cli(
         "quick-eval",
         "huggingface",

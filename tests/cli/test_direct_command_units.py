@@ -129,11 +129,24 @@ def test_inspect_commands_and_replay_command(
     )
 
 
-def test_quick_eval_and_init_commands(tmp_path: Path, capsys) -> None:
+def test_quick_eval_and_init_commands(tmp_path: Path, capsys, monkeypatch) -> None:
     jsonl_path = tmp_path / "cases.jsonl"
     jsonl_path.write_text(
         '{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n',
         encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "themis.catalog.benchmarks.materializers.load_huggingface_rows",
+        lambda dataset_id, split, revision=None, config_name=None: [
+            {
+                "item_id": "mmlu-pro-1",
+                "question": "Which planet is known as the Red Planet?",
+                "options": ["Venus", "Mars", "Jupiter", "Mercury"],
+                "answer": "B",
+                "category": "astronomy",
+                "src": "fixture",
+            }
+        ],
     )
 
     assert (
