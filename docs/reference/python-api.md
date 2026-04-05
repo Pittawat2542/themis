@@ -12,7 +12,9 @@ This page is the generated entry point into the public Python API. Use the small
 ## Root exports
 
 - `Experiment`
+- `FewShotExample`
 - `InMemoryRunStore`
+- `PromptSpec`
 - `Reporter`
 - `RunEstimate`
 - `RunResult`
@@ -25,11 +27,17 @@ This page is the generated entry point into the public Python API. Use the small
 - `evaluate`
 - `export_evaluation_bundle`
 - `export_generation_bundle`
+- `export_parse_bundle`
+- `export_reduction_bundle`
+- `export_score_bundle`
 - `get_evaluation_execution`
 - `get_execution_state`
 - `get_run_snapshot`
 - `import_evaluation_bundle`
 - `import_generation_bundle`
+- `import_parse_bundle`
+- `import_reduction_bundle`
+- `import_score_bundle`
 - `quickcheck`
 - `snapshot_report`
 - `sqlite_store`

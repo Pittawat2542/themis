@@ -28,4 +28,13 @@ flowchart LR
 
 Reporting helpers do not bypass persistence; they sit on top of projection-backed read models derived from stored events.
 
+Benchmark projections now separate scored outcomes from pipeline errors:
+
+- successful scored rows are labeled `correct` or `incorrect`
+- pipeline problems produce `error` rows with `error_category` and `error_message`
+- metric means are computed only from scored rows, not from error rows
+- per-metric `outcome_counts` and `error_counts` make it possible to distinguish model quality from parser, evaluator, or workflow instability
+
+This is the intended export boundary for external reporting. Use `benchmark_result` and `Reporter.export_csv(...)` when you want to build leaderboards, prompt sweep comparisons, or warehouse-backed dashboards outside Themis.
+
 What to inspect when it goes wrong: compare the raw stored run with the benchmark and trace projections to determine whether the issue is in execution or in derived reporting.

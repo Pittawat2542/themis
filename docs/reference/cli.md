@@ -26,10 +26,10 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 
 ## Command behavior
 
-- `run --config ...`: executes the experiment and prints JSON with `run_id`, `status`, and `metric_means`
+- `run --config ... [--until-stage ...]`: executes the experiment and prints JSON with `run_id`, `status`, `completed_through_stage`, and `metric_means`
 - `replay --config ... --stage reduce|parse|score|judge`: reruns downstream stages from stored upstream artifacts
 - `resume --config ...`: inspects persisted state for the compiled `run_id`
-- `estimate --config ...`: prints planner output for the compiled snapshot
+- `estimate --config ...`: prints planner output for the compiled snapshot, including task counts, token estimates, and estimate assumptions
 - `quickcheck --config ...`: prints a compact status summary for a stored run
 - `report --config ... --format ...`: exports JSON, Markdown, CSV, or LaTeX from persisted projections
 - `inspect snapshot --config ...`: prints the stored `RunSnapshot`
@@ -55,3 +55,5 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 ## Output notes
 
 JSON-producing commands generally emit compact machine-readable JSON to stdout. Commands that inspect stored runs require a persistent store unless the current process still owns the original memory store.
+
+`report` and exported score tables include `outcome`, `error_category`, and `error_message` columns alongside metric values.

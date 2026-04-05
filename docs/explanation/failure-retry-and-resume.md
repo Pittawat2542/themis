@@ -13,7 +13,7 @@ When it matters: whenever a provider call, parsing step, scoring step, or persis
 
 What you provide: runtime retry settings and a store that persists enough state to resume.
 
-What Themis provides: failure events, partial-failure status handling, and per-stage resume behavior.
+What Themis provides: failure events, structured retry metadata, duplicate-run handling, and per-stage resume behavior.
 
 Use this flow to reason about whether the next action is retrying a stage or continuing from stored state.
 
@@ -30,4 +30,12 @@ flowchart TD
 
 Retry is a same-stage recovery decision, while resume is a later continuation decision over persisted state.
 
-What to inspect when it goes wrong: stage-specific failures inside execution state, evaluation failures, and runtime retry settings.
+Important distinctions:
+
+- retry history explains transient recovery inside one stage execution
+- `existing_run_policy` explains what happens when you submit the same compiled `run_id` again
+- `completed_through_stage` explains whether a run intentionally stopped at `generate`, `reduce`, `parse`, `score`, or `judge`
+
+Retry classification is built around common endpoint failures: explicit retryable exceptions, timeouts, connection failures, `429` rate limits, and `5xx` server failures. Persisted retry history includes the attempt number, delay, reason, and any `retry_after_s` hint that the provider returned.
+
+What to inspect when it goes wrong: stage-specific failures inside execution state, evaluation failures, retry history on generation or judge calls, and runtime retry settings.

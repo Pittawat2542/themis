@@ -11,6 +11,10 @@ Core runtime and output models:
 
 ::: themis.core.models
 
+Prompt-oriented models:
+
+::: themis.core.prompts
+
 Run state, results, and bundle models:
 
 ::: themis.core.results

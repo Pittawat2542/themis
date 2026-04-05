@@ -33,6 +33,7 @@ Provide:
 - one or more workflow-backed metrics
 - parsers for the reduced candidate
 - judge models
+- optional `prompt_spec` for judge prompt instructions or few-shot examples
 - any workflow overrides such as a rubric
 
 ```python
@@ -47,6 +48,7 @@ Provide:
 - multi-judge averaging: `builtin/panel_of_judges`
 - majority-vote judgment: `builtin/majority_vote_judge`
 - pairwise selection: `builtin/pairwise_judge`
+- heterogeneous multi-judge orchestration: author a custom workflow metric in Python when different prompts or parsing logic should run over the same response
 
 ## Expected result
 

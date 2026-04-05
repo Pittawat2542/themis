@@ -25,11 +25,15 @@ Or run the same named benchmark from Python through the catalog API using `themi
 
 Then inspect the benchmark catalog for prerequisites such as optional dataset dependencies or adapter-specific execution constraints.
 
+Benchmark slicing and downsampling are code-authored today. When you need a subset of a shipped benchmark, load or materialize a `Dataset`, then filter or sample its `cases` before compiling the experiment. Themis treats that filtered dataset as the benchmark you asked it to run.
+
 ## Variants
 
 - quick local check: `quick-eval benchmark`
 - Python catalog execution: `themis.catalog.run(...)`
 - custom experiment around the same dataset: load the definition first and move to Python or config-driven experiments
+- filtered benchmark slice: construct a `Dataset(cases=[...])` from the original benchmark input
+- benchmark downsample: sample cases before `Experiment.compile()`
 
 ## Expected result
 

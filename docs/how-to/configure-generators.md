@@ -32,6 +32,12 @@ Use the builtin demo generator for deterministic tutorials, smoke tests, and loc
 
 Use provider adapters when Themis should still own fan-out, reduction, storage, and inspection, but an external model or graph runtime should produce the candidate output.
 
+Prompt-focused experiments:
+
+- set `GenerationConfig.prompt_spec` when you want prompt instructions, prefixes, suffixes, or few-shot examples to be part of the experiment identity
+- prompt specs flow into `GenerateContext`, so custom generators can consume them directly
+- provider-backed adapters such as OpenAI also consume prompt specs, which means prompt changes invalidate generation-stage cache reuse as expected
+
 Review these example sources:
 
 ```python
@@ -57,6 +63,7 @@ Review these example sources:
 - builtin deterministic runs: `builtin/demo_generator`
 - provider-backed generation: adapter helpers in `themis.adapters`
 - fully custom generation: implement `Generator`
+- prompt-only experiment change: keep the generator fixed and vary `prompt_spec`
 
 ## Expected result
 

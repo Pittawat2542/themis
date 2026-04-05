@@ -22,11 +22,29 @@ Use:
 - `themis compare --baseline-config ... --candidate-config ...`
 - `themis export generation|evaluation --config ...`
 
+Portable artifact handoff is stage-aware:
+
+- generation artifacts: `export_generation_bundle(...)`
+- reduction artifacts: `export_reduction_bundle(...)`
+- parse artifacts: `export_parse_bundle(...)`
+- pure-score artifacts: `export_score_bundle(...)`
+- workflow execution artifacts: `export_evaluation_bundle(...)`
+
+Reporting output is now outcome-aware. `benchmark_result.score_rows` and CSV exports include:
+
+- `outcome`: `correct`, `incorrect`, or `error`
+- `error_category`: for example `parse_failure`, `parse_null`, `parse_invalid`, `evaluation_failure`, `evaluation_partial_failure`, or `score_failure`
+- `error_message`: the stored failure reason when the row is an error
+
+Use this output shape when you build downstream leaderboards or prompt-sweep dashboards outside Themis. Themis owns the per-run read models; cross-run aggregation is expected to happen in your notebook, warehouse, or reporting job.
+
 ## Variants
 
 - one-run reporting: `report`
 - portable artifact handoff: `export`
 - side-by-side benchmark comparison: `compare`
+- external leaderboard or dashboard: consume JSON or CSV exports outside Themis
+- prompt sweep analysis: run multiple experiments and aggregate exported `benchmark_result` payloads outside Themis
 
 ## Expected result
 
