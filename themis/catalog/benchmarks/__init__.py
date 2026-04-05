@@ -272,6 +272,21 @@ def _recipe_defaults(base_name: str, *, variant: str | None) -> dict[str, object
             "metric_ids": ["builtin/procbench_final_accuracy"],
             "parser_ids": ["builtin/text"],
         }
+    if base_name == "codeforces":
+        return {
+            "metric_ids": ["builtin/codeforces_pass_rate"],
+            "parser_ids": ["builtin/code_text"],
+        }
+    if base_name == "aethercode":
+        return {
+            "metric_ids": ["builtin/aethercode_pass_rate"],
+            "parser_ids": ["builtin/code_text"],
+        }
+    if base_name == "livecodebench":
+        return {
+            "metric_ids": ["builtin/livecodebench_pass_rate"],
+            "parser_ids": ["builtin/code_text"],
+        }
     return {}
 
 

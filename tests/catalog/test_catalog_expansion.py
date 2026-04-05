@@ -115,6 +115,54 @@ def test_catalog_math_answer_and_metric_are_reusable(monkeypatch: pytest.MonkeyP
     assert score.value == 1.0
 
 
+def test_catalog_code_execution_metric_is_reusable() -> None:
+    from themis.catalog.builtins.code_execution import (
+        CodeforcesExecutionMetric,
+        SandboxExecutionResult,
+    )
+
+    class _FakeExecutor:
+        def execute(
+            self,
+            *,
+            code: str,
+            language: str,
+            stdin: str = "",
+            files: dict[str, str] | None = None,
+            args: list[str] | None = None,
+            timeout_seconds: float | None = None,
+            memory_limit_mb: float | None = None,
+        ) -> SandboxExecutionResult:
+            del code, language, files, args, timeout_seconds, memory_limit_mb
+            return SandboxExecutionResult(
+                stdout="4\n" if stdin == "6 6 4\n" else "",
+                stderr="",
+                return_code=0,
+                status="ok",
+            )
+
+    metric = CodeforcesExecutionMetric(executor=_FakeExecutor())
+    case = benchmark_case(
+        input_value="Write a Python program that solves the problem.",
+        expected_output={
+            "language": "python",
+            "execution_mode": "stdio",
+            "official_tests": [{"input": "6 6 4\n", "output": "4\n"}],
+        },
+    )
+    parsed = ParsedOutput(value="print(4)")
+
+    score = metric.score(
+        parsed,
+        case,
+        ScoreContext(run_id="run-1", case=case, parsed_output=parsed),
+    )
+
+    assert isinstance(score, Score)
+    assert score.metric_id == "builtin/codeforces_pass_rate"
+    assert score.value == 1.0
+
+
 def benchmark_case(*, input_value: JSONValue, expected_output: JSONValue):
     from themis.core.models import Case
 

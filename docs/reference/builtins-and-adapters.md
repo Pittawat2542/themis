@@ -26,6 +26,9 @@ Builtin component ids:
 - `builtin/choice_accuracy`
 - `builtin/math_equivalence`
 - `builtin/procbench_final_accuracy`
+- `builtin/codeforces_pass_rate`
+- `builtin/aethercode_pass_rate`
+- `builtin/livecodebench_pass_rate`
 - `builtin/demo_judge`
 - `builtin/llm_rubric`
 - `builtin/pairwise_judge`

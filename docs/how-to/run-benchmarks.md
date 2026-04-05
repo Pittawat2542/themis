@@ -87,7 +87,7 @@ You should get a completed run keyed by the named benchmark entry and know wheth
 Use these optional commands when you want to validate benchmark wiring against
 local services instead of the demo generator.
 
-Judge-backed smoke check against your local OpenAI-compatible endpoint:
+Generation-model smoke check against your local OpenAI-compatible endpoint:
 
 ```python
 from themis.adapters.openai import openai
