@@ -49,12 +49,14 @@ Use this output shape when you build downstream leaderboards or prompt-sweep das
 
 ## Variants
 
-- one-run reporting: `report`
-- portable artifact handoff: `export`
-- side-by-side benchmark comparison: `compare`
-- external leaderboard or dashboard: consume JSON or CSV exports outside Themis
-- prompt sweep analysis: run multiple experiments and aggregate exported `benchmark_result` payloads outside Themis
-- external judge pipeline: custom script around exported/imported artifacts
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| One-run reporting | You want human-readable or machine-readable output for one completed run | Does not compare multiple runs by itself | `Reporter`, `themis report --config ... --format ...` |
+| Portable artifact handoff | Another system should consume stored stage artifacts | You need to manage exported bundles explicitly | `themis export generation|evaluation`, `export_generation_bundle(...)`, `export_evaluation_bundle(...)` |
+| Side-by-side benchmark comparison | You want baseline vs candidate analysis inside Themis | Requires two completed persisted runs | `themis compare --baseline-config ... --candidate-config ...` |
+| External leaderboard or dashboard | Aggregation belongs in notebooks, warehouses, or dashboards outside Themis | You own cross-run aggregation logic | JSON or CSV exports, `BenchmarkResult` payloads |
+| Prompt sweep analysis | You are comparing multiple prompt variants over repeated runs | Sweep aggregation still happens outside Themis | Exported `benchmark_result` payloads |
+| External judge pipeline | Judging should happen outside Themis, then come back as imported artifacts | Requires custom mapping code at the handoff boundary | Export/import bundle helpers |
 
 ## Expected result
 

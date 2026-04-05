@@ -28,19 +28,23 @@ uv add "themis-eval[postgres]"
 
 Provider specifics:
 
-- OpenAI: install `themis-eval[openai]` and either inject a client or provide credentials to the adapter
-- vLLM: install `themis-eval[vllm]` on Linux, or inject an OpenAI-compatible client when you cannot install the Linux-only dependency
-- LangGraph: install `themis-eval[langgraph]` and pass a graph with `invoke()` or `ainvoke()`
-- Hugging Face quick-eval: install `themis-eval[datasets]`
-- MongoDB store: install `themis-eval[mongodb]` before using the `mongodb` backend
-- Postgres store: install `themis-eval[postgres]` before using the `postgres` backend
+| Option | Best for | Persistence / runtime behavior | Caveats |
+| --- | --- | --- | --- |
+| OpenAI | OpenAI or OpenAI-compatible generation | Themis still owns evaluation and storage while the adapter calls the provider | Install `themis-eval[openai]` and either inject a client or provide credentials |
+| vLLM | Local or self-hosted OpenAI-compatible generation on Linux | Behaves like another provider endpoint inside Themis runtime controls | Install `themis-eval[vllm]` on Linux, or inject a compatible client |
+| LangGraph | Graph-backed generation flows | Themis treats the graph as the generator and still owns the rest of the runtime | Install `themis-eval[langgraph]` and pass a graph with `invoke()` or `ainvoke()` |
+| Hugging Face quick-eval | Remote dataset-backed quick evaluations and benchmark materialization | Enables dataset loading rather than provider generation | Install `themis-eval[datasets]` |
+| MongoDB store | External persistent storage with MongoDB | Adds a non-local store backend | Install `themis-eval[mongodb]` before using `mongodb` |
+| Postgres store | External persistent storage with Postgres | Adds a non-local store backend | Install `themis-eval[postgres]` before using `postgres` |
 
 If you only need builtin components with `memory` or `sqlite`, the base install is enough.
 
 ## Variants
 
-- deterministic docs/test examples: inject fake clients or use builtin demo components
-- production-style provider flows: install the matching extras and point adapters at the real service
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Deterministic docs or test examples | You want local reproducibility without real providers | Does not validate real provider integration | Builtin demo components, injected fake clients |
+| Production-style provider flows | You want real endpoint-backed generation or storage | Requires matching extras, credentials, and service setup | `uv add "themis-eval[openai]"`, `uv add "themis-eval[vllm]"`, `uv add "themis-eval[langgraph]"` |
 
 ## Expected result
 

@@ -61,10 +61,12 @@ Review these example sources:
 
 ## Variants
 
-- builtin deterministic runs: `builtin/demo_generator`
-- provider-backed generation: adapter helpers in `themis.adapters`
-- fully custom generation: implement `Generator`
-- prompt-only experiment change: keep the generator fixed and vary `prompt_spec`
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Builtin deterministic runs | You want tutorials, smoke tests, or fixture-backed examples without external providers | Not representative of production model behavior | `builtin/demo_generator` |
+| Provider-backed generation | An external endpoint or graph runtime should generate outputs while Themis owns the rest of the run | Requires provider extras, clients, or service setup | `themis.adapters.openai(...)`, `themis.adapters.vllm(...)`, `themis.adapters.langgraph(...)` |
+| Fully custom generation | Candidate production logic belongs entirely in your own code | Highest implementation effort | `Generator` |
+| Prompt-only experiment change | The generator stays fixed and prompt material is the only experiment variable | Less useful when provider or generator behavior also needs to change | `GenerationConfig.prompt_spec`, `PromptSpec.blocks` |
 
 ## Expected result
 

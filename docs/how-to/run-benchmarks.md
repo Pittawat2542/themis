@@ -67,11 +67,13 @@ This is the current supported way to run just a slice or downsample of a benchma
 
 ## Variants
 
-- quick local check: `quick-eval benchmark`
-- Python catalog execution: `themis.catalog.run(...)`
-- custom experiment around the same dataset: load the definition first and move to Python or config-driven experiments
-- filtered benchmark slice: construct a `Dataset(cases=[...])` from the original benchmark input
-- benchmark downsample: sample cases before `Experiment.compile()`
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Quick local check | You want the shortest shell path to a shipped benchmark | Less control over filtering and experiment wiring | `themis quick-eval benchmark --name ...` |
+| Python catalog execution | You want catalog convenience but still from Python | Less flexible than building a custom experiment after inspection | `themis.catalog.run(...)` |
+| Custom experiment around the same dataset | You want to reuse the shipped benchmark dataset but own the experiment wiring | More code than the convenience API | `themis.catalog.load(...)`, `BenchmarkDefinition.materialize_dataset(...)`, `Experiment(...)` |
+| Filtered benchmark slice | Only part of the shipped benchmark should run | Slicing is authored in code today rather than declarative config | `Dataset(cases=[...])` built from a materialized benchmark dataset |
+| Benchmark downsample | You want a smaller subset for smoke checks or iteration speed | No longer the full benchmark score | Sample cases before `Experiment.compile()` |
 
 ## Expected result
 

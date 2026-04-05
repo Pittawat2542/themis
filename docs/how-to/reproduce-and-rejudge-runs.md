@@ -45,12 +45,14 @@ Stage handoff boundaries:
 
 ## Variants
 
-- portable generation artifacts only: generation bundle export/import
-- portable reduction, parse, or score artifacts: Python-only stage bundle export/import
-- portable evaluation artifacts too: evaluation bundle export/import
-- rerun workflow-backed metrics in place: `Experiment.replay(stage="judge")`
-- rerun pure scoring from parsed outputs: `Experiment.replay(stage="score")`
-- stop a run intentionally at a boundary first: `Experiment.run(..., until_stage="generate"|"reduce"|"parse"|"score")`
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Portable generation artifacts only | Candidate outputs should move to another store or environment before any new evaluation work | Downstream stages still need to run later | `export_generation_bundle(...)`, `import_generation_bundle(...)` |
+| Portable reduction, parse, or score artifacts | Intermediate stages, not just generation or judging, must move across environments | Python-only today, so less convenient than CLI export | `export_reduction_bundle(...)`, `export_parse_bundle(...)`, `export_score_bundle(...)` |
+| Portable evaluation artifacts too | Judge executions should move with the run | More artifact management than an in-place replay | `export_evaluation_bundle(...)`, `import_evaluation_bundle(...)` |
+| Rerun workflow-backed metrics in place | Generation stays fixed and only judge outputs should change | Requires stored upstream artifacts and judge access | `Experiment.replay(stage="judge")` |
+| Rerun pure scoring from parsed outputs | Parsing is fixed and deterministic scoring should be recomputed | Only useful when upstream parsing is already good | `Experiment.replay(stage="score")` |
+| Stop a run intentionally at a boundary first | You know ahead of time that generation or parsing should stop early for handoff | Requires a second step to continue later | `Experiment.run(..., until_stage=...)` |
 
 ## Expected result
 

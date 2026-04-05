@@ -25,9 +25,11 @@ Populate `GenerationResult.trace` and `GenerationResult.conversation` inside you
 
 ## Variants
 
-- trace only: populate `trace`
-- conversation only: populate `conversation`
-- full inspection workflows: populate both and persist to a store you can reopen
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Trace only | You need execution breadcrumbs without full turn-by-turn conversation state | Less useful for prompt-review workflows | `GenerationResult.trace` |
+| Conversation only | You need the conversational exchange for later inspection or judging | Provides less internal execution structure than a trace | `GenerationResult.conversation` |
+| Full inspection workflows | You want both trace-level and conversation-level evidence persisted for later analysis | More storage and generator implementation work | `GenerationResult.trace`, `GenerationResult.conversation`, persistent stores |
 
 ## Expected result
 

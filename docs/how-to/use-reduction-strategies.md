@@ -27,9 +27,11 @@ Use a custom reducer when the selection rule is domain-specific.
 
 ## Variants
 
-- deterministic output voting: `builtin/majority_vote`
-- judged selection: `builtin/best_of_n`
-- domain-specific selection: custom reducer
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Deterministic output voting | Multiple candidates often converge on the same normalized answer | Less useful when outputs vary semantically but not textually | `builtin/majority_vote` |
+| Judged selection | A judge should pick the strongest candidate before reduction | Requires judge-backed selection logic | `builtin/best_of_n` |
+| Domain-specific selection | Selection or synthesis logic belongs entirely to your own task | Requires custom reduction code | Custom reducer, `CandidateReducer` |
 
 --8<-- "docs/_snippets/how-to/reduction-strategies-note.md"
 

@@ -46,8 +46,10 @@ Estimate behavior:
 
 ## Variants
 
-- conservative provider rollout: low provider concurrency and explicit rate limits
-- throughput-oriented local runs: raise concurrency carefully while keeping storage stable
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Conservative provider rollout | A provider has strict quotas or unstable limits and you want safety first | Lower throughput | `provider_concurrency`, `provider_rate_limits`, retry settings |
+| Throughput-oriented local runs | Local hardware or permissive endpoints can handle more parallel work | Higher pressure on stores, providers, and error handling | `max_concurrent_tasks`, `stage_concurrency`, `provider_concurrency` |
 
 ## Expected result
 

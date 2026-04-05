@@ -49,8 +49,10 @@ themis batch run --request runs/batch/requests/<run-id>.json
 
 ## Variants
 
-- single-host queued work: worker-pool
-- request/completed manifest flow: batch
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Single-host queued work | Workers should pull manifests from a shared queue root | Requires a worker process to keep polling | `themis submit --mode worker-pool`, `themis worker run --queue-root ...` |
+| Request and completed manifest flow | Each run should execute from an explicit request file | Less queue-like than worker-pool mode | `themis submit --mode batch`, `themis batch run --request ...` |
 
 ## Expected result
 

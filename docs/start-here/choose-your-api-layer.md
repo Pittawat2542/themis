@@ -27,11 +27,13 @@ flowchart TD
 
 All three paths still converge on the same runtime model, so this choice is about authoring surface, not a different engine.
 
-Decision rule:
+## Decision rule
 
-- shortest path: `evaluate(model=..., data=..., metric=..., ...)`
-- reusable experiment: `Experiment(...)`
-- custom runtime behavior: extension protocols
+| Option | Best for | Persistence / runtime behavior | Caveats |
+| --- | --- | --- | --- |
+| `evaluate(model=..., data=..., metric=..., ...)` | The shortest path from inline data to a completed run | Uses the same runtime under a smaller authoring surface | Less explicit control over compile, replay, and config loading |
+| `Experiment(...)` | Reusable experiment definitions and long-lived workflows | Exposes compile, replay, config loading, and store control | More structure than a one-off script |
+| Extension protocols | Custom runtime behavior when builtins are not enough | Still plugs into the same Themis runtime once implemented | Requires custom code and protocol knowledge |
 
 Next:
 

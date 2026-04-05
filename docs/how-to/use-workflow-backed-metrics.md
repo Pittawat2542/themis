@@ -44,11 +44,13 @@ Provide:
 
 ## Variants
 
-- rubric scoring: `builtin/llm_rubric`
-- multi-judge averaging: `builtin/panel_of_judges`
-- majority-vote judgment: `builtin/majority_vote_judge`
-- pairwise selection: `builtin/pairwise_judge`
-- heterogeneous multi-judge orchestration: author a custom workflow metric in Python when different prompts or parsing logic should run over the same response
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Rubric scoring | One judge and one rubric are enough | Less resilient to judge variance than panel-style setups | `builtin/llm_rubric` |
+| Multi-judge averaging | Multiple judges should score the same output and aggregate | Higher latency and judge-model cost | `builtin/panel_of_judges` |
+| Majority-vote judgment | The output should collapse to a categorical majority decision | Loses scalar nuance compared with averaging | `builtin/majority_vote_judge` |
+| Pairwise selection | Two candidates should be compared directly | Not a drop-in replacement for single-output scoring | `builtin/pairwise_judge` |
+| Heterogeneous multi-judge orchestration | Different prompts or parsing logic should run over the same response | Requires a custom workflow metric in Python | Custom workflow metric, `ctx.prompt_spec` |
 
 ## Expected result
 

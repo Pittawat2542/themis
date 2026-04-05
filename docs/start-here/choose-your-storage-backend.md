@@ -27,11 +27,13 @@ flowchart TD
 
 The decision is mostly about whether later resume, reporting, or handoff must happen outside the current process.
 
-Decision rule:
+## Decision rule
 
-- tutorials and smoke tests: `memory`
-- most real local work: `sqlite`
-- operational or integration-specific needs: external stores
+| Option | Best for | Persistence / runtime behavior | Caveats |
+| --- | --- | --- | --- |
+| `memory` | Tutorials and smoke tests | Keeps artifacts only in the current process | No cross-process reopen, report, or cache reuse |
+| `sqlite` | Most real local work | Persists runs locally for resume, report, compare, and export | Less environment-specific flexibility than external stores |
+| External stores | Operational or integration-specific needs | Match non-local persistence requirements such as services or shared infrastructure | More setup and backend-specific operational work |
 
 Next:
 

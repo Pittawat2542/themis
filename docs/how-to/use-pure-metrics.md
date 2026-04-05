@@ -25,9 +25,11 @@ Choose one or more builtin pure metrics such as `builtin/exact_match`, `builtin/
 
 ## Variants
 
-- exact structured comparison: `builtin/exact_match`
-- token-overlap style scoring: `builtin/f1` or `builtin/bleu`
-- task-specific deterministic logic: custom `PureMetric`
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Exact structured comparison | Parsed output should match the expected value exactly | Too strict for fuzzy or stylistic outputs | `builtin/exact_match` |
+| Token-overlap style scoring | Partial lexical overlap is more meaningful than exact equality | Still surface-form based, not semantic judging | `builtin/f1`, `builtin/bleu` |
+| Task-specific deterministic logic | The scoring rule is deterministic but domain-specific | Requires custom metric implementation | `PureMetric` |
 
 ## Expected result
 

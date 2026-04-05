@@ -29,9 +29,11 @@ Instrumentation is runtime-only. Swapping subscribers or tracing backends change
 
 ## Variants
 
-- layer-1 convenience flow: pass `subscribers=` or `tracing_provider=` to `evaluate(...)`
-- experiment flow: pass them to `Experiment.run(...)` or `Experiment.rejudge(...)`
-- no-op default: omit both and let the built-in `NoOpTracingProvider` handle execution silently
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Layer-1 convenience flow | You are using the small `evaluate(...)` API and still want runtime visibility | Less reusable than wiring observability into an `Experiment` workflow | `evaluate(...)`, `subscribers=`, `tracing_provider=` |
+| Experiment flow | You want observability on reusable experiments, replay, or rejudge flows | Slightly more setup than the one-call convenience path | `Experiment.run(...)`, `Experiment.rejudge(...)` |
+| No-op default | You do not need explicit instrumentation for this run | No trace or subscriber output to inspect later | Omit `subscribers` and `tracing_provider` |
 
 ## Expected result
 

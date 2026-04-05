@@ -30,9 +30,11 @@ Choose `jsonl`, `mongodb`, or `postgres` when your environment or data lifecycle
 
 ## Variants
 
-- tutorial or smoke-test runs: `memory`
-- most local persisted work: `sqlite`
-- environment-driven persistence requirements: external stores
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Tutorial or smoke-test runs | The run is short-lived and does not need reopen support | No cross-process persistence or later reporting | `memory`, `InMemoryRunStore` |
+| Most local persisted work | You want the default persistent backend for resume, report, and compare | Less flexible than environment-specific external stores | `sqlite`, `SqliteRunStore`, `sqlite_store` |
+| Environment-driven persistence requirements | Team or infrastructure constraints already require an external backend | More setup and operational dependencies | `jsonl`, `mongodb`, `postgres`, `StorageConfig` |
 
 ## Expected result
 

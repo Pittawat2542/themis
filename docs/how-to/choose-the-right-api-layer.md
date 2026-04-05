@@ -31,9 +31,11 @@ Choose custom protocols if builtin components are not sufficient and your logic 
 
 ## Variants
 
-- shortest possible local script: `evaluate(model=..., data=..., metric=..., ...)`
-- most reusable user workflow: `Experiment(...)`
-- advanced extensibility: `Generator`, `Parser`, `CandidateReducer`, and metric protocols
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Shortest possible local script | You want one small Python entry point for a straightforward run | Less explicit control over compile, replay, and config loading | `evaluate(model=..., data=..., metric=..., ...)` |
+| Most reusable user workflow | You want a reusable experiment definition with compile, run, replay, and store control | More structure than a one-off script | `Experiment(...)`, `Experiment.compile()`, `Experiment.run()` |
+| Advanced extensibility | Builtins are close but not sufficient and custom runtime behavior is required | Highest implementation cost and more protocol knowledge | `Generator`, `Parser`, `CandidateReducer`, metric protocols |
 
 ## Expected result
 

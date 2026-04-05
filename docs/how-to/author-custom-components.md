@@ -44,9 +44,11 @@ Review the runnable examples:
 
 ## Variants
 
-- simple deterministic scoring: `PureMetric`
-- workflow-backed evaluation: `LLMMetric` or `SelectionMetric`
-- artifact-aware generation: `Generator` plus trace/conversation payloads
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Simple deterministic scoring | Parsed output alone is enough to decide correctness | Less flexible than workflow-backed judging for subjective tasks | `PureMetric` |
+| Workflow-backed evaluation | A judge model or richer workflow should score the output | Higher latency and judge-model dependencies | `LLMMetric`, `SelectionMetric` |
+| Artifact-aware generation | Generation should emit trace or conversation artifacts for later inspection | More generator responsibility and more stored artifacts | `Generator`, `GenerationResult.trace`, `GenerationResult.conversation` |
 
 ## Expected result
 

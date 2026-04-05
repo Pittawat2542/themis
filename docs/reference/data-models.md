@@ -7,11 +7,13 @@ goal: Document runtime models, snapshot models, and projection/read-model types.
 
 # Data models reference
 
-Important payloads to inspect directly:
+## Important payloads to inspect directly
 
-- `RunEstimate`: task counts plus token estimate fields such as `estimated_generation_input_tokens`, `estimated_generation_output_tokens`, `estimated_judge_prompt_tokens`, `estimated_judge_output_tokens`, `estimated_total_tokens`, and `assumptions`
-- `BenchmarkScoreRow`: one row with `outcome`, `value`, `error_category`, `error_message`, and `details`
-- `BenchmarkResult`: aggregated `score_rows`, `metric_means`, `outcome_counts`, and `error_counts`
+| Name | Kind | Use when | Key constraints / notes |
+| --- | --- | --- | --- |
+| `RunEstimate` | Planning model | You want task counts plus token estimate fields such as `estimated_generation_input_tokens`, `estimated_generation_output_tokens`, `estimated_judge_prompt_tokens`, `estimated_judge_output_tokens`, `estimated_total_tokens`, and `assumptions` | Informational only; pair with your own pricing model |
+| `BenchmarkScoreRow` | Per-case score model | You want one scored row with `outcome`, `value`, `error_category`, `error_message`, and `details` | Best for debugging specific cases |
+| `BenchmarkResult` | Aggregated benchmark model | You want combined `score_rows`, `metric_means`, `outcome_counts`, and `error_counts` | Best for reporting and comparison |
 
 Core runtime and output models:
 

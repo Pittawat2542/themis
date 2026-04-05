@@ -58,12 +58,14 @@ Imported artifacts are persisted through normal events, so `resume`, `report`, c
 
 ## Variants
 
-- quick state summary: `themis quickcheck`
-- stored snapshot inspection: `get_run_snapshot(...)` or `themis inspect snapshot`
-- explicit persisted state inspection: `get_execution_state(...)`
-- workflow execution inspection: `get_evaluation_execution(...)` or `themis inspect evaluation`
-- downstream-only recompute: `Experiment.replay(stage="reduce"|"parse"|"score"|"judge")`
-- report generation from the stored run: `Reporter` or `themis report`
+| Variant | Best when | Tradeoff | Related APIs / commands |
+| --- | --- | --- | --- |
+| Quick state summary | You need a fast operational check before digging deeper | Less detail than snapshot, state, or report views | `themis quickcheck` |
+| Stored snapshot inspection | You want identity and provenance details for the run | Does not show per-stage execution progress by itself | `get_run_snapshot(...)`, `themis inspect snapshot` |
+| Explicit persisted state inspection | You need stage completion, counts, and failure state | Lower-level than a report | `get_execution_state(...)`, `themis inspect state` |
+| Workflow execution inspection | You need judge prompts, responses, or workflow artifacts for one case | Only applies to workflow-backed metrics | `get_evaluation_execution(...)`, `themis inspect evaluation` |
+| Downstream-only recompute | Upstream artifacts are good and only later stages should rerun | Requires stored artifacts and careful stage choice | `Experiment.replay(stage="reduce"|"parse"|"score"|"judge")` |
+| Report generation from the stored run | You want shareable output after inspection | Requires a persistent run state to report from | `Reporter`, `themis report` |
 
 ## Expected result
 
