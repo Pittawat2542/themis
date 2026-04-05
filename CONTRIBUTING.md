@@ -28,18 +28,18 @@ Start with these project docs:
 Run these before opening a PR:
 
 ```bash
-uv run ruff check themis tests examples scripts
-uv run mypy themis tests
-uv run pytest -q
-uv run pytest tests/test_docs_site.py tests/test_docs_examples.py tests/test_docs_inventory.py -q
-uv run mkdocs build --strict
+uv run --extra dev ruff check themis tests examples scripts
+uv run --extra dev mypy themis tests
+uv run --extra dev pytest -q
+uv run --extra dev pytest tests/test_docs_site.py tests/test_docs_examples.py tests/test_docs_inventory.py -q
+uv run --extra docs mkdocs build --strict
 ```
 
 If you changed packaging or release metadata, also run:
 
 ```bash
 uv build
-uv run python scripts/ci/check_built_package.py
+uv run --extra dev python scripts/ci/check_built_package.py
 ```
 
 ## Docs and examples

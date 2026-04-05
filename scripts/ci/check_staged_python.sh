@@ -41,7 +41,7 @@ for path in "${staged_python[@]}"; do
   staged_snapshot_paths+=("$tmp_root/$path")
 done
 
-uv run ruff check --config "$repo_root/pyproject.toml" --force-exclude -- "${staged_snapshot_paths[@]}"
+uv run --extra dev ruff check --config "$repo_root/pyproject.toml" --force-exclude -- "${staged_snapshot_paths[@]}"
 uv run python -m py_compile "${staged_snapshot_paths[@]}"
 MYPYPATH="$tmp_root${MYPYPATH:+:$MYPYPATH}" \
-  uv run --project "$repo_root" mypy "${staged_snapshot_paths[@]}"
+  uv run --extra dev --project "$repo_root" mypy "${staged_snapshot_paths[@]}"

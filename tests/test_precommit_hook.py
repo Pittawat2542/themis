@@ -130,4 +130,6 @@ def test_check_staged_python_uses_staged_snapshot_not_worktree(tmp_path: Path) -
     assert "ruff check" in logged
     assert "py_compile" in logged
     assert "mypy" in logged
+    assert "--extra dev ruff check" in logged
+    assert "--extra dev --project" in logged
     assert "sample.py" in logged
