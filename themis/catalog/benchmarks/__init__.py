@@ -456,7 +456,9 @@ def _recipe_defaults(base_name: str, *, variant: str | None) -> dict[str, object
     return {}
 
 
-def _validate_execution_wiring(definition: BenchmarkDefinition, dataset: Dataset) -> None:
+def _validate_execution_wiring(
+    definition: BenchmarkDefinition, dataset: Dataset
+) -> None:
     if definition.parser_ids == ["builtin/json_identity"] and definition.metric_ids == [
         "builtin/exact_match"
     ]:

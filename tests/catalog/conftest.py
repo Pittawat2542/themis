@@ -143,9 +143,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "answer": "D",
             }
         ],
-        request_key(
-            "huggingface_dataset", "openai/MMMLU", "test", None, "default"
-        ): [
+        request_key("huggingface_dataset", "openai/MMMLU", "test", None, "default"): [
             {
                 "Unnamed: 0": 0,
                 "Question": "What is 2 + 2?",

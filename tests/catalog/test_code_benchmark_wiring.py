@@ -40,7 +40,9 @@ def test_humaneval_materialization_includes_reference_solution_for_demo_runs() -
     assert "def square" in str(payload["reference_solution"])
 
 
-def test_humaneval_execution_metric_scores_candidate_against_reference_solution() -> None:
+def test_humaneval_execution_metric_scores_candidate_against_reference_solution() -> (
+    None
+):
     class _FakeExecutor:
         def execute(
             self,

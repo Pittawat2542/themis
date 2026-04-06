@@ -571,7 +571,9 @@ def _materialize_livecodebench(definition, *, row_loader: DatasetRowLoader) -> D
         revision=None
         if definition.source_kind == "huggingface_raw_files"
         else definition.dataset_revision,
-        files=definition.source_files if definition.source_kind == "huggingface_raw_files" else None,
+        files=definition.source_files
+        if definition.source_kind == "huggingface_raw_files"
+        else None,
     )
     cases = []
     for index, row in enumerate(rows, start=1):
