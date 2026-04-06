@@ -99,7 +99,7 @@
   ],
   "provenance": {
     "dependency_versions": {
-      "themis-eval": "4.0.0"
+      "themis-eval": "4.0.1"
     },
     "environment_metadata": {
       "env": "test"
@@ -137,7 +137,7 @@
       },
       "store": "sqlite"
     },
-    "themis_version": "4.0.0"
+    "themis_version": "4.0.1"
   },
   "run_id": "8fae287c1cf1154ca8b7e6525e57d5ed28eecec31769c246147fc890751e019e"
 }

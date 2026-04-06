@@ -4,6 +4,8 @@ from pathlib import Path
 
 import tomllib
 
+from tests.release import CURRENT_VERSION
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,7 +32,7 @@ def test_pyproject_has_release_ready_public_metadata() -> None:
     project = _project_metadata()
 
     assert project["name"] == "themis-eval"
-    assert project["version"] == "4.0.0"
+    assert project["version"] == CURRENT_VERSION
     assert "v4" not in str(project["description"]).lower()
     assert project["requires-python"] == ">=3.12"
     assert project["license"] == "MIT"
@@ -85,6 +87,16 @@ def test_readme_uses_public_install_instructions_and_no_repo_local_links() -> No
     assert 'uv pip install -e ".[dev]"' not in readme
 
 
+def test_release_notes_and_citation_match_current_release() -> None:
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    citation = (REPO_ROOT / "CITATION.cff").read_text(encoding="utf-8")
+
+    assert f"## [{CURRENT_VERSION}] - 2026-04-06" in changelog
+    assert "## 4.0.0 - 2026-04-05" not in changelog
+    assert f"version: {CURRENT_VERSION}" in citation
+    assert "date-released: 2026-04-06" in citation
+
+
 def test_lockfile_excludes_vulnerable_anthropic_release() -> None:
     anthropic_versions = {
         str(package["version"])
@@ -97,3 +109,13 @@ def test_lockfile_excludes_vulnerable_anthropic_release() -> None:
         _parse_version(version) < (0, 86, 0) or _parse_version(version) >= (0, 87, 0)
         for version in anthropic_versions
     )
+
+
+def test_lockfile_tracks_current_editable_package_version() -> None:
+    versions = {
+        str(package["version"])
+        for package in _lock_packages()
+        if package.get("name") == "themis-eval"
+    }
+
+    assert versions == {CURRENT_VERSION}

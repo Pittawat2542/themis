@@ -7,6 +7,15 @@ import sys
 import tarfile
 import zipfile
 
+from tests.release import (
+    CURRENT_DIST_BASENAME,
+    CURRENT_DIST_INFO,
+    CURRENT_SDIST,
+    CURRENT_TAG,
+    CURRENT_VERSION,
+    CURRENT_WHEEL,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,7 +46,7 @@ def test_validate_release_extracts_version_headings(tmp_path: Path) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
         "# Changelog\n\n"
-        "## [4.0.0] - 2026-04-05\n"
+        f"## [{CURRENT_VERSION}] - 2026-04-06\n"
         "Stable release.\n\n"
         "## [Unreleased]\n"
         "Draft.\n\n"
@@ -46,23 +55,23 @@ def test_validate_release_extracts_version_headings(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert module._extract_versions(changelog) == {"4.0.0", "3.9.0"}
+    assert module._extract_versions(changelog) == {CURRENT_VERSION, "3.9.0"}
 
 
 def test_validate_release_main_accepts_matching_tag(tmp_path: Path) -> None:
     script = _copy_ci_script(tmp_path, "validate_release.py")
     repo_root = script.parents[2]
     (repo_root / "pyproject.toml").write_text(
-        '[project]\nversion = "4.0.0"\n',
+        f'[project]\nversion = "{CURRENT_VERSION}"\n',
         encoding="utf-8",
     )
     (repo_root / "CHANGELOG.md").write_text(
-        "# Changelog\n\n## [4.0.0] - 2026-04-05\nRelease notes.\n",
+        f"# Changelog\n\n## [{CURRENT_VERSION}] - 2026-04-06\nRelease notes.\n",
         encoding="utf-8",
     )
 
     result = subprocess.run(
-        [sys.executable, str(script), "--tag", "v4.0.0"],
+        [sys.executable, str(script), "--tag", CURRENT_TAG],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -70,7 +79,7 @@ def test_validate_release_main_accepts_matching_tag(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "release metadata validated for v4.0.0" in result.stdout
+    assert f"release metadata validated for {CURRENT_TAG}" in result.stdout
 
 
 def test_validate_release_main_rejects_missing_changelog_section(
@@ -79,7 +88,7 @@ def test_validate_release_main_rejects_missing_changelog_section(
     script = _copy_ci_script(tmp_path, "validate_release.py")
     repo_root = script.parents[2]
     (repo_root / "pyproject.toml").write_text(
-        '[project]\nversion = "4.0.0"\n',
+        f'[project]\nversion = "{CURRENT_VERSION}"\n',
         encoding="utf-8",
     )
     (repo_root / "CHANGELOG.md").write_text(
@@ -88,7 +97,7 @@ def test_validate_release_main_rejects_missing_changelog_section(
     )
 
     result = subprocess.run(
-        [sys.executable, str(script), "--tag", "v4.0.0"],
+        [sys.executable, str(script), "--tag", CURRENT_TAG],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -96,7 +105,10 @@ def test_validate_release_main_rejects_missing_changelog_section(
     )
 
     assert result.returncode == 1
-    assert "does not contain a release section for version 4.0.0" in result.stderr
+    assert (
+        f"does not contain a release section for version {CURRENT_VERSION}"
+        in result.stderr
+    )
 
 
 def test_extract_release_notes_writes_requested_section(tmp_path: Path) -> None:
@@ -105,7 +117,7 @@ def test_extract_release_notes_writes_requested_section(tmp_path: Path) -> None:
     output = tmp_path / "release_notes.md"
     changelog.write_text(
         "# Changelog\n\n"
-        "## [4.0.0] - 2026-04-05\n"
+        f"## [{CURRENT_VERSION}] - 2026-04-06\n"
         "Line one.\n"
         "Line two.\n\n"
         "## [3.9.0] - 2026-04-01\n"
@@ -118,7 +130,7 @@ def test_extract_release_notes_writes_requested_section(tmp_path: Path) -> None:
             sys.executable,
             str(script),
             "--tag",
-            "v4.0.0",
+            CURRENT_TAG,
             "--changelog",
             str(changelog),
             "--output",
@@ -132,14 +144,14 @@ def test_extract_release_notes_writes_requested_section(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert output.read_text(encoding="utf-8") == (
-        "## [4.0.0] - 2026-04-05\nLine one.\nLine two.\n"
+        f"## [{CURRENT_VERSION}] - 2026-04-06\nLine one.\nLine two.\n"
     )
 
 
 def test_check_built_package_rejects_excluded_files() -> None:
     module = _load_module("scripts/ci/check_built_package.py", "check_built_package")
 
-    path = Path("themis_eval-4.0.0-py3-none-any.whl")
+    path = Path(CURRENT_WHEEL)
     try:
         module._assert_archive_contents(path, ["themis/__init__.py", "docs/index.md"])
     except SystemExit as exc:
@@ -153,15 +165,15 @@ def test_check_built_package_inspect_wheel_requires_cli_entry_point(
 ) -> None:
     module = _load_module("scripts/ci/check_built_package.py", "check_built_package")
 
-    wheel = tmp_path / "themis_eval-4.0.0-py3-none-any.whl"
+    wheel = tmp_path / CURRENT_WHEEL
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr("themis/__init__.py", "__all__ = []\n")
         archive.writestr(
-            "themis_eval-4.0.0.dist-info/METADATA",
-            "Metadata-Version: 2.4\nName: themis-eval\nVersion: 4.0.0\n",
+            f"{CURRENT_DIST_INFO}/METADATA",
+            f"Metadata-Version: 2.4\nName: themis-eval\nVersion: {CURRENT_VERSION}\n",
         )
         archive.writestr(
-            "themis_eval-4.0.0.dist-info/entry_points.txt",
+            f"{CURRENT_DIST_INFO}/entry_points.txt",
             "[console_scripts]\nother = themis.cli:main\n",
         )
 
@@ -178,13 +190,13 @@ def test_check_built_package_inspect_sdist_accepts_package_layout(
 ) -> None:
     module = _load_module("scripts/ci/check_built_package.py", "check_built_package")
 
-    sdist = tmp_path / "themis_eval-4.0.0.tar.gz"
+    sdist = tmp_path / CURRENT_SDIST
     with tarfile.open(sdist, "w:gz") as archive:
-        package_dir = tmp_path / "themis_eval-4.0.0" / "themis"
+        package_dir = tmp_path / CURRENT_DIST_BASENAME / "themis"
         package_dir.mkdir(parents=True)
         init_file = package_dir / "__init__.py"
         init_file.write_text("__all__ = []\n", encoding="utf-8")
-        archive.add(init_file, arcname="themis_eval-4.0.0/themis/__init__.py")
+        archive.add(init_file, arcname=f"{CURRENT_DIST_BASENAME}/themis/__init__.py")
 
     module._inspect_sdist(sdist)
 

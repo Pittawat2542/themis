@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## [4.0.1] - 2026-04-06
+
+Themis 4.0.1 is a patch release that stabilizes benchmark catalog workflows,
+docs rendering, and release validation after the first stable public launch.
+
+### Fixed
+- Fixed catalog benchmark loading and validation so public benchmark discovery,
+  materialization, and monkeypatched loader scenarios behave consistently.
+- Fixed built-in code benchmark wiring to support HumanEval-style execution
+  scoring in the benchmark catalog.
+- Fixed docs-site rendering issues affecting dark mode presentation and Mermaid
+  diagrams.
+- Fixed release packaging validation so built-wheel smoke tests verify the
+  current release version instead of a stale hardcoded value.
+
+### Changed
+- Updated package metadata, runtime provenance defaults, and citation metadata
+  for the 4.0.1 release.
+
 ## [4.0.0] - 2026-04-05
 
 Themis 4.0.0 is the first stable public release and marks a complete
@@ -46,10 +65,3 @@ evaluation workflows.
 - Previous runtime, storage, and catalog APIs are not compatible with v4.
 - Legacy import paths, workflows, and module structure have been removed or
   redesigned.
-
-## [3.1.0] - 2026-03-23
-
-## 4.0.0 - 2026-04-05
-
-- First stable public release of Themis.
-- Added the CLI, documentation set, examples, storage backends, and release automation.
