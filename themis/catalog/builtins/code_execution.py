@@ -331,8 +331,7 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
             if (
                 candidate_result.ok
                 and reference_ok
-                and _normalize_output(candidate_result.stdout)
-                == reference_stdout
+                and _normalize_output(candidate_result.stdout) == reference_stdout
             ):
                 passed += 1
         total = len(tests)
