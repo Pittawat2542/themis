@@ -1,10 +1,14 @@
 [benchmarks.aime_2025]
 dataset_id = "MathArena/aime_2025"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.aime_2026]
 dataset_id = "MathArena/aime_2026"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.aethercode]
 dataset_id = "m-a-p/AetherCode"
@@ -13,50 +17,72 @@ split = "test"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.apex_2025]
 dataset_id = "MathArena/apex_2025"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.babe]
 dataset_id = "mediabiasgroup/BABE"
 split = "test"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.beyond_aime]
 dataset_id = "ByteDance-Seed/BeyondAIME"
 split = "test"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.encyclo_k]
 dataset_id = "m-a-p/Encyclo-K"
 split = "test"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.frontierscience]
 dataset_id = "openai/frontierscience"
 split = "test"
 adapter = "rubric_qa"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.gpqa_diamond]
 dataset_id = "fingertap/GPQA-Diamond"
 split = "test"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.healthbench]
 dataset_id = "openai/healthbench"
 split = "test"
 adapter = "rubric_qa"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.hle]
 dataset_id = "cais/hle"
 split = "test"
 variant_mode = "open"
 adapter = "hle"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.hmmt_feb_2025]
 dataset_id = "MathArena/hmmt_feb_2025"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.hmmt_nov_2025]
 dataset_id = "MathArena/hmmt_nov_2025"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.humaneval]
 dataset_id = "evalplus/HumanEvalPlus"
@@ -65,6 +91,9 @@ variant_mode = "open"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
+source_kind = "huggingface_dataset"
+support_tier = "experimental"
+version_notes = "Execution scoring is not implemented yet."
 
 [benchmarks.humaneval_plus]
 dataset_id = "evalplus/HumanEvalPlus"
@@ -73,10 +102,15 @@ variant_mode = "open"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
+source_kind = "huggingface_dataset"
+support_tier = "experimental"
+version_notes = "Execution scoring is not implemented yet."
 
 [benchmarks.imo_answerbench]
 dataset_id = "Hwilner/imo-answerbench"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.livecodebench]
 dataset_id = "livecodebench/code_generation_lite"
@@ -85,21 +119,30 @@ split = "test"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
+source_kind = "huggingface_raw_files"
+support_tier = "ready"
+version_notes = "Targets LiveCodeBench release_v6."
 
 [benchmarks.lpfqa]
 dataset_id = "m-a-p/LPFQA"
 split = "train"
 adapter = "rubric_qa"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.mmlu_pro]
 dataset_id = "TIGER-Lab/MMLU-Pro"
 split = "test"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.mmmlu]
 dataset_id = "openai/MMMLU"
 split = "test"
 variant_mode = "open"
 adapter = "mmmlu"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.codeforces]
 dataset_id = "open-r1/codeforces"
@@ -108,34 +151,48 @@ split = "test"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.phybench]
 dataset_id = "Eureka-Lab/PHYBench"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.procbench]
 dataset_id = "ifujisawa/procbench"
 split = "train"
 variant_mode = "open"
 adapter = "procbench"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.rolebench]
 dataset_id = "ZenMoore/RoleBench"
 split = "test"
 variants = ["instruction_generalization_eng", "role_generalization_eng"]
 adapter = "rolebench"
+source_kind = "huggingface_raw_files"
+support_tier = "ready"
 
 [benchmarks.simpleqa_verified]
 dataset_id = "google/simpleqa-verified"
 split = "eval"
 adapter = "panel_qa"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.superchem]
 dataset_id = "ZehuaZhao/SUPERChem"
 split = "train"
 variants = ["en", "zh"]
 adapter = "superchem"
+source_kind = "huggingface_dataset"
+support_tier = "ready"
 
 [benchmarks.supergpqa]
 dataset_id = "m-a-p/SuperGPQA"
 split = "train"
+source_kind = "huggingface_dataset"
+support_tier = "ready"

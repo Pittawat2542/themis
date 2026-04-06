@@ -103,6 +103,23 @@ class BenchmarkDefinition(FrozenModel):
         )
 
 
+class BenchmarkCatalogEntry(FrozenModel):
+    benchmark_id: str
+    base_benchmark_id: str
+    variant_mode: str = "none"
+    declared_variants: list[str] = Field(default_factory=list)
+    dataset_id: str
+    split: str
+    dataset_revision: str | None = None
+    source_kind: str = "huggingface_dataset"
+    requires_code_execution: bool = False
+    supported_execution_backends: list[str] = Field(default_factory=list)
+    parser_ids: list[str] = Field(default_factory=list)
+    metric_ids: list[str] = Field(default_factory=list)
+    support_tier: str = "ready"
+    version_notes: str | None = None
+
+
 @lru_cache(maxsize=1)
 def benchmark_specs() -> dict[str, dict[str, object]]:
     manifest_path = Path(__file__).with_name("manifests") / "benchmarks.toml"
@@ -218,6 +235,35 @@ def run_benchmark(
         dataset=dataset, model=model, storage=storage
     )
     return experiment.run(store=store)
+
+
+def list_benchmark_ids() -> list[str]:
+    return sorted(benchmark_specs())
+
+
+def list_benchmarks() -> list[BenchmarkCatalogEntry]:
+    return [get_benchmark(benchmark_id) for benchmark_id in list_benchmark_ids()]
+
+
+def get_benchmark(name: str) -> BenchmarkCatalogEntry:
+    definition = load_benchmark(name)
+    spec = benchmark_specs()[definition.base_benchmark_id]
+    return BenchmarkCatalogEntry(
+        benchmark_id=definition.base_benchmark_id,
+        base_benchmark_id=definition.base_benchmark_id,
+        variant_mode=_string_from_value(spec.get("variant_mode", "none")),
+        declared_variants=_string_list_from_value(spec.get("variants", [])),
+        dataset_id=definition.dataset_id,
+        split=definition.split,
+        dataset_revision=definition.dataset_revision,
+        source_kind=_string_from_value(spec.get("source_kind", "huggingface_dataset")),
+        requires_code_execution=definition.requires_code_execution,
+        supported_execution_backends=definition.supported_execution_backends,
+        parser_ids=definition.parser_ids,
+        metric_ids=definition.metric_ids,
+        support_tier=_string_from_value(spec.get("support_tier", "ready")),
+        version_notes=_optional_str(spec.get("version_notes")),
+    )
 
 
 def _resolve_variant(

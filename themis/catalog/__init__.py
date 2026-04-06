@@ -5,11 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from themis.catalog.benchmarks import BenchmarkCatalogEntry
     from themis.core.results import RunResult
     from themis.core.store import RunStore
 
 __all__ = [
     "builtin_component_refs",
+    "get_benchmark",
+    "list_benchmark_ids",
+    "list_benchmarks",
     "list_component_ids",
     "load",
     "run",
@@ -46,6 +50,30 @@ def builtin_component_refs() -> dict[str, Any]:
     )
 
     return _builtin_component_refs()
+
+
+def list_benchmark_ids() -> list[str]:
+    """List canonical benchmark identifiers from the shipped catalog."""
+
+    from themis.catalog.benchmarks import list_benchmark_ids as _list_benchmark_ids
+
+    return _list_benchmark_ids()
+
+
+def list_benchmarks() -> list[BenchmarkCatalogEntry]:
+    """Return structured metadata for shipped catalog benchmarks."""
+
+    from themis.catalog.benchmarks import list_benchmarks as _list_benchmarks
+
+    return _list_benchmarks()
+
+
+def get_benchmark(name: str) -> BenchmarkCatalogEntry:
+    """Return structured metadata for a shipped catalog benchmark."""
+
+    from themis.catalog.benchmarks import get_benchmark as _get_benchmark
+
+    return _get_benchmark(name)
 
 
 def list_component_ids(*, kind: str | None = None) -> list[str]:
