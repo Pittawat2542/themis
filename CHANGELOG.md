@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## [4.0.2] - 2026-04-06
+
+Themis 4.0.2 is a patch release that tightens live benchmark materialization
+and adds a catalog-wide materialization checker for release validation.
+
+### Added
+- Added an exhaustive catalog materialization checker script for validating
+  shipped benchmark recipes against live dataset sources.
+
+### Fixed
+- Fixed catalog benchmark loading to handle streamed Hugging Face datasets and
+  benchmark-specific raw-file materialization paths.
+- Fixed live benchmark materialization for HealthBench, LiveCodeBench,
+  ProcBench, RoleBench, SuperChem, and related benchmark variants.
+- Fixed multiple-choice prompt rendering for benchmark rows with more than ten
+  answer options.
+
 ## [4.0.1] - 2026-04-06
 
 Themis 4.0.1 is a patch release that stabilizes benchmark catalog workflows,
