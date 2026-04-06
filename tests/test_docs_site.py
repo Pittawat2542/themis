@@ -8,6 +8,7 @@ from pathlib import Path
 import tomllib
 
 import themis
+from themis.catalog import list_benchmarks
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -256,6 +257,26 @@ def test_reference_docs_cover_cli_public_api_and_catalogs() -> None:
 
     assert "themis.catalog.load(...)" in benchmark_reference
     assert "themis.catalog.run(...)" in benchmark_reference
+
+
+def test_benchmark_reference_tracks_catalog_metadata() -> None:
+    benchmark_reference = (DOCS_ROOT / "reference" / "benchmark-catalog.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "themis.catalog.list_benchmark_ids(...)" in benchmark_reference
+    assert "themis.catalog.list_benchmarks(...)" in benchmark_reference
+    assert "Support tier" in benchmark_reference
+
+    for entry in list_benchmarks():
+        assert f"`{entry.benchmark_id}`" in benchmark_reference
+        assert f"| `{entry.benchmark_id}` |" in benchmark_reference
+        assert entry.support_tier in benchmark_reference
+        if entry.declared_variants:
+            for variant in entry.declared_variants:
+                assert variant in benchmark_reference
+        if entry.version_notes is not None:
+            assert entry.version_notes in benchmark_reference
 
 
 def test_docs_cover_required_topics_and_optional_extras() -> None:

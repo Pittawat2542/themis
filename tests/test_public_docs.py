@@ -13,6 +13,7 @@ from themis.catalog import (
     list_component_ids,
     load,
     run,
+    validate_benchmark,
 )
 from themis.cli import main
 from themis.cli.helpers import (
@@ -85,6 +86,7 @@ def test_catalog_entrypoints_are_documented_and_typed() -> None:
         list_benchmark_ids,
         list_benchmarks,
         get_benchmark,
+        validate_benchmark,
     ):
         _assert_docstring(symbol)
         _assert_annotations(symbol)

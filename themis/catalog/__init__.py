@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from themis.catalog.benchmarks import BenchmarkCatalogEntry
+    from themis.catalog.benchmarks import (
+        BenchmarkCatalogEntry,
+        BenchmarkValidationResult,
+    )
     from themis.core.results import RunResult
     from themis.core.store import RunStore
 
@@ -17,6 +20,7 @@ __all__ = [
     "list_component_ids",
     "load",
     "run",
+    "validate_benchmark",
 ]
 
 
@@ -74,6 +78,14 @@ def get_benchmark(name: str) -> BenchmarkCatalogEntry:
     from themis.catalog.benchmarks import get_benchmark as _get_benchmark
 
     return _get_benchmark(name)
+
+
+def validate_benchmark(name: str) -> BenchmarkValidationResult:
+    """Validate that a shipped benchmark can load, materialize, and score."""
+
+    from themis.catalog.benchmarks import validate_benchmark as _validate_benchmark
+
+    return _validate_benchmark(name)
 
 
 def list_component_ids(*, kind: str | None = None) -> list[str]:

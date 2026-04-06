@@ -125,6 +125,18 @@ class BenchmarkCatalogEntry(FrozenModel):
     version_notes: str | None = None
 
 
+class BenchmarkValidationCheck(FrozenModel):
+    status: str
+    message: str | None = None
+
+
+class BenchmarkValidationResult(FrozenModel):
+    benchmark_id: str
+    support_tier: str
+    checks: dict[str, BenchmarkValidationCheck]
+    issues: list[str] = Field(default_factory=list)
+
+
 @lru_cache(maxsize=1)
 def benchmark_specs() -> dict[str, dict[str, object]]:
     manifest_path = Path(__file__).with_name("manifests") / "benchmarks.toml"
@@ -276,6 +288,96 @@ def get_benchmark(name: str) -> BenchmarkCatalogEntry:
     )
 
 
+def validate_benchmark(name: str) -> BenchmarkValidationResult:
+    issues: list[str] = []
+    checks: dict[str, BenchmarkValidationCheck] = {}
+
+    try:
+        definition = load_benchmark(name)
+    except Exception as exc:
+        message = str(exc)
+        checks["load"] = BenchmarkValidationCheck(status="failed", message=message)
+        checks["materialize"] = BenchmarkValidationCheck(
+            status="skipped", message="Benchmark failed to load."
+        )
+        checks["score_smoke"] = BenchmarkValidationCheck(
+            status="skipped", message="Benchmark failed to load."
+        )
+        return BenchmarkValidationResult(
+            benchmark_id=name,
+            support_tier="unsupported",
+            checks=checks,
+            issues=[message],
+        )
+
+    checks["load"] = BenchmarkValidationCheck(status="passed")
+    dataset = None
+
+    try:
+        dataset = definition.materialize_dataset()
+        if not dataset.cases:
+            raise ValueError("Benchmark materialized an empty dataset.")
+        checks["materialize"] = BenchmarkValidationCheck(status="passed")
+    except Exception as exc:
+        message = str(exc)
+        issues.append(message)
+        checks["materialize"] = BenchmarkValidationCheck(
+            status="failed", message=message
+        )
+        checks["score_smoke"] = BenchmarkValidationCheck(
+            status="skipped", message="Materialization failed."
+        )
+        return BenchmarkValidationResult(
+            benchmark_id=definition.benchmark_id,
+            support_tier=definition.support_tier,
+            checks=checks,
+            issues=issues,
+        )
+
+    if not definition.requires_code_execution:
+        checks["score_smoke"] = BenchmarkValidationCheck(
+            status="skipped", message="Benchmark does not require code execution."
+        )
+        return BenchmarkValidationResult(
+            benchmark_id=definition.benchmark_id,
+            support_tier=definition.support_tier,
+            checks=checks,
+            issues=issues,
+        )
+
+    if definition.support_tier != "ready":
+        message = "Benchmark is not ready for execution score smoke validation."
+        checks["score_smoke"] = BenchmarkValidationCheck(
+            status="skipped",
+            message=message,
+        )
+        return BenchmarkValidationResult(
+            benchmark_id=definition.benchmark_id,
+            support_tier=definition.support_tier,
+            checks=checks,
+            issues=issues,
+        )
+
+    try:
+        assert dataset is not None
+        _validate_execution_wiring(definition, dataset)
+        _score_smoke(definition, dataset)
+        checks["score_smoke"] = BenchmarkValidationCheck(status="passed")
+    except Exception as exc:
+        message = str(exc)
+        issues.append(message)
+        checks["score_smoke"] = BenchmarkValidationCheck(
+            status="failed", message=message
+        )
+
+    return BenchmarkValidationResult(
+        benchmark_id=definition.benchmark_id,
+        support_tier=definition.support_tier,
+        checks=checks,
+        issues=issues,
+    )
+
+
 def _resolve_variant(
     base_name: str, variant: str | None, spec: dict[str, object]
 ) -> str | None:
@@ -347,6 +449,55 @@ def _recipe_defaults(base_name: str, *, variant: str | None) -> dict[str, object
             "parser_ids": ["builtin/code_text"],
         }
     return {}
+
+
+def _validate_execution_wiring(definition: BenchmarkDefinition, dataset: Dataset) -> None:
+    if definition.parser_ids == ["builtin/json_identity"] and definition.metric_ids == [
+        "builtin/exact_match"
+    ]:
+        raise ValueError(
+            "Code-execution benchmark resolves to non-execution parser/metric wiring."
+        )
+    first_case = dataset.cases[0]
+    expected_output = first_case.expected_output
+    if not isinstance(expected_output, dict) or "official_tests" not in expected_output:
+        raise ValueError(
+            "Code-execution benchmark materializer did not produce an execution payload."
+        )
+
+
+def _score_smoke(definition: BenchmarkDefinition, dataset: Dataset) -> None:
+    from themis.catalog import load as load_catalog
+    from themis.core.contexts import ParseContext, ScoreContext
+    from themis.core.models import ReducedCandidate
+    from themis.core.protocols import Parser, PureMetric
+
+    if not definition.parser_ids or not definition.metric_ids:
+        raise ValueError("Benchmark is missing parser or metric configuration.")
+
+    parser = cast(Parser, load_catalog(definition.parser_ids[0]))
+    metric = cast(PureMetric, load_catalog(definition.metric_ids[0]))
+    case = dataset.cases[0]
+    parsed = parser.parse(
+        ReducedCandidate(
+            candidate_id="validation-candidate",
+            final_output="def solve():\n    return 'validation'\n",
+        ),
+        ParseContext(
+            run_id="benchmark-validation",
+            case_id=case.case_id,
+            candidate_id="validation-candidate",
+        ),
+    )
+    metric.score(
+        parsed,
+        case,
+        ScoreContext(
+            run_id="benchmark-validation",
+            case=case,
+            parsed_output=parsed,
+        ),
+    )
 
 
 def _required_str(payload: dict[str, object], key: str) -> str:
