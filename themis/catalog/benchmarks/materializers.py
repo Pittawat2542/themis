@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 
@@ -618,12 +619,12 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
     )
     for index, row in enumerate(rows, start=1):
         prompt = str(row.get("prompt", "")).rstrip()
+        canonical_solution = str(row.get("canonical_solution", "")).rstrip()
         entry_point = str(row.get("entry_point", ""))
-        tests = _humaneval_tests(
-            row.get("base_input", []), row.get("canonical_solution")
-        )
-        plus_tests = _humaneval_tests(
-            row.get("plus_input", []), row.get("canonical_solution")
+        tests = _humaneval_tests(row.get("base_input", []))
+        plus_tests = _humaneval_tests(row.get("plus_input", []))
+        reference_solution = _humaneval_reference_solution(
+            prompt=prompt, canonical_solution=canonical_solution
         )
         cases.append(
             Case(
@@ -640,6 +641,8 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
                         "function_name": entry_point,
                         "official_tests": tests,
                         "plus_tests": plus_tests,
+                        "reference_solution": reference_solution,
+                        "solution": reference_solution,
                         "score_variant": score_variant,
                     }
                 ),
@@ -792,11 +795,18 @@ def _normalize_tests(value: object) -> list[dict[str, str]]:
     return tests
 
 
-def _humaneval_tests(inputs: object, solution: object) -> list[dict[str, str]]:
+def _humaneval_tests(inputs: object) -> list[dict[str, str]]:
     if not isinstance(inputs, list):
         return []
-    expected = str(solution or "").strip() or "pass"
-    return [{"input": str(item), "output": expected} for item in inputs]
+    return [{"input": _json_dump(item)} for item in inputs]
+
+
+def _humaneval_reference_solution(*, prompt: str, canonical_solution: str) -> str:
+    return f"{prompt}\n{canonical_solution}\n".strip() + "\n"
+
+
+def _json_dump(value: object) -> str:
+    return json.dumps(_json(value), sort_keys=True)
 
 
 def _json(value: object) -> JSONValue:

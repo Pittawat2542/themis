@@ -92,8 +92,7 @@ requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
 source_kind = "huggingface_dataset"
-support_tier = "experimental"
-version_notes = "Execution scoring is not implemented yet."
+support_tier = "ready"
 
 [benchmarks.humaneval_plus]
 dataset_id = "evalplus/HumanEvalPlus"
@@ -103,8 +102,7 @@ requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
 source_kind = "huggingface_dataset"
-support_tier = "experimental"
-version_notes = "Execution scoring is not implemented yet."
+support_tier = "ready"
 
 [benchmarks.imo_answerbench]
 dataset_id = "Hwilner/imo-answerbench"

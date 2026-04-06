@@ -63,8 +63,8 @@ discovery.
 | `hle` | Judge-backed expert QA | `builtin/json_identity` + `builtin/panel_of_judges` | Recipe-defined | ready | Check the recipe for supported domain variants before choosing one |
 | `hmmt_feb_2025` | Math short-answer | `builtin/math_answer` + `builtin/math_equivalence` | None | ready | Dataset access only |
 | `hmmt_nov_2025` | Math short-answer | `builtin/math_answer` + `builtin/math_equivalence` | None | ready | Dataset access only |
-| `humaneval` | Code generation | `builtin/json_identity` + `builtin/exact_match` | Recipe-defined | experimental | Execution scoring is not implemented yet. Requires `piston` or `sandbox_fusion`; inspect the recipe before choosing a variant |
-| `humaneval_plus` | Code generation | `builtin/json_identity` + `builtin/exact_match` | Recipe-defined | experimental | Execution scoring is not implemented yet. Requires `piston` or `sandbox_fusion`; inspect the recipe before choosing a variant |
+| `humaneval` | Code generation | `builtin/code_text` + `builtin/humaneval_pass_rate` | Recipe-defined | ready | Requires `piston` or `sandbox_fusion`; inspect the recipe before choosing a variant |
+| `humaneval_plus` | Code generation | `builtin/code_text` + `builtin/humaneval_pass_rate` | Recipe-defined | ready | Requires `piston` or `sandbox_fusion`; inspect the recipe before choosing a variant |
 | `imo_answerbench` | Math short-answer | `builtin/math_answer` + `builtin/math_equivalence` | None | ready | Dataset access only |
 | `livecodebench` | Code generation | `builtin/code_text` + `builtin/livecodebench_pass_rate` | None | ready | Targets LiveCodeBench release_v6. Requires `piston` or `sandbox_fusion` plus dataset access |
 | `lpfqa` | Judge-backed QA | `builtin/json_identity` + `builtin/llm_rubric` | None | ready | Use a real judge model for non-demo scoring |

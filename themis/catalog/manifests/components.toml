@@ -100,6 +100,12 @@ target = "themis.catalog.builtins.code_execution:LiveCodeBenchExecutionMetric"
 version = "1.0"
 fingerprint = "builtin/livecodebench_pass_rate-fingerprint"
 
+[components."builtin/humaneval_pass_rate"]
+kind = "metric"
+target = "themis.catalog.builtins.code_execution:HumanEvalExecutionMetric"
+version = "1.0"
+fingerprint = "builtin/humaneval_pass_rate-fingerprint"
+
 [components."builtin/demo_judge"]
 kind = "judge_model"
 target = "themis.catalog.builtins.generators:DemoJudgeModel"

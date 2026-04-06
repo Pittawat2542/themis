@@ -31,6 +31,7 @@ The catalog now exposes reusable shipped components directly through
 | `builtin/codeforces_pass_rate` | Metric | You need Codeforces-style code execution scoring | Requires an execution backend such as `piston` or `sandbox_fusion` |
 | `builtin/aethercode_pass_rate` | Metric | You need AetherCode-specific execution scoring | Requires an execution backend such as `piston` or `sandbox_fusion` |
 | `builtin/livecodebench_pass_rate` | Metric | You need LiveCodeBench-style execution scoring | Requires an execution backend such as `piston` or `sandbox_fusion` |
+| `builtin/humaneval_pass_rate` | Metric | You need HumanEval-style function execution scoring against a reference solution | Requires a Python-capable execution backend such as `piston` or `sandbox_fusion` |
 | `builtin/demo_judge` | Judge model | You need a deterministic local judge for examples and tests | Replace with a real judge model for meaningful evaluation |
 | `builtin/llm_rubric` | Workflow metric | One judge should score against a rubric | Requires judge models plus optional rubric overrides |
 | `builtin/pairwise_judge` | Workflow metric | Two candidates should be compared head-to-head | Useful for selection or pairwise preference evaluation |

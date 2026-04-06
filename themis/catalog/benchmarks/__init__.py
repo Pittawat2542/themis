@@ -448,6 +448,11 @@ def _recipe_defaults(base_name: str, *, variant: str | None) -> dict[str, object
             "metric_ids": ["builtin/livecodebench_pass_rate"],
             "parser_ids": ["builtin/code_text"],
         }
+    if base_name in {"humaneval", "humaneval_plus"}:
+        return {
+            "metric_ids": ["builtin/humaneval_pass_rate"],
+            "parser_ids": ["builtin/code_text"],
+        }
     return {}
 
 
@@ -478,10 +483,15 @@ def _score_smoke(definition: BenchmarkDefinition, dataset: Dataset) -> None:
     parser = cast(Parser, load_catalog(definition.parser_ids[0]))
     metric = cast(PureMetric, load_catalog(definition.metric_ids[0]))
     case = dataset.cases[0]
+    candidate_output = "def solve():\n    return 'validation'\n"
+    if isinstance(case.expected_output, dict):
+        solution = case.expected_output.get("solution")
+        if isinstance(solution, str) and solution.strip():
+            candidate_output = solution
     parsed = parser.parse(
         ReducedCandidate(
             candidate_id="validation-candidate",
-            final_output="def solve():\n    return 'validation'\n",
+            final_output=candidate_output,
         ),
         ParseContext(
             run_id="benchmark-validation",

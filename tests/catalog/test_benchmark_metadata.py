@@ -27,7 +27,7 @@ def test_list_benchmarks_exposes_structured_benchmark_metadata() -> None:
     assert rolebench.source_kind == "huggingface_raw_files"
     assert livecodebench.dataset_revision == "release_v6"
     assert livecodebench.support_tier == "ready"
-    assert humaneval.support_tier == "experimental"
+    assert humaneval.support_tier == "ready"
     assert humaneval.requires_code_execution is True
 
 
