@@ -271,12 +271,17 @@ def test_benchmark_reference_tracks_catalog_metadata() -> None:
     for entry in list_benchmarks():
         assert f"`{entry.benchmark_id}`" in benchmark_reference
         assert f"| `{entry.benchmark_id}` |" in benchmark_reference
-        assert entry.support_tier in benchmark_reference
+        row_text = next(
+            line
+            for line in benchmark_reference.splitlines()
+            if f"| `{entry.benchmark_id}` |" in line
+        )
+        assert entry.support_tier in row_text
         if entry.declared_variants:
             for variant in entry.declared_variants:
-                assert variant in benchmark_reference
+                assert variant in row_text
         if entry.version_notes is not None:
-            assert entry.version_notes in benchmark_reference
+            assert entry.version_notes in row_text
 
 
 def test_docs_cover_required_topics_and_optional_extras() -> None:
