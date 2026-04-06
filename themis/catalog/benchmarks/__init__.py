@@ -30,6 +30,11 @@ class BenchmarkDefinition(FrozenModel):
     dataset_revision: str | None = None
     split: str
     variant: str | None = None
+    source_kind: str = "huggingface_dataset"
+    source_files: list[str] = Field(default_factory=list)
+    source_file_map: dict[str, str] = Field(default_factory=dict)
+    support_tier: str = "ready"
+    version_notes: str | None = None
     requires_code_execution: bool = False
     supported_execution_backends: list[str] = Field(default_factory=list)
     metric_ids: list[str] = Field(default_factory=lambda: ["builtin/exact_match"])
@@ -157,6 +162,11 @@ def load_benchmark(name: str) -> BenchmarkDefinition:
         dataset_revision=_optional_str(spec.get("dataset_revision")),
         split=_required_str(spec, "split"),
         variant=resolved_variant,
+        source_kind=_string_from_value(spec.get("source_kind", "huggingface_dataset")),
+        source_files=_string_list_from_value(spec.get("source_files", [])),
+        source_file_map=_string_mapping_from_value(spec.get("source_file_map", {})),
+        support_tier=_string_from_value(spec.get("support_tier", "ready")),
+        version_notes=_optional_str(spec.get("version_notes")),
         requires_code_execution=bool(spec.get("requires_code_execution", False)),
         supported_execution_backends=_string_list_from_value(
             spec.get("supported_execution_backends", [])
@@ -256,13 +266,13 @@ def get_benchmark(name: str) -> BenchmarkCatalogEntry:
         dataset_id=definition.dataset_id,
         split=definition.split,
         dataset_revision=definition.dataset_revision,
-        source_kind=_string_from_value(spec.get("source_kind", "huggingface_dataset")),
+        source_kind=definition.source_kind,
         requires_code_execution=definition.requires_code_execution,
         supported_execution_backends=definition.supported_execution_backends,
         parser_ids=definition.parser_ids,
         metric_ids=definition.metric_ids,
-        support_tier=_string_from_value(spec.get("support_tier", "ready")),
-        version_notes=_optional_str(spec.get("version_notes")),
+        support_tier=definition.support_tier,
+        version_notes=definition.version_notes,
     )
 
 

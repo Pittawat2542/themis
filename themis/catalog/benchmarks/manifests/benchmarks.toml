@@ -120,6 +120,7 @@ requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
 source_kind = "huggingface_raw_files"
+source_files = ["release_v6/test.jsonl"]
 support_tier = "ready"
 version_notes = "Targets LiveCodeBench release_v6."
 
@@ -174,6 +175,7 @@ split = "test"
 variants = ["instruction_generalization_eng", "role_generalization_eng"]
 adapter = "rolebench"
 source_kind = "huggingface_raw_files"
+source_file_map = { instruction_generalization_eng = "instruction_generalization_eng.jsonl", role_generalization_eng = "role_generalization_eng.jsonl" }
 support_tier = "ready"
 
 [benchmarks.simpleqa_verified]

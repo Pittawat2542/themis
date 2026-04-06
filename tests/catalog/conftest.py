@@ -1,14 +1,28 @@
 from __future__ import annotations
 
 import pytest
+from themis.catalog.loaders import BenchmarkSourceRequest
 
 
 @pytest.fixture(autouse=True)
 def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     from themis.catalog.benchmarks import materializers
 
-    rows_by_dataset: dict[tuple[str, str | None], list[dict[str, object]]] = {
-        ("MathArena/aime_2025", None): [
+    def request_key(
+        source_kind: str,
+        dataset_id: str,
+        split: str,
+        revision: str | None = None,
+        config_name: str | None = None,
+        files: tuple[str, ...] = (),
+    ) -> tuple[str, str, str, str | None, str | None, tuple[str, ...]]:
+        return (source_kind, dataset_id, split, revision, config_name, files)
+
+    rows_by_request: dict[
+        tuple[str, str, str, str | None, str | None, tuple[str, ...]],
+        list[dict[str, object]],
+    ] = {
+        request_key("huggingface_dataset", "MathArena/aime_2025", "train"): [
             {
                 "problem_idx": 2,
                 "problem": "Compute 3 + 3.",
@@ -17,7 +31,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "source": "fixture",
             }
         ],
-        ("MathArena/aime_2026", None): [
+        request_key("huggingface_dataset", "MathArena/aime_2026", "train"): [
             {
                 "problem_idx": 1,
                 "problem": "What is 2 + 2?",
@@ -26,7 +40,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "source": "fixture",
             }
         ],
-        ("MathArena/apex_2025", None): [
+        request_key("huggingface_dataset", "MathArena/apex_2025", "train"): [
             {
                 "problem_idx": 5,
                 "problem": "Find the value of 9 + 10.",
@@ -34,7 +48,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "source": "fixture",
             }
         ],
-        ("ByteDance-Seed/BeyondAIME", None): [
+        request_key("huggingface_dataset", "ByteDance-Seed/BeyondAIME", "test"): [
             {
                 "item_id": "beyond-aime-1",
                 "problem": "What is 7 times 6?",
@@ -42,7 +56,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "source": "fixture",
             }
         ],
-        ("MathArena/hmmt_feb_2025", None): [
+        request_key("huggingface_dataset", "MathArena/hmmt_feb_2025", "train"): [
             {
                 "problem_idx": 3,
                 "problem": "What is 5 + 7?",
@@ -51,7 +65,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "source": "fixture",
             }
         ],
-        ("MathArena/hmmt_nov_2025", None): [
+        request_key("huggingface_dataset", "MathArena/hmmt_nov_2025", "train"): [
             {
                 "problem_idx": 4,
                 "problem": "Evaluate 8 - 3.",
@@ -60,7 +74,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "source": "fixture",
             }
         ],
-        ("Eureka-Lab/PHYBench", None): [
+        request_key("huggingface_dataset", "Eureka-Lab/PHYBench", "train"): [
             {
                 "id": 1,
                 "tag": "MECHANICS",
@@ -68,7 +82,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "answer": "9.8",
             }
         ],
-        ("Hwilner/imo-answerbench", None): [
+        request_key("huggingface_dataset", "Hwilner/imo-answerbench", "train"): [
             {
                 "Problem ID": "imo-1",
                 "Problem": "What is 10 + 10?",
@@ -78,7 +92,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "Source": "fixture",
             }
         ],
-        ("TIGER-Lab/MMLU-Pro", None): [
+        request_key("huggingface_dataset", "TIGER-Lab/MMLU-Pro", "test"): [
             {
                 "item_id": "mmlu-pro-1",
                 "question": "Which planet is known as the Red Planet?",
@@ -88,7 +102,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "src": "fixture",
             }
         ],
-        ("m-a-p/SuperGPQA", None): [
+        request_key("huggingface_dataset", "m-a-p/SuperGPQA", "train"): [
             {
                 "item_id": "supergpqa-1",
                 "question": "Which gas is most abundant in Earth's atmosphere?",
@@ -100,7 +114,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "difficulty": "medium",
             }
         ],
-        ("m-a-p/Encyclo-K", None): [
+        request_key("huggingface_dataset", "m-a-p/Encyclo-K", "test"): [
             {
                 "item_id": "encyclo-k-1",
                 "question": "What is the capital city of Canada?",
@@ -112,7 +126,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "difficulty": "easy",
             }
         ],
-        ("mediabiasgroup/BABE", None): [
+        request_key("huggingface_dataset", "mediabiasgroup/BABE", "test"): [
             {
                 "uuid": "babe-1",
                 "text": "This article lead is written in an opinionated voice.",
@@ -123,13 +137,15 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "label_opinion": "Expresses writer's opinion",
             }
         ],
-        ("fingertap/GPQA-Diamond", None): [
+        request_key("huggingface_dataset", "fingertap/GPQA-Diamond", "test"): [
             {
                 "question": "Which option is correct?\n\na) alpha\nb) beta\nc) gamma\nd) delta\n\nA. d\nB. a\nC. b\nD. c",
                 "answer": "D",
             }
         ],
-        ("openai/MMMLU", "default"): [
+        request_key(
+            "huggingface_dataset", "openai/MMMLU", "test", None, "default"
+        ): [
             {
                 "Unnamed: 0": 0,
                 "Question": "What is 2 + 2?",
@@ -141,7 +157,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "Subject": "math",
             }
         ],
-        ("openai/MMMLU", "thai"): [
+        request_key("huggingface_dataset", "openai/MMMLU", "test", None, "thai"): [
             {
                 "Unnamed: 0": 1,
                 "Question": "เมืองหลวงของไทยคืออะไร?",
@@ -153,7 +169,9 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "Subject": "geography",
             }
         ],
-        ("ZehuaZhao/SUPERChem", "default"): [
+        request_key(
+            "huggingface_dataset", "ZehuaZhao/SUPERChem", "train", None, "default"
+        ): [
             {
                 "uuid": "chem-1",
                 "field": "chemistry",
@@ -167,7 +185,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "answer_zh": ["B"],
             }
         ],
-        ("openai/frontierscience", None): [
+        request_key("huggingface_dataset", "openai/frontierscience", "test"): [
             {
                 "item_id": "frontierscience-1",
                 "problem": "Derive the requested expression.",
@@ -176,7 +194,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "task_group_id": "group-1",
             }
         ],
-        ("openai/healthbench", None): [
+        request_key("huggingface_dataset", "openai/healthbench", "test"): [
             {
                 "prompt_id": "healthbench-1",
                 "prompt": [
@@ -198,7 +216,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 },
             }
         ],
-        ("m-a-p/LPFQA", None): [
+        request_key("huggingface_dataset", "m-a-p/LPFQA", "train"): [
             {
                 "prompt_id": "lpfqa-1",
                 "prompt": "Translate the phrase 'good morning' into Japanese.",
@@ -208,7 +226,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "primary_domain": "translation",
             }
         ],
-        ("google/simpleqa-verified", None): [
+        request_key("huggingface_dataset", "google/simpleqa-verified", "eval"): [
             {
                 "original_index": 1,
                 "problem": "What is the chemical symbol for gold?",
@@ -219,7 +237,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "requires_reasoning": False,
             }
         ],
-        ("cais/hle", None): [
+        request_key("huggingface_dataset", "cais/hle", "test"): [
             {
                 "id": "hle-1",
                 "question": "What is 12 multiplied by 12?",
@@ -227,7 +245,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "image": "",
             }
         ],
-        ("ifujisawa/procbench", None): [
+        request_key("huggingface_dataset", "ifujisawa/procbench", "train"): [
             {
                 "problem_name": "task01_0000",
                 "prompt": "Sort the string.",
@@ -247,7 +265,14 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "label": {"final": "done"},
             },
         ],
-        ("ZenMoore/RoleBench", "instruction_generalization_eng"): [
+        request_key(
+            "huggingface_raw_files",
+            "ZenMoore/RoleBench",
+            "test",
+            None,
+            None,
+            ("instruction_generalization_eng.jsonl",),
+        ): [
             {
                 "role": "Wizard",
                 "desc": "Speaks cryptically.",
@@ -256,7 +281,14 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "subset": "general",
             }
         ],
-        ("ZenMoore/RoleBench", "role_generalization_eng"): [
+        request_key(
+            "huggingface_raw_files",
+            "ZenMoore/RoleBench",
+            "test",
+            None,
+            None,
+            ("role_generalization_eng.jsonl",),
+        ): [
             {
                 "role": "Historian",
                 "desc": "Answers with context.",
@@ -265,7 +297,13 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "subset": "general",
             }
         ],
-        ("open-r1/codeforces", "verifiable-prompts"): [
+        request_key(
+            "huggingface_dataset",
+            "open-r1/codeforces",
+            "test",
+            None,
+            "verifiable-prompts",
+        ): [
             {
                 "id": "1A",
                 "contest_id": "1",
@@ -280,7 +318,9 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "memory_limit": 256.0,
             }
         ],
-        ("m-a-p/AetherCode", "v1_2024"): [
+        request_key(
+            "huggingface_dataset", "m-a-p/AetherCode", "test", None, "v1_2024"
+        ): [
             {
                 "id": "60173",
                 "description": "Compute the answer.",
@@ -293,7 +333,14 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "year": 2024,
             }
         ],
-        ("livecodebench/code_generation_lite", None): [
+        request_key(
+            "huggingface_raw_files",
+            "livecodebench/code_generation_lite",
+            "test",
+            None,
+            None,
+            ("release_v6/test.jsonl",),
+        ): [
             {
                 "question_id": "lcb-1",
                 "prompt": "Write a Python function that returns 4.",
@@ -306,7 +353,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "contest_date": "2025-01-04T00:00:00",
             }
         ],
-        ("evalplus/HumanEvalPlus", None): [
+        request_key("huggingface_dataset", "evalplus/HumanEvalPlus", "test"): [
             {
                 "task_id": "HumanEval/0",
                 "entry_point": "add",
@@ -317,7 +364,9 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "atol": 0.0,
             }
         ],
-        ("evalplus/HumanEvalPlus", "mini"): [
+        request_key(
+            "huggingface_dataset", "evalplus/HumanEvalPlus", "test", None, "mini"
+        ): [
             {
                 "task_id": "HumanEval/1",
                 "entry_point": "mul",
@@ -328,7 +377,13 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "atol": 0.0,
             }
         ],
-        ("evalplus/HumanEvalPlus", "noextreme"): [
+        request_key(
+            "huggingface_dataset",
+            "evalplus/HumanEvalPlus",
+            "test",
+            None,
+            "noextreme",
+        ): [
             {
                 "task_id": "HumanEval/2",
                 "entry_point": "sub",
@@ -339,7 +394,13 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "atol": 0.0,
             }
         ],
-        ("evalplus/HumanEvalPlus", "v0.1.0"): [
+        request_key(
+            "huggingface_dataset",
+            "evalplus/HumanEvalPlus",
+            "test",
+            None,
+            "v0.1.0",
+        ): [
             {
                 "task_id": "HumanEval/3",
                 "entry_point": "square",
@@ -352,17 +413,21 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
         ],
     }
 
-    def fake_loader(
-        dataset_id: str,
-        split: str,
-        revision: str | None = None,
-        config_name: str | None = None,
-    ) -> list[dict[str, object]]:
-        del split, revision
+    def fake_loader(request: BenchmarkSourceRequest) -> list[dict[str, object]]:
+        key = request_key(
+            request.source_kind,
+            request.dataset_id,
+            request.split,
+            request.revision,
+            request.config_name,
+            tuple(request.files),
+        )
         try:
-            return [dict(row) for row in rows_by_dataset[(dataset_id, config_name)]]
+            return [dict(row) for row in rows_by_request[key]]
         except KeyError:
-            return [dict(row) for row in rows_by_dataset[(dataset_id, None)]]
+            raise AssertionError(
+                f"Unexpected benchmark source request: {request.model_dump()}"
+            ) from None
 
     monkeypatch.setattr(materializers, "_default_loader", fake_loader)
 
