@@ -55,6 +55,7 @@ from themis.core.stores.factory import (
 from themis.core.stores.jsonl import JsonlRunStore
 from themis.core.stores.mongodb import MongoDbRunStore
 from themis.core.stores.postgres import PostgresRunStore
+from tests.release import CURRENT_VERSION
 
 
 def _assert_docstring(value: object) -> None:
@@ -74,7 +75,7 @@ def _assert_annotations(value: Callable[..., object]) -> None:
 
 def test_root_package_exposes_version() -> None:
     assert "__version__" in root_all
-    assert __version__ == "4.0.0"
+    assert __version__ == CURRENT_VERSION
 
 
 def test_catalog_entrypoints_are_documented_and_typed() -> None:

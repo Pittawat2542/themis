@@ -17,7 +17,7 @@ from themis.core.config import (
     RuntimeConfig,
     StorageConfig,
 )
-from themis.core.experiment import Experiment
+from themis.core.experiment import Experiment, _resolve_themis_version
 from themis.core.models import Case, Dataset
 from themis.core.protocols import LifecycleSubscriber, TracingProvider
 from themis.core.results import RunResult
@@ -39,7 +39,7 @@ def evaluate(
     workflow_overrides: dict[str, object] | None = None,
     judge_config: dict[str, object] | None = None,
     environment_metadata: dict[str, str] | None = None,
-    themis_version: str = "4.0.0",
+    themis_version: str | None = None,
     python_version: str = "3.12",
     platform: str = "unknown",
     store: RunStore | None = None,
@@ -76,7 +76,7 @@ def evaluate(
         datasets=datasets,
         seeds=list(seeds or []),
         environment_metadata=dict(environment_metadata or {}),
-        themis_version=themis_version,
+        themis_version=themis_version or _resolve_themis_version(),
         python_version=python_version,
         platform=platform,
     )

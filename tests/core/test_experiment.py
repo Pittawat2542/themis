@@ -3,12 +3,13 @@ from __future__ import annotations
 import pytest
 from typing import Any, cast
 
-from themis import Experiment, RunSnapshot
+from themis import Experiment, RunSnapshot, __version__
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import GenerateContext
 from themis.core.models import Case, Dataset, GenerationResult
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.workflows import JudgeResponse
+from tests.release import CURRENT_VERSION
 
 
 class DummyJudgeModel:
@@ -72,7 +73,7 @@ def test_experiment_compile_returns_snapshot() -> None:
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0",
+        themis_version=CURRENT_VERSION,
         python_version="3.12.9",
         platform="macos",
     )
@@ -87,6 +88,32 @@ def test_experiment_compile_returns_snapshot() -> None:
     assert (
         snapshot.identity.judge_model_refs[0].fingerprint == "judge-custom-fingerprint"
     )
+
+
+def test_experiment_defaults_release_provenance_to_package_version() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
+                ],
+            )
+        ],
+    )
+
+    assert experiment.compile().provenance.themis_version == __version__
 
 
 def test_experiment_compile_captures_extended_provenance_fields() -> None:

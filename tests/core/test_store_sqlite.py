@@ -9,6 +9,7 @@ from themis.core.events import RunStartedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.stores.sqlite import SqliteRunStore
+from tests.release import CURRENT_VERSION
 
 
 def _snapshot():
@@ -39,7 +40,7 @@ def _snapshot():
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0",
+        themis_version=CURRENT_VERSION,
         python_version="3.12.9",
         platform="macos",
     )

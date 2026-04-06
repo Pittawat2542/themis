@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from importlib.metadata import PackageNotFoundError, version as distribution_version
 import subprocess
 from pathlib import Path
+import tomllib
 from typing import Literal
 
 from pydantic import Field, PrivateAttr
@@ -50,6 +52,19 @@ from themis.core.snapshot import (
 )
 
 
+def _resolve_themis_version() -> str:
+    """Resolve the release version for runtime provenance defaults."""
+
+    try:
+        return distribution_version("themis-eval")
+    except PackageNotFoundError:
+        pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        if pyproject_path.is_file():
+            payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+            return str(payload["project"]["version"])
+        return "0+unknown"
+
+
 class Experiment(FrozenModel):
     """Authoring model for a Themis experiment.
 
@@ -64,7 +79,7 @@ class Experiment(FrozenModel):
     datasets: list[Dataset] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
-    themis_version: str = "4.0.0"
+    themis_version: str = Field(default_factory=_resolve_themis_version)
     python_version: str = "3.12"
     platform: str = "unknown"
     git_commit: str | None = None

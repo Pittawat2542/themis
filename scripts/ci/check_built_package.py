@@ -74,7 +74,8 @@ def _inspect_wheel(path: Path) -> None:
             raise SystemExit(f"{path.name} is missing dist-info metadata")
         metadata = archive.read(metadata_name).decode()
         entry_points = archive.read(entry_points_name).decode()
-        if "Version: 4.0.0" not in metadata:
+        expected_version = path.name.removeprefix("themis_eval-").split("-", 1)[0]
+        if f"Version: {expected_version}" not in metadata:
             raise SystemExit(
                 f"{path.name} metadata does not contain the final release version"
             )

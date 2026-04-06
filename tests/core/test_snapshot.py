@@ -28,6 +28,7 @@ from themis.core.models import (
     Score,
 )
 from themis.core.snapshot import BUILTIN_COMPONENT_REFS, ComponentRef
+from tests.release import CURRENT_VERSION
 
 
 class DummyGenerator:
@@ -136,11 +137,11 @@ def _experiment(
         ],
         seeds=[7, 11],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0",
+        themis_version=CURRENT_VERSION,
         python_version="3.12.9",
         platform="macos",
         git_commit="abc123",
-        dependency_versions={"themis-eval": "4.0.0"},
+        dependency_versions={"themis-eval": CURRENT_VERSION},
         provider_metadata={},
     )
 

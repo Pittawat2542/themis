@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from themis import Experiment, InMemoryRunStore, RunStatus, evaluate
+from themis import Experiment, InMemoryRunStore, RunStatus, __version__, evaluate
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
+from tests.release import CURRENT_VERSION
 
 
 def test_evaluate_runs_one_off_experiment_with_same_run_id_as_explicit_experiment() -> (
@@ -34,6 +35,7 @@ def test_evaluate_runs_one_off_experiment_with_same_run_id_as_explicit_experimen
         storage=StorageConfig(store="memory"),
         datasets=datasets,
         seeds=[7],
+        themis_version=CURRENT_VERSION,
     )
     store = InMemoryRunStore()
 
@@ -80,3 +82,27 @@ def test_evaluate_shorthand_supports_workflow_backed_metrics() -> None:
         "builtin/llm_rubric"
     ]
     assert execution.status == "completed"
+
+
+def test_evaluate_defaults_release_provenance_to_package_version() -> None:
+    store = InMemoryRunStore()
+
+    result = evaluate(
+        model="builtin/demo_generator",
+        data=[
+            {
+                "case_id": "case-1",
+                "input": {"question": "2+2"},
+                "expected_output": {"answer": "4"},
+            }
+        ],
+        metric="builtin/exact_match",
+        parser="builtin/json_identity",
+        storage=StorageConfig(store="memory"),
+        store=store,
+    )
+
+    stored = store.resume(result.run_id)
+
+    assert stored is not None
+    assert stored.snapshot.provenance.themis_version == __version__

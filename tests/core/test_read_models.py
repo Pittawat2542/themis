@@ -23,6 +23,7 @@ from themis.core.projections import (
     build_trace_view,
 )
 from themis.core.workflows import EvaluationExecution
+from tests.release import CURRENT_VERSION
 
 
 def _snapshot():
@@ -53,7 +54,7 @@ def _snapshot():
         ],
         seeds=[7, 11],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0",
+        themis_version=CURRENT_VERSION,
         python_version="3.12.9",
         platform="macos",
     )

@@ -19,6 +19,7 @@ from themis import (
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import EvaluationCompletedEvent, RunStartedEvent
 from themis.core.models import Case, Dataset
+from tests.release import CURRENT_VERSION
 
 
 def test_root_package_exports_public_symbols() -> None:
@@ -92,7 +93,7 @@ def test_public_surface_compiles_and_persists_runs(tmp_path) -> None:
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0",
+        themis_version=CURRENT_VERSION,
         python_version="3.12.9",
         platform="macos",
     )

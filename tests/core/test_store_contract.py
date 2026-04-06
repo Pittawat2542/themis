@@ -18,6 +18,7 @@ from themis.core.stores import (
     mongodb_store,
     sqlite_store,
 )
+from tests.release import CURRENT_VERSION
 from tests.core.store_fakes import fake_pymongo_module
 
 
@@ -47,7 +48,7 @@ def _snapshot() -> RunSnapshot:
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0",
+        themis_version=CURRENT_VERSION,
         python_version="3.12.9",
         platform="macos",
     )

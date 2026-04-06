@@ -20,6 +20,7 @@ from themis.core.models import Case, Dataset
 from themis.core.quickcheck import quickcheck
 from themis.core.reporter import Reporter, snapshot_report
 from themis.core.stores.memory import InMemoryRunStore
+from tests.release import CURRENT_VERSION
 
 
 def _snapshot():
@@ -49,7 +50,7 @@ def _snapshot():
         ],
         seeds=[7],
         environment_metadata={"env": "test"},
-        themis_version="4.0.0",
+        themis_version=CURRENT_VERSION,
         python_version="3.12.9",
         platform="macos",
     )
@@ -192,7 +193,7 @@ def test_snapshot_report_includes_identity_and_provenance() -> None:
 
     assert report["run_id"] == snapshot.run_id
     assert first_dataset_ref["dataset_id"] == "dataset-1"
-    assert provenance["themis_version"] == "4.0.0"
+    assert provenance["themis_version"] == CURRENT_VERSION
     assert report["run_metadata"] == {"stored_events": 6}
 
 
