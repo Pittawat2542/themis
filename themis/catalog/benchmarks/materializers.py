@@ -5,7 +5,11 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-from themis.catalog.loaders import BenchmarkSourceRequest, load_benchmark_rows
+from themis.catalog.loaders import (
+    BenchmarkSourceRequest,
+    load_huggingface_raw_rows,
+    load_huggingface_rows,
+)
 from themis.core.base import JSONValue
 from themis.core.models import Case, Dataset
 
@@ -76,7 +80,20 @@ def materialize_benchmark_dataset(
 def _default_loader(
     request: BenchmarkSourceRequest,
 ) -> list[dict[str, object]]:
-    return load_benchmark_rows(request)
+    if request.source_kind == "huggingface_dataset":
+        return load_huggingface_rows(
+            request.dataset_id,
+            request.split,
+            request.revision,
+            config_name=request.config_name,
+        )
+    if request.source_kind == "huggingface_raw_files":
+        return load_huggingface_raw_rows(
+            request.dataset_id,
+            files=request.files,
+            revision=request.revision,
+        )
+    raise ValueError(f"Unknown benchmark source kind: {request.source_kind}")
 
 
 def _load_rows(
