@@ -5,6 +5,7 @@ from typing import cast
 import pytest
 
 from themis.catalog import load
+from themis.catalog.loaders import BenchmarkSourceRequest
 from themis.catalog.registry import list_component_ids
 from themis.core.base import JSONValue
 from themis.core.contexts import ParseContext, ScoreContext
@@ -15,9 +16,11 @@ from themis.core.protocols import Parser, PureMetric
 def test_benchmark_materialize_dataset_uses_fixture_loader_and_real_cases() -> None:
     benchmark = cast(object, load("mmlu_pro"))
     materialize_dataset = getattr(benchmark, "materialize_dataset")
+    captured: list[BenchmarkSourceRequest] = []
 
-    dataset = materialize_dataset(
-        loader=lambda dataset_id, split, revision=None, config_name=None: [
+    def loader(request: BenchmarkSourceRequest) -> list[dict[str, object]]:
+        captured.append(request)
+        return [
             {
                 "question": "Which planet is known as the Red Planet?",
                 "options": ["Venus", "Mars", "Jupiter", "Mercury"],
@@ -27,11 +30,19 @@ def test_benchmark_materialize_dataset_uses_fixture_loader_and_real_cases() -> N
                 "src": "fixture",
             }
         ]
-    )
+
+    dataset = materialize_dataset(loader=loader)
 
     assert dataset.dataset_id == "TIGER-Lab/MMLU-Pro"
     assert dataset.revision == "test"
     assert len(dataset.cases) == 1
+    assert captured == [
+        BenchmarkSourceRequest(
+            dataset_id="TIGER-Lab/MMLU-Pro",
+            split="test",
+            source_kind="huggingface_dataset",
+        )
+    ]
     assert dataset.cases[0].input == (
         "Question:\nWhich planet is known as the Red Planet?\n\n"
         "Options:\nA. Venus\nB. Mars\nC. Jupiter\nD. Mercury\n\n"

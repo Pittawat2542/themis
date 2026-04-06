@@ -5,7 +5,16 @@ from collections.abc import Callable
 
 from themis import __all__ as root_all
 from themis import __version__
-from themis.catalog import builtin_component_refs, list_component_ids, load, run
+from themis.catalog import (
+    builtin_component_refs,
+    get_benchmark,
+    list_benchmark_ids,
+    list_benchmarks,
+    list_component_ids,
+    load,
+    run,
+    validate_benchmark,
+)
 from themis.cli import main
 from themis.cli.helpers import (
     dump_json,
@@ -69,7 +78,16 @@ def test_root_package_exposes_version() -> None:
 
 
 def test_catalog_entrypoints_are_documented_and_typed() -> None:
-    for symbol in (load, run, builtin_component_refs, list_component_ids):
+    for symbol in (
+        load,
+        run,
+        builtin_component_refs,
+        list_component_ids,
+        list_benchmark_ids,
+        list_benchmarks,
+        get_benchmark,
+        validate_benchmark,
+    ):
         _assert_docstring(symbol)
         _assert_annotations(symbol)
 

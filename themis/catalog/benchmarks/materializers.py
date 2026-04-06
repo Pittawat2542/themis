@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 
-from themis.catalog.loaders import load_huggingface_rows
+from themis.catalog.loaders import (
+    BenchmarkSourceRequest,
+    load_huggingface_raw_rows,
+    load_huggingface_rows,
+)
 from themis.core.base import JSONValue
 from themis.core.models import Case, Dataset
 
-DatasetRowLoader = Callable[[str, str, str | None, str | None], list[dict[str, object]]]
+DatasetRowLoader = Callable[[BenchmarkSourceRequest], list[dict[str, object]]]
 
 _MATH_FAMILY_IDS = {
     "aime_2025",
@@ -74,23 +79,46 @@ def materialize_benchmark_dataset(
 
 
 def _default_loader(
-    dataset_id: str,
-    split: str,
-    revision: str | None = None,
-    config_name: str | None = None,
+    request: BenchmarkSourceRequest,
 ) -> list[dict[str, object]]:
-    return load_huggingface_rows(
-        dataset_id,
-        split,
-        revision,
-        config_name=config_name,
+    if request.source_kind == "huggingface_dataset":
+        return load_huggingface_rows(
+            request.dataset_id,
+            request.split,
+            request.revision,
+            config_name=request.config_name,
+        )
+    if request.source_kind == "huggingface_raw_files":
+        return load_huggingface_raw_rows(
+            request.dataset_id,
+            files=request.files,
+            revision=request.revision,
+        )
+    raise ValueError(f"Unknown benchmark source kind: {request.source_kind}")
+
+
+def _load_rows(
+    definition,
+    row_loader: DatasetRowLoader,
+    *,
+    config_name: str | None = None,
+    revision: str | None = None,
+    files: list[str] | None = None,
+) -> list[dict[str, object]]:
+    return row_loader(
+        BenchmarkSourceRequest(
+            source_kind=definition.source_kind,
+            dataset_id=definition.dataset_id,
+            split=definition.split,
+            revision=revision,
+            config_name=config_name,
+            files=list(files or []),
+        )
     )
 
 
 def _materialize_math_family(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = [
         Case(
             case_id=str(
@@ -112,9 +140,7 @@ def _materialize_math_family(definition, *, row_loader: DatasetRowLoader) -> Dat
 def _materialize_imo_answerbench(
     definition, *, row_loader: DatasetRowLoader
 ) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         cases.append(
@@ -145,7 +171,7 @@ def _materialize_imo_answerbench(
 
 
 def _materialize_mmlu_pro(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(definition.dataset_id, definition.split, None, None)
+    rows = _load_rows(definition, row_loader)
     return _dataset(
         definition,
         [
@@ -166,9 +192,7 @@ def _materialize_mmlu_pro(definition, *, row_loader: DatasetRowLoader) -> Datase
 
 
 def _materialize_mcq_family(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases: list[Case] = []
     for index, row in enumerate(rows, start=1):
         options = _normalize_options(row.get("options"))
@@ -189,9 +213,7 @@ def _materialize_mcq_family(definition, *, row_loader: DatasetRowLoader) -> Data
 
 
 def _materialize_babe(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         label_value = row.get("label", 0)
@@ -212,9 +234,7 @@ def _materialize_babe(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 
 def _materialize_gpqa_diamond(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         question, options = _parse_gpqa_diamond_question(str(row.get("question", "")))
@@ -231,11 +251,11 @@ def _materialize_gpqa_diamond(definition, *, row_loader: DatasetRowLoader) -> Da
 
 def _materialize_mmmlu(definition, *, row_loader: DatasetRowLoader) -> Dataset:
     config_name = definition.variant or "default"
-    rows = row_loader(
-        definition.dataset_id,
-        definition.split,
-        definition.dataset_revision,
-        config_name,
+    rows = _load_rows(
+        definition,
+        row_loader,
+        revision=definition.dataset_revision,
+        config_name=config_name,
     )
     cases = []
     for index, row in enumerate(rows, start=1):
@@ -263,8 +283,11 @@ def _materialize_mmmlu(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 def _materialize_superchem(definition, *, row_loader: DatasetRowLoader) -> Dataset:
     language = definition.variant or "en"
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, "default"
+    rows = _load_rows(
+        definition,
+        row_loader,
+        revision=definition.dataset_revision,
+        config_name="default",
     )
     cases = []
     for index, row in enumerate(rows, start=1):
@@ -293,9 +316,7 @@ def _materialize_superchem(definition, *, row_loader: DatasetRowLoader) -> Datas
 def _materialize_frontierscience(
     definition, *, row_loader: DatasetRowLoader
 ) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = [
         Case(
             case_id=str(row.get("item_id", f"{definition.split}-{index}")),
@@ -309,9 +330,7 @@ def _materialize_frontierscience(
 
 
 def _materialize_healthbench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         prompt_messages = _prompt_messages_from_payload(row)
@@ -341,9 +360,7 @@ def _materialize_healthbench(definition, *, row_loader: DatasetRowLoader) -> Dat
 
 
 def _materialize_lpfqa(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         cases.append(
@@ -369,9 +386,7 @@ def _materialize_lpfqa(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 
 def _materialize_simpleqa(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         cases.append(
@@ -390,9 +405,7 @@ def _materialize_simpleqa(definition, *, row_loader: DatasetRowLoader) -> Datase
 def _materialize_hle(definition, *, row_loader: DatasetRowLoader) -> Dataset:
     variant = definition.variant or ""
     variant_tokens = {token.strip() for token in variant.split(",") if token.strip()}
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         image = row.get("image")
@@ -410,9 +423,7 @@ def _materialize_hle(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 
 def _materialize_procbench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
-    )
+    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
     requested_task = definition.variant
     cases = []
     for index, row in enumerate(rows, start=1):
@@ -441,11 +452,18 @@ def _materialize_rolebench(definition, *, row_loader: DatasetRowLoader) -> Datas
     cases: list[Case] = []
     for variant in variants:
         assert variant is not None
-        rows = row_loader(
-            definition.dataset_id,
-            definition.split,
-            definition.dataset_revision,
-            variant,
+        rows = _load_rows(
+            definition,
+            row_loader,
+            revision=None
+            if definition.source_kind == "huggingface_raw_files"
+            else definition.dataset_revision,
+            config_name=None
+            if definition.source_kind == "huggingface_raw_files"
+            else variant,
+            files=[_rolebench_source_file(definition, variant)]
+            if definition.source_kind == "huggingface_raw_files"
+            else None,
         )
         for index, row in enumerate(rows, start=1):
             generated = row.get("generated")
@@ -478,9 +496,7 @@ def _materialize_rolebench(definition, *, row_loader: DatasetRowLoader) -> Datas
 
 
 def _materialize_codeforces(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, None, definition.dataset_revision
-    )
+    rows = _load_rows(definition, row_loader, config_name=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         if str(row.get("input_mode", "")).strip().lower() != "stdio":
@@ -513,9 +529,7 @@ def _materialize_codeforces(definition, *, row_loader: DatasetRowLoader) -> Data
 
 
 def _materialize_aethercode(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, None, definition.dataset_revision
-    )
+    rows = _load_rows(definition, row_loader, config_name=definition.dataset_revision)
     cases = []
     for index, row in enumerate(rows, start=1):
         tests = _normalize_tests(row.get("test_cases", row.get("official_tests")))
@@ -551,8 +565,15 @@ def _materialize_aethercode(definition, *, row_loader: DatasetRowLoader) -> Data
 
 
 def _materialize_livecodebench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id, definition.split, definition.dataset_revision, None
+    rows = _load_rows(
+        definition,
+        row_loader,
+        revision=None
+        if definition.source_kind == "huggingface_raw_files"
+        else definition.dataset_revision,
+        files=definition.source_files
+        if definition.source_kind == "huggingface_raw_files"
+        else None,
     )
     cases = []
     for index, row in enumerate(rows, start=1):
@@ -588,11 +609,11 @@ def _materialize_livecodebench(definition, *, row_loader: DatasetRowLoader) -> D
 
 
 def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = row_loader(
-        definition.dataset_id,
-        definition.split,
-        definition.dataset_revision,
-        definition.variant,
+    rows = _load_rows(
+        definition,
+        row_loader,
+        revision=definition.dataset_revision,
+        config_name=definition.variant,
     )
     cases = []
     score_variant = (
@@ -600,12 +621,12 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
     )
     for index, row in enumerate(rows, start=1):
         prompt = str(row.get("prompt", "")).rstrip()
+        canonical_solution = str(row.get("canonical_solution", "")).rstrip()
         entry_point = str(row.get("entry_point", ""))
-        tests = _humaneval_tests(
-            row.get("base_input", []), row.get("canonical_solution")
-        )
-        plus_tests = _humaneval_tests(
-            row.get("plus_input", []), row.get("canonical_solution")
+        tests = _humaneval_tests(row.get("base_input", []))
+        plus_tests = _humaneval_tests(row.get("plus_input", []))
+        reference_solution = _humaneval_reference_solution(
+            prompt=prompt, canonical_solution=canonical_solution
         )
         cases.append(
             Case(
@@ -622,6 +643,10 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
                         "function_name": entry_point,
                         "official_tests": tests,
                         "plus_tests": plus_tests,
+                        "reference_solution": reference_solution,
+                        # Keep the canonical solution under the generic key used by
+                        # validation smoke runs and other code-text flows.
+                        "solution": reference_solution,
                         "score_variant": score_variant,
                     }
                 ),
@@ -649,6 +674,10 @@ def _dataset(definition, cases: list[Case]) -> Dataset:
         },
         cases=cases,
     )
+
+
+def _rolebench_source_file(definition, variant: str) -> str:
+    return definition.source_file_map.get(variant, f"{variant}.jsonl")
 
 
 def _normalize_options(value: object) -> list[str]:
@@ -770,11 +799,18 @@ def _normalize_tests(value: object) -> list[dict[str, str]]:
     return tests
 
 
-def _humaneval_tests(inputs: object, solution: object) -> list[dict[str, str]]:
+def _humaneval_tests(inputs: object) -> list[dict[str, str]]:
     if not isinstance(inputs, list):
         return []
-    expected = str(solution or "").strip() or "pass"
-    return [{"input": str(item), "output": expected} for item in inputs]
+    return [{"input": _json_dump(item)} for item in inputs]
+
+
+def _humaneval_reference_solution(*, prompt: str, canonical_solution: str) -> str:
+    return f"{prompt}\n{canonical_solution}\n".strip() + "\n"
+
+
+def _json_dump(value: object) -> str:
+    return json.dumps(_json(value), sort_keys=True)
 
 
 def _json(value: object) -> JSONValue:

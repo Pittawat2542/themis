@@ -28,7 +28,7 @@ TABLE_REQUIRED_SECTIONS = (
     (
         "reference/benchmark-catalog.md",
         "Named benchmark entries",
-        ("Benchmark", "Shape", "Parser / Metric", "Variants", "Extra setup"),
+        ("Benchmark", "Shape", "Parser / Metric", "Variants", "Support tier", "Notes"),
     ),
     (
         "reference/builtins-and-adapters.md",

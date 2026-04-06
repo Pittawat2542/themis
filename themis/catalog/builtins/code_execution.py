@@ -267,6 +267,85 @@ class LiveCodeBenchExecutionMetric(CodeExecutionMetric):
         )
 
 
+class HumanEvalExecutionMetric(CodeExecutionMetric):
+    def __init__(self, executor: SandboxExecutor | None = None) -> None:
+        super().__init__(
+            component_id="builtin/humaneval_pass_rate",
+            benchmark_name="humaneval",
+            supported_languages={"python"},
+            supported_modes={"function"},
+            executor=executor,
+        )
+
+    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+        del ctx
+        code = str(parsed.value).strip()
+        payload = case.expected_output if isinstance(case.expected_output, dict) else {}
+        language = str(payload.get("language", "")).strip().lower()
+        execution_mode = str(payload.get("execution_mode", "function")).strip().lower()
+        function_name = str(payload.get("function_name", "")).strip()
+        reference_solution = str(payload.get("reference_solution", "")).strip()
+        tests = _normalize_function_tests(payload.get("official_tests"))
+        score_variant = str(payload.get("score_variant", "base")).strip().lower()
+        if score_variant == "plus":
+            plus_tests = _normalize_function_tests(payload.get("plus_tests"))
+            if plus_tests:
+                tests = plus_tests
+        if execution_mode not in self._supported_modes:
+            return _score(
+                self.component_id, 0.0, {"reason": "unsupported_execution_mode"}
+            )
+        if language not in self._supported_languages:
+            return _score(self.component_id, 0.0, {"reason": "unsupported_language"})
+        if not code or not tests or not function_name or not reference_solution:
+            return _score(
+                self.component_id, 0.0, {"reason": "missing_code_or_reference"}
+            )
+
+        passed = 0
+        reference_cache: dict[str, tuple[bool, str]] = {}
+        for test_case in tests:
+            candidate_result = self._executor.execute(
+                code=_humaneval_wrapper(
+                    solution=code,
+                    function_name=function_name,
+                    input_json=test_case["input"],
+                ),
+                language=language,
+            )
+            cache_key = json.dumps(test_case["input"], sort_keys=True)
+            if cache_key not in reference_cache:
+                reference_result = self._executor.execute(
+                    code=_humaneval_wrapper(
+                        solution=reference_solution,
+                        function_name=function_name,
+                        input_json=test_case["input"],
+                    ),
+                    language=language,
+                )
+                reference_cache[cache_key] = (
+                    reference_result.ok,
+                    _normalize_output(reference_result.stdout),
+                )
+            reference_ok, reference_stdout = reference_cache[cache_key]
+            if (
+                candidate_result.ok
+                and reference_ok
+                and _normalize_output(candidate_result.stdout) == reference_stdout
+            ):
+                passed += 1
+        total = len(tests)
+        return _score(
+            self.component_id,
+            passed / total if total else 0.0,
+            {
+                "passed_tests": passed,
+                "total_tests": total,
+                "benchmark": self._benchmark_name,
+            },
+        )
+
+
 def _ordered_files(
     code: str,
     language: str,
@@ -309,6 +388,39 @@ def _normalize_tests(value: object) -> list[dict[str, str]]:
         if isinstance(raw_input, str) and isinstance(raw_output, str):
             tests.append({"input": raw_input, "output": raw_output})
     return tests
+
+
+def _normalize_function_tests(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    tests: list[dict[str, str]] = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        raw_input = entry.get("input")
+        if isinstance(raw_input, str) and raw_input:
+            tests.append({"input": raw_input})
+    return tests
+
+
+def _humaneval_wrapper(
+    *,
+    solution: str,
+    function_name: str,
+    input_json: str,
+) -> str:
+    return "\n".join(
+        [
+            solution.rstrip(),
+            "",
+            "import json",
+            "",
+            f"_themis_args = json.loads({json.dumps(input_json)})",
+            f"_themis_result = {function_name}(*_themis_args)",
+            "print(json.dumps(_themis_result, sort_keys=True))",
+            "",
+        ]
+    )
 
 
 def _normalize_output(value: str) -> str:
