@@ -644,6 +644,8 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
                         "official_tests": tests,
                         "plus_tests": plus_tests,
                         "reference_solution": reference_solution,
+                        # Keep the canonical solution under the generic key used by
+                        # validation smoke runs and other code-text flows.
                         "solution": reference_solution,
                         "score_variant": score_variant,
                     }

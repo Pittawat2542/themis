@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import sys
 from typing import cast
 
 import pytest
 
 from themis.catalog import load
 from themis.catalog.benchmarks import BenchmarkDefinition
+from themis.catalog.loaders import (
+    MissingOptionalDependencyError,
+    load_huggingface_raw_rows,
+)
 from tests.catalog_ids import catalog_benchmark_ids
 
 
@@ -59,3 +64,21 @@ def test_catalog_manifest_covers_representative_benchmark_families() -> None:
     ]
 
     assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
+
+
+def test_raw_benchmark_loading_reports_missing_huggingface_hub_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(sys.modules, "huggingface_hub", raising=False)
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: (_ for _ in ()).throw(ModuleNotFoundError(name)),
+    )
+
+    with pytest.raises(MissingOptionalDependencyError) as exc_info:
+        load_huggingface_raw_rows("demo", files=["train.jsonl"])
+
+    message = str(exc_info.value)
+    assert "huggingface_hub" in message
+    assert "pip install huggingface-hub" in message
+    assert 'uv add "themis-eval[datasets]"' in message

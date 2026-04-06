@@ -303,6 +303,7 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
             )
 
         passed = 0
+        reference_cache: dict[str, tuple[bool, str]] = {}
         for test_case in tests:
             candidate_result = self._executor.execute(
                 code=_humaneval_wrapper(
@@ -312,19 +313,26 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
                 ),
                 language=language,
             )
-            reference_result = self._executor.execute(
-                code=_humaneval_wrapper(
-                    solution=reference_solution,
-                    function_name=function_name,
-                    input_json=test_case["input"],
-                ),
-                language=language,
-            )
+            cache_key = json.dumps(test_case["input"], sort_keys=True)
+            if cache_key not in reference_cache:
+                reference_result = self._executor.execute(
+                    code=_humaneval_wrapper(
+                        solution=reference_solution,
+                        function_name=function_name,
+                        input_json=test_case["input"],
+                    ),
+                    language=language,
+                )
+                reference_cache[cache_key] = (
+                    reference_result.ok,
+                    _normalize_output(reference_result.stdout),
+                )
+            reference_ok, reference_stdout = reference_cache[cache_key]
             if (
                 candidate_result.ok
-                and reference_result.ok
+                and reference_ok
                 and _normalize_output(candidate_result.stdout)
-                == _normalize_output(reference_result.stdout)
+                == reference_stdout
             ):
                 passed += 1
         total = len(tests)

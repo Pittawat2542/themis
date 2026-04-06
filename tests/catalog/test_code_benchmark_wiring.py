@@ -37,6 +37,7 @@ def test_humaneval_materialization_includes_reference_solution_for_demo_runs() -
     assert payload["function_name"] == "square"
     assert "reference_solution" in payload
     assert "solution" in payload
+    assert payload["solution"] == payload["reference_solution"]
     assert "def square" in str(payload["reference_solution"])
 
 
@@ -77,32 +78,23 @@ def test_humaneval_execution_metric_scores_candidate_against_reference_solution(
         ),
         ParseContext(run_id="run-1", case_id="case-1", candidate_id="candidate-1"),
     )
+    case_obj = benchmark_case(
+        expected_output={
+            "language": "python",
+            "execution_mode": "function",
+            "function_name": "add",
+            "official_tests": [{"input": "[1, 2]"}, {"input": "[4, 5]"}],
+            "reference_solution": "def add(a, b):\n    return a + b\n",
+            "solution": "def add(a, b):\n    return a + b\n",
+            "score_variant": "base",
+        }
+    )
     score = metric.score(
         parsed,
-        benchmark_case(
-            expected_output={
-                "language": "python",
-                "execution_mode": "function",
-                "function_name": "add",
-                "official_tests": [{"input": "[1, 2]"}, {"input": "[4, 5]"}],
-                "reference_solution": "def add(a, b):\n    return a + b\n",
-                "solution": "def add(a, b):\n    return a + b\n",
-                "score_variant": "base",
-            }
-        ),
+        case_obj,
         ScoreContext(
             run_id="run-1",
-            case=benchmark_case(
-                expected_output={
-                    "language": "python",
-                    "execution_mode": "function",
-                    "function_name": "add",
-                    "official_tests": [{"input": "[1, 2]"}, {"input": "[4, 5]"}],
-                    "reference_solution": "def add(a, b):\n    return a + b\n",
-                    "solution": "def add(a, b):\n    return a + b\n",
-                    "score_variant": "base",
-                }
-            ),
+            case=case_obj,
             parsed_output=parsed,
         ),
     )
@@ -114,6 +106,61 @@ def test_humaneval_execution_metric_scores_candidate_against_reference_solution(
     assert isinstance(score, Score)
     assert score.metric_id == "builtin/humaneval_pass_rate"
     assert score.value == 1.0
+
+
+def test_humaneval_execution_metric_caches_reference_solution_results() -> None:
+    class _CountingExecutor:
+        def __init__(self) -> None:
+            self.reference_runs: list[str] = []
+
+        def execute(
+            self,
+            *,
+            code: str,
+            language: str,
+            stdin: str = "",
+            files: dict[str, str] | None = None,
+            args: list[str] | None = None,
+            timeout_seconds: float | None = None,
+            memory_limit_mb: float | None = None,
+        ) -> SandboxExecutionResult:
+            del language, stdin, files, args, timeout_seconds, memory_limit_mb
+            if "return a + b" in code:
+                self.reference_runs.append(code)
+            return SandboxExecutionResult(
+                stdout="3\n", stderr="", return_code=0, status="ok"
+            )
+
+    executor = _CountingExecutor()
+    metric = HumanEvalExecutionMetric(executor=executor)
+    case_obj = benchmark_case(
+        expected_output={
+            "language": "python",
+            "execution_mode": "function",
+            "function_name": "add",
+            "official_tests": [{"input": "[1, 2]"}, {"input": "[1, 2]"}],
+            "reference_solution": "def add(a, b):\n    return a + b\n",
+            "solution": "def add(a, b):\n    return a + b\n",
+            "score_variant": "base",
+        }
+    )
+
+    score = metric.score(
+        ParsedOutput(value="def add(a, b):\n    return 1 + 2", format="code"),
+        case_obj,
+        ScoreContext(
+            run_id="run-1",
+            case=case_obj,
+            parsed_output=ParsedOutput(
+                value="def add(a, b):\n    return 1 + 2",
+                format="code",
+            ),
+        ),
+    )
+
+    assert isinstance(score, Score)
+    assert score.value == 1.0
+    assert len(executor.reference_runs) == 1
 
 
 def benchmark_case(*, expected_output: JSONValue):

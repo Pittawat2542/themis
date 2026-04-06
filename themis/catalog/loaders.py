@@ -89,8 +89,10 @@ def load_huggingface_raw_rows(
         hub_module = importlib.import_module("huggingface_hub")
     except ModuleNotFoundError as exc:
         raise MissingOptionalDependencyError(
-            "Catalog raw benchmark loading requires the optional datasets dependency. "
-            'Install it with: uv add "themis-eval[datasets]"'
+            "Catalog raw benchmark loading requires the optional "
+            "`huggingface_hub` module. Install it with: "
+            "pip install huggingface-hub or "
+            'uv add "themis-eval[datasets]"'
         ) from exc
 
     rows: list[dict[str, object]] = []
