@@ -83,6 +83,7 @@ postgres = [
 ]
 datasets = [
     "datasets>=3.0.0",
+    "Pillow>=11.0.0",
 ]
 
 [tool.pytest.ini_options]
