@@ -61,7 +61,8 @@ support_tier = "ready"
 dataset_id = "openai/healthbench"
 split = "test"
 adapter = "rubric_qa"
-source_kind = "huggingface_dataset"
+source_kind = "huggingface_raw_files"
+source_files = ["2025-05-07-06-14-12_oss_eval.jsonl"]
 support_tier = "ready"
 
 [benchmarks.hle]
@@ -84,20 +85,9 @@ split = "train"
 source_kind = "huggingface_dataset"
 support_tier = "ready"
 
-[benchmarks.humaneval]
-dataset_id = "evalplus/HumanEvalPlus"
-split = "test"
-variant_mode = "open"
-requires_code_execution = true
-supported_execution_backends = ["piston", "sandbox_fusion"]
-adapter = "code_generation"
-source_kind = "huggingface_dataset"
-support_tier = "ready"
-
 [benchmarks.humaneval_plus]
-dataset_id = "evalplus/HumanEvalPlus"
+dataset_id = "evalplus/humanevalplus"
 split = "test"
-variant_mode = "open"
 requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
@@ -118,7 +108,7 @@ requires_code_execution = true
 supported_execution_backends = ["piston", "sandbox_fusion"]
 adapter = "code_generation"
 source_kind = "huggingface_raw_files"
-source_files = ["release_v6/test.jsonl"]
+source_files = ["test6.jsonl"]
 support_tier = "ready"
 version_notes = "Targets LiveCodeBench release_v6."
 
@@ -164,7 +154,8 @@ dataset_id = "ifujisawa/procbench"
 split = "train"
 variant_mode = "open"
 adapter = "procbench"
-source_kind = "huggingface_dataset"
+source_kind = "huggingface_raw_files"
+source_files = ["combined_dataset.jsonl"]
 support_tier = "ready"
 
 [benchmarks.rolebench]
@@ -173,7 +164,7 @@ split = "test"
 variants = ["instruction_generalization_eng", "role_generalization_eng"]
 adapter = "rolebench"
 source_kind = "huggingface_raw_files"
-source_file_map = { instruction_generalization_eng = "instruction_generalization_eng.jsonl", role_generalization_eng = "role_generalization_eng.jsonl" }
+source_file_map = { instruction_generalization_eng = "rolebench-eng/instruction-generalization", role_generalization_eng = "rolebench-eng/role-generalization" }
 support_tier = "ready"
 
 [benchmarks.simpleqa_verified]
@@ -188,7 +179,8 @@ dataset_id = "ZehuaZhao/SUPERChem"
 split = "train"
 variants = ["en", "zh"]
 adapter = "superchem"
-source_kind = "huggingface_dataset"
+source_kind = "huggingface_raw_files"
+source_files = ["SUPERChem-500.parquet"]
 support_tier = "ready"
 
 [benchmarks.supergpqa]

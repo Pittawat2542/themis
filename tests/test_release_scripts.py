@@ -239,3 +239,83 @@ def test_run_examples_resets_cache_dirs(tmp_path: Path, monkeypatch) -> None:
 
     assert not (tmp_path / ".cache").exists()
     assert not (tmp_path / ".themis_cache").exists()
+
+
+def test_check_catalog_materialization_reports_success_and_failures(
+    monkeypatch,
+) -> None:
+    module = _load_module(
+        "scripts/check_catalog_materialization.py",
+        "check_catalog_materialization",
+    )
+
+    class _Dataset:
+        def __init__(self, cases):
+            self.cases = cases
+
+    class _Benchmark:
+        def __init__(self, dataset):
+            self._dataset = dataset
+
+        def materialize_dataset(self):
+            return self._dataset
+
+    def _fake_load(name: str):
+        if name == "alpha":
+            return _Benchmark(_Dataset([{"case_id": "1"}, {"case_id": "2"}]))
+        if name == "beta":
+            return _Benchmark(_Dataset([]))
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(module, "_materialization_benchmark_ids", lambda: ["unused"])
+    monkeypatch.setattr(module, "load", _fake_load)
+
+    results = module.check_catalog_materialization(["alpha", "beta", "gamma"])
+
+    assert [result.benchmark_id for result in results] == ["alpha", "beta", "gamma"]
+    assert results[0].status == "passed"
+    assert results[0].case_count == 2
+    assert results[0].message is None
+    assert results[1].status == "failed"
+    assert results[1].case_count == 0
+    assert "empty dataset" in str(results[1].message).lower()
+    assert results[2].status == "failed"
+    assert results[2].case_count is None
+    assert results[2].message == "boom"
+
+
+def test_check_catalog_materialization_main_prints_summary_and_exit_code(
+    monkeypatch, capsys
+) -> None:
+    module = _load_module(
+        "scripts/check_catalog_materialization.py",
+        "check_catalog_materialization_main",
+    )
+
+    monkeypatch.setattr(module, "_materialization_benchmark_ids", lambda: ["unused"])
+    monkeypatch.setattr(
+        module,
+        "check_catalog_materialization",
+        lambda benchmark_ids=None: [
+            module.MaterializationCheckResult(
+                benchmark_id="alpha",
+                status="passed",
+                case_count=3,
+            ),
+            module.MaterializationCheckResult(
+                benchmark_id="beta",
+                status="failed",
+                case_count=0,
+                message="empty dataset",
+            ),
+        ],
+    )
+
+    exit_code = module.main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "PASS alpha (3 cases)" in captured.out
+    assert "FAIL beta (empty dataset)" in captured.out
+    assert "Checked 2 benchmarks: 1 passed, 1 failed." in captured.out
+    assert "beta: empty dataset" in captured.out

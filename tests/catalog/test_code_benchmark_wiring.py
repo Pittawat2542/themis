@@ -15,30 +15,26 @@ from themis.core.models import ParsedOutput, ReducedCandidate, Score
 
 
 def test_humaneval_benchmarks_use_code_execution_wiring() -> None:
-    humaneval = cast(BenchmarkDefinition, load("humaneval:v0.1.0"))
-    humaneval_plus = cast(BenchmarkDefinition, load("humaneval_plus:noextreme"))
+    humaneval_plus = cast(BenchmarkDefinition, load("humaneval_plus"))
 
-    assert humaneval.metric_ids == ["builtin/humaneval_pass_rate"]
-    assert humaneval.parser_ids == ["builtin/code_text"]
-    assert humaneval.support_tier == "ready"
     assert humaneval_plus.metric_ids == ["builtin/humaneval_pass_rate"]
     assert humaneval_plus.parser_ids == ["builtin/code_text"]
     assert humaneval_plus.support_tier == "ready"
 
 
 def test_humaneval_materialization_includes_reference_solution_for_demo_runs() -> None:
-    humaneval = cast(BenchmarkDefinition, load("humaneval:v0.1.0"))
+    humaneval = cast(BenchmarkDefinition, load("humaneval_plus"))
 
     dataset = humaneval.materialize_dataset()
     payload = dataset.cases[0].expected_output
 
     assert isinstance(payload, dict)
     assert payload["execution_mode"] == "function"
-    assert payload["function_name"] == "square"
+    assert payload["function_name"] == "add"
     assert "reference_solution" in payload
     assert "solution" in payload
     assert payload["solution"] == payload["reference_solution"]
-    assert "def square" in str(payload["reference_solution"])
+    assert "def add" in str(payload["reference_solution"])
 
 
 def test_humaneval_execution_metric_scores_candidate_against_reference_solution() -> (

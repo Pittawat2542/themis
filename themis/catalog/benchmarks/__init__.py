@@ -18,6 +18,12 @@ from themis.core.models import Case, Dataset
 from themis.core.protocols import Generator
 from themis.core.store import RunStore
 
+_OPEN_VARIANT_EXAMPLES = {
+    "hle": "math,reasoning",
+    "mmmlu": "ZH_CN",
+    "procbench": "task07",
+}
+
 
 def _default_candidate_policy() -> dict[str, JSONValue]:
     return {"num_samples": 1}
@@ -263,6 +269,23 @@ def list_benchmark_ids() -> list[str]:
     return sorted(benchmark_specs())
 
 
+def _materialization_benchmark_ids() -> list[str]:
+    benchmark_ids: set[str] = set()
+    for benchmark_id, spec in benchmark_specs().items():
+        benchmark_ids.add(benchmark_id)
+        for variant in _string_list_from_value(spec.get("variants", [])):
+            benchmark_ids.add(f"{benchmark_id}:{variant}")
+        if spec.get("variant_mode") == "open":
+            try:
+                variant = _OPEN_VARIANT_EXAMPLES[benchmark_id]
+            except KeyError as exc:
+                raise ValueError(
+                    f"Missing representative open variant example for {benchmark_id}"
+                ) from exc
+            benchmark_ids.add(f"{benchmark_id}:{variant}")
+    return sorted(benchmark_ids)
+
+
 def list_benchmarks() -> list[BenchmarkCatalogEntry]:
     return [get_benchmark(benchmark_id) for benchmark_id in list_benchmark_ids()]
 
@@ -448,7 +471,7 @@ def _recipe_defaults(base_name: str, *, variant: str | None) -> dict[str, object
             "metric_ids": ["builtin/livecodebench_pass_rate"],
             "parser_ids": ["builtin/code_text"],
         }
-    if base_name in {"humaneval", "humaneval_plus"}:
+    if base_name == "humaneval_plus":
         return {
             "metric_ids": ["builtin/humaneval_pass_rate"],
             "parser_ids": ["builtin/code_text"],

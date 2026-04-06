@@ -286,6 +286,7 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
         function_name = str(payload.get("function_name", "")).strip()
         reference_solution = str(payload.get("reference_solution", "")).strip()
         tests = _normalize_function_tests(payload.get("official_tests"))
+        test_script = str(payload.get("test_script", "")).strip()
         score_variant = str(payload.get("score_variant", "base")).strip().lower()
         if score_variant == "plus":
             plus_tests = _normalize_function_tests(payload.get("plus_tests"))
@@ -297,9 +298,41 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
             )
         if language not in self._supported_languages:
             return _score(self.component_id, 0.0, {"reason": "unsupported_language"})
-        if not code or not tests or not function_name or not reference_solution:
+        if not code or not function_name or not reference_solution:
             return _score(
                 self.component_id, 0.0, {"reason": "missing_code_or_reference"}
+            )
+        if not tests and not test_script:
+            return _score(
+                self.component_id, 0.0, {"reason": "missing_code_or_reference"}
+            )
+
+        if test_script:
+            candidate_result = self._executor.execute(
+                code=_humaneval_script_wrapper(
+                    solution=code,
+                    function_name=function_name,
+                    test_script=test_script,
+                ),
+                language=language,
+            )
+            reference_result = self._executor.execute(
+                code=_humaneval_script_wrapper(
+                    solution=reference_solution,
+                    function_name=function_name,
+                    test_script=test_script,
+                ),
+                language=language,
+            )
+            passed = 1 if candidate_result.ok and reference_result.ok else 0
+            return _score(
+                self.component_id,
+                float(passed),
+                {
+                    "passed_tests": passed,
+                    "total_tests": 1,
+                    "benchmark": self._benchmark_name,
+                },
             )
 
         passed = 0
@@ -418,6 +451,25 @@ def _humaneval_wrapper(
             f"_themis_args = json.loads({json.dumps(input_json)})",
             f"_themis_result = {function_name}(*_themis_args)",
             "print(json.dumps(_themis_result, sort_keys=True))",
+            "",
+        ]
+    )
+
+
+def _humaneval_script_wrapper(
+    *,
+    solution: str,
+    function_name: str,
+    test_script: str,
+) -> str:
+    return "\n".join(
+        [
+            solution.rstrip(),
+            "",
+            test_script.rstrip(),
+            "",
+            f"check({function_name})",
+            "print('ok')",
             "",
         ]
     )

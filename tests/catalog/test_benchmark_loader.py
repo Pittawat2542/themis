@@ -9,6 +9,7 @@ from themis.catalog import load
 from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.catalog.loaders import (
     MissingOptionalDependencyError,
+    load_huggingface_rows,
     load_huggingface_raw_rows,
 )
 from tests.catalog_ids import catalog_benchmark_ids
@@ -82,3 +83,80 @@ def test_raw_benchmark_loading_reports_missing_huggingface_hub_dependency(
     assert "huggingface_hub" in message
     assert "pip install huggingface-hub" in message
     assert 'uv add "themis-eval[datasets]"' in message
+
+
+def test_huggingface_dataset_loading_streams_rows_as_plain_dicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeDataset:
+        def __iter__(self):
+            yield {"question": "one", "answer": "A"}
+            yield {"question": "two", "answer": "B"}
+
+    class _FakeDatasetsModule:
+        @staticmethod
+        def load_dataset(*args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            return _FakeDataset()
+
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: _FakeDatasetsModule() if name == "datasets" else None,
+    )
+
+    rows = load_huggingface_rows(
+        "openai/MMMLU",
+        "test",
+        config_name="ZH_CN",
+    )
+
+    assert rows == [
+        {"question": "one", "answer": "A"},
+        {"question": "two", "answer": "B"},
+    ]
+    assert captured == {
+        "args": ("openai/MMMLU", "ZH_CN"),
+        "kwargs": {"split": "test", "revision": None, "streaming": True},
+    }
+
+
+def test_huggingface_raw_loading_supports_parquet_rows(tmp_path) -> None:
+    import pyarrow as pa  # type: ignore[import-untyped]
+    import pyarrow.parquet as pq  # type: ignore[import-untyped]
+
+    path = tmp_path / "sample.parquet"
+    table = pa.table(
+        {
+            "question_en": ["What is shown?"],
+            "answer_en": [["B"]],
+            "question_type": ["multiple_choice"],
+        }
+    )
+    pq.write_table(table, path)
+
+    class _FakeHubModule:
+        @staticmethod
+        def hf_hub_download(*, repo_id, filename, repo_type, revision=None):
+            del repo_id, filename, repo_type, revision
+            return str(path)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: _FakeHubModule() if name == "huggingface_hub" else None,
+    )
+    try:
+        rows = load_huggingface_raw_rows("demo", files=["sample.parquet"])
+    finally:
+        monkeypatch.undo()
+
+    assert rows == [
+        {
+            "question_en": "What is shown?",
+            "answer_en": ["B"],
+            "question_type": "multiple_choice",
+        }
+    ]

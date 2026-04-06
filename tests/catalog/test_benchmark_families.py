@@ -47,26 +47,61 @@ def test_procbench_variant_exposes_task_specific_metadata() -> None:
 
 def test_superchem_and_mmmlu_variants_propagate_language_metadata() -> None:
     superchem = cast(BenchmarkDefinition, load("superchem:zh"))
-    mmmlu = cast(BenchmarkDefinition, load("mmmlu:thai"))
+    mmmlu = cast(BenchmarkDefinition, load("mmmlu:ZH_CN"))
     superchem_input = _sample_input(superchem)
     mmmlu_input = _sample_input(mmmlu)
 
     assert superchem.sample_case_metadata["language"] == "zh"
     assert superchem_input["language"] == "zh"
-    assert mmmlu.sample_case_metadata["language_config"] == "thai"
-    assert mmmlu_input["language"] == "thai"
+    assert mmmlu.sample_case_metadata["language_config"] == "ZH_CN"
+    assert mmmlu_input["language"] == "ZH_CN"
 
 
-def test_hle_and_humaneval_variants_preserve_variant_shapes() -> None:
+def test_superchem_materializes_mcq_prompts_with_more_than_ten_options() -> None:
+    benchmark = cast(BenchmarkDefinition, load("superchem"))
+
+    def loader(_request) -> list[dict[str, object]]:
+        return [
+            {
+                "uuid": "chem-many-options",
+                "field": "chemistry",
+                "question_type": "multiple_choice",
+                "question_en": "Which option is correct?",
+                "question_images": [],
+                "options_en": {
+                    "A": "option 1",
+                    "B": "option 2",
+                    "C": "option 3",
+                    "D": "option 4",
+                    "E": "option 5",
+                    "F": "option 6",
+                    "G": "option 7",
+                    "H": "option 8",
+                    "I": "option 9",
+                    "J": "option 10",
+                    "K": "option 11",
+                },
+                "answer_en": ["K"],
+            }
+        ]
+
+    dataset = benchmark.materialize_dataset(loader=loader)
+
+    assert len(dataset.cases) == 1
+    prompt = dataset.cases[0].input
+    assert isinstance(prompt, str)
+    assert "K. option 11" in prompt
+    assert dataset.cases[0].expected_output == {"choice": "K"}
+
+
+def test_hle_variant_and_humaneval_plus_preserve_variant_shapes() -> None:
     hle = cast(BenchmarkDefinition, load("hle:math,reasoning"))
-    humaneval = cast(BenchmarkDefinition, load("humaneval:v0.1.0"))
-    humaneval_plus = cast(BenchmarkDefinition, load("humaneval_plus:noextreme"))
+    humaneval_plus = cast(BenchmarkDefinition, load("humaneval_plus"))
 
     assert hle.metric_ids == ["builtin/panel_of_judges"]
     assert hle.sample_case_metadata["domains"] == "math,reasoning"
-    assert humaneval.requires_code_execution is True
-    assert humaneval.sample_case_metadata["variant"] == "v0.1.0"
-    assert humaneval_plus.sample_case_metadata["variant"] == "noextreme"
+    assert humaneval_plus.requires_code_execution is True
+    assert humaneval_plus.sample_case_metadata["variant"] == ""
 
 
 def test_catalog_load_covers_all_benchmark_entries_from_catalog_md() -> None:

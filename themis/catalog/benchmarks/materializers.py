@@ -287,7 +287,12 @@ def _materialize_superchem(definition, *, row_loader: DatasetRowLoader) -> Datas
         definition,
         row_loader,
         revision=definition.dataset_revision,
-        config_name="default",
+        config_name=None
+        if definition.source_kind == "huggingface_raw_files"
+        else "default",
+        files=definition.source_files
+        if definition.source_kind == "huggingface_raw_files"
+        else None,
     )
     cases = []
     for index, row in enumerate(rows, start=1):
@@ -330,7 +335,14 @@ def _materialize_frontierscience(
 
 
 def _materialize_healthbench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
+    rows = _load_rows(
+        definition,
+        row_loader,
+        revision=definition.dataset_revision,
+        files=definition.source_files
+        if definition.source_kind == "huggingface_raw_files"
+        else None,
+    )
     cases = []
     for index, row in enumerate(rows, start=1):
         prompt_messages = _prompt_messages_from_payload(row)
@@ -423,7 +435,16 @@ def _materialize_hle(definition, *, row_loader: DatasetRowLoader) -> Dataset:
 
 
 def _materialize_procbench(definition, *, row_loader: DatasetRowLoader) -> Dataset:
-    rows = _load_rows(definition, row_loader, revision=definition.dataset_revision)
+    rows = _load_rows(
+        definition,
+        row_loader,
+        revision=None
+        if definition.source_kind == "huggingface_raw_files"
+        else definition.dataset_revision,
+        files=definition.source_files
+        if definition.source_kind == "huggingface_raw_files"
+        else None,
+    )
     requested_task = definition.variant
     cases = []
     for index, row in enumerate(rows, start=1):
@@ -452,46 +473,59 @@ def _materialize_rolebench(definition, *, row_loader: DatasetRowLoader) -> Datas
     cases: list[Case] = []
     for variant in variants:
         assert variant is not None
-        rows = _load_rows(
-            definition,
-            row_loader,
-            revision=None
-            if definition.source_kind == "huggingface_raw_files"
-            else definition.dataset_revision,
-            config_name=None
-            if definition.source_kind == "huggingface_raw_files"
-            else variant,
-            files=[_rolebench_source_file(definition, variant)]
-            if definition.source_kind == "huggingface_raw_files"
-            else None,
-        )
-        for index, row in enumerate(rows, start=1):
-            generated = row.get("generated")
-            expected = (
-                str(generated[0]) if isinstance(generated, list) and generated else ""
+        for source_file in _rolebench_source_files(definition, variant):
+            subset = _rolebench_subset_from_source_file(source_file)
+            rows = _load_rows(
+                definition,
+                row_loader,
+                revision=None
+                if definition.source_kind == "huggingface_raw_files"
+                else definition.dataset_revision,
+                config_name=None
+                if definition.source_kind == "huggingface_raw_files"
+                else variant,
+                files=[source_file]
+                if definition.source_kind == "huggingface_raw_files"
+                else None,
             )
-            prompt = (
-                f"You are {str(row.get('role', ''))}, your description is: {str(row.get('desc', ''))}. "
-                "Answer the following question while staying fully in character.\n\n"
-                f"Question:\n{str(row.get('question', ''))}"
-            )
-            cases.append(
-                Case(
-                    case_id=str(
-                        row.get(
-                            "item_id",
-                            f"rolebench-{variant}-{row.get('subset', 'general')}-{index}",
-                        )
-                    ),
-                    input=prompt,
-                    expected_output={"answer": expected},
-                    metadata={
-                        "variant": variant,
-                        "subset": str(row.get("subset", "general")),
-                        "role": str(row.get("role", "")),
-                    },
+            for index, row in enumerate(rows, start=1):
+                generated = row.get("generated")
+                expected = (
+                    str(generated[0])
+                    if isinstance(generated, list) and generated
+                    else ""
                 )
-            )
+                role = str(row.get("role", ""))
+                description = str(row.get("desc", "")).strip()
+                prompt_parts = [f"You are {role}."]
+                if description:
+                    prompt_parts.append(f"Your description is: {description}.")
+                prompt_parts.extend(
+                    [
+                        "Answer the following question while staying fully in character.",
+                        "",
+                        f"Question:\n{str(row.get('question', ''))}",
+                    ]
+                )
+                cases.append(
+                    Case(
+                        case_id=str(
+                            row.get(
+                                "item_id",
+                                f"rolebench-{variant}-{subset}-{index}",
+                            )
+                        ),
+                        input=" ".join(part for part in prompt_parts[:2] if part)
+                        + "\n\n"
+                        + "\n".join(prompt_parts[2:]),
+                        expected_output={"answer": expected},
+                        metadata={
+                            "variant": variant,
+                            "subset": subset,
+                            "role": role,
+                        },
+                    )
+                )
     return _dataset(definition, cases)
 
 
@@ -577,7 +611,12 @@ def _materialize_livecodebench(definition, *, row_loader: DatasetRowLoader) -> D
     )
     cases = []
     for index, row in enumerate(rows, start=1):
-        tests = _normalize_tests(row.get("public_tests", row.get("official_tests")))
+        tests = _normalize_tests(
+            row.get(
+                "public_tests",
+                row.get("official_tests", row.get("public_test_cases")),
+            )
+        )
         if not tests:
             continue
         prompt = str(row.get("prompt", row.get("question_content", "")))
@@ -623,11 +662,11 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
         prompt = str(row.get("prompt", "")).rstrip()
         canonical_solution = str(row.get("canonical_solution", "")).rstrip()
         entry_point = str(row.get("entry_point", ""))
-        tests = _humaneval_tests(row.get("base_input", []))
-        plus_tests = _humaneval_tests(row.get("plus_input", []))
         reference_solution = _humaneval_reference_solution(
             prompt=prompt, canonical_solution=canonical_solution
         )
+        tests = _humaneval_tests(row.get("base_input", []))
+        test_script = str(row.get("test", "")).strip()
         cases.append(
             Case(
                 case_id=str(row.get("task_id", f"{definition.split}-{index}")),
@@ -642,7 +681,7 @@ def _materialize_humaneval(definition, *, row_loader: DatasetRowLoader) -> Datas
                         "execution_mode": "function",
                         "function_name": entry_point,
                         "official_tests": tests,
-                        "plus_tests": plus_tests,
+                        "test_script": test_script,
                         "reference_solution": reference_solution,
                         # Keep the canonical solution under the generic key used by
                         # validation smoke runs and other code-text flows.
@@ -676,8 +715,20 @@ def _dataset(definition, cases: list[Case]) -> Dataset:
     )
 
 
-def _rolebench_source_file(definition, variant: str) -> str:
-    return definition.source_file_map.get(variant, f"{variant}.jsonl")
+def _rolebench_source_files(definition, variant: str) -> list[str]:
+    source_root = definition.source_file_map.get(variant, variant)
+    if source_root.endswith(".jsonl"):
+        return [source_root]
+    return [
+        f"{source_root}/general/test.jsonl",
+        f"{source_root}/role_specific/test.jsonl",
+    ]
+
+
+def _rolebench_subset_from_source_file(path: str) -> str:
+    if "/role_specific/" in path:
+        return "role_specific"
+    return "general"
 
 
 def _normalize_options(value: object) -> list[str]:
@@ -688,12 +739,27 @@ def _normalize_options(value: object) -> list[str]:
 
 def _mcq_prompt(*, question: str, options: list[str]) -> str:
     options_text = "\n".join(
-        f"{'ABCDEFGHIJ'[index]}. {option}" for index, option in enumerate(options)
+        f"{_choice_label(index)}. {option}" for index, option in enumerate(options)
     )
     return (
         f"Question:\n{question}\n\nOptions:\n{options_text}\n\n"
         "Return the best option letter only."
     )
+
+
+def _choice_label(index: int) -> str:
+    if index < 0:
+        raise ValueError("Choice labels require a non-negative index")
+
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    label = ""
+    current = index
+    while True:
+        current, remainder = divmod(current, len(alphabet))
+        label = alphabet[remainder] + label
+        if current == 0:
+            return label
+        current -= 1
 
 
 def _string_metadata(row: dict[str, object], keys: list[str]) -> dict[str, str]:
@@ -786,6 +852,11 @@ def _string_list(value: object) -> list[str]:
 
 
 def _normalize_tests(value: object) -> list[dict[str, str]]:
+    if isinstance(value, str):
+        try:
+            return _normalize_tests(json.loads(value))
+        except json.JSONDecodeError:
+            return []
     if not isinstance(value, list):
         return []
     tests: list[dict[str, str]] = []
@@ -794,8 +865,9 @@ def _normalize_tests(value: object) -> list[dict[str, str]]:
             continue
         raw_input = entry.get("input")
         raw_output = entry.get("output")
-        if isinstance(raw_input, str) and isinstance(raw_output, str):
-            tests.append({"input": raw_input, "output": raw_output})
+        if raw_input is None or raw_output is None:
+            continue
+        tests.append({"input": str(raw_input), "output": str(raw_output)})
     return tests
 
 

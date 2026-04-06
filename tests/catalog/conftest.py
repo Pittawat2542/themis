@@ -155,20 +155,25 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "Subject": "math",
             }
         ],
-        request_key("huggingface_dataset", "openai/MMMLU", "test", None, "thai"): [
+        request_key("huggingface_dataset", "openai/MMMLU", "test", None, "ZH_CN"): [
             {
                 "Unnamed: 0": 1,
-                "Question": "เมืองหลวงของไทยคืออะไร?",
-                "A": "เชียงใหม่",
-                "B": "กรุงเทพฯ",
-                "C": "ภูเก็ต",
-                "D": "ขอนแก่น",
+                "Question": "中国的首都是哪里？",
+                "A": "上海",
+                "B": "北京",
+                "C": "广州",
+                "D": "深圳",
                 "Answer": "B",
                 "Subject": "geography",
             }
         ],
         request_key(
-            "huggingface_dataset", "ZehuaZhao/SUPERChem", "train", None, "default"
+            "huggingface_raw_files",
+            "ZehuaZhao/SUPERChem",
+            "train",
+            None,
+            None,
+            ("SUPERChem-500.parquet",),
         ): [
             {
                 "uuid": "chem-1",
@@ -192,7 +197,14 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "task_group_id": "group-1",
             }
         ],
-        request_key("huggingface_dataset", "openai/healthbench", "test"): [
+        request_key(
+            "huggingface_raw_files",
+            "openai/healthbench",
+            "test",
+            None,
+            None,
+            ("2025-05-07-06-14-12_oss_eval.jsonl",),
+        ): [
             {
                 "prompt_id": "healthbench-1",
                 "prompt": [
@@ -243,7 +255,14 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "image": "",
             }
         ],
-        request_key("huggingface_dataset", "ifujisawa/procbench", "train"): [
+        request_key(
+            "huggingface_raw_files",
+            "ifujisawa/procbench",
+            "train",
+            None,
+            None,
+            ("combined_dataset.jsonl",),
+        ): [
             {
                 "problem_name": "task01_0000",
                 "prompt": "Sort the string.",
@@ -269,14 +288,12 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
             "test",
             None,
             None,
-            ("instruction_generalization_eng.jsonl",),
+            ("rolebench-eng/instruction-generalization/general/test.jsonl",),
         ): [
             {
                 "role": "Wizard",
-                "desc": "Speaks cryptically.",
                 "question": "What would you say to a lost traveler?",
                 "generated": ["Follow the silver river until dawn."],
-                "subset": "general",
             }
         ],
         request_key(
@@ -285,14 +302,42 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
             "test",
             None,
             None,
-            ("role_generalization_eng.jsonl",),
+            ("rolebench-eng/instruction-generalization/role_specific/test.jsonl",),
+        ): [
+            {
+                "role": "Archivist",
+                "question": "How should I preserve a fragile manuscript?",
+                "generated": ["Store it in a stable, dry, low-light archive."],
+                "type": ["script_based"],
+            }
+        ],
+        request_key(
+            "huggingface_raw_files",
+            "ZenMoore/RoleBench",
+            "test",
+            None,
+            None,
+            ("rolebench-eng/role-generalization/general/test.jsonl",),
         ): [
             {
                 "role": "Historian",
-                "desc": "Answers with context.",
                 "question": "Why do archives matter?",
                 "generated": ["They preserve evidence and memory."],
-                "subset": "general",
+            }
+        ],
+        request_key(
+            "huggingface_raw_files",
+            "ZenMoore/RoleBench",
+            "test",
+            None,
+            None,
+            ("rolebench-eng/role-generalization/role_specific/test.jsonl",),
+        ): [
+            {
+                "role": "Captain",
+                "question": "How do you stay calm in a storm?",
+                "generated": ["By trusting the crew and reading the seas."],
+                "type": "script_based",
             }
         ],
         request_key(
@@ -337,7 +382,7 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
             "test",
             None,
             None,
-            ("release_v6/test.jsonl",),
+            ("test6.jsonl",),
         ): [
             {
                 "question_id": "lcb-1",
@@ -351,62 +396,17 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
                 "contest_date": "2025-01-04T00:00:00",
             }
         ],
-        request_key("huggingface_dataset", "evalplus/HumanEvalPlus", "test"): [
+        request_key("huggingface_dataset", "evalplus/humanevalplus", "test"): [
             {
                 "task_id": "HumanEval/0",
                 "entry_point": "add",
                 "prompt": 'def add(a: int, b: int) -> int:\n    """Return the sum of two integers."""\n',
                 "canonical_solution": "    return a + b\n",
-                "base_input": [[1, 2], [4, 5]],
-                "plus_input": [[10, 20]],
-                "atol": 0.0,
-            }
-        ],
-        request_key(
-            "huggingface_dataset", "evalplus/HumanEvalPlus", "test", None, "mini"
-        ): [
-            {
-                "task_id": "HumanEval/1",
-                "entry_point": "mul",
-                "prompt": 'def mul(a: int, b: int) -> int:\n    """Return the product."""\n',
-                "canonical_solution": "    return a * b\n",
-                "base_input": [[2, 3]],
-                "plus_input": [[4, 5]],
-                "atol": 0.0,
-            }
-        ],
-        request_key(
-            "huggingface_dataset",
-            "evalplus/HumanEvalPlus",
-            "test",
-            None,
-            "noextreme",
-        ): [
-            {
-                "task_id": "HumanEval/2",
-                "entry_point": "sub",
-                "prompt": 'def sub(a: int, b: int) -> int:\n    """Return the difference."""\n',
-                "canonical_solution": "    return a - b\n",
-                "base_input": [[3, 2]],
-                "plus_input": [[10, 1]],
-                "atol": 0.0,
-            }
-        ],
-        request_key(
-            "huggingface_dataset",
-            "evalplus/HumanEvalPlus",
-            "test",
-            None,
-            "v0.1.0",
-        ): [
-            {
-                "task_id": "HumanEval/3",
-                "entry_point": "square",
-                "prompt": 'def square(x: int) -> int:\n    """Return x squared."""\n',
-                "canonical_solution": "    return x * x\n",
-                "base_input": [[4]],
-                "plus_input": [[6]],
-                "atol": 0.0,
+                "test": (
+                    "def check(candidate):\n"
+                    "    assert candidate(1, 2) == 3\n"
+                    "    assert candidate(4, 5) == 9\n"
+                ),
             }
         ],
     }

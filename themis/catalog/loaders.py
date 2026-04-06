@@ -73,6 +73,7 @@ def load_huggingface_rows(
         *args,
         split=split,
         revision=revision,
+        streaming=True,
     )
     return [dict(row) for row in dataset]
 
@@ -103,7 +104,14 @@ def load_huggingface_raw_rows(
             repo_type="dataset",
             revision=revision,
         )
-        rows.extend(_read_jsonl_rows(Path(local_path)))
+        path = Path(local_path)
+        if path.suffix == ".jsonl":
+            rows.extend(_read_jsonl_rows(path))
+            continue
+        if path.suffix == ".parquet":
+            rows.extend(_read_parquet_rows(path))
+            continue
+        raise ValueError(f"Unsupported raw benchmark file type: {path.name}")
     return rows
 
 
@@ -136,3 +144,18 @@ def _read_jsonl_rows(path: Path) -> list[dict[str, object]]:
                 raise ValueError(f"Expected JSON object rows in {path}")
             rows.append({str(key): value for key, value in parsed.items()})
     return rows
+
+
+def _read_parquet_rows(path: Path) -> list[dict[str, object]]:
+    try:
+        import pyarrow.parquet as pq  # type: ignore[import-untyped]
+    except ModuleNotFoundError as exc:
+        raise MissingOptionalDependencyError(
+            "Catalog parquet benchmark loading requires the optional `pyarrow` "
+            'module. Install it with: uv add "themis-eval[datasets]"'
+        ) from exc
+
+    return [
+        {str(key): value for key, value in row.items()}
+        for row in pq.read_table(path).to_pylist()
+    ]
