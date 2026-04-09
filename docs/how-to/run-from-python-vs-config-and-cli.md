@@ -45,7 +45,7 @@ Use the config-backed external execution example when you want one runnable path
 
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
-| Ad hoc scripts and notebooks | You want direct imports, live objects, and quick local debugging | Harder to standardize across repeated runs | Python authoring, `evaluate(...)`, `Experiment(...)` |
+| Ad hoc scripts and notebooks | You want direct imports, live objects, and quick local debugging | Harder to standardize across repeated runs | Python authoring, `evaluate(...)` for sync scripts, `evaluate_async(...)` or `Experiment.run_async()` inside notebooks and async apps |
 | Checked-in experiment specs and automation | You want reproducible definitions that work well with shell workflows and deferred execution | Component references must be config-loadable rather than live objects | `Experiment.from_config(...)`, `themis run`, `themis submit` |
 | Mixed approach | You want checked-in configs for repeatable runs but still keep custom component logic in Python | Requires discipline about what lives in config vs code | Config files plus importable module paths |
 

@@ -26,13 +26,14 @@ This page is the generated entry point into the public Python API. Use the small
 | `RuntimeConfig` | Config model | You want runtime tuning without changing logical identity | Covers concurrency, retries, and deferred execution paths |
 | `SqliteRunStore` | Store implementation | You want the default persistent local store | Good default for real runs |
 | `StatsEngine` | Analysis helper | You want statistical comparison utilities | Used in comparison and reporting flows |
-| `evaluate` | Convenience function | You want the shortest Python path to a run | Best for simple scripts and notebooks |
+| `evaluate` | Convenience function | You want the shortest synchronous Python path to a run | Best for simple scripts; call only when no event loop is already running |
+| `evaluate_async` | Convenience function | You want the shortest async Python path to a run | Use in notebooks, async apps, and any environment with a running event loop |
 | `export_evaluation_bundle` | Artifact helper | You want portable evaluation workflow artifacts | Best for judge-backed replay or handoff |
 | `export_generation_bundle` | Artifact helper | You want portable generation artifacts | Good for external evaluation pipelines |
 | `export_parse_bundle` | Artifact helper | You want portable parsed-output artifacts | Python-only today |
 | `export_reduction_bundle` | Artifact helper | You want portable reduction-stage artifacts | Python-only today |
 | `export_score_bundle` | Artifact helper | You want portable pure-score artifacts | Python-only today |
-| `get_evaluation_execution` | Inspection helper | You want one stored workflow execution | Judge-backed metrics only |
+| `get_evaluation_execution` | Inspection helper | You want one stored workflow execution | Judge-backed metrics only; pass `dataset_id` or `case_key` when duplicate `case_id`s exist across datasets |
 | `get_execution_state` | Inspection helper | You want stored progress and failure details | Best before resume or replay decisions |
 | `get_run_snapshot` | Inspection helper | You want compiled identity and provenance details | Read-only lookup |
 | `import_evaluation_bundle` | Artifact helper | You want to ingest external evaluation artifacts into a store | Match bundle shape to the target run |
