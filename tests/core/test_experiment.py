@@ -413,10 +413,7 @@ def test_run_distinguishes_duplicate_case_ids_across_datasets() -> None:
     assert isinstance(benchmark, dict)
     score_rows = cast(list[dict[str, JSONValue]], benchmark["score_rows"])
     assert len(score_rows) == 2
-    assert {
-        (row["dataset_id"], row["case_key"])
-        for row in score_rows
-    } == {
+    assert {(row["dataset_id"], row["case_key"]) for row in score_rows} == {
         ("dataset-1", result.cases[0].case_key),
         ("dataset-2", result.cases[1].case_key),
     }
@@ -440,8 +437,7 @@ def test_run_distinguishes_duplicate_case_ids_across_datasets() -> None:
     )
     assert len(generation_traces) == 2
     assert {
-        (record["dataset_id"], record["case_key"])
-        for record in generation_traces
+        (record["dataset_id"], record["case_key"]) for record in generation_traces
     } == {
         ("dataset-1", result.cases[0].case_key),
         ("dataset-2", result.cases[1].case_key),
@@ -518,9 +514,7 @@ async def test_sync_experiment_entrypoints_reject_running_event_loops(
         gc.collect()
 
     assert not [
-        warning
-        for warning in caught
-        if "was never awaited" in str(warning.message)
+        warning for warning in caught if "was never awaited" in str(warning.message)
     ]
 
 

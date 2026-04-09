@@ -149,7 +149,9 @@ class ExecutionState(FrozenModel):
             case_key=getattr(event, "case_key", None),
         )
         case_states = dict(self.case_states)
-        current = case_states.get(case_key, case_states.get(event.case_id, CaseExecutionState()))
+        current = case_states.get(
+            case_key, case_states.get(event.case_id, CaseExecutionState())
+        )
         updated = current
 
         if isinstance(event, GenerationCompletedEvent) and event.result is not None:

@@ -39,7 +39,9 @@ def get_evaluation_execution(
     resolved_case_key = resolve_case_key(
         case_id=case_id, dataset_id=dataset_id, case_key=case_key
     )
-    case_state = state.case_states.get(resolved_case_key, state.case_states.get(case_id))
+    case_state = state.case_states.get(
+        resolved_case_key, state.case_states.get(case_id)
+    )
     if case_state is None:
         return None
     return case_state.evaluation_executions.get(metric_id)

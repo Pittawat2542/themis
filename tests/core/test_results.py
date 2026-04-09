@@ -102,10 +102,14 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
     assert state.status is RunStatus.COMPLETED
     case_state = next(iter(state.case_states.values()))
 
-    assert case_state.generated_candidates["candidate-1"].final_output == {"answer": "4"}
+    assert case_state.generated_candidates["candidate-1"].final_output == {
+        "answer": "4"
+    }
     assert case_state.reduced_candidate is not None
     assert case_state.parsed_output is not None
-    assert case_state.evaluation_executions["metric/judge"].execution_id == "execution-1"
+    assert (
+        case_state.evaluation_executions["metric/judge"].execution_id == "execution-1"
+    )
     assert case_state.successful_scores["builtin/exact_match"].value == 1.0
 
 

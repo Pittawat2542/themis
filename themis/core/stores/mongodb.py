@@ -25,7 +25,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
     def initialize(self) -> None:
         self.blob_root.mkdir(parents=True, exist_ok=True)
         database = self._db()
-        database["run_events"].create_index([("run_id", 1), ("sequence", 1)], unique=True)
+        database["run_events"].create_index(
+            [("run_id", 1), ("sequence", 1)], unique=True
+        )
         database["run_event_counters"].create_index([("run_id", 1)], unique=True)
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
@@ -160,7 +162,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             return_document="after",
         )
         if row is None:
-            raise RuntimeError(f"Unable to allocate MongoDB event sequence for {run_id}")
+            raise RuntimeError(
+                f"Unable to allocate MongoDB event sequence for {run_id}"
+            )
         return int(row["next_sequence"]) - 1
 
     def _db(self):

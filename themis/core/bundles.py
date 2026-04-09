@@ -45,8 +45,12 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
             records.append(
                 GenerationBundleRecord(
                     case_id=event.case_id,
-                    dataset_id=case_ref.dataset_id if case_ref is not None else getattr(event, "dataset_id", None),
-                    case_key=case_ref.case_key if case_ref is not None else getattr(event, "case_key", None),
+                    dataset_id=case_ref.dataset_id
+                    if case_ref is not None
+                    else getattr(event, "dataset_id", None),
+                    case_key=case_ref.case_key
+                    if case_ref is not None
+                    else getattr(event, "case_key", None),
                     candidate_id=event.candidate_id,
                     candidate_index=event.candidate_index,
                     seed=event.seed,
@@ -119,8 +123,12 @@ def export_reduction_bundle(store: RunStore, run_id: str) -> ReductionBundle:
             records.append(
                 ReductionBundleRecord(
                     case_id=event.case_id,
-                    dataset_id=case_ref.dataset_id if case_ref is not None else getattr(event, "dataset_id", None),
-                    case_key=case_ref.case_key if case_ref is not None else getattr(event, "case_key", None),
+                    dataset_id=case_ref.dataset_id
+                    if case_ref is not None
+                    else getattr(event, "dataset_id", None),
+                    case_key=case_ref.case_key
+                    if case_ref is not None
+                    else getattr(event, "case_key", None),
                     candidate_id=event.candidate_id,
                     result=ReducedCandidate.model_validate(event.result),
                 )
@@ -175,8 +183,12 @@ def export_parse_bundle(store: RunStore, run_id: str) -> ParseBundle:
             records.append(
                 ParseBundleRecord(
                     case_id=event.case_id,
-                    dataset_id=case_ref.dataset_id if case_ref is not None else getattr(event, "dataset_id", None),
-                    case_key=case_ref.case_key if case_ref is not None else getattr(event, "case_key", None),
+                    dataset_id=case_ref.dataset_id
+                    if case_ref is not None
+                    else getattr(event, "dataset_id", None),
+                    case_key=case_ref.case_key
+                    if case_ref is not None
+                    else getattr(event, "case_key", None),
                     candidate_id=event.candidate_id,
                     result=ParsedOutput.model_validate(event.result),
                 )
@@ -230,8 +242,12 @@ def export_score_bundle(store: RunStore, run_id: str) -> ScoreBundle:
             records.append(
                 ScoreBundleRecord(
                     case_id=event.case_id,
-                    dataset_id=case_ref.dataset_id if case_ref is not None else getattr(event, "dataset_id", None),
-                    case_key=case_ref.case_key if case_ref is not None else getattr(event, "case_key", None),
+                    dataset_id=case_ref.dataset_id
+                    if case_ref is not None
+                    else getattr(event, "dataset_id", None),
+                    case_key=case_ref.case_key
+                    if case_ref is not None
+                    else getattr(event, "case_key", None),
                     candidate_id=event.candidate_id,
                     metric_id=event.metric_id,
                     score=Score.model_validate(event.score),
@@ -287,8 +303,12 @@ def export_evaluation_bundle(store: RunStore, run_id: str) -> EvaluationBundle:
             records.append(
                 EvaluationBundleRecord(
                     case_id=event.case_id,
-                    dataset_id=case_ref.dataset_id if case_ref is not None else getattr(event, "dataset_id", None),
-                    case_key=case_ref.case_key if case_ref is not None else getattr(event, "case_key", None),
+                    dataset_id=case_ref.dataset_id
+                    if case_ref is not None
+                    else getattr(event, "dataset_id", None),
+                    case_key=case_ref.case_key
+                    if case_ref is not None
+                    else getattr(event, "case_key", None),
                     metric_id=event.metric_id,
                     candidate_id=event.candidate_id,
                     execution_blob_ref=_blob_ref(

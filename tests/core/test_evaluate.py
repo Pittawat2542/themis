@@ -58,7 +58,9 @@ class JudgeConfigWorkflow:
         self, call: JudgeCall, judgment: ParsedJudgment, ctx
     ) -> Score | None:
         del call, ctx
-        return Score(metric_id="metric/judge-config", value=float(judgment.score or 0.0))
+        return Score(
+            metric_id="metric/judge-config", value=float(judgment.score or 0.0)
+        )
 
     def aggregate(
         self,
@@ -260,9 +262,7 @@ async def test_evaluate_rejects_running_event_loop_with_clear_guidance() -> None
         gc.collect()
 
     assert not [
-        warning
-        for warning in caught
-        if "was never awaited" in str(warning.message)
+        warning for warning in caught if "was never awaited" in str(warning.message)
     ]
 
 

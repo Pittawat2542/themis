@@ -90,7 +90,9 @@ def test_mongodb_persist_event_allocates_sequences_without_querying_events(
         "themis.core.stores.mongodb.importlib.import_module",
         lambda name: fake_pymongo_module(),
     )
-    store = mongodb_store("mongodb://example", "themis_test", tmp_path / "mongodb-blobs")
+    store = mongodb_store(
+        "mongodb://example", "themis_test", tmp_path / "mongodb-blobs"
+    )
     snapshot = _snapshot()
 
     store.initialize()
