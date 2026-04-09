@@ -31,6 +31,7 @@ def test_root_package_exports_public_symbols() -> None:
         RunStatus,
         RuntimeConfig,
         StatsEngine,
+        evaluate_async,
         export_evaluation_bundle,
         export_generation_bundle,
         get_run_snapshot,
@@ -50,6 +51,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert RunStatus is not None
     assert RuntimeConfig is not None
     assert StatsEngine is not None
+    assert evaluate_async is not None
     assert export_evaluation_bundle is not None
     assert export_generation_bundle is not None
     assert import_evaluation_bundle is not None

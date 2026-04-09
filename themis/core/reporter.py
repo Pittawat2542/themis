@@ -74,7 +74,7 @@ class Reporter:
         ]
         for row in score_rows:
             lines.append(
-                f"- case={row['case_id']} metric={row['metric_id']} outcome={row['outcome']} value={row['value']} candidate={row['candidate_id']} error_category={row.get('error_category')} error_message={row.get('error_message')}"
+                f"- dataset={row.get('dataset_id')} case={row['case_id']} case_key={row.get('case_key')} metric={row['metric_id']} outcome={row['outcome']} value={row['value']} candidate={row['candidate_id']} error_category={row.get('error_category')} error_message={row.get('error_message')}"
             )
         return "\n".join(lines) + "\n"
 
@@ -86,6 +86,8 @@ class Reporter:
             buffer,
             fieldnames=[
                 "case_id",
+                "dataset_id",
+                "case_key",
                 "metric_id",
                 "outcome",
                 "value",
@@ -103,8 +105,8 @@ class Reporter:
         """Export benchmark score rows as a compact LaTeX table."""
 
         lines = [
-            r"\begin{tabular}{llllllll}",
-            r"case\_id & metric\_id & outcome & value & candidate\_id & error\_category & error\_message & details \\",
+            r"\begin{tabular}{llllllllll}",
+            r"case\_id & dataset\_id & case\_key & metric\_id & outcome & value & candidate\_id & error\_category & error\_message & details \\",
             r"\hline",
         ]
         for row in self.export_score_table(run_id):
@@ -112,6 +114,8 @@ class Reporter:
                 " & ".join(
                     [
                         _latex_cell(row["case_id"]),
+                        _latex_cell(row["dataset_id"]),
+                        _latex_cell(row["case_key"]),
                         _latex_cell(row["metric_id"]),
                         _latex_cell(row["outcome"]),
                         _latex_cell(row["value"]),
@@ -136,6 +140,8 @@ class Reporter:
         return [
             {
                 "case_id": row["case_id"],
+                "dataset_id": row.get("dataset_id"),
+                "case_key": row.get("case_key"),
                 "metric_id": row["metric_id"],
                 "outcome": row["outcome"],
                 "value": row["value"],

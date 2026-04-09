@@ -5,6 +5,7 @@ from themis.core.events import (
     GenerationCompletedEvent,
     ParseCompletedEvent,
     ReductionCompletedEvent,
+    GenerationFailedEvent,
     RunCompletedEvent,
     RunStartedEvent,
     ScoreCompletedEvent,
@@ -99,19 +100,13 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
     )
 
     assert state.status is RunStatus.COMPLETED
-    assert state.case_states["case-1"].generated_candidates[
-        "candidate-1"
-    ].final_output == {"answer": "4"}
-    assert state.case_states["case-1"].reduced_candidate is not None
-    assert state.case_states["case-1"].parsed_output is not None
-    assert (
-        state.case_states["case-1"].evaluation_executions["metric/judge"].execution_id
-        == "execution-1"
-    )
-    assert (
-        state.case_states["case-1"].successful_scores["builtin/exact_match"].value
-        == 1.0
-    )
+    case_state = next(iter(state.case_states.values()))
+
+    assert case_state.generated_candidates["candidate-1"].final_output == {"answer": "4"}
+    assert case_state.reduced_candidate is not None
+    assert case_state.parsed_output is not None
+    assert case_state.evaluation_executions["metric/judge"].execution_id == "execution-1"
+    assert case_state.successful_scores["builtin/exact_match"].value == 1.0
 
 
 def test_stored_run_exposes_execution_state() -> None:
@@ -125,3 +120,63 @@ def test_stored_run_exposes_execution_state() -> None:
     )
 
     assert stored.execution_state.status is RunStatus.COMPLETED
+
+
+def test_execution_state_clears_generation_failures_after_successful_resume() -> None:
+    state = ExecutionState.from_events(
+        "run-1",
+        [
+            RunStartedEvent(run_id="run-1"),
+            GenerationFailedEvent(
+                run_id="run-1",
+                case_id="case-1",
+                candidate_id="case-1-candidate-0",
+                candidate_index=0,
+                error_message="provider timeout",
+            ),
+            GenerationCompletedEvent(
+                run_id="run-1",
+                case_id="case-1",
+                candidate_id="generated-candidate",
+                candidate_index=0,
+                result={
+                    "candidate_id": "generated-candidate",
+                    "final_output": {"answer": "4"},
+                },
+            ),
+            RunCompletedEvent(run_id="run-1"),
+        ],
+    )
+
+    case_state = next(iter(state.case_states.values()))
+
+    assert state.status is RunStatus.COMPLETED
+    assert case_state.generation_failures == {}
+
+
+def test_execution_state_uses_case_key_when_available() -> None:
+    state = ExecutionState.from_events(
+        "run-1",
+        [
+            GenerationCompletedEvent(
+                run_id="run-1",
+                dataset_id="dataset-1",
+                case_id="case-1",
+                case_key="dataset-1:case-1",
+                candidate_id="candidate-1",
+                candidate_index=0,
+                result={"candidate_id": "candidate-1", "final_output": {"answer": "4"}},
+            ),
+            GenerationCompletedEvent(
+                run_id="run-1",
+                dataset_id="dataset-2",
+                case_id="case-1",
+                case_key="dataset-2:case-1",
+                candidate_id="candidate-2",
+                candidate_index=0,
+                result={"candidate_id": "candidate-2", "final_output": {"answer": "5"}},
+            ),
+        ],
+    )
+
+    assert set(state.case_states) == {"dataset-1:case-1", "dataset-2:case-1"}

@@ -78,6 +78,7 @@ class DefaultWorkflowRunner:
         planned_calls = self.planner.plan_judge_calls(
             run_id=ctx.run_id,
             case_id=ctx.case.case_id,
+            case_key=ctx.case_key,
             metric_id=metric_id,
             calls=workflow.judge_calls(),
         )

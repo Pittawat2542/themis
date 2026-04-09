@@ -49,7 +49,7 @@ from themis.core.events import (
     StepStartedEvent,
     event_from_dict,
 )
-from themis.core.evaluate import evaluate
+from themis.core.evaluate import evaluate, evaluate_async
 from themis.core.experiment import Experiment
 from themis.core.inspection import (
     get_evaluation_execution,
@@ -184,6 +184,7 @@ __all__ = [
     "EvaluationConfig",
     "EvaluationWorkflow",
     "evaluate",
+    "evaluate_async",
     "Experiment",
     "FrozenModel",
     "Generator",

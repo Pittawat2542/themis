@@ -249,9 +249,8 @@ def test_import_evaluation_bundle_preserves_partial_failures() -> None:
     resumed = target_store.resume(snapshot.run_id)
 
     assert resumed is not None
-    execution = resumed.execution_state.case_states["case-1"].evaluation_executions[
-        "metric/judge"
-    ]
+    case_state = next(iter(resumed.execution_state.case_states.values()))
+    execution = case_state.evaluation_executions["metric/judge"]
     assert execution.status == "partial_failure"
     assert execution.failures[0].error_message == "judge timeout"
 
@@ -310,7 +309,7 @@ def test_reduction_parse_and_score_bundles_round_trip_stage_artifacts() -> None:
         "parse_completed",
         "score_completed",
     ]
-    case_state = resumed.execution_state.case_states["case-1"]
+    case_state = next(iter(resumed.execution_state.case_states.values()))
     assert case_state.reduced_candidate is not None
     assert case_state.parsed_output is not None
     assert case_state.successful_scores["builtin/exact_match"].value == 1.0

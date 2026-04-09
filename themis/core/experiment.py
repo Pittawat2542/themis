@@ -65,6 +65,14 @@ def _resolve_themis_version() -> str:
         return "0+unknown"
 
 
+def _raise_if_running_loop(message: str) -> None:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    raise RuntimeError(message)
+
+
 class Experiment(FrozenModel):
     """Authoring model for a Themis experiment.
 
@@ -188,6 +196,8 @@ class Experiment(FrozenModel):
         snapshot = self._snapshot_for_runtime(effective_runtime)
         run_store = store or self._build_store()
         run_store.initialize()
+        resolved_component_refs = self._resolved_component_refs()
+        self._validate_component_refs(snapshot, resolved_component_refs)
         stored_run = run_store.resume(snapshot.run_id)
         if stored_run is not None:
             existing_run_policy = effective_runtime.existing_run_policy
@@ -205,8 +215,6 @@ class Experiment(FrozenModel):
                 return build_run_result(stored_run.snapshot, stored_run.events)
         if stored_run is None:
             run_store.persist_snapshot(snapshot)
-        resolved_component_refs = self._resolved_component_refs()
-        self._validate_component_refs(snapshot, resolved_component_refs)
         orchestrator = Orchestrator(
             store=run_store,
             generator=resolve_generator_component(self.generation.generator),
@@ -327,6 +335,9 @@ class Experiment(FrozenModel):
     ):
         """Run the compiled snapshot synchronously."""
 
+        _raise_if_running_loop(
+            "Experiment.run() cannot be called from a running event loop. Use await Experiment.run_async() or themis.evaluate_async()."
+        )
         return asyncio.run(
             self.run_async(
                 until_stage=until_stage,
@@ -348,6 +359,9 @@ class Experiment(FrozenModel):
     ):
         """Re-run workflow-backed metrics synchronously."""
 
+        _raise_if_running_loop(
+            "Experiment.rejudge() cannot be called from a running event loop. Use await Experiment.rejudge_async()."
+        )
         return asyncio.run(
             self.rejudge_async(
                 metric_ids=metric_ids,
@@ -370,6 +384,9 @@ class Experiment(FrozenModel):
     ):
         """Replay persisted runs from a downstream stage synchronously."""
 
+        _raise_if_running_loop(
+            "Experiment.replay() cannot be called from a running event loop. Use await Experiment.replay_async()."
+        )
         return asyncio.run(
             self.replay_async(
                 stage=stage,

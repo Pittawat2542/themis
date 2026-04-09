@@ -81,3 +81,27 @@ def test_store_factory_can_build_mongodb_backend(monkeypatch, tmp_path) -> None:
     )
 
     assert isinstance(store, MongoDbRunStore)
+
+
+def test_mongodb_persist_event_allocates_sequences_without_querying_events(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(
+        "themis.core.stores.mongodb.importlib.import_module",
+        lambda name: fake_pymongo_module(),
+    )
+    store = mongodb_store("mongodb://example", "themis_test", tmp_path / "mongodb-blobs")
+    snapshot = _snapshot()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.query_events = lambda run_id: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        AssertionError("persist_event should not query existing events")
+    )
+
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+
+    rows = store._db()["run_events"].find({"run_id": snapshot.run_id})
+
+    assert [row["sequence"] for row in rows] == [0, 1]

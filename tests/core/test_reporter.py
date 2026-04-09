@@ -137,6 +137,8 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
     assert score_table == [
         {
             "case_id": "case-1",
+            "dataset_id": "dataset-1",
+            "case_key": "9:dataset-1:case-1",
             "metric_id": "builtin/exact_match",
             "outcome": "correct",
             "value": 1.0,

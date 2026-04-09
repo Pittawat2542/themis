@@ -6,7 +6,6 @@ import hashlib
 import json
 from datetime import datetime
 from enum import Enum
-from functools import cached_property
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -60,7 +59,6 @@ class HashableModel(FrozenModel):
             data[field_name] = _canonicalize(value)
         return data
 
-    @cached_property
     def _canonical_json(self) -> str:
         return json.dumps(
             self.canonical_data(),
@@ -70,4 +68,4 @@ class HashableModel(FrozenModel):
         )
 
     def compute_hash(self) -> str:
-        return hashlib.sha256(self._canonical_json.encode("utf-8")).hexdigest()
+        return hashlib.sha256(self._canonical_json().encode("utf-8")).hexdigest()

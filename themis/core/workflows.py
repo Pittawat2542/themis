@@ -109,6 +109,10 @@ def build_prompt_template_context(
         "candidate_output": candidate_output,
         "candidate_a_output": candidate_a_output,
         "candidate_b_output": candidate_b_output,
+        "dataset_id": ctx.dataset_id,
+        "case_key": ctx.case_key,
         "case_input": ctx.case.input,
         "parsed_output": ctx.parsed_output.value,
+        "judge_config": ctx.judge_config,
+        "workflow_config": ctx.eval_workflow_config,
     }

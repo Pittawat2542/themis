@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Literal
 
 from themis.core.base import JSONValue
+from themis.core.case_refs import CaseRef, resolve_case_key
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
@@ -22,7 +23,13 @@ from themis.core.read_models import (
     TimelineView,
     TraceView,
 )
-from themis.core.results import CaseResult, ExecutionState, ProgressSnapshot, RunResult
+from themis.core.results import (
+    CaseResult,
+    ExecutionState,
+    ProgressSnapshot,
+    RunResult,
+    _case_state_has_failures,
+)
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import EvaluationExecution
 
@@ -51,30 +58,28 @@ def build_run_result_from_state(
 
     for dataset in snapshot.datasets:
         for case in dataset.cases:
-            case_state = state.case_states.get(case.case_id)
+            case_ref = CaseRef(dataset_id=dataset.dataset_id, case_id=case.case_id)
+            case_state = state.case_states.get(
+                case_ref.case_key, state.case_states.get(case.case_id)
+            )
             if case_state is None:
-                case_results.append(CaseResult(case_id=case.case_id))
+                case_results.append(
+                    CaseResult(
+                        case_id=case.case_id,
+                        dataset_id=dataset.dataset_id,
+                        case_key=case_ref.case_key,
+                    )
+                )
                 continue
 
-            has_failure = any(
-                (
-                    case_state.generation_failures,
-                    case_state.reduction_error is not None,
-                    case_state.parse_error is not None,
-                    case_state.evaluation_failures,
-                    any(
-                        execution.status == "partial_failure"
-                        or bool(execution.failures)
-                        for execution in case_state.evaluation_executions.values()
-                    ),
-                    case_state.score_failures,
-                )
-            )
+            has_failure = _case_state_has_failures(case_state)
             failed_cases += int(has_failure)
             completed_cases += int(not has_failure)
             case_results.append(
                 CaseResult(
                     case_id=case.case_id,
+                    dataset_id=dataset.dataset_id,
+                    case_key=case_ref.case_key,
                     generated_candidates=[
                         case_state.generated_candidates_by_index[index]
                         for index in sorted(case_state.generated_candidates_by_index)
@@ -203,6 +208,7 @@ def build_benchmark_result_from_run_result(
 
 
 def build_timeline_view(snapshot: RunSnapshot, events: list[RunEvent]) -> TimelineView:
+    case_identities = _snapshot_case_identities(snapshot)
     return TimelineView(
         run_id=snapshot.run_id,
         entries=[
@@ -211,6 +217,8 @@ def build_timeline_view(snapshot: RunSnapshot, events: list[RunEvent]) -> Timeli
                 event_type=event.event_type,
                 occurred_at=event.occurred_at,
                 case_id=getattr(event, "case_id", None),
+                dataset_id=_event_dataset_id(event, case_identities),
+                case_key=_event_case_key(event, case_identities),
                 candidate_id=getattr(event, "candidate_id", None),
                 metric_id=getattr(event, "metric_id", None),
             )
@@ -317,6 +325,8 @@ def _benchmark_row_for_metric(
     if metric_id in case.evaluation_failures:
         return BenchmarkScoreRow(
             case_id=case.case_id,
+            dataset_id=case.dataset_id,
+            case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
@@ -326,6 +336,8 @@ def _benchmark_row_for_metric(
     if metric_id in execution_failures:
         return BenchmarkScoreRow(
             case_id=case.case_id,
+            dataset_id=case.dataset_id,
+            case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
@@ -336,6 +348,8 @@ def _benchmark_row_for_metric(
         score_error = score_errors[metric_id]
         return BenchmarkScoreRow(
             case_id=case.case_id,
+            dataset_id=case.dataset_id,
+            case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
@@ -347,6 +361,8 @@ def _benchmark_row_for_metric(
         score = score_results[metric_id]
         return BenchmarkScoreRow(
             case_id=case.case_id,
+            dataset_id=case.dataset_id,
+            case_key=case.case_key,
             metric_id=metric_id,
             value=float(score.value),
             candidate_id=candidate_id,
@@ -364,6 +380,8 @@ def _parse_error_row(
     if case.parse_error is not None:
         return BenchmarkScoreRow(
             case_id=case.case_id,
+            dataset_id=case.dataset_id,
+            case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
@@ -375,6 +393,8 @@ def _parse_error_row(
     if case.parsed_output.value is None:
         return BenchmarkScoreRow(
             case_id=case.case_id,
+            dataset_id=case.dataset_id,
+            case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
@@ -384,6 +404,8 @@ def _parse_error_row(
     if case.parsed_output.metadata.get("invalid") is True:
         return BenchmarkScoreRow(
             case_id=case.case_id,
+            dataset_id=case.dataset_id,
+            case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
@@ -442,6 +464,7 @@ def _apply_event_to_timeline_view(
     payload: JSONValue | None,
     event: RunEvent,
 ) -> TimelineView:
+    case_identities = _snapshot_case_identities(snapshot)
     view = (
         TimelineView.model_validate(payload)
         if isinstance(payload, dict)
@@ -454,6 +477,8 @@ def _apply_event_to_timeline_view(
             event_type=event.event_type,
             occurred_at=event.occurred_at,
             case_id=getattr(event, "case_id", None),
+            dataset_id=_event_dataset_id(event, case_identities),
+            case_key=_event_case_key(event, case_identities),
             candidate_id=getattr(event, "candidate_id", None),
             metric_id=getattr(event, "metric_id", None),
         )
@@ -464,6 +489,9 @@ def _apply_event_to_timeline_view(
 def _apply_event_to_trace_view(
     snapshot: RunSnapshot, view: TraceView, event: RunEvent
 ) -> TraceView:
+    case_identities = _snapshot_case_identities(snapshot)
+    dataset_id = _event_dataset_id(event, case_identities)
+    case_key = _event_case_key(event, case_identities)
     generation_traces = list(view.generation_traces)
     conversation_traces = list(view.conversation_traces)
     evaluation_traces = list(view.evaluation_traces)
@@ -474,6 +502,8 @@ def _apply_event_to_trace_view(
             generation_traces.append(
                 GenerationTraceRecord(
                     case_id=event.case_id,
+                    dataset_id=dataset_id,
+                    case_key=case_key,
                     candidate_id=event.candidate_id,
                     trace_id=f"{event.candidate_id}:generation",
                     steps=[step.model_dump(mode="json") for step in result.trace],
@@ -483,6 +513,8 @@ def _apply_event_to_trace_view(
             conversation_traces.append(
                 ConversationTraceRecord(
                     case_id=event.case_id,
+                    dataset_id=dataset_id,
+                    case_key=case_key,
                     candidate_id=event.candidate_id,
                     trace_id=f"{event.candidate_id}:conversation",
                     messages=[
@@ -495,6 +527,8 @@ def _apply_event_to_trace_view(
         evaluation_traces.append(
             EvaluationTraceRecord(
                 case_id=event.case_id,
+                dataset_id=dataset_id,
+                case_key=case_key,
                 candidate_id=event.candidate_id,
                 metric_id=event.metric_id,
                 execution=EvaluationExecution.model_validate(event.execution),
@@ -507,4 +541,41 @@ def _apply_event_to_trace_view(
             "conversation_traces": conversation_traces,
             "evaluation_traces": evaluation_traces,
         }
+    )
+
+
+def _snapshot_case_identities(snapshot: RunSnapshot) -> dict[str, CaseRef]:
+    identities: dict[str, CaseRef] = {}
+    duplicate_case_ids: set[str] = set()
+    for dataset in snapshot.datasets:
+        for case in dataset.cases:
+            if case.case_id in identities:
+                duplicate_case_ids.add(case.case_id)
+                continue
+            identities[case.case_id] = CaseRef(
+                dataset_id=dataset.dataset_id, case_id=case.case_id
+            )
+    for case_id in duplicate_case_ids:
+        identities.pop(case_id, None)
+    return identities
+
+
+def _event_dataset_id(event: RunEvent, identities: dict[str, CaseRef]) -> str | None:
+    dataset_id = getattr(event, "dataset_id", None)
+    if isinstance(dataset_id, str):
+        return dataset_id
+    case_id = getattr(event, "case_id", None)
+    if isinstance(case_id, str) and case_id in identities:
+        return identities[case_id].dataset_id
+    return None
+
+
+def _event_case_key(event: RunEvent, identities: dict[str, CaseRef]) -> str | None:
+    case_id = getattr(event, "case_id", None)
+    if not isinstance(case_id, str):
+        return None
+    return resolve_case_key(
+        case_id=case_id,
+        dataset_id=_event_dataset_id(event, identities),
+        case_key=getattr(event, "case_key", None),
     )

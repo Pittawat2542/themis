@@ -11,6 +11,7 @@ from themis.core.events import (
     ReductionCompletedEvent,
     RunCompletedEvent,
     RunStartedEvent,
+    SelectionFailedEvent,
     ScoreCompletedEvent,
     ScoreFailedEvent,
 )
@@ -175,6 +176,8 @@ def test_build_run_result_projects_case_drill_down_from_events() -> None:
 
     case = result.cases[0]
     assert case.case_id == "case-1"
+    assert case.dataset_id == "dataset-1"
+    assert case.case_key is not None
     assert case.generated_candidates[0].candidate_id == "candidate-1"
     assert case.generated_candidates[0].trace is not None
     assert case.generated_candidates[0].conversation is not None
@@ -203,6 +206,8 @@ def test_build_benchmark_result_aggregates_scores_from_run_result() -> None:
     assert result.failed_cases == 1
     assert len(result.score_rows) == 1
     assert result.score_rows[0].case_id == "case-1"
+    assert result.score_rows[0].dataset_id == "dataset-1"
+    assert result.score_rows[0].case_key is not None
     assert result.score_rows[0].metric_id == "builtin/exact_match"
     assert result.score_rows[0].value == 1.0
     assert result.score_rows[0].outcome == "correct"
@@ -325,6 +330,8 @@ def test_build_timeline_view_preserves_event_order_and_case_scope() -> None:
         "run_completed",
     ]
     assert view.entries[1].case_id == "case-1"
+    assert view.entries[1].dataset_id == "dataset-1"
+    assert view.entries[1].case_key is not None
     assert view.entries[1].candidate_id == "candidate-1"
     assert view.entries[5].metric_id == "metric/judge"
 
@@ -336,16 +343,22 @@ def test_build_trace_view_collects_generation_and_evaluation_traces() -> None:
 
     assert len(view.generation_traces) == 1
     assert view.generation_traces[0].case_id == "case-1"
+    assert view.generation_traces[0].dataset_id == "dataset-1"
+    assert view.generation_traces[0].case_key is not None
     assert view.generation_traces[0].candidate_id == "candidate-1"
     assert view.generation_traces[0].trace_id == "candidate-1:generation"
     assert len(view.generation_traces[0].steps) == 1
 
     assert len(view.conversation_traces) == 1
+    assert view.conversation_traces[0].dataset_id == "dataset-1"
+    assert view.conversation_traces[0].case_key is not None
     assert view.conversation_traces[0].candidate_id == "candidate-1"
     assert view.conversation_traces[0].trace_id == "candidate-1:conversation"
 
     assert len(view.evaluation_traces) == 1
     assert view.evaluation_traces[0].case_id == "case-1"
+    assert view.evaluation_traces[0].dataset_id == "dataset-1"
+    assert view.evaluation_traces[0].case_key is not None
     assert view.evaluation_traces[0].metric_id == "metric/judge"
     assert isinstance(view.evaluation_traces[0].execution, EvaluationExecution)
 
@@ -381,3 +394,33 @@ def test_build_run_result_marks_partial_workflow_execution_failures() -> None:
     execution = result.cases[0].evaluation_executions[0]
     assert execution.status == "partial_failure"
     assert execution.failures[0].call_id == "call-2"
+
+
+def test_build_run_result_counts_selection_failures_as_failed_cases() -> None:
+    snapshot = _snapshot()
+    events = [
+        RunStartedEvent(run_id=snapshot.run_id),
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="candidate-1",
+            candidate_index=0,
+            seed=7,
+            result={"candidate_id": "candidate-1", "final_output": {"answer": "4"}},
+        ),
+        RunCompletedEvent(run_id=snapshot.run_id),
+    ]
+    events.insert(
+        2,
+        SelectionFailedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            error_message="selection failed",
+        ),
+    )
+
+    result = build_run_result(snapshot, events)
+
+    assert result.status.value == "partial_failure"
+    assert result.progress.completed_cases == 0
+    assert result.progress.failed_cases == 1

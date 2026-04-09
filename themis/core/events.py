@@ -47,11 +47,18 @@ class RunFailedEvent(RunEvent):
     error_message: str
 
 
-class GenerationCompletedEvent(RunEvent):
+class CaseRunEvent(RunEvent):
+    """Base event persisted for a case-scoped execution stage."""
+
+    case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
+
+
+class GenerationCompletedEvent(CaseRunEvent):
     """Event emitted when candidate generation finishes for a case."""
 
     event_type: Literal["generation_completed"] = "generation_completed"
-    case_id: str
     candidate_id: str
     candidate_index: int | None = None
     seed: int | None = None
@@ -62,38 +69,35 @@ class GenerationCompletedEvent(RunEvent):
     source_run_id: str | None = None
 
 
-class GenerationFailedEvent(RunEvent):
+class GenerationFailedEvent(CaseRunEvent):
     """Event emitted when candidate generation fails for a case."""
 
     event_type: Literal["generation_failed"] = "generation_failed"
-    case_id: str
     candidate_id: str
+    candidate_index: int | None = None
     error_message: str
     retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
 
 
-class SelectionCompletedEvent(RunEvent):
+class SelectionCompletedEvent(CaseRunEvent):
     """Event emitted when candidate selection succeeds."""
 
     event_type: Literal["selection_completed"] = "selection_completed"
-    case_id: str
     candidate_ids: list[str] = Field(default_factory=list)
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
-class SelectionFailedEvent(RunEvent):
+class SelectionFailedEvent(CaseRunEvent):
     """Event emitted when candidate selection fails."""
 
     event_type: Literal["selection_failed"] = "selection_failed"
-    case_id: str
     error_message: str
 
 
-class ReductionCompletedEvent(RunEvent):
+class ReductionCompletedEvent(CaseRunEvent):
     """Event emitted when candidate reduction succeeds."""
 
     event_type: Literal["reduction_completed"] = "reduction_completed"
-    case_id: str
     candidate_id: str
     source_candidate_ids: list[str] = Field(default_factory=list)
     result: dict[str, JSONValue] | None = None
@@ -101,60 +105,54 @@ class ReductionCompletedEvent(RunEvent):
     source_run_id: str | None = None
 
 
-class ReductionFailedEvent(RunEvent):
+class ReductionFailedEvent(CaseRunEvent):
     """Event emitted when candidate reduction fails."""
 
     event_type: Literal["reduction_failed"] = "reduction_failed"
-    case_id: str
     error_message: str
 
 
-class ParseCompletedEvent(RunEvent):
+class ParseCompletedEvent(CaseRunEvent):
     """Event emitted when parsing a reduced candidate succeeds."""
 
     event_type: Literal["parse_completed"] = "parse_completed"
-    case_id: str
     candidate_id: str
     result: dict[str, JSONValue] | None = None
     cache_hit: bool = False
     source_run_id: str | None = None
 
 
-class ParseFailedEvent(RunEvent):
+class ParseFailedEvent(CaseRunEvent):
     """Event emitted when parsing a reduced candidate fails."""
 
     event_type: Literal["parse_failed"] = "parse_failed"
-    case_id: str
     candidate_id: str
     error_message: str
 
 
-class EvaluationCompletedEvent(RunEvent):
+class EvaluationCompletedEvent(CaseRunEvent):
     """Event emitted when a workflow-backed metric finishes."""
 
     event_type: Literal["evaluation_completed"] = "evaluation_completed"
-    case_id: str
     candidate_id: str | None = None
     metric_id: str
     execution: dict[str, JSONValue] | None = None
     execution_blob_ref: str | None = None
 
 
-class EvaluationFailedEvent(RunEvent):
+class EvaluationFailedEvent(CaseRunEvent):
     """Event emitted when a workflow-backed metric fails."""
 
     event_type: Literal["evaluation_failed"] = "evaluation_failed"
-    case_id: str
     candidate_id: str | None = None
     metric_id: str
     error_message: str
 
 
-class ScoreCompletedEvent(RunEvent):
+class ScoreCompletedEvent(CaseRunEvent):
     """Event emitted when a pure metric succeeds."""
 
     event_type: Literal["score_completed"] = "score_completed"
-    case_id: str
     candidate_id: str
     metric_id: str
     score: dict[str, JSONValue] | None = None
@@ -162,11 +160,10 @@ class ScoreCompletedEvent(RunEvent):
     source_run_id: str | None = None
 
 
-class ScoreFailedEvent(RunEvent):
+class ScoreFailedEvent(CaseRunEvent):
     """Event emitted when a pure metric produces an error payload."""
 
     event_type: Literal["score_failed"] = "score_failed"
-    case_id: str
     candidate_id: str
     metric_id: str
     error: dict[str, JSONValue] | None = None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from themis.core.case_refs import resolve_case_key
 from themis.core.results import ExecutionState
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
@@ -28,11 +29,17 @@ def get_evaluation_execution(
     run_id: str,
     case_id: str,
     metric_id: str,
+    *,
+    dataset_id: str | None = None,
+    case_key: str | None = None,
 ) -> EvaluationExecution | None:
     """Return one stored workflow execution for a case and metric."""
 
     state = get_execution_state(store, run_id)
-    case_state = state.case_states.get(case_id)
+    resolved_case_key = resolve_case_key(
+        case_id=case_id, dataset_id=dataset_id, case_key=case_key
+    )
+    case_state = state.case_states.get(resolved_case_key, state.case_states.get(case_id))
     if case_state is None:
         return None
     return case_state.evaluation_executions.get(metric_id)

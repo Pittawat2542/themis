@@ -1068,9 +1068,8 @@ async def test_orchestrator_retries_retryable_generation_failures_and_persists_h
     stored = store.resume(snapshot.run_id)
     assert stored is not None
     execution_state = stored.execution_state
-    artifacts = (
-        execution_state.case_states["case-1"].generated_candidates_by_index[0].artifacts
-    )
+    case_state = next(iter(execution_state.case_states.values()))
+    artifacts = case_state.generated_candidates_by_index[0].artifacts
 
     assert result.status is RunStatus.COMPLETED
     assert generator.calls == 3
@@ -1233,9 +1232,8 @@ async def test_orchestrator_retries_retryable_judge_failures_and_persists_histor
     result = await orchestrator.run(snapshot)
     stored = store.resume(snapshot.run_id)
     assert stored is not None
-    execution = stored.execution_state.case_states["case-1"].evaluation_executions[
-        "metric/llm"
-    ]
+    case_state = next(iter(stored.execution_state.case_states.values()))
+    execution = case_state.evaluation_executions["metric/llm"]
 
     assert result.status is RunStatus.COMPLETED
     assert judge_model.calls == 2
