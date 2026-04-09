@@ -10,7 +10,7 @@ from themis.core.events import (
     RunStartedEvent,
     ScoreCompletedEvent,
 )
-from themis.core.results import ExecutionState, RunStatus
+from themis.core.results import CaseExecutionState, ExecutionState, RunStatus
 from themis.core.snapshot import StoredRun
 from themis.core.experiment import Experiment
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
@@ -184,3 +184,33 @@ def test_execution_state_uses_case_key_when_available() -> None:
     )
 
     assert set(state.case_states) == {"dataset-1:case-1", "dataset-2:case-1"}
+
+
+def test_execution_state_does_not_reuse_legacy_alias_for_scoped_events() -> None:
+    state = ExecutionState(
+        run_id="run-1",
+        case_states={
+            "case-1": CaseExecutionState(generation_failures={"legacy": "timeout"})
+        },
+    )
+
+    updated = state.apply_event(
+        GenerationCompletedEvent(
+            run_id="run-1",
+            dataset_id="dataset-2",
+            case_id="case-1",
+            case_key="dataset-2:case-1",
+            candidate_id="candidate-2",
+            candidate_index=0,
+            result={"candidate_id": "candidate-2", "final_output": {"answer": "5"}},
+        )
+    )
+
+    assert updated.case_states["case-1"].generation_failures == {"legacy": "timeout"}
+    assert updated.case_states["dataset-2:case-1"].generation_failures == {}
+    assert (
+        updated.case_states["dataset-2:case-1"]
+        .generated_candidates["candidate-2"]
+        .candidate_id
+        == "candidate-2"
+    )

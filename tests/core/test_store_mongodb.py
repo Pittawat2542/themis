@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import RunCompletedEvent, RunStartedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.stores import create_run_store
 from themis.core.stores.mongodb import MongoDbRunStore, mongodb_store
-from tests.core.store_fakes import fake_pymongo_module
+from tests.core.store_fakes import FakeCollection, fake_pymongo_module
 
 
 def _snapshot():
@@ -107,3 +109,49 @@ def test_mongodb_persist_event_allocates_sequences_without_querying_events(
     rows = store._db()["run_events"].find({"run_id": snapshot.run_id})
 
     assert [row["sequence"] for row in rows] == [0, 1]
+
+
+def test_fake_collection_find_one_and_update_honors_return_document() -> None:
+    collection = FakeCollection()
+
+    assert (
+        collection.find_one_and_update(
+            {"run_id": "run-1"},
+            {"$inc": {"next_sequence": 1}},
+            upsert=True,
+            return_document=False,
+        )
+        is None
+    )
+    assert collection.find_one({"run_id": "run-1"}) == {
+        "run_id": "run-1",
+        "next_sequence": 1,
+    }
+
+    after = collection.find_one_and_update(
+        {"run_id": "run-1"},
+        {"$inc": {"next_sequence": 1}},
+        return_document=True,
+    )
+    assert after == {"run_id": "run-1", "next_sequence": 2}
+
+    before = collection.find_one_and_update(
+        {"run_id": "run-1"},
+        {"$inc": {"next_sequence": 1}},
+        return_document=False,
+    )
+    assert before == {"run_id": "run-1", "next_sequence": 2}
+    assert collection.find_one({"run_id": "run-1"}) == {
+        "run_id": "run-1",
+        "next_sequence": 3,
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="return_document must be ReturnDocument.BEFORE or ReturnDocument.AFTER",
+    ):
+        collection.find_one_and_update(
+            {"run_id": "run-1"},
+            {"$inc": {"next_sequence": 1}},
+            return_document="after",
+        )

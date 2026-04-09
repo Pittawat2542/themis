@@ -155,11 +155,12 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         self._db()["run_snapshots"].delete_many({"run_id": run_id})
 
     def _allocate_sequence(self, run_id: str) -> int:
+        pymongo = self._pymongo()
         row = self._db()["run_event_counters"].find_one_and_update(
             {"run_id": run_id},
             {"$inc": {"next_sequence": 1}},
             upsert=True,
-            return_document="after",
+            return_document=pymongo.ReturnDocument.AFTER,
         )
         if row is None:
             raise RuntimeError(
@@ -170,15 +171,18 @@ class MongoDbRunStore(ProjectionRefreshingStore):
     def _db(self):
         if self._database_handle is not None:
             return self._database_handle
+        pymongo = self._pymongo()
+        client = pymongo.MongoClient(self.url)
+        self._database_handle = client[self.database]
+        return self._database_handle
+
+    def _pymongo(self):
         try:
-            pymongo = importlib.import_module("pymongo")
+            return importlib.import_module("pymongo")
         except ImportError as exc:
             raise ImportError(
                 "MongoDB support requires the optional 'mongodb' dependency."
             ) from exc
-        client = pymongo.MongoClient(self.url)
-        self._database_handle = client[self.database]
-        return self._database_handle
 
 
 def mongodb_store(url: str, database: str, blob_root: str | Path) -> MongoDbRunStore:

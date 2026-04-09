@@ -24,6 +24,7 @@ from themis.core.read_models import (
     TraceView,
 )
 from themis.core.results import (
+    CaseExecutionState,
     CaseResult,
     ExecutionState,
     ProgressSnapshot,
@@ -55,13 +56,12 @@ def build_run_result_from_state(
     case_results: list[CaseResult] = []
     failed_cases = 0
     completed_cases = 0
+    case_identities = _snapshot_case_identities(snapshot)
 
     for dataset in snapshot.datasets:
         for case in dataset.cases:
             case_ref = CaseRef(dataset_id=dataset.dataset_id, case_id=case.case_id)
-            case_state = state.case_states.get(
-                case_ref.case_key, state.case_states.get(case.case_id)
-            )
+            case_state = _case_state_for_snapshot_case(state, case_ref, case_identities)
             if case_state is None:
                 case_results.append(
                     CaseResult(
@@ -542,6 +542,20 @@ def _apply_event_to_trace_view(
             "evaluation_traces": evaluation_traces,
         }
     )
+
+
+def _case_state_for_snapshot_case(
+    state: ExecutionState,
+    case_ref: CaseRef,
+    identities: dict[str, CaseRef],
+) -> CaseExecutionState | None:
+    case_state = state.case_states.get(case_ref.case_key)
+    if case_state is not None:
+        return case_state
+    unique_case_ref = identities.get(case_ref.case_id)
+    if unique_case_ref is None or unique_case_ref.case_key != case_ref.case_key:
+        return None
+    return state.case_states.get(case_ref.case_id)
 
 
 def _snapshot_case_identities(snapshot: RunSnapshot) -> dict[str, CaseRef]:

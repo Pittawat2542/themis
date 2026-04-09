@@ -60,8 +60,11 @@ def evaluation(
         dataset_id=dataset_id,
     )
     if execution is None:
-        raise SystemExit(
+        message = (
             f"No evaluation execution found for case_id={case_id} metric_id={metric_id}"
         )
+        if dataset_id is not None:
+            message += f" dataset_id={dataset_id}"
+        raise SystemExit(message)
     print(dump_json(execution.model_dump(mode="json")))
     return 0

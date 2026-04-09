@@ -47,6 +47,10 @@ def run_example() -> dict[str, object]:
         seeds=[7],
     )
     result = experiment.run(store=store)
+    if not result.cases:
+        raise RuntimeError("OpenAI example expected at least one case result")
+    if not result.cases[0].generated_candidates:
+        raise RuntimeError("OpenAI example expected at least one generated candidate")
     candidate = result.cases[0].generated_candidates[0]
     artifact_keys = [] if candidate.artifacts is None else sorted(candidate.artifacts)
     return {

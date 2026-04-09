@@ -120,9 +120,11 @@ def test_inspect_commands_and_replay_command(
             config=str(config_path),
             case_id="case-1",
             metric_id="builtin/llm_rubric",
+            dataset_id="cases",
         )
     except SystemExit as exc:
         assert "No evaluation execution found" in str(exc)
+        assert "dataset_id=cases" in str(exc)
     else:
         raise AssertionError("expected inspect.evaluation to report missing execution")
 

@@ -313,6 +313,56 @@ def test_build_benchmark_result_marks_score_failures_as_error_rows() -> None:
     assert result.error_counts == {"builtin/exact_match": {"score_failure": 1}}
 
 
+def test_build_run_result_does_not_apply_ambiguous_legacy_case_state() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"})],
+            ),
+            Dataset(
+                dataset_id="dataset-2",
+                cases=[Case(case_id="case-1", input={"question": "3+3"})],
+            ),
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+
+    result = build_run_result(
+        snapshot,
+        [
+            GenerationCompletedEvent(
+                run_id=snapshot.run_id,
+                case_id="case-1",
+                candidate_id="candidate-1",
+                candidate_index=0,
+                result={
+                    "candidate_id": "candidate-1",
+                    "final_output": {"answer": "4"},
+                },
+            )
+        ],
+    )
+
+    assert [case.case_key for case in result.cases] == [
+        "9:dataset-1:case-1",
+        "9:dataset-2:case-1",
+    ]
+    assert all(not case.generated_candidates for case in result.cases)
+    assert result.progress.completed_cases == 0
+    assert result.progress.failed_cases == 0
+
+
 def test_build_timeline_view_preserves_event_order_and_case_scope() -> None:
     snapshot = _snapshot()
 

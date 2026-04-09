@@ -149,9 +149,17 @@ class ExecutionState(FrozenModel):
             case_key=getattr(event, "case_key", None),
         )
         case_states = dict(self.case_states)
-        current = case_states.get(
-            case_key, case_states.get(event.case_id, CaseExecutionState())
+        legacy_case_alias = (
+            event.case_id
+            if getattr(event, "dataset_id", None) is None
+            and getattr(event, "case_key", None) is None
+            else None
         )
+        current = case_states.get(case_key)
+        if current is None and legacy_case_alias is not None:
+            current = case_states.get(legacy_case_alias)
+        if current is None:
+            current = CaseExecutionState()
         updated = current
 
         if isinstance(event, GenerationCompletedEvent) and event.result is not None:
@@ -284,7 +292,8 @@ class ExecutionState(FrozenModel):
                 }
             )
 
-        case_states.pop(event.case_id, None)
+        if legacy_case_alias is not None and legacy_case_alias != case_key:
+            case_states.pop(legacy_case_alias, None)
         case_states[case_key] = updated
         status = self.status
         if status is RunStatus.COMPLETED and _case_state_has_failures(updated):

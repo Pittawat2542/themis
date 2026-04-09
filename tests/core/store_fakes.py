@@ -86,8 +86,13 @@ class FakeCollection:
         upsert: bool = False,
         return_document=None,
     ) -> dict[str, object] | None:
-        del return_document
+        if return_document is not None and not isinstance(return_document, bool):
+            raise ValueError(
+                "return_document must be ReturnDocument.BEFORE or ReturnDocument.AFTER"
+            )
+        return_after = bool(return_document)
         row = self.find_one(query)
+        before = dict(row) if row is not None else None
         if row is None:
             if not upsert:
                 return None
@@ -103,7 +108,7 @@ class FakeCollection:
                     else int(cast(str | bytes | bytearray, current_value))
                 )
                 row[key] = current_int + int(cast(int, value))
-        return row
+        return dict(row) if return_after else before
 
     def delete_many(self, query: dict[str, object]) -> None:
         self.rows = [
@@ -140,4 +145,5 @@ class FakeMongoClient:
 def fake_pymongo_module():
     module = types.SimpleNamespace()
     module.MongoClient = lambda url: FakeMongoClient(url)
+    module.ReturnDocument = types.SimpleNamespace(BEFORE=False, AFTER=True)
     return module
