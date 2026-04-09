@@ -15,6 +15,8 @@ class BenchmarkScoreRow(FrozenModel):
     """One score row in the benchmark projection."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     metric_id: str
     value: float | None = None
     candidate_id: str | None = None
@@ -46,6 +48,8 @@ class TimelineEntry(FrozenModel):
     event_type: str
     occurred_at: datetime
     case_id: str | None = None
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str | None = None
     metric_id: str | None = None
 
@@ -61,6 +65,8 @@ class GenerationTraceRecord(FrozenModel):
     """One generation trace record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str
     trace_id: str
     steps: list[dict[str, object]] = Field(default_factory=list)
@@ -70,6 +76,8 @@ class ConversationTraceRecord(FrozenModel):
     """One conversation trace record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str
     trace_id: str
     messages: list[dict[str, object]] = Field(default_factory=list)
@@ -79,6 +87,8 @@ class EvaluationTraceRecord(FrozenModel):
     """One evaluation trace record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     metric_id: str
     candidate_id: str | None = None
     execution: EvaluationExecution

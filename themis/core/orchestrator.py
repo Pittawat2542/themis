@@ -8,7 +8,7 @@ import json
 import random
 from time import monotonic
 from collections.abc import Mapping
-from typing import Literal, TypeGuard, cast
+from typing import Literal, TypeGuard, TypedDict, cast
 
 from themis.core.base import JSONValue
 from themis.core.config import RuntimeConfig
@@ -88,6 +88,12 @@ WorkflowMetric = LLMMetric | SelectionMetric | TraceMetric
 RuntimeMetric = PureMetric | WorkflowMetric
 ConnectionLikeErrors = (ConnectionError, OSError)
 _RETRY_JITTER_RNG = random.Random()
+
+
+class _CaseIdentityKwargs(TypedDict):
+    case_id: str
+    dataset_id: str | None
+    case_key: str | None
 
 
 def _is_pure_metric(metric: RuntimeMetric) -> TypeGuard[PureMetric]:
@@ -318,15 +324,15 @@ class Orchestrator:
                 yield task.result()
 
     async def _iter_case_groups(self, snapshot: RunSnapshot):
-        current_case_id: str | None = None
+        current_case_key: str | None = None
         current_items: list[GenerationWorkItem] = []
         async for item in self.planner.iter_work_items(snapshot):
-            if current_case_id is None:
-                current_case_id = item.case_id
-            if item.case_id != current_case_id:
+            if current_case_key is None:
+                current_case_key = item.case_key
+            if item.case_key != current_case_key:
                 yield current_items
                 current_items = []
-                current_case_id = item.case_id
+                current_case_key = item.case_key
             current_items.append(item)
         if current_items:
             yield current_items
@@ -337,9 +343,23 @@ class Orchestrator:
         items: list[GenerationWorkItem],
         existing_state: ExecutionState,
     ) -> tuple[CaseResult, bool]:
-        case = items[0].case
+        item0 = items[0]
+        case = item0.case
+        case_result_kwargs: _CaseIdentityKwargs = {
+            "case_id": case.case_id,
+            "dataset_id": item0.dataset_id,
+            "case_key": item0.case_key,
+        }
+        case_event_kwargs: _CaseIdentityKwargs = {
+            "case_id": case.case_id,
+            "dataset_id": item0.dataset_id,
+            "case_key": item0.case_key,
+        }
         prior_case_state = self._replay_case_state(
-            existing_state.case_states.get(case.case_id, CaseExecutionState())
+            existing_state.case_states.get(
+                item0.case_key,
+                existing_state.case_states.get(case.case_id, CaseExecutionState()),
+            )
         )
         generated_by_index = dict(prior_case_state.generated_candidates_by_index)
         workflow_executions = dict(prior_case_state.evaluation_executions)
@@ -364,11 +384,11 @@ class Orchestrator:
             generated_by_index[index] for index in sorted(generated_by_index)
         ]
         if not generated_candidates and prior_case_state.reduced_candidate is None:
-            return CaseResult(case_id=case.case_id), True
+            return CaseResult(**case_result_kwargs), True
         if self.until_stage == "generate":
             return (
                 CaseResult(
-                    case_id=case.case_id,
+                    **case_result_kwargs,
                     generated_candidates=generated_candidates,
                 ),
                 had_failure,
@@ -384,10 +404,12 @@ class Orchestrator:
             select_ctx = SelectContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
+                dataset_id=item0.dataset_id,
+                case_key=item0.case_key,
                 candidate_ids=[
                     candidate.candidate_id for candidate in generated_candidates
                 ],
-                seed=items[0].seed,
+                seed=item0.seed,
                 judge_models=list(self.judge_models),
             )
             span = self.tracing_provider.start_span(
@@ -402,7 +424,7 @@ class Orchestrator:
                 await self._persist_event(
                     SelectionCompletedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_ids=[
                             candidate.candidate_id for candidate in selected_candidates
                         ],
@@ -414,13 +436,14 @@ class Orchestrator:
                 await self._persist_event(
                     SelectionFailedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         error_message=str(exc),
                     )
                 )
                 self.tracing_provider.end_span(span, "error")
                 return CaseResult(
-                    case_id=case.case_id, generated_candidates=generated_candidates
+                    **case_result_kwargs,
+                    generated_candidates=generated_candidates,
                 ), True
 
         reduced = prior_case_state.reduced_candidate
@@ -436,7 +459,7 @@ class Orchestrator:
                 await self._persist_event(
                     ReductionCompletedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         source_candidate_ids=reduced.source_candidate_ids,
                         result=reduced.model_dump(mode="json"),
@@ -450,10 +473,12 @@ class Orchestrator:
             reduce_ctx = ReduceContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
+                dataset_id=item0.dataset_id,
+                case_key=item0.case_key,
                 candidate_ids=[
                     candidate.candidate_id for candidate in selected_candidates
                 ],
-                seed=items[0].seed,
+                seed=item0.seed,
                 metadata={"selector_id": self.selector.component_id}
                 if self.selector is not None
                 else {},
@@ -468,7 +493,7 @@ class Orchestrator:
                 await self._persist_event(
                     ReductionCompletedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         source_candidate_ids=reduced.source_candidate_ids,
                         result=reduced.model_dump(mode="json"),
@@ -487,18 +512,19 @@ class Orchestrator:
                 await self._persist_event(
                     ReductionFailedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         error_message=str(exc),
                     )
                 )
                 self.tracing_provider.end_span(span, "error")
                 return CaseResult(
-                    case_id=case.case_id, generated_candidates=generated_candidates
+                    **case_result_kwargs,
+                    generated_candidates=generated_candidates,
                 ), True
         if self.until_stage == "reduce":
             return (
                 CaseResult(
-                    case_id=case.case_id,
+                    **case_result_kwargs,
                     generated_candidates=generated_candidates,
                     reduced_candidate=reduced,
                 ),
@@ -518,7 +544,7 @@ class Orchestrator:
                 await self._persist_event(
                     ParseCompletedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         result=parsed.model_dump(mode="json"),
                         cache_hit=True,
@@ -531,6 +557,8 @@ class Orchestrator:
             parse_ctx = ParseContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
+                dataset_id=item0.dataset_id,
+                case_key=item0.case_key,
                 candidate_id=reduced.candidate_id,
             )
             self._notify("before_parse", reduced, parse_ctx)
@@ -545,7 +573,7 @@ class Orchestrator:
                 await self._persist_event(
                     ParseCompletedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         result=parsed.model_dump(mode="json"),
                     )
@@ -563,7 +591,7 @@ class Orchestrator:
                 await self._persist_event(
                     ParseFailedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         error_message=str(exc),
                     )
@@ -571,7 +599,7 @@ class Orchestrator:
                 self.tracing_provider.end_span(span, "error")
                 return (
                     CaseResult(
-                        case_id=case.case_id,
+                        **case_result_kwargs,
                         generated_candidates=generated_candidates,
                         reduced_candidate=reduced,
                     ),
@@ -580,7 +608,7 @@ class Orchestrator:
         if self.until_stage == "parse":
             return (
                 CaseResult(
-                    case_id=case.case_id,
+                    **case_result_kwargs,
                     generated_candidates=generated_candidates,
                     reduced_candidate=reduced,
                     parsed_output=parsed,
@@ -620,7 +648,7 @@ class Orchestrator:
                     await self._persist_event(
                         ScoreCompletedEvent(
                             run_id=snapshot.run_id,
-                            case_id=case.case_id,
+                            **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
                             metric_id=cached_score_result.metric_id,
                             score=cached_score_result.model_dump(mode="json"),
@@ -635,7 +663,9 @@ class Orchestrator:
                     run_id=snapshot.run_id,
                     case=case,
                     parsed_output=parsed,
-                    seed=items[0].seed,
+                    dataset_id=item0.dataset_id,
+                    case_key=item0.case_key,
+                    seed=item0.seed,
                 )
                 self._notify("before_score", parsed, score_ctx)
                 span = self.tracing_provider.start_span(
@@ -658,7 +688,7 @@ class Orchestrator:
                         await self._persist_event(
                             ScoreFailedEvent(
                                 run_id=snapshot.run_id,
-                                case_id=case.case_id,
+                                **case_event_kwargs,
                                 candidate_id=reduced.candidate_id,
                                 metric_id=score_result.metric_id,
                                 error=score_result.model_dump(mode="json"),
@@ -672,7 +702,7 @@ class Orchestrator:
                     await self._persist_event(
                         ScoreCompletedEvent(
                             run_id=snapshot.run_id,
-                            case_id=case.case_id,
+                            **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
                             metric_id=score_result.metric_id,
                             score=score_result.model_dump(mode="json"),
@@ -696,7 +726,7 @@ class Orchestrator:
                     await self._persist_event(
                         ScoreFailedEvent(
                             run_id=snapshot.run_id,
-                            case_id=case.case_id,
+                            **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
                             metric_id=metric.component_id,
                             error=score_error.model_dump(mode="json"),
@@ -710,7 +740,14 @@ class Orchestrator:
                 raise TypeError(
                     f"Metric {metric.component_id} does not implement a workflow metric protocol"
                 )
-            eval_ctx = self._evaluation_context(snapshot, case, parsed, items[0].seed)
+            eval_ctx = self._evaluation_context(
+                snapshot,
+                case,
+                parsed,
+                item0.seed,
+                dataset_id=item0.dataset_id,
+                case_key=item0.case_key,
+            )
             subject = self._evaluation_subject(
                 metric_kind=metric_kind,
                 generated_candidates=generated_candidates,
@@ -741,7 +778,7 @@ class Orchestrator:
                 await self._persist_event(
                     EvaluationCompletedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         metric_id=metric.component_id,
                         execution=execution.model_dump(mode="json"),
@@ -760,7 +797,7 @@ class Orchestrator:
                     await self._persist_event(
                         ScoreCompletedEvent(
                             run_id=snapshot.run_id,
-                            case_id=case.case_id,
+                            **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
                             metric_id=final_score.metric_id,
                             score=final_score.model_dump(mode="json"),
@@ -776,7 +813,7 @@ class Orchestrator:
                     await self._persist_event(
                         ScoreFailedEvent(
                             run_id=snapshot.run_id,
-                            case_id=case.case_id,
+                            **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
                             metric_id=metric.component_id,
                             error=score_error.model_dump(mode="json"),
@@ -793,7 +830,7 @@ class Orchestrator:
                 await self._persist_event(
                     EvaluationFailedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         metric_id=metric.component_id,
                         error_message=str(exc),
@@ -802,7 +839,7 @@ class Orchestrator:
                 await self._persist_event(
                     ScoreFailedEvent(
                         run_id=snapshot.run_id,
-                        case_id=case.case_id,
+                        **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         metric_id=metric.component_id,
                         error=score_error.model_dump(mode="json"),
@@ -821,7 +858,7 @@ class Orchestrator:
 
         return (
             CaseResult(
-                case_id=case.case_id,
+                **case_result_kwargs,
                 generated_candidates=generated_candidates,
                 reduced_candidate=reduced,
                 parsed_output=parsed,
@@ -857,6 +894,8 @@ class Orchestrator:
         generate_ctx = GenerateContext(
             run_id=snapshot.run_id,
             case_id=item.case_id,
+            dataset_id=item.dataset_id,
+            case_key=item.case_key,
             seed=item.seed,
             prompt_spec=snapshot.identity.generation_prompt_spec,
         )
@@ -876,6 +915,8 @@ class Orchestrator:
                 GenerationCompletedEvent(
                     run_id=snapshot.run_id,
                     case_id=item.case_id,
+                    dataset_id=item.dataset_id,
+                    case_key=item.case_key,
                     candidate_id=generated.candidate_id,
                     candidate_index=item.candidate_index,
                     seed=item.seed,
@@ -929,6 +970,8 @@ class Orchestrator:
                             GenerationCompletedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
+                                dataset_id=item.dataset_id,
+                                case_key=item.case_key,
                                 candidate_id=generated.candidate_id,
                                 candidate_index=item.candidate_index,
                                 seed=item.seed,
@@ -954,7 +997,10 @@ class Orchestrator:
                             GenerationFailedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
+                                dataset_id=item.dataset_id,
+                                case_key=item.case_key,
                                 candidate_id=item.candidate_id,
+                                candidate_index=item.candidate_index,
                                 error_message=str(exc),
                                 retry_history=retry_history,
                             )
@@ -1007,6 +1053,9 @@ class Orchestrator:
         case,
         parsed: ParsedOutput,
         seed: int | None,
+        *,
+        dataset_id: str | None,
+        case_key: str | None,
     ) -> EvalScoreContext:
         if not snapshot.identity.judge_model_refs:
             raise WorkflowBuildError(
@@ -1016,10 +1065,13 @@ class Orchestrator:
             run_id=snapshot.run_id,
             case=case,
             parsed_output=parsed,
+            dataset_id=dataset_id,
+            case_key=case_key,
             seed=seed,
             judge_model_refs=list(snapshot.identity.judge_model_refs),
             judge_seed=seed,
             prompt_spec=snapshot.identity.evaluation_prompt_spec,
+            judge_config=snapshot.identity.judge_config,
             eval_workflow_config=snapshot.identity.workflow_overrides,
         )
 

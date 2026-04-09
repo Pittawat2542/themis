@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
+from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import (
     EvalScoreContext,
@@ -89,6 +91,19 @@ def test_canonical_hashing_is_stable_for_core_models() -> None:
     assert left.compute_hash() != changed.compute_hash()
 
 
+def test_canonical_hashing_recomputes_after_nested_mutation() -> None:
+    case = Case(
+        case_id="case-1",
+        input={"question": "2+2"},
+        expected_output={"answer": "4"},
+    )
+
+    initial_hash = case.compute_hash()
+    cast(dict[str, JSONValue], case.input)["question"] = "3+3"
+
+    assert case.compute_hash() != initial_hash
+
+
 def test_dataset_and_trace_models_embed_core_records() -> None:
     dataset = Dataset(
         dataset_id="dataset-1",
@@ -157,6 +172,8 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
         parsed_output=score.parsed_output,
         dataset_metadata={"split": "test"},
         seed=7,
+        dataset_id="dataset-1",
+        case_key="dataset-1:case-1",
         judge_model_refs=[
             ComponentRef(
                 component_id="builtin/demo_judge",
@@ -166,6 +183,7 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
         ],
         judge_seed=9,
         prompt_spec=prompt_spec,
+        judge_config={"panel_size": 1},
         eval_workflow_config={"rubric": "pass_fail"},
     )
     generation = GenerationConfig(

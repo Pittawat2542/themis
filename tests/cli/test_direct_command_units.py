@@ -63,7 +63,10 @@ def test_report_export_and_compare_commands(
     assert "# Run Report" in capsys.readouterr().out
 
     assert report(config=str(baseline_config), format="csv") == 0
-    assert "case_id,metric_id,outcome" in capsys.readouterr().out
+    assert (
+        capsys.readouterr().out.splitlines()[0]
+        == "case_id,dataset_id,case_key,metric_id,outcome,value,candidate_id,error_category,error_message,details"
+    )
 
     assert report(config=str(baseline_config), format="latex") == 0
     assert "\\begin{tabular}" in capsys.readouterr().out
@@ -117,9 +120,11 @@ def test_inspect_commands_and_replay_command(
             config=str(config_path),
             case_id="case-1",
             metric_id="builtin/llm_rubric",
+            dataset_id="cases",
         )
     except SystemExit as exc:
         assert "No evaluation execution found" in str(exc)
+        assert "dataset_id=cases" in str(exc)
     else:
         raise AssertionError("expected inspect.evaluation to report missing execution")
 

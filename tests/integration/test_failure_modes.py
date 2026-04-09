@@ -312,12 +312,14 @@ def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging(
         seeds=[7],
     )
     store = InMemoryRunStore()
-    experiment.run(store=store)
+    initial = experiment.run(store=store)
 
     stored_run = store.resume(experiment.compile().run_id)
     assert stored_run is not None
+    case_key = initial.cases[0].case_key
+    assert case_key is not None
     partial_execution = stored_run.execution_state.case_states[
-        "case-1"
+        case_key
     ].evaluation_executions["metric/partial"]
     assert partial_execution is not None
 

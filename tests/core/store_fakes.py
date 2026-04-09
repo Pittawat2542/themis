@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import types
+from typing import cast
 
 
 class FakeCursor:
@@ -46,6 +47,7 @@ def fake_psycopg_module():
 class FakeCollection:
     def __init__(self) -> None:
         self.rows: list[dict[str, object]] = []
+        self.indexes: list[tuple[tuple[tuple[str, int], ...], bool]] = []
 
     def replace_one(
         self,
@@ -76,6 +78,48 @@ class FakeCollection:
                 return row
         return None
 
+    def find_one_and_update(
+        self,
+        query: dict[str, object],
+        update: dict[str, object],
+        *,
+        upsert: bool = False,
+        return_document=None,
+    ) -> dict[str, object] | None:
+        if return_document is not None and not isinstance(return_document, bool):
+            raise ValueError(
+                "return_document must be ReturnDocument.BEFORE or ReturnDocument.AFTER"
+            )
+        return_after = bool(return_document)
+        row = self.find_one(query)
+        before = dict(row) if row is not None else None
+        if row is None:
+            if not upsert:
+                return None
+            row = dict(query)
+            self.rows.append(row)
+        increments = update.get("$inc", {})
+        if isinstance(increments, dict):
+            for key, value in increments.items():
+                current_value = row.get(key, 0)
+                current_int = (
+                    current_value
+                    if isinstance(current_value, int)
+                    else int(cast(str | bytes | bytearray, current_value))
+                )
+                row[key] = current_int + int(cast(int, value))
+        return dict(row) if return_after else before
+
+    def delete_many(self, query: dict[str, object]) -> None:
+        self.rows = [
+            row
+            for row in self.rows
+            if not all(row.get(key) == value for key, value in query.items())
+        ]
+
+    def create_index(self, keys, unique: bool = False) -> None:
+        self.indexes.append((tuple(keys), unique))
+
 
 class FakeDatabase:
     def __init__(self) -> None:
@@ -101,4 +145,5 @@ class FakeMongoClient:
 def fake_pymongo_module():
     module = types.SimpleNamespace()
     module.MongoClient = lambda url: FakeMongoClient(url)
+    module.ReturnDocument = types.SimpleNamespace(BEFORE=False, AFTER=True)
     return module

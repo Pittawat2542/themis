@@ -43,15 +43,28 @@ def state(*, config: str) -> int:
 
 
 @inspect_app.command
-def evaluation(*, config: str, case_id: str, metric_id: str) -> int:
+def evaluation(
+    *,
+    config: str,
+    case_id: str,
+    metric_id: str,
+    dataset_id: str | None = None,
+) -> int:
     experiment = load_experiment(config)
     store = initialize_store(experiment)
     execution = get_evaluation_execution(
-        store, experiment.compile().run_id, case_id, metric_id
+        store,
+        experiment.compile().run_id,
+        case_id,
+        metric_id,
+        dataset_id=dataset_id,
     )
     if execution is None:
-        raise SystemExit(
+        message = (
             f"No evaluation execution found for case_id={case_id} metric_id={metric_id}"
         )
+        if dataset_id is not None:
+            message += f" dataset_id={dataset_id}"
+        raise SystemExit(message)
     print(dump_json(execution.model_dump(mode="json")))
     return 0

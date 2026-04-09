@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from themis import Experiment, InMemoryRunStore, get_execution_state
+from themis import Experiment, InMemoryRunStore
 from themis.adapters import openai
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
@@ -47,8 +47,11 @@ def run_example() -> dict[str, object]:
         seeds=[7],
     )
     result = experiment.run(store=store)
-    state = get_execution_state(store, result.run_id)
-    candidate = next(iter(state.case_states["case-1"].generated_candidates.values()))
+    if not result.cases:
+        raise RuntimeError("OpenAI example expected at least one case result")
+    if not result.cases[0].generated_candidates:
+        raise RuntimeError("OpenAI example expected at least one generated candidate")
+    candidate = result.cases[0].generated_candidates[0]
     artifact_keys = [] if candidate.artifacts is None else sorted(candidate.artifacts)
     return {
         "run_id": result.run_id,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from themis.core.case_refs import CaseRef
 from themis.core.results import GenerationWorkItem, RunEstimate
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import JudgeCall
@@ -20,6 +21,7 @@ class Planner:
         *,
         run_id: str,
         case_id: str,
+        case_key: str | None = None,
         metric_id: str,
         judge_model_id: str = "",
         judge_index: int = 0,
@@ -31,7 +33,7 @@ class Planner:
             ":".join(
                 [
                     run_id,
-                    case_id,
+                    case_key or case_id,
                     metric_id,
                     judge_model_id,
                     str(judge_index),
@@ -48,6 +50,7 @@ class Planner:
         *,
         run_id: str,
         case_id: str,
+        case_key: str | None = None,
         metric_id: str,
         calls: list[JudgeCall],
     ) -> list[JudgeCall]:
@@ -68,6 +71,7 @@ class Planner:
                         "effective_seed": self.judge_seed_for_call(
                             run_id=run_id,
                             case_id=case_id,
+                            case_key=case_key,
                             metric_id=metric_id,
                             judge_model_id=call.judge_model_id,
                             repeat_index=call.repeat_index,
@@ -182,12 +186,14 @@ class Planner:
 
         for dataset in snapshot.datasets:
             for case in dataset.cases:
+                case_ref = CaseRef(dataset_id=dataset.dataset_id, case_id=case.case_id)
                 for candidate_index, seed in enumerate(seeds):
                     yield GenerationWorkItem(
                         run_id=snapshot.run_id,
                         dataset_id=dataset.dataset_id,
                         case=case,
                         case_id=case.case_id,
+                        case_key=case_ref.case_key,
                         candidate_index=candidate_index,
                         candidate_id=f"{case.case_id}-candidate-{candidate_index}",
                         seed=seed,

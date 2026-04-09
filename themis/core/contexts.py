@@ -17,6 +17,8 @@ class GenerateContext(HashableModel):
 
     run_id: str
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     seed: int | None = None
     prompt_spec: PromptSpec | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
@@ -27,6 +29,8 @@ class SelectContext(HashableModel):
 
     run_id: str
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_ids: list[str] = Field(default_factory=list)
     seed: int | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
@@ -38,6 +42,8 @@ class ReduceContext(HashableModel):
 
     run_id: str
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_ids: list[str] = Field(default_factory=list)
     seed: int | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
@@ -48,6 +54,8 @@ class ParseContext(HashableModel):
 
     run_id: str
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
@@ -58,6 +66,8 @@ class ScoreContext(HashableModel):
     run_id: str
     case: Case
     parsed_output: ParsedOutput
+    dataset_id: str | None = None
+    case_key: str | None = None
     dataset_metadata: dict[str, JSONValue] = Field(default_factory=dict)
     seed: int | None = None
 
@@ -68,4 +78,5 @@ class EvalScoreContext(ScoreContext):
     judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     judge_seed: int | None = None
     prompt_spec: PromptSpec | None = None
+    judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     eval_workflow_config: dict[str, JSONValue] = Field(default_factory=dict)

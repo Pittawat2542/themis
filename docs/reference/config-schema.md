@@ -40,8 +40,8 @@ goal: Document config model fields, defaults, and identity/persistence implicati
 | `parsers` | No | Normalizes reduced output into metric-ready subjects | Yes | Choose parsers that match the expected output shape |
 | `judge_models` | No | Provides judge models for workflow-backed metrics | Yes | Omit when using only deterministic pure metrics |
 | `prompt_spec` | No | Adds prompt instructions or blocks for builtin judge workflows | Yes | Judge prompt changes are identity-bearing |
-| `judge_config` | No | Configures workflow evaluation behavior | Yes | Use when builtin workflow knobs are not enough |
-| `workflow_overrides` | No | Adds extra workflow configuration such as a rubric | Yes | Useful for rubric text and benchmark-specific judge settings |
+| `judge_config` | No | Carries generic runtime configuration for workflow implementations | Yes | Exposed to workflows as `EvalScoreContext.judge_config`; use for custom workflow config that should affect runtime behavior and identity |
+| `workflow_overrides` | No | Carries builtin-oriented prompt and rubric overrides | Yes | Exposed as `EvalScoreContext.eval_workflow_config`; useful for rubric text and benchmark-specific builtin judge settings |
 
 ## `StorageConfig`
 

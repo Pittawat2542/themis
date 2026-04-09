@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from themis import (
     Experiment,
     InMemoryRunStore,
@@ -16,6 +18,7 @@ from themis import (
     get_execution_state,
     sqlite_store,
 )
+from themis.core.case_refs import case_key_for
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import EvaluationCompletedEvent, RunStartedEvent
 from themis.core.models import Case, Dataset
@@ -31,6 +34,7 @@ def test_root_package_exports_public_symbols() -> None:
         RunStatus,
         RuntimeConfig,
         StatsEngine,
+        evaluate_async,
         export_evaluation_bundle,
         export_generation_bundle,
         get_run_snapshot,
@@ -50,6 +54,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert RunStatus is not None
     assert RuntimeConfig is not None
     assert StatsEngine is not None
+    assert evaluate_async is not None
     assert export_evaluation_bundle is not None
     assert export_generation_bundle is not None
     assert import_evaluation_bundle is not None
@@ -214,3 +219,108 @@ def test_public_inspection_helpers_return_execution_state_and_evaluation_executi
     assert state.run_id == snapshot.run_id
     assert execution is not None
     assert execution.execution_id == "execution-1"
+
+
+def test_get_evaluation_execution_rejects_conflicting_case_key() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(case_id="case-1", input={"question": "2+2"}),
+                    Case(case_id="case-2", input={"question": "3+3"}),
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/judge",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+
+    with pytest.raises(ValueError, match="Conflicting case_id and case_key inputs"):
+        get_evaluation_execution(
+            store,
+            snapshot.run_id,
+            "case-1",
+            "metric/judge",
+            case_key=case_key_for("dataset-1", "case-2"),
+        )
+
+
+def test_get_evaluation_execution_does_not_ignore_supplied_case_key() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(store="memory"),
+        datasets=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[Case(case_id="case-1", input={"question": "2+2"})],
+            )
+        ],
+        seeds=[7],
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/judge",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        )
+    )
+
+    assert (
+        get_evaluation_execution(
+            store,
+            snapshot.run_id,
+            "case-1",
+            "metric/judge",
+            case_key="unknown-case-key",
+        )
+        is None
+    )

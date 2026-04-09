@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import Field
 
 from themis.core.base import FrozenModel, JSONValue
+from themis.core.case_refs import resolve_case_key
 from themis.core.events import (
     EvaluationCompletedEvent,
     EvaluationFailedEvent,
@@ -79,6 +80,7 @@ class CaseExecutionState(FrozenModel):
     )
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
+    generation_failure_keys_by_index: dict[int, str] = Field(default_factory=dict)
     selected_candidate_ids: list[str] | None = None
     selection_metadata: dict[str, object] = Field(default_factory=dict)
     selection_error: str | None = None
@@ -141,8 +143,23 @@ class ExecutionState(FrozenModel):
         if not isinstance(event, CaseStageEvent):
             return self
 
+        case_key = resolve_case_key(
+            case_id=event.case_id,
+            dataset_id=getattr(event, "dataset_id", None),
+            case_key=getattr(event, "case_key", None),
+        )
         case_states = dict(self.case_states)
-        current = case_states.get(event.case_id, CaseExecutionState())
+        legacy_case_alias = (
+            event.case_id
+            if getattr(event, "dataset_id", None) is None
+            and getattr(event, "case_key", None) is None
+            else None
+        )
+        current = case_states.get(case_key)
+        if current is None and legacy_case_alias is not None:
+            current = case_states.get(legacy_case_alias)
+        if current is None:
+            current = CaseExecutionState()
         updated = current
 
         if isinstance(event, GenerationCompletedEvent) and event.result is not None:
@@ -152,10 +169,16 @@ class ExecutionState(FrozenModel):
             )
             generated_by_index = dict(current.generated_candidates_by_index)
             generated_blob_refs = dict(current.generated_candidate_blob_refs)
+            failures = dict(current.generation_failures)
+            failure_keys_by_index = dict(current.generation_failure_keys_by_index)
             if event.candidate_index is not None:
                 generated_by_index[event.candidate_index] = generated[
                     event.candidate_id
                 ]
+                failure_key = failure_keys_by_index.pop(event.candidate_index, None)
+                if failure_key is not None:
+                    failures.pop(failure_key, None)
+            failures.pop(event.candidate_id, None)
             if event.result_blob_ref is not None:
                 generated_blob_refs[event.candidate_id] = event.result_blob_ref
             updated = current.model_copy(
@@ -163,12 +186,22 @@ class ExecutionState(FrozenModel):
                     "generated_candidates": generated,
                     "generated_candidates_by_index": generated_by_index,
                     "generated_candidate_blob_refs": generated_blob_refs,
+                    "generation_failures": failures,
+                    "generation_failure_keys_by_index": failure_keys_by_index,
                 }
             )
         elif isinstance(event, GenerationFailedEvent):
             failures = dict(current.generation_failures)
+            failure_keys_by_index = dict(current.generation_failure_keys_by_index)
             failures[event.candidate_id] = event.error_message
-            updated = current.model_copy(update={"generation_failures": failures})
+            if event.candidate_index is not None:
+                failure_keys_by_index[event.candidate_index] = event.candidate_id
+            updated = current.model_copy(
+                update={
+                    "generation_failures": failures,
+                    "generation_failure_keys_by_index": failure_keys_by_index,
+                }
+            )
         elif isinstance(event, SelectionCompletedEvent):
             updated = current.model_copy(
                 update={
@@ -259,7 +292,9 @@ class ExecutionState(FrozenModel):
                 }
             )
 
-        case_states[event.case_id] = updated
+        if legacy_case_alias is not None and legacy_case_alias != case_key:
+            case_states.pop(legacy_case_alias, None)
+        case_states[case_key] = updated
         status = self.status
         if status is RunStatus.COMPLETED and _case_state_has_failures(updated):
             status = RunStatus.PARTIAL_FAILURE
@@ -290,6 +325,7 @@ class GenerationWorkItem(FrozenModel):
     dataset_id: str
     case: Case
     case_id: str
+    case_key: str
     candidate_index: int
     candidate_id: str
     seed: int | None = None
@@ -299,6 +335,8 @@ class CaseResult(FrozenModel):
     """Final case-level result returned from a run."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     generated_candidates: list[GenerationResult] = Field(default_factory=list)
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
@@ -347,6 +385,8 @@ class ReductionBundleRecord(FrozenModel):
     """One portable reduction artifact record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str
     result: ReducedCandidate
 
@@ -364,6 +404,8 @@ class ParseBundleRecord(FrozenModel):
     """One portable parse artifact record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str
     result: ParsedOutput
 
@@ -381,6 +423,8 @@ class ScoreBundleRecord(FrozenModel):
     """One portable score artifact record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str
     metric_id: str
     score: Score
@@ -399,6 +443,8 @@ class GenerationBundleRecord(FrozenModel):
     """One portable generation artifact record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     candidate_id: str
     candidate_index: int | None = None
     seed: int | None = None
@@ -419,6 +465,8 @@ class EvaluationBundleRecord(FrozenModel):
     """One portable evaluation execution record."""
 
     case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
     metric_id: str
     candidate_id: str | None = None
     execution_blob_ref: str | None = None

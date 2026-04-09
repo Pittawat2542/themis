@@ -24,7 +24,11 @@ class MongoDbRunStore(ProjectionRefreshingStore):
 
     def initialize(self) -> None:
         self.blob_root.mkdir(parents=True, exist_ok=True)
-        self._db()
+        database = self._db()
+        database["run_events"].create_index(
+            [("run_id", 1), ("sequence", 1)], unique=True
+        )
+        database["run_event_counters"].create_index([("run_id", 1)], unique=True)
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
         self._db()["run_snapshots"].replace_one(
@@ -38,7 +42,7 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         self._bootstrap_projections(snapshot)
 
     def persist_event(self, event: RunEvent) -> None:
-        sequence = len(self.query_events(event.run_id))
+        sequence = self._allocate_sequence(event.run_id)
         self._db()["run_events"].insert_one(
             {
                 "run_id": event.run_id,
@@ -146,21 +150,39 @@ class MongoDbRunStore(ProjectionRefreshingStore):
 
     def clear_run(self, run_id: str) -> None:
         self._db()["run_events"].delete_many({"run_id": run_id})
+        self._db()["run_event_counters"].delete_many({"run_id": run_id})
         self._db()["run_projections"].delete_many({"run_id": run_id})
         self._db()["run_snapshots"].delete_many({"run_id": run_id})
+
+    def _allocate_sequence(self, run_id: str) -> int:
+        pymongo = self._pymongo()
+        row = self._db()["run_event_counters"].find_one_and_update(
+            {"run_id": run_id},
+            {"$inc": {"next_sequence": 1}},
+            upsert=True,
+            return_document=pymongo.ReturnDocument.AFTER,
+        )
+        if row is None:
+            raise RuntimeError(
+                f"Unable to allocate MongoDB event sequence for {run_id}"
+            )
+        return int(row["next_sequence"]) - 1
 
     def _db(self):
         if self._database_handle is not None:
             return self._database_handle
+        pymongo = self._pymongo()
+        client = pymongo.MongoClient(self.url)
+        self._database_handle = client[self.database]
+        return self._database_handle
+
+    def _pymongo(self):
         try:
-            pymongo = importlib.import_module("pymongo")
+            return importlib.import_module("pymongo")
         except ImportError as exc:
             raise ImportError(
                 "MongoDB support requires the optional 'mongodb' dependency."
             ) from exc
-        client = pymongo.MongoClient(self.url)
-        self._database_handle = client[self.database]
-        return self._database_handle
 
 
 def mongodb_store(url: str, database: str, blob_root: str | Path) -> MongoDbRunStore:
