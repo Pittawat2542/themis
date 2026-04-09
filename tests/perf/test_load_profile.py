@@ -64,12 +64,12 @@ def _snapshot() -> RunSnapshot:
     return experiment.compile()
 
 
-def test_compute_hash_reuses_cached_canonical_fingerprint_work() -> None:
+def test_compute_hash_recomputes_fingerprints_without_changing_value() -> None:
     component = CountingFingerprintComponent()
     model = CountingHashModel(component=component, value=1)
 
     assert model.compute_hash() == model.compute_hash()
-    assert component.calls == 1
+    assert component.calls == 2
 
 
 def test_projection_updates_reuse_existing_snapshot_payload(

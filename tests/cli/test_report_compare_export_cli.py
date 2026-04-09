@@ -83,8 +83,8 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(
     report_csv = _run_cli("report", "--config", str(baseline_config), "--format", "csv")
     assert report_csv.returncode == 0, report_csv.stderr
     assert (
-        "case_id,metric_id,outcome,value,candidate_id,error_category,error_message,details"
-        in report_csv.stdout
+        report_csv.stdout.splitlines()[0]
+        == "case_id,dataset_id,case_key,metric_id,outcome,value,candidate_id,error_category,error_message,details"
     )
 
     report_latex = _run_cli(

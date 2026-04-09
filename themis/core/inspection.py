@@ -35,16 +35,44 @@ def get_evaluation_execution(
 ) -> EvaluationExecution | None:
     """Return one stored workflow execution for a case and metric."""
 
-    state = get_execution_state(store, run_id)
-    resolved_case_key = resolve_case_key(
-        case_id=case_id, dataset_id=dataset_id, case_key=case_key
+    stored = _require_stored_run(store, run_id)
+    resolved_case_key = _resolve_stored_case_key(
+        stored.snapshot,
+        case_id=case_id,
+        dataset_id=dataset_id,
+        case_key=case_key,
     )
-    case_state = state.case_states.get(
-        resolved_case_key, state.case_states.get(case_id)
+    case_state = stored.execution_state.case_states.get(
+        resolved_case_key, stored.execution_state.case_states.get(case_id)
     )
     if case_state is None:
         return None
     return case_state.evaluation_executions.get(metric_id)
+
+
+def _resolve_stored_case_key(
+    snapshot: RunSnapshot,
+    *,
+    case_id: str,
+    dataset_id: str | None = None,
+    case_key: str | None = None,
+) -> str:
+    if dataset_id is not None or case_key is not None:
+        return resolve_case_key(
+            case_id=case_id,
+            dataset_id=dataset_id,
+            case_key=case_key,
+        )
+
+    matches = [
+        resolve_case_key(case_id=case.case_id, dataset_id=dataset.dataset_id)
+        for dataset in snapshot.datasets
+        for case in dataset.cases
+        if case.case_id == case_id
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    return case_id
 
 
 def _require_stored_run(store: RunStore, run_id: str):

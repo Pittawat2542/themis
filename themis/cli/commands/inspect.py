@@ -43,11 +43,21 @@ def state(*, config: str) -> int:
 
 
 @inspect_app.command
-def evaluation(*, config: str, case_id: str, metric_id: str) -> int:
+def evaluation(
+    *,
+    config: str,
+    case_id: str,
+    metric_id: str,
+    dataset_id: str | None = None,
+) -> int:
     experiment = load_experiment(config)
     store = initialize_store(experiment)
     execution = get_evaluation_execution(
-        store, experiment.compile().run_id, case_id, metric_id
+        store,
+        experiment.compile().run_id,
+        case_id,
+        metric_id,
+        dataset_id=dataset_id,
     )
     if execution is None:
         raise SystemExit(
