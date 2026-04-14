@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from themis import Experiment, InMemoryRunStore
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.dataset_sources import inline_dataset_source
 from themis.core.models import Case, Dataset, GenerationResult, Message, TraceStep
 
 
@@ -41,12 +42,12 @@ def run_example() -> dict[str, object]:
     experiment = Experiment(
         generation=GenerationConfig(generator=TracedGenerator()),
         evaluation=EvaluationConfig(),
-        storage=StorageConfig(store="memory"),
-        datasets=[
-            Dataset(
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            inline_dataset_source(Dataset(
                 dataset_id="sample",
                 cases=[Case(case_id="case-1", input={"question": "2+2"})],
-            )
+            ))
         ],
     )
     result = experiment.run(store=store)

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from themis import Experiment
 from themis.adapters import vllm
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.dataset_sources import inline_dataset_source
 from themis.core.models import Case, Dataset
 
 
@@ -61,12 +62,12 @@ def run_example() -> dict[str, object]:
     experiment = Experiment(
         generation=GenerationConfig(generator=generator),
         evaluation=EvaluationConfig(),
-        storage=StorageConfig(store="memory"),
-        datasets=[
-            Dataset(
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            inline_dataset_source(Dataset(
                 dataset_id="sample",
                 cases=[Case(case_id="case-1", input={"question": "2+2"})],
-            )
+            ))
         ],
         seeds=[7],
     )

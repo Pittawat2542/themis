@@ -112,7 +112,7 @@ class VLLMGenerator:
 
     def _build_client(self) -> _VLLMClient:
         try:
-            from openai import AsyncOpenAI
+            from openai import AsyncOpenAI  # type: ignore[import-not-found]
         except ImportError as exc:
             raise ImportError(
                 "vLLM adapter requires the Linux-only 'vllm' extra or an injected OpenAI-compatible client."

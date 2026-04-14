@@ -10,6 +10,7 @@ from themis import (
     sqlite_store,
 )
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.dataset_sources import inline_dataset_source
 from themis.core.models import Case, Dataset
 
 
@@ -29,9 +30,9 @@ def run_example(root: Path) -> dict[str, object]:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="sqlite", parameters={"path": str(store_path)}),
-        datasets=[
-            Dataset(
+        storage=StorageConfig(target="sqlite", kwargs={"path": str(store_path)}),
+        dataset_sources=[
+            inline_dataset_source(Dataset(
                 dataset_id="sample",
                 cases=[
                     Case(
@@ -40,7 +41,7 @@ def run_example(root: Path) -> dict[str, object]:
                         expected_output={"answer": "4"},
                     )
                 ],
-            )
+            ))
         ],
         seeds=[7],
     )

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.dataset_sources import inline_dataset_source
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.protocols import LifecycleSubscriber, TracingProvider
@@ -49,9 +50,9 @@ def run_example() -> dict[str, object]:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
-            Dataset(
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            inline_dataset_source(Dataset(
                 dataset_id="sample",
                 cases=[
                     Case(
@@ -60,7 +61,7 @@ def run_example() -> dict[str, object]:
                         expected_output={"answer": "4"},
                     )
                 ],
-            )
+            ))
         ],
         seeds=[7],
     )

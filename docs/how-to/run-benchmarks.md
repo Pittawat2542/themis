@@ -58,8 +58,8 @@ filtered_dataset = source_dataset.model_copy(
 experiment = Experiment(
     generation=GenerationConfig(...),
     evaluation=EvaluationConfig(...),
-    storage=StorageConfig(store="sqlite", parameters={"path": "runs.sqlite3"}),
-    datasets=[filtered_dataset],
+    storage=StorageConfig(target="sqlite", kwargs={"path": "runs.sqlite3"}),
+    dataset_sources=[filtered_dataset],
 )
 ```
 

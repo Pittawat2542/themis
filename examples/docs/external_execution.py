@@ -19,12 +19,12 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: runs/themis.sqlite3
 runtime:
   queue_root: runs/queue
-datasets:
+dataset_sources:
   - dataset_id: sample
     cases:
       - case_id: case-1

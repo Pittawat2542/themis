@@ -108,7 +108,7 @@ class OpenAIGenerator:
 
     def _build_client(self) -> _OpenAIResponsesClient:
         try:
-            from openai import AsyncOpenAI
+            from openai import AsyncOpenAI  # type: ignore[import-not-found]
         except ImportError as exc:
             raise ImportError(
                 "OpenAI adapter requires the optional 'openai' dependency or an injected client."

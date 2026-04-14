@@ -20,7 +20,9 @@ from themis.core.config import (
     GenerationConfig,
     RuntimeConfig,
     StorageConfig,
+    TargetSpec,
 )  # noqa: E402
+from themis.core.dataset_sources import inline_dataset_source  # noqa: E402
 from themis.core.events import RunEvent  # noqa: E402
 from themis.core.experiment import Experiment  # noqa: E402
 from themis.core.models import (
@@ -32,6 +34,7 @@ from themis.core.models import (
     Score,
 )  # noqa: E402
 from themis.core.protocols import JudgeModel  # noqa: E402
+from themis.core.registry import RunLineage, RunQuery, RunRecord  # noqa: E402
 from themis.core.contexts import (
     EvalScoreContext,
     GenerateContext,
@@ -240,6 +243,25 @@ class ProfileStore(RunStore):
     def store_stage_cache(self, stage_name: str, cache_key: str, payload) -> None:
         self._stage_cache[(stage_name, cache_key)] = payload
 
+    def get_run_record(self, run_id: str) -> RunRecord | None:
+        del run_id
+        return None
+
+    def query_runs(self, query: RunQuery | None = None) -> list[RunRecord]:
+        del query
+        return []
+
+    def update_run_record(
+        self,
+        run_id: str,
+        *,
+        tags: list[str] | None = None,
+        baseline_label: str | None = None,
+        lineage: list[RunLineage] | None = None,
+    ) -> None:
+        del run_id, tags, baseline_label, lineage
+        return None
+
     def clear_run(self, run_id: str) -> None:
         self._snapshots.pop(run_id, None)
         self._events.pop(run_id, None)
@@ -253,7 +275,9 @@ def _build_experiment(
 ) -> tuple[Experiment, ProfileGenerator, list[ProfileJudgeModel]]:
     generator = ProfileGenerator()
     judge_models = [ProfileJudgeModel(index) for index in range(judge_count)]
-    configured_judge_models = cast(list[JudgeModel | str], judge_models)
+    configured_judge_models = cast(
+        list[JudgeModel | TargetSpec | str], judge_models
+    )
     experiment = Experiment(
         generation=GenerationConfig(
             generator=generator,
@@ -265,7 +289,7 @@ def _build_experiment(
             parsers=[ProfileParser()],
             judge_models=configured_judge_models,
         ),
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         runtime=RuntimeConfig(
             max_concurrent_tasks=min(32, max(1, judge_count + samples)),
             stage_concurrency={
@@ -273,8 +297,8 @@ def _build_experiment(
                 "evaluation": min(16, max(1, judge_count)),
             },
         ),
-        datasets=[
-            Dataset(
+        dataset_sources=[
+            inline_dataset_source(Dataset(
                 dataset_id="profile",
                 cases=[
                     Case(
@@ -284,7 +308,7 @@ def _build_experiment(
                     )
                     for index in range(cases)
                 ],
-            )
+            ))
         ],
         seeds=list(range(samples)),
     )

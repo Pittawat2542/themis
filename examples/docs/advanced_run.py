@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from themis import Experiment, InMemoryRunStore
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.dataset_sources import inline_dataset_source
 from themis.core.models import Case, Dataset
 
 
@@ -25,9 +26,9 @@ def run_example() -> dict[str, object]:
             judge_models=["builtin/demo_judge", "builtin/demo_judge"],
             workflow_overrides={"rubric": "prefer correct and concise answers"},
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
-            Dataset(
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            inline_dataset_source(Dataset(
                 dataset_id="sample",
                 cases=[
                     Case(
@@ -36,7 +37,7 @@ def run_example() -> dict[str, object]:
                         expected_output={"answer": "4"},
                     )
                 ],
-            )
+            ))
         ],
         seeds=[7, 11],
     )
