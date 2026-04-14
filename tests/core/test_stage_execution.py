@@ -30,8 +30,8 @@ def _experiment() -> Experiment:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -174,9 +174,9 @@ def _cached_experiment(
             reducer=reducer,
         ),
         evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
-        storage=StorageConfig(store="sqlite", parameters={"path": store_path}),
+        storage=StorageConfig(target="sqlite", kwargs={"path": store_path}),
         runtime=RuntimeConfig(existing_run_policy=existing_run_policy),
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

@@ -91,8 +91,8 @@ def test_experiment_compile_returns_snapshot() -> None:
             judge_config={"panel_size": 1},
             judge_models=[DummyJudgeModel()],
         ),
-        storage=StorageConfig(store="memory", parameters={"path": ":memory:"}),
-        datasets=[
+        storage=StorageConfig(target="memory", kwargs={"path": ":memory:"}),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -113,7 +113,7 @@ def test_experiment_compile_returns_snapshot() -> None:
     snapshot = experiment.compile()
 
     assert isinstance(snapshot, RunSnapshot)
-    assert snapshot.identity.dataset_refs[0].dataset_id == "dataset-1"
+    assert snapshot.identity.dataset_source_refs[0].dataset_id == "dataset-1"
     assert snapshot.datasets[0].cases[0].case_id == "case-1"
     assert snapshot.component_refs.generator.component_id == "builtin/demo_generator"
     assert snapshot.component_refs.judge_models[0].component_id == "judge/custom"
@@ -132,8 +132,8 @@ def test_experiment_defaults_release_provenance_to_package_version() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -159,8 +159,8 @@ def test_experiment_compile_captures_extended_provenance_fields() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -196,8 +196,8 @@ def test_rejudge_requires_explicit_store_for_memory_backed_runs() -> None:
             parsers=["builtin/json_identity"],
             judge_models=[DummyJudgeModel()],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -225,8 +225,8 @@ def test_replay_requires_explicit_store_for_memory_backed_runs() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -254,8 +254,8 @@ def test_run_accepts_explicit_store_for_memory_backed_runs() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -287,8 +287,8 @@ def test_run_rejects_component_fingerprint_mismatch_after_compile() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -322,9 +322,9 @@ def test_run_rejects_component_fingerprint_mismatch_before_auto_reuse() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         runtime=RuntimeConfig(existing_run_policy="auto"),
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -360,8 +360,8 @@ def test_run_distinguishes_duplicate_case_ids_across_datasets() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
@@ -456,8 +456,8 @@ def test_compile_keeps_cached_snapshot_until_explicit_rebuild() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[Dataset(dataset_id="dataset-1", cases=[case])],
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[Dataset(dataset_id="dataset-1", cases=[case])],
     )
 
     compiled = experiment.compile()
@@ -491,8 +491,8 @@ async def test_sync_experiment_entrypoints_reject_running_event_loops(
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -530,8 +530,8 @@ def test_compile_rejects_multiple_parsers() -> None:
                 metrics=["builtin/exact_match"],
                 parsers=["builtin/json_identity", "builtin/json_identity"],
             ),
-            storage=StorageConfig(store="memory"),
-            datasets=[
+            storage=StorageConfig(target="memory"),
+            dataset_sources=[
                 Dataset(
                     dataset_id="dataset-1",
                     cases=[
@@ -557,8 +557,8 @@ def test_replay_rejects_unknown_stage() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

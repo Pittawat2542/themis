@@ -22,8 +22,8 @@ def test_planner_estimate_returns_deterministic_counts_for_compiled_snapshot() -
             metrics=["builtin/exact_match", "builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -72,8 +72,8 @@ def test_runtime_submission_paths_do_not_affect_run_identity() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -96,8 +96,8 @@ def test_runtime_submission_paths_do_not_affect_run_identity() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -121,8 +121,8 @@ def test_runtime_submission_paths_do_not_affect_run_identity() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

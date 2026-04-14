@@ -198,7 +198,7 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
         prompt_spec=prompt_spec,
         judge_config={"panel_size": 1},
     )
-    storage = StorageConfig(store="memory", parameters={"path": ":memory:"})
+    storage = StorageConfig(target="memory", kwargs={"path": ":memory:"})
 
     assert GenerateContext.model_validate_json(generate.model_dump_json()) == generate
     assert ReduceContext.model_validate_json(reduce.model_dump_json()) == reduce

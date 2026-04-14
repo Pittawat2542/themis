@@ -74,8 +74,8 @@ def _experiment(
             parsers=parsers or ["builtin/json_identity"],
             judge_models=judge_models or [],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

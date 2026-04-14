@@ -20,10 +20,10 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: {store_path}
-datasets:
+dataset_sources:
   - dataset_id: dataset-1
     revision: r1
     cases:
@@ -55,10 +55,10 @@ evaluation:
   workflow_overrides:
     rubric: pass if the answer is correct
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: {store_path}
-datasets:
+dataset_sources:
   - dataset_id: dataset-1
     revision: r1
     cases:

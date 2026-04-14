@@ -251,8 +251,8 @@ def test_failure_modes_cover_stage_failures(generator, reducer, parser, metric) 
             generator=generator, candidate_policy={"num_samples": 1}, reducer=reducer
         ),
         evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
-        storage=StorageConfig(store="memory"),
-        datasets=_base_dataset(),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=_base_dataset(),
         seeds=[7],
     )
 
@@ -277,8 +277,8 @@ def test_failure_modes_persist_partial_workflow_failures() -> None:
                 PartialJudgeModel("judge/fail", fail=True),
             ],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=_base_dataset(),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=_base_dataset(),
         seeds=[7],
     )
 
@@ -307,8 +307,8 @@ def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging(
             parsers=[HappyParser()],
             judge_models=[PartialJudgeModel("judge/ok")],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=_base_dataset(),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=_base_dataset(),
         seeds=[7],
     )
     store = InMemoryRunStore()
@@ -338,8 +338,8 @@ def test_failure_modes_recover_from_store_write_retry() -> None:
             reducer=HappyReducer(),
         ),
         evaluation=EvaluationConfig(metrics=[FailingMetric()], parsers=[HappyParser()]),
-        storage=StorageConfig(store="memory"),
-        datasets=_base_dataset(),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=_base_dataset(),
         seeds=[7],
     )
     store = FlakyStore()

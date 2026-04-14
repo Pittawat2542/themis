@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 import subprocess
 from pathlib import Path
@@ -94,7 +95,7 @@ class Experiment(FrozenModel):
     evaluation: EvaluationConfig
     storage: StorageConfig
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
-    dataset_sources: list[DatasetSourceSpec] = Field(default_factory=list)
+    dataset_sources: Sequence[DatasetSourceSpec | Dataset] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
     themis_version: str = Field(default_factory=_resolve_themis_version)
@@ -452,7 +453,12 @@ class Experiment(FrozenModel):
         )
 
     def _resolved_dataset_sources(self) -> list[DatasetSourceSpec]:
-        return list(self.dataset_sources)
+        return [
+            source
+            if isinstance(source, DatasetSourceSpec)
+            else inline_dataset_source(source)
+            for source in self.dataset_sources
+        ]
 
     def _materialized_datasets(self) -> list[Dataset]:
         return materialize_dataset_sources(self._resolved_dataset_sources())

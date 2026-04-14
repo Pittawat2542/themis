@@ -46,8 +46,8 @@ def _snapshot() -> RunSnapshot:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

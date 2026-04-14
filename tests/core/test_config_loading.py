@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 from themis import Experiment
+from themis.core.config import TargetSpec
 from themis.core.models import Case, Dataset, GenerationResult
 
 
@@ -38,8 +40,8 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: memory
-datasets:
+  target: memory
+dataset_sources:
   - dataset_id: dataset-1
     revision: r1
     cases:
@@ -57,7 +59,7 @@ seeds: [7]
         generation=loaded.generation,
         evaluation=loaded.evaluation,
         storage=loaded.storage,
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
@@ -92,18 +94,18 @@ metrics = ["builtin/exact_match"]
 parsers = ["builtin/json_identity"]
 
 [storage]
-store = "memory"
+target = "memory"
 
-[[datasets]]
+[[dataset_sources]]
 dataset_id = "dataset-1"
 
-[[datasets.cases]]
+[[dataset_sources.cases]]
 case_id = "case-1"
 
-[datasets.cases.input]
+[dataset_sources.cases.input]
 question = "2+2"
 
-[datasets.cases.expected_output]
+[dataset_sources.cases.expected_output]
 answer = "4"
 """.strip()
     )
@@ -125,8 +127,8 @@ evaluation:
   metrics: []
   parsers: []
 storage:
-  store: memory
-datasets:
+  target: memory
+dataset_sources:
   - dataset_id: dataset-1
     cases:
       - case_id: case-1
@@ -136,14 +138,90 @@ datasets:
 
     experiment = Experiment.from_config(path)
 
-    assert not isinstance(experiment.generation.generator, str)
-    assert experiment.generation.generator.component_id == CONFIG_GENERATOR.component_id
+    assert isinstance(experiment.generation.generator, TargetSpec)
     assert (
-        experiment.generation.generator.fingerprint() == CONFIG_GENERATOR.fingerprint()
+        experiment.generation.generator.target
+        == "tests.core.test_config_loading:CONFIG_GENERATOR"
     )
+    assert experiment.generation.generator.kwargs == {}
     assert (
         experiment.compile().component_refs.generator.component_id == "generator/config"
     )
+
+
+def test_experiment_from_config_supports_target_and_kwargs_for_custom_components(
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "custom_components.py"
+    module_path.write_text(
+        """
+from themis.core.contexts import GenerateContext
+from themis.core.models import Case, GenerationResult
+
+
+class PrefixGenerator:
+    component_id = "generator/prefix"
+    version = "1.0"
+
+    def __init__(self, *, prefix: str) -> None:
+        self.prefix = prefix
+
+    def fingerprint(self) -> str:
+        return f"prefix:{self.prefix}"
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        del ctx
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate",
+            final_output={"answer": f"{self.prefix}{case.expected_output['answer']}"},
+        )
+
+
+def build_generator(*, prefix: str) -> PrefixGenerator:
+    return PrefixGenerator(prefix=prefix)
+""".strip()
+    )
+    sys.path.insert(0, str(tmp_path))
+    try:
+        path = tmp_path / "experiment.toml"
+        path.write_text(
+            """
+[generation]
+candidate_policy = { num_samples = 1 }
+reducer = { target = "builtin/majority_vote" }
+generator = { target = "custom_components:build_generator", kwargs = { prefix = "" } }
+
+[evaluation]
+metrics = [{ target = "builtin/exact_match" }]
+parsers = [{ target = "builtin/json_identity" }]
+
+[storage]
+target = "memory"
+
+[[dataset_sources]]
+dataset_id = "dataset-1"
+revision = "r1"
+
+[[dataset_sources.cases]]
+case_id = "case-1"
+
+[dataset_sources.cases.input]
+question = "2+2"
+
+[dataset_sources.cases.expected_output]
+answer = "4"
+""".strip()
+        )
+
+        experiment = Experiment.from_config(path)
+        result = experiment.run(store=None)
+    finally:
+        sys.path.remove(str(tmp_path))
+
+    assert isinstance(experiment.generation.generator, TargetSpec)
+    assert experiment.generation.generator.target == "custom_components:build_generator"
+    assert experiment.generation.generator.kwargs == {"prefix": ""}
+    assert result.status.value == "completed"
 
 
 def test_experiment_from_config_resolves_relative_paths_from_config_directory(
@@ -165,13 +243,13 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: runs/themis.sqlite3
 runtime:
   queue_root: runs/queue
   batch_root: runs/batch
-datasets:
+dataset_sources:
   - dataset_id: dataset-1
     cases:
       - case_id: case-1
@@ -184,7 +262,7 @@ datasets:
 
     experiment = Experiment.from_config(path)
 
-    assert experiment.storage.parameters["path"] == str(
+    assert experiment.storage.kwargs["path"] == str(
         root / "runs" / "themis.sqlite3"
     )
     assert experiment.runtime.queue_root == str(root / "runs" / "queue")
@@ -210,13 +288,13 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: runs/themis.sqlite3
 runtime:
   queue_root: runs/queue
   batch_root: runs/batch
-datasets:
+dataset_sources:
   - dataset_id: dataset-1
     cases:
       - case_id: case-1
@@ -230,12 +308,12 @@ datasets:
     experiment = Experiment.from_config(
         path,
         overrides=[
-            "storage.parameters.path=alt/store.sqlite3",
+            "storage.kwargs.path=alt/store.sqlite3",
             "runtime.queue_root=alt/queue",
             "runtime.batch_root=alt/batch",
         ],
     )
 
-    assert experiment.storage.parameters["path"] == str(root / "alt" / "store.sqlite3")
+    assert experiment.storage.kwargs["path"] == str(root / "alt" / "store.sqlite3")
     assert experiment.runtime.queue_root == str(root / "alt" / "queue")
     assert experiment.runtime.batch_root == str(root / "alt" / "batch")

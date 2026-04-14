@@ -42,13 +42,13 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: {resolved_store_path}
 runtime:
   queue_root: {resolved_queue_root}
   batch_root: {resolved_batch_root}
-datasets:
+dataset_sources:
   - dataset_id: cases
     cases:
       - case_id: case-1

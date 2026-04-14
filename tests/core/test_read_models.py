@@ -16,6 +16,7 @@ from themis.core.events import (
     ScoreFailedEvent,
 )
 from themis.core.experiment import Experiment
+from themis.core.inspection import get_case_audit, get_telemetry_summary
 from themis.core.models import Case, Dataset
 from themis.core.projections import (
     build_benchmark_result,
@@ -23,6 +24,7 @@ from themis.core.projections import (
     build_timeline_view,
     build_trace_view,
 )
+from themis.core.stores.memory import InMemoryRunStore
 from themis.core.workflows import EvaluationExecution
 from tests.release import CURRENT_VERSION
 
@@ -39,8 +41,8 @@ def _snapshot():
             parsers=["builtin/json_identity"],
             judge_models=["builtin/demo_judge"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
@@ -216,6 +218,121 @@ def test_build_benchmark_result_aggregates_scores_from_run_result() -> None:
     assert result.metric_means == {"builtin/exact_match": 1.0}
 
 
+def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures() -> None:
+    snapshot = _snapshot()
+    events = [
+        RunStartedEvent(run_id=snapshot.run_id),
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            candidate_id="candidate-1",
+            candidate_index=0,
+            result={
+                "candidate_id": "candidate-1",
+                "final_output": {"answer": "4"},
+                "token_usage": {"prompt_tokens": 10, "completion_tokens": 2},
+                "latency_ms": 12.5,
+                "artifacts": {
+                    "provider_request_id": "req-gen-1",
+                    "retry_history": [{"attempt": 1}],
+                    "cost_estimate": 0.12,
+                },
+            },
+        ),
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["candidate-1"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["candidate-1"],
+                "final_output": {"answer": "4"},
+                "metadata": {"strategy": "majority_vote"},
+            },
+        ),
+        ParseCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            candidate_id="case-1-reduced",
+            result={"value": {"answer": "4"}, "format": "json"},
+        ),
+        EvaluationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            candidate_id="case-1-reduced",
+            metric_id="builtin/llm_rubric",
+            execution={
+                "execution_id": "execution-1",
+                "subject_kind": "candidate_set",
+                "judge_calls": [
+                    {"call_id": "call-1", "judge_model_id": "builtin/demo_judge"}
+                ],
+                "rendered_prompts": [{"prompt_id": "prompt-1", "content": "grade"}],
+                "judge_responses": [
+                    {
+                        "judge_model_id": "builtin/demo_judge",
+                        "judge_model_version": "1.0",
+                        "judge_model_fingerprint": "builtin-judge-demo-fingerprint",
+                        "raw_response": "pass",
+                        "token_usage": {"prompt_tokens": 3, "completion_tokens": 1},
+                        "latency_ms": 5.0,
+                        "provider_request_id": "req-judge-1",
+                        "retry_history": [{"attempt": 1}],
+                    }
+                ],
+                "parsed_judgments": [{"label": "pass", "score": 1.0}],
+                "scores": [{"metric_id": "builtin/llm_rubric", "value": 1.0}],
+                "trace": {"trace_id": "trace-1", "steps": []},
+            },
+        ),
+        EvaluationFailedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            candidate_id="case-1-reduced",
+            metric_id="metric/trace",
+            error_message="judge unavailable",
+        ),
+        ScoreCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            candidate_id="case-1-reduced",
+            metric_id="builtin/exact_match",
+            score={"metric_id": "builtin/exact_match", "value": 1.0},
+        ),
+        RunCompletedEvent(run_id=snapshot.run_id),
+    ]
+    store = InMemoryRunStore()
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    for event in events:
+        store.persist_event(event)
+
+    case_audit = get_case_audit(store, snapshot.run_id, "case-1", dataset_id="dataset-1")
+    telemetry = get_telemetry_summary(store, snapshot.run_id)
+    metric_records = {record.metric_id: record for record in case_audit.metric_records}
+
+    assert case_audit is not None
+    assert case_audit.reduction_source_candidate_ids == ["candidate-1"]
+    assert case_audit.parse_candidate_id == "case-1-reduced"
+    assert metric_records["metric/trace"].failure_records == ["judge unavailable"]
+    assert metric_records["builtin/llm_rubric"].evaluation_input["candidate_id"] == "case-1-reduced"
+    assert telemetry.generation_tokens == {"prompt_tokens": 10, "completion_tokens": 2}
+    assert telemetry.judge_tokens == {"prompt_tokens": 3, "completion_tokens": 1}
+
+
 def test_build_benchmark_result_marks_incorrect_scores_separately_from_errors() -> None:
     snapshot = _snapshot()
     events = _events(snapshot.run_id)
@@ -323,8 +440,8 @@ def test_build_run_result_does_not_apply_ambiguous_legacy_case_state() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"question": "2+2"})],

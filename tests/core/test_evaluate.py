@@ -16,6 +16,7 @@ from themis import (
 )
 from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.dataset_sources import inline_dataset_source
 from themis.core.models import Score
 from themis.core.models import Case, Dataset
 from themis.core.workflows import (
@@ -96,7 +97,7 @@ class JudgeConfigMetric:
 def test_evaluate_runs_one_off_experiment_with_same_run_id_as_explicit_experiment() -> (
     None
 ):
-    datasets = [
+    dataset_sources = [
         Dataset(
             dataset_id="dataset-1",
             cases=[
@@ -119,8 +120,8 @@ def test_evaluate_runs_one_off_experiment_with_same_run_id_as_explicit_experimen
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=datasets,
+        storage=StorageConfig(target="memory"),
+        dataset_sources=dataset_sources,
         seeds=[7],
         themis_version=CURRENT_VERSION,
     )
@@ -128,10 +129,10 @@ def test_evaluate_runs_one_off_experiment_with_same_run_id_as_explicit_experimen
 
     result = evaluate(
         model="builtin/demo_generator",
-        data=datasets,
+        data=dataset_sources,
         metric="builtin/exact_match",
         parser="builtin/json_identity",
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         seeds=[7],
         store=store,
     )
@@ -156,7 +157,7 @@ def test_evaluate_shorthand_supports_workflow_backed_metrics() -> None:
         parser="builtin/json_identity",
         judge="builtin/demo_judge",
         workflow_overrides={"rubric": "pass if the answer is correct"},
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         store=store,
         seeds=[7],
     )
@@ -184,7 +185,7 @@ def test_evaluate_defaults_release_provenance_to_package_version() -> None:
         ],
         metric="builtin/exact_match",
         parser="builtin/json_identity",
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         store=store,
     )
 
@@ -196,7 +197,7 @@ def test_evaluate_defaults_release_provenance_to_package_version() -> None:
 
 @pytest.mark.asyncio
 async def test_evaluate_async_matches_explicit_experiment_run_async() -> None:
-    datasets = [
+    dataset_sources = [
         Dataset(
             dataset_id="dataset-1",
             cases=[
@@ -219,8 +220,8 @@ async def test_evaluate_async_matches_explicit_experiment_run_async() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=datasets,
+        storage=StorageConfig(target="memory"),
+        dataset_sources=dataset_sources,
         seeds=[7],
         themis_version=CURRENT_VERSION,
     )
@@ -228,16 +229,59 @@ async def test_evaluate_async_matches_explicit_experiment_run_async() -> None:
     explicit_result = await explicit.run_async(store=InMemoryRunStore())
     shorthand_result = await evaluate_async(
         model="builtin/demo_generator",
-        data=datasets,
+        data=dataset_sources,
         metric="builtin/exact_match",
         parser="builtin/json_identity",
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         seeds=[7],
         store=InMemoryRunStore(),
     )
 
     assert shorthand_result.status is RunStatus.COMPLETED
     assert shorthand_result.run_id == explicit_result.run_id
+
+
+def test_evaluate_normalizes_inline_data_to_same_run_id_as_dataset_source_experiment() -> (
+    None
+):
+    dataset = Dataset(
+        dataset_id="inline",
+        revision="inline",
+        cases=[
+            Case(
+                case_id="case-1",
+                input={"question": "2+2"},
+                expected_output={"answer": "4"},
+                metadata={"difficulty": "easy"},
+            )
+        ],
+    )
+    explicit = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[inline_dataset_source(dataset)],
+        seeds=[7],
+    )
+
+    result = evaluate(
+        model="builtin/demo_generator",
+        data=[dataset],
+        metric="builtin/exact_match",
+        parser="builtin/json_identity",
+        storage=StorageConfig(target="memory"),
+        seeds=[7],
+        store=InMemoryRunStore(),
+    )
+
+    assert result.run_id == explicit.compile().run_id
 
 
 @pytest.mark.asyncio
@@ -256,7 +300,7 @@ async def test_evaluate_rejects_running_event_loop_with_clear_guidance() -> None
                 ],
                 metric="builtin/exact_match",
                 parser="builtin/json_identity",
-                storage=StorageConfig(store="memory"),
+                storage=StorageConfig(target="memory"),
                 store=InMemoryRunStore(),
             )
         gc.collect()
@@ -283,7 +327,7 @@ async def test_evaluate_async_exposes_judge_config_to_workflows() -> None:
         parser="builtin/json_identity",
         judge="builtin/demo_judge",
         judge_config={"panel_size": 3},
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         store=InMemoryRunStore(),
         seeds=[7],
     )

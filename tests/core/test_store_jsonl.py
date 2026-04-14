@@ -20,8 +20,8 @@ def _snapshot():
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="jsonl"),
-        datasets=[
+        storage=StorageConfig(target="jsonl"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
@@ -99,7 +99,7 @@ def test_jsonl_store_skips_unknown_event_types_on_read(tmp_path) -> None:
 
 def test_store_factory_can_build_jsonl_backend(tmp_path) -> None:
     store = create_run_store(
-        StorageConfig(store="jsonl", parameters={"root": str(tmp_path / "jsonl-store")})
+        StorageConfig(target="jsonl", kwargs={"root": str(tmp_path / "jsonl-store")})
     )
 
     assert store.__class__.__name__ == "JsonlRunStore"

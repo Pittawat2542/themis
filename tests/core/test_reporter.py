@@ -34,8 +34,8 @@ def _snapshot():
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
@@ -189,8 +189,8 @@ def test_snapshot_report_includes_identity_and_provenance() -> None:
 
     report = snapshot_report(snapshot, {"stored_events": 6})
     identity = cast(dict[str, JSONValue], report["identity"])
-    dataset_refs = cast(list[JSONValue], identity["dataset_refs"])
-    first_dataset_ref = cast(dict[str, JSONValue], dataset_refs[0])
+    dataset_source_refs = cast(list[JSONValue], identity["dataset_source_refs"])
+    first_dataset_ref = cast(dict[str, JSONValue], dataset_source_refs[0])
     provenance = cast(dict[str, JSONValue], report["provenance"])
 
     assert report["run_id"] == snapshot.run_id

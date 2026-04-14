@@ -28,7 +28,11 @@ from tests.release import CURRENT_VERSION
 def test_root_package_exports_public_symbols() -> None:
     from themis import (
         Experiment,
+        DatasetSourceSpec,
         Reporter,
+        RunLineage,
+        RunQuery,
+        RunRecord,
         RunResult,
         RunSnapshot,
         RunStatus,
@@ -37,7 +41,9 @@ def test_root_package_exports_public_symbols() -> None:
         evaluate_async,
         export_evaluation_bundle,
         export_generation_bundle,
+        get_case_audit,
         get_run_snapshot,
+        get_telemetry_summary,
         get_evaluation_execution,
         get_execution_state,
         import_evaluation_bundle,
@@ -48,7 +54,11 @@ def test_root_package_exports_public_symbols() -> None:
     )
 
     assert Experiment is not None
+    assert DatasetSourceSpec is not None
     assert Reporter is not None
+    assert RunLineage is not None
+    assert RunQuery is not None
+    assert RunRecord is not None
     assert RunResult is not None
     assert RunSnapshot is not None
     assert RunStatus is not None
@@ -59,7 +69,9 @@ def test_root_package_exports_public_symbols() -> None:
     assert export_generation_bundle is not None
     assert import_evaluation_bundle is not None
     assert import_generation_bundle is not None
+    assert get_case_audit is not None
     assert get_run_snapshot is not None
+    assert get_telemetry_summary is not None
     assert get_execution_state is not None
     assert get_evaluation_execution is not None
     assert quickcheck is not None
@@ -80,10 +92,10 @@ def test_public_surface_compiles_and_persists_runs(tmp_path) -> None:
             judge_config={"panel_size": 1},
         ),
         storage=StorageConfig(
-            store="sqlite",
-            parameters={"path": str(tmp_path / "run_store.sqlite3")},
+            target="sqlite",
+            kwargs={"path": str(tmp_path / "run_store.sqlite3")},
         ),
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -134,8 +146,8 @@ def test_public_surface_runs_experiment_end_to_end() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -174,8 +186,8 @@ def test_public_inspection_helpers_return_execution_state_and_evaluation_executi
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -232,8 +244,8 @@ def test_get_evaluation_execution_rejects_conflicting_case_key() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -285,8 +297,8 @@ def test_get_evaluation_execution_does_not_ignore_supplied_case_key() -> None:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"question": "2+2"})],

@@ -9,8 +9,13 @@ from themis.cli.commands.export import evaluation as export_evaluation
 from themis.cli.commands.export import generation as export_generation
 from themis.cli.commands.init import init
 from themis.cli.commands.inspect import evaluation as inspect_evaluation
+from themis.cli.commands.inspect import case as inspect_case
+from themis.cli.commands.inspect import lineage as inspect_lineage
+from themis.cli.commands.inspect import run_record as inspect_run_record
+from themis.cli.commands.inspect import runs as inspect_runs
 from themis.cli.commands.inspect import snapshot as inspect_snapshot
 from themis.cli.commands.inspect import state as inspect_state
+from themis.cli.commands.inspect import telemetry as inspect_telemetry
 from themis.cli.commands.quick_eval import benchmark, file as quick_eval_file
 from themis.cli.commands.quick_eval import inline as quick_eval_inline
 from themis.cli.commands.reporting import report
@@ -18,7 +23,9 @@ from themis.cli.commands.run import estimate, quickcheck, replay, resume, run
 from themis.cli.commands.worker import run as run_worker_command
 from themis.core.experiment import Experiment
 from themis.core.read_models import BenchmarkResult
+from themis.core.registry import RunLineage
 from themis.core.results import RunStatus
+from themis.core.stores.factory import create_run_store
 
 
 def test_run_resume_estimate_and_quickcheck_commands(
@@ -71,6 +78,18 @@ def test_report_export_and_compare_commands(
     assert report(config=str(baseline_config), format="latex") == 0
     assert "\\begin{tabular}" in capsys.readouterr().out
 
+    assert report(config=str(baseline_config), run_id=baseline_result.run_id) == 0
+    report_by_id_payload = json.loads(capsys.readouterr().out)
+    assert report_by_id_payload["run_result"]["run_id"] == baseline_result.run_id
+
+    baseline_store = create_run_store(baseline_experiment.storage)
+    baseline_store.initialize()
+    baseline_store.update_run_record(baseline_result.run_id, baseline_label="main")
+
+    assert report(config=str(baseline_config), baseline_label="main") == 0
+    report_by_label_payload = json.loads(capsys.readouterr().out)
+    assert report_by_label_payload["run_result"]["run_id"] == baseline_result.run_id
+
     assert (
         compare(
             baseline_config=str(baseline_config),
@@ -80,6 +99,31 @@ def test_report_export_and_compare_commands(
     )
     compare_payload = json.loads(capsys.readouterr().out)
     assert compare_payload["metrics"]["builtin/exact_match"]["ties"] == 1
+
+    assert (
+        compare(
+            baseline_config=str(baseline_config),
+            candidate_config=str(candidate_config),
+            baseline_run_id=baseline_result.run_id,
+            candidate_run_id=candidate_experiment.compile().run_id,
+        )
+        == 0
+    )
+    compare_by_id_payload = json.loads(capsys.readouterr().out)
+    assert compare_by_id_payload["metrics"]["builtin/exact_match"]["ties"] == 1
+
+    candidate_store.update_run_record(candidate_experiment.compile().run_id, baseline_label="candidate")
+    assert (
+        compare(
+            baseline_config=str(baseline_config),
+            candidate_config=str(candidate_config),
+            baseline_baseline_label="main",
+            candidate_baseline_label="candidate",
+        )
+        == 0
+    )
+    compare_by_label_payload = json.loads(capsys.readouterr().out)
+    assert compare_by_label_payload["metrics"]["builtin/exact_match"]["ties"] == 1
 
     assert export_generation(config=str(baseline_config)) == 0
     generation_payload = json.loads(capsys.readouterr().out)
@@ -101,7 +145,12 @@ def test_inspect_commands_and_replay_command(
     write_experiment_config, run_config_experiment, capsys
 ) -> None:
     config_path = write_experiment_config()
-    experiment, _, result = run_config_experiment(config_path)
+    experiment, store, result = run_config_experiment(config_path)
+    store.update_run_record(
+        result.run_id,
+        tags=["phase1", "smoke"],
+        baseline_label="main",
+    )
 
     assert inspect_snapshot(config=str(config_path)) == 0
     snapshot_payload = json.loads(capsys.readouterr().out)
@@ -110,6 +159,33 @@ def test_inspect_commands_and_replay_command(
     assert inspect_state(config=str(config_path)) == 0
     state_payload = json.loads(capsys.readouterr().out)
     assert state_payload["status"] == "completed"
+
+    assert inspect_runs(config=str(config_path), tag=["phase1"]) == 0
+    run_list_payload = json.loads(capsys.readouterr().out)
+    assert run_list_payload[0]["run_id"] == result.run_id
+
+    assert inspect_run_record(config=str(config_path), run_id=result.run_id) == 0
+    run_record_payload = json.loads(capsys.readouterr().out)
+    assert run_record_payload["baseline_label"] == "main"
+
+    store.update_run_record(
+        result.run_id,
+        lineage=[RunLineage(parent_run_id="parent-run", relationship="rerun")],
+    )
+    assert inspect_lineage(config=str(config_path), run_id=result.run_id) == 0
+    lineage_payload = json.loads(capsys.readouterr().out)
+    assert lineage_payload["run_id"] == result.run_id
+    assert lineage_payload["lineage"][0]["parent_run_id"] == "parent-run"
+
+    assert inspect_case(
+        config=str(config_path), run_id=result.run_id, case_id="case-1", dataset_id="cases"
+    ) == 0
+    case_payload = json.loads(capsys.readouterr().out)
+    assert case_payload["case_id"] == "case-1"
+
+    assert inspect_telemetry(config=str(config_path), run_id=result.run_id) == 0
+    telemetry_payload = json.loads(capsys.readouterr().out)
+    assert telemetry_payload["run_id"] == result.run_id
 
     assert replay(config=str(config_path), stage="score") == 0
     replay_payload = json.loads(capsys.readouterr().out)

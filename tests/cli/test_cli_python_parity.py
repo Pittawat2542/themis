@@ -46,13 +46,13 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: {store_path}
 runtime:
   queue_root: {queue_root}
   batch_root: {batch_root}
-datasets:
+dataset_sources:
   - dataset_id: cases
     cases:
       - case_id: case-1
@@ -98,7 +98,7 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
         data=[dataset_from_jsonl(cases_path, dataset_id="cases")],
         metric="builtin/exact_match",
         parser="builtin/json_identity",
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
     )
 
     cli_run = _run_cli("run", "--config", str(config_path))

@@ -155,8 +155,8 @@ def test_catalog_builtin_judge_metrics_run_end_to_end_through_experiment() -> No
             judge_models=["builtin/demo_judge", "builtin/demo_judge"],
             workflow_overrides={"rubric": "pass if the answer is correct"},
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

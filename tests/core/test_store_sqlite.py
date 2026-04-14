@@ -25,9 +25,9 @@ def _snapshot():
             judge_config={"panel_size": 1},
         ),
         storage=StorageConfig(
-            store="sqlite", parameters={"path": "runs/themis.sqlite3"}
+            target="sqlite", kwargs={"path": "runs/themis.sqlite3"}
         ),
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

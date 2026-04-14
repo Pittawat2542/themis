@@ -12,6 +12,7 @@ from themis.core.config import (
     RuntimeConfig,
     StorageConfig,
 )
+from themis.core.dataset_sources import DatasetSourceSpec
 from themis.core.experiment import Experiment
 from themis.core.contexts import (
     GenerateContext,
@@ -113,7 +114,7 @@ def _experiment(
             workflow_overrides=workflow_overrides or {},
         ),
         storage=StorageConfig(
-            store="sqlite", parameters={"path": "runs/themis.sqlite3"}
+            target="sqlite", kwargs={"path": "runs/themis.sqlite3"}
         ),
         runtime=RuntimeConfig(
             max_concurrent_tasks=16,
@@ -123,7 +124,7 @@ def _experiment(
             store_retry_attempts=7,
             store_retry_delay=0.25,
         ),
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -170,6 +171,58 @@ def test_identity_changes_alter_run_id() -> None:
     assert first.run_id != second.run_id
 
 
+def test_dataset_source_identity_tracks_source_fingerprint_and_materialization_receipt() -> (
+    None
+):
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            DatasetSourceSpec(
+                target="inline",
+                dataset_id="dataset-1",
+                source_id="inline-fixture",
+                source_revision="source-r1",
+                source_fingerprint="source-fingerprint-v1",
+                revision="dataset-r1",
+                kwargs={
+                    "cases": [
+                        {
+                            "case_id": "case-1",
+                            "input": {"question": "2+2"},
+                            "expected_output": {"answer": "4"},
+                            "metadata": {"difficulty": "easy"},
+                        }
+                    ]
+                },
+                provenance_metadata={"source_kind": "inline"},
+            )
+        ],
+        seeds=[7],
+    )
+
+    snapshot = experiment.compile()
+    source_ref = snapshot.identity.dataset_source_refs[0]
+    manifest = snapshot.dataset_manifests[0]
+
+    assert source_ref.dataset_id == "dataset-1"
+    assert source_ref.source_id == "inline-fixture"
+    assert source_ref.source_revision == "source-r1"
+    assert source_ref.source_fingerprint == "source-fingerprint-v1"
+    assert manifest.source_id == "inline-fixture"
+    assert manifest.source_revision == "source-r1"
+    assert manifest.source_fingerprint == "source-fingerprint-v1"
+    assert manifest.materialization_receipt["case_count"] == 1
+
+
 def test_workflow_overrides_change_run_id() -> None:
     first = _experiment(workflow_overrides={"timeout": 10}).compile()
     second = _experiment(workflow_overrides={"timeout": 20}).compile()
@@ -208,12 +261,12 @@ def test_storage_dsn_credentials_are_redacted_in_snapshot_provenance() -> None:
             parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(
-            store="postgres",
-            parameters={
+            target="postgres",
+            kwargs={
                 "url": "postgresql://themis:swordfish@db.example.com:5432/themis"
             },
         ),
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],
@@ -222,7 +275,7 @@ def test_storage_dsn_credentials_are_redacted_in_snapshot_provenance() -> None:
     ).compile()
 
     assert (
-        compiled.provenance.storage.parameters["url"]
+        compiled.provenance.storage.kwargs["url"]
         == "postgresql://themis:<redacted>@db.example.com:5432/themis"
     )
 
@@ -248,8 +301,8 @@ def test_builtin_component_strings_resolve_to_registry_entries() -> None:
             parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
-        storage=StorageConfig(store="memory", parameters={"path": ":memory:"}),
-        datasets=[
+        storage=StorageConfig(target="memory", kwargs={"path": ":memory:"}),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],
@@ -279,8 +332,8 @@ def test_unknown_builtin_component_strings_fail_fast() -> None:
     experiment = Experiment(
         generation=GenerationConfig(generator="generator/unknown"),
         evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],
@@ -299,8 +352,8 @@ def test_builtin_registry_changes_alter_component_identity(
     first = Experiment(
         generation=GenerationConfig(generator="builtin/demo_generator"),
         evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],
@@ -321,8 +374,8 @@ def test_builtin_registry_changes_alter_component_identity(
     second = Experiment(
         generation=GenerationConfig(generator="builtin/demo_generator"),
         evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],

@@ -10,6 +10,7 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.events import RunCompletedEvent, RunStartedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
+from themis.core.registry import RunLineage, RunQuery
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
 from themis.core.stores import (
@@ -34,8 +35,8 @@ def _snapshot() -> RunSnapshot:
             parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
-        storage=StorageConfig(store="memory", parameters={"path": ":memory:"}),
-        datasets=[
+        storage=StorageConfig(target="memory", kwargs={"path": ":memory:"}),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -199,3 +200,46 @@ def test_in_memory_store_updates_projections_without_resume_replay() -> None:
 
     assert isinstance(run_result, dict)
     assert run_result["status"] == "completed"
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["memory", "sqlite", "jsonl", "mongodb"],
+)
+def test_run_store_registry_round_trips_queryable_run_metadata(
+    label: str, tmp_path: Path, monkeypatch
+) -> None:
+    store = _store(label, tmp_path, monkeypatch)
+    snapshot = _snapshot()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.update_run_record(
+        snapshot.run_id,
+        tags=["phase1", "smoke"],
+        baseline_label="main",
+        lineage=[RunLineage(parent_run_id="parent-run", relationship="rerun")],
+    )
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+
+    record = store.get_run_record(snapshot.run_id)
+    matches = store.query_runs(
+        RunQuery(
+            run_id=snapshot.run_id,
+            dataset_source_id="dataset-1",
+            dataset_fingerprint=snapshot.identity.dataset_source_refs[0].fingerprint,
+            metric_id="builtin/exact_match",
+            tags=["phase1"],
+            baseline_label="main",
+            lineage_parent_run_id="parent-run",
+        )
+    )
+
+    assert record is not None
+    assert record.status == "completed"
+    assert record.tags == ["phase1", "smoke"]
+    assert record.baseline_label == "main"
+    assert record.lineage[0].parent_run_id == "parent-run"
+    assert record.created_at <= record.updated_at
+    assert [item.run_id for item in matches] == [snapshot.run_id]

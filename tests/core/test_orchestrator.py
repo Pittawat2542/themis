@@ -629,8 +629,8 @@ def _experiment() -> Experiment:
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -828,8 +828,8 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
             parsers=["builtin/json_identity"],
             judge_models=["builtin/demo_judge", "builtin/demo_judge"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -913,8 +913,8 @@ async def test_orchestrator_persists_workflow_events_through_orchestrator_event_
             parsers=["builtin/json_identity"],
             judge_models=["builtin/demo_judge"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -972,8 +972,8 @@ async def test_orchestrator_persists_partial_workflow_failures_without_dropping_
                 FlakyJudgeModel("judge/fail", fail=True),
             ],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1035,8 +1035,8 @@ async def test_orchestrator_retries_retryable_generation_failures_and_persists_h
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1092,8 +1092,8 @@ async def test_orchestrator_retries_timeout_generation_failures_by_default() -> 
             metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1144,8 +1144,8 @@ async def test_orchestrator_retries_rate_limited_judge_failures_and_persists_ret
             parsers=["builtin/json_identity"],
             judge_models=[judge_model],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1199,8 +1199,8 @@ async def test_orchestrator_retries_retryable_judge_failures_and_persists_histor
             parsers=["builtin/json_identity"],
             judge_models=[judge_model],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1307,8 +1307,8 @@ async def test_orchestrator_limits_parsing_stage_concurrency() -> None:
             reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1357,8 +1357,8 @@ async def test_orchestrator_limits_selection_stage_concurrency() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1407,8 +1407,8 @@ async def test_orchestrator_limits_reduction_stage_concurrency() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1456,8 +1456,8 @@ async def test_orchestrator_limits_scoring_stage_concurrency() -> None:
         evaluation=EvaluationConfig(
             metrics=[metric], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

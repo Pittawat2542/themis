@@ -17,7 +17,7 @@ from tests.core.store_fakes import fake_pymongo_module
 
 
 def _experiment(
-    store: str, parameters: dict[str, JSONValue] | None = None
+    target: str, parameters: dict[str, JSONValue] | None = None
 ) -> Experiment:
     return Experiment(
         generation=GenerationConfig(
@@ -28,8 +28,8 @@ def _experiment(
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store=store, parameters=parameters or {}),
-        datasets=[
+        storage=StorageConfig(target=target, kwargs=parameters or {}),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input="hi", expected_output="hi")],
@@ -44,19 +44,19 @@ def test_create_run_store_supports_builtin_backends(monkeypatch, tmp_path) -> No
         lambda name: fake_pymongo_module(),
     )
 
-    memory_store = create_run_store(StorageConfig(store="memory"))
+    memory_store = create_run_store(StorageConfig(target="memory"))
     jsonl = create_run_store(
-        StorageConfig(store="jsonl", parameters={"root": str(tmp_path / "jsonl-store")})
+        StorageConfig(target="jsonl", kwargs={"root": str(tmp_path / "jsonl-store")})
     )
     sqlite = create_run_store(
         StorageConfig(
-            store="sqlite", parameters={"path": str(tmp_path / "run_store.sqlite3")}
+            target="sqlite", kwargs={"path": str(tmp_path / "run_store.sqlite3")}
         )
     )
     postgres = create_run_store(
         StorageConfig(
-            store="postgres",
-            parameters={
+            target="postgres",
+            kwargs={
                 "url": str(tmp_path / "postgres.sqlite3"),
                 "blob_root": str(tmp_path / "postgres-blobs"),
             },
@@ -64,8 +64,8 @@ def test_create_run_store_supports_builtin_backends(monkeypatch, tmp_path) -> No
     )
     mongodb = create_run_store(
         StorageConfig(
-            store="mongodb",
-            parameters={
+            target="mongodb",
+            kwargs={
                 "url": "mongodb://example",
                 "database": "themis_test",
                 "blob_root": str(tmp_path / "mongodb-blobs"),
@@ -86,7 +86,7 @@ def test_register_store_backend_allows_custom_builders() -> None:
 
     register_store_backend("dummy", lambda config: DummyStore())
 
-    store = create_run_store(StorageConfig(store="dummy"))
+    store = create_run_store(StorageConfig(target="dummy"))
 
     assert isinstance(store, DummyStore)
 
@@ -106,4 +106,4 @@ def test_experiment_build_store_routes_through_store_factory(monkeypatch) -> Non
     store = _experiment("memory")._build_store()
 
     assert store is sentinel
-    assert captured == [StorageConfig(store="memory", parameters={})]
+    assert captured == [StorageConfig(target="memory", kwargs={})]

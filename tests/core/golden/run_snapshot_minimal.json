@@ -27,34 +27,79 @@
     },
     "selector": null
   },
-  "datasets": [
+  "dataset_manifests": [
     {
       "cases": [
         {
           "case_id": "case-1",
-          "expected_output": "4",
-          "input": {
-            "question": "2+2"
-          },
           "metadata": {}
         }
       ],
       "dataset_id": "dataset-1",
+      "fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+      "materialization_receipt": {
+        "case_count": 1,
+        "dataset_fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+        "dataset_metadata": {
+          "owner": "tests"
+        },
+        "provenance_metadata": {},
+        "source_fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+        "source_id": "dataset-1",
+        "source_revision": "r1",
+        "target": "inline"
+      },
       "metadata": {
         "owner": "tests"
       },
-      "revision": "r1"
+      "revision": "r1",
+      "source_fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+      "source_id": "dataset-1",
+      "source_revision": "r1"
+    }
+  ],
+  "dataset_sources": [
+    {
+      "dataset_id": "dataset-1",
+      "kwargs": {
+        "cases": [
+          {
+            "case_id": "case-1",
+            "expected_output": "4",
+            "input": {
+              "question": "2+2"
+            },
+            "metadata": {}
+          }
+        ],
+        "metadata": {
+          "owner": "tests"
+        }
+      },
+      "provenance_metadata": {},
+      "revision": "r1",
+      "source_fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+      "source_id": "dataset-1",
+      "source_revision": "r1",
+      "target": "inline",
+      "transform_kwargs": {}
     }
   ],
   "identity": {
     "candidate_policy": {
       "num_samples": 2
     },
-    "dataset_refs": [
+    "dataset_source_refs": [
       {
         "dataset_id": "dataset-1",
         "fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
-        "revision": "r1"
+        "provenance_metadata": {},
+        "revision": "r1",
+        "source_fingerprint": "ec54c1e6d455bcac452415ee2a0d9f736e3e7d82c22e2d967e883338b055d6d4",
+        "source_id": "dataset-1",
+        "source_revision": "r1",
+        "target": "inline",
+        "transform_kwargs": {}
       }
     ],
     "evaluation_prompt_spec": null,
@@ -132,12 +177,12 @@
       "store_retry_delay": 0.25
     },
     "storage": {
-      "parameters": {
+      "kwargs": {
         "path": "runs/themis.sqlite3"
       },
-      "store": "sqlite"
+      "target": "sqlite"
     },
     "themis_version": "4.0.2"
   },
-  "run_id": "8fae287c1cf1154ca8b7e6525e57d5ed28eecec31769c246147fc890751e019e"
+  "run_id": "013b36c75efc539e389f2cfd20e0ff6e5eb90bb97804db3fd6325b38d36d757b"
 }

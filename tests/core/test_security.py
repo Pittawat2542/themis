@@ -21,8 +21,8 @@ def _experiment(
             parsers=["builtin/json_identity"],
             judge_config=judge_config or {},
         ),
-        storage=storage or StorageConfig(store="memory"),
-        datasets=[
+        storage=storage or StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -73,8 +73,8 @@ def test_compile_allows_reference_style_secret_values() -> None:
 def test_compile_redacts_credentials_in_storage_urls() -> None:
     experiment = _experiment(
         storage=StorageConfig(
-            store="postgres",
-            parameters={
+            target="postgres",
+            kwargs={
                 "url": "postgresql://themis:swordfish@db.example.com:5432/themis"
             },
         )
@@ -83,6 +83,6 @@ def test_compile_redacts_credentials_in_storage_urls() -> None:
     snapshot = experiment.compile()
 
     assert (
-        snapshot.provenance.storage.parameters["url"]
+        snapshot.provenance.storage.kwargs["url"]
         == "postgresql://themis:<redacted>@db.example.com:5432/themis"
     )

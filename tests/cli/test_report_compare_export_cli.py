@@ -20,10 +20,10 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: {store_path}
-datasets:
+dataset_sources:
   - dataset_id: dataset-1
     cases:
       - case_id: case-1

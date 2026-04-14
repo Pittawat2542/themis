@@ -317,8 +317,8 @@ def _experiment(*, generator, reducer, parser, metric, num_samples=1) -> Experim
             reducer=reducer,
         ),
         evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -706,8 +706,8 @@ async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metr
             parsers=[parser],
             judge_models=[DemoJudgeModel()],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -819,8 +819,8 @@ async def test_orchestrator_respects_evaluation_concurrency_cap() -> None:
             parsers=[parser],
             judge_models=[judge_model],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -874,8 +874,8 @@ async def test_orchestrator_limits_in_flight_case_tasks() -> None:
             reducer=reducer,
         ),
         evaluation=EvaluationConfig(metrics=[metric], parsers=[parser]),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -929,8 +929,8 @@ async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume(
             parsers=[parser],
             judge_models=[DemoJudgeModel()],
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -1054,9 +1054,9 @@ async def test_experiment_rejudge_async_reruns_workflow_metrics_without_regenera
             judge_models=[judge_model],
         ),
         storage=StorageConfig(
-            store="sqlite", parameters={"path": str(tmp_path / "run_store.sqlite3")}
+            target="sqlite", kwargs={"path": str(tmp_path / "run_store.sqlite3")}
         ),
-        datasets=[
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

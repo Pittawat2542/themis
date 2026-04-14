@@ -39,7 +39,7 @@ def test_quick_eval_inline_matches_python_api() -> None:
         data=[dataset],
         metric="builtin/exact_match",
         parser="builtin/json_identity",
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         store=store,
     )
     benchmark = cast(
@@ -75,7 +75,7 @@ def test_quick_eval_file_matches_python_api(tmp_path: Path) -> None:
         data=[dataset],
         metric="builtin/exact_match",
         parser="builtin/json_identity",
-        storage=StorageConfig(store="memory"),
+        storage=StorageConfig(target="memory"),
         store=store,
     )
     benchmark = cast(

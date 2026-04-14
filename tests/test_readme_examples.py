@@ -43,8 +43,8 @@ def test_readme_builtin_component_example_compiles_and_persists() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],
@@ -69,8 +69,8 @@ def test_readme_builtin_component_example_runs_end_to_end() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -98,8 +98,8 @@ def test_readme_custom_component_example_compiles_and_persists() -> None:
     experiment = Experiment(
         generation=GenerationConfig(generator=CustomGenerator()),
         evaluation=EvaluationConfig(),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],
@@ -120,8 +120,8 @@ def test_readme_custom_component_example_runs_end_to_end() -> None:
     experiment = Experiment(
         generation=GenerationConfig(generator=CustomGenerator()),
         evaluation=EvaluationConfig(),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[Case(case_id="case-1", input={"q": "2+2"})],
@@ -142,8 +142,8 @@ def test_readme_generation_bundle_example_round_trips() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -190,8 +190,8 @@ def test_readme_evaluation_bundle_example_round_trips() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -239,8 +239,8 @@ def test_readme_inspection_example_reads_execution_state() -> None:
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[

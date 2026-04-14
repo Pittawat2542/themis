@@ -28,13 +28,13 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: {store_path}
 runtime:
   queue_root: {queue_root}
   batch_root: {batch_root}
-datasets:
+dataset_sources:
   - dataset_id: dataset-1
     cases:
       - case_id: case-1
@@ -184,13 +184,13 @@ evaluation:
   metrics: []
   parsers: []
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: {tmp_path / "run.sqlite3"}
 runtime:
   queue_root: {tmp_path / "queue"}
   batch_root: {tmp_path / "batch"}
-datasets:
+dataset_sources:
   - dataset_id: dataset-1
     cases:
       - case_id: case-1
@@ -220,8 +220,8 @@ def test_submit_experiment_rejects_non_importable_runtime_components(
             candidate_policy={"num_samples": 1},
         ),
         evaluation=EvaluationConfig(metrics=[], parsers=[]),
-        storage=StorageConfig(store="memory"),
-        datasets=[],
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[],
     )
 
     with pytest.raises(ValueError, match="importable config symbols"):

@@ -21,8 +21,8 @@ def _snapshot():
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
         ),
-        storage=StorageConfig(store="mongodb"),
-        datasets=[
+        storage=StorageConfig(target="mongodb"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 revision="r1",
@@ -73,8 +73,8 @@ def test_store_factory_can_build_mongodb_backend(monkeypatch, tmp_path) -> None:
 
     store = create_run_store(
         StorageConfig(
-            store="mongodb",
-            parameters={
+            target="mongodb",
+            kwargs={
                 "url": "mongodb://example",
                 "database": "themis_test",
                 "blob_root": str(tmp_path / "mongodb-blobs"),

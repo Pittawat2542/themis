@@ -10,8 +10,8 @@ from themis.core.stores.postgres import PostgresRunStore, postgres_store
 def test_store_factory_can_build_postgres_backend(tmp_path) -> None:
     store = create_run_store(
         StorageConfig(
-            store="postgres",
-            parameters={
+            target="postgres",
+            kwargs={
                 "url": f"postgresql://localhost/{tmp_path.name}",
                 "blob_root": str(tmp_path / "postgres-blobs"),
             },

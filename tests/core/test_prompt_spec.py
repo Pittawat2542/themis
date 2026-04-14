@@ -29,8 +29,8 @@ def test_prompt_specs_change_run_identity_for_generation_and_evaluation() -> Non
                 ],
             ),
         ),
-        storage=StorageConfig(store="memory"),
-        datasets=[
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
