@@ -9,6 +9,7 @@ from pathlib import Path
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
+from themis.core.registry import RunRecord
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -114,6 +115,32 @@ class JsonlRunStore(ProjectionRefreshingStore):
 
     def _run_root(self, run_id: str) -> Path:
         return self.root / "runs" / run_id
+
+    def _write_run_record(self, run_id: str, record: RunRecord) -> None:
+        run_root = self._run_root(run_id)
+        run_root.mkdir(parents=True, exist_ok=True)
+        (run_root / "run_record.json").write_text(
+            record.model_dump_json(indent=2), encoding="utf-8"
+        )
+
+    def _read_run_record(self, run_id: str) -> RunRecord | None:
+        path = self._run_root(run_id) / "run_record.json"
+        if not path.is_file():
+            return None
+        return RunRecord.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def _list_run_records(self) -> list[RunRecord]:
+        runs_root = self.root / "runs"
+        if not runs_root.exists():
+            return []
+        records: list[RunRecord] = []
+        for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
+            path = run_root / "run_record.json"
+            if path.is_file():
+                records.append(
+                    RunRecord.model_validate_json(path.read_text(encoding="utf-8"))
+                )
+        return records
 
     def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
         path = self.root / "stage_cache" / stage_name / f"{cache_key}.json"

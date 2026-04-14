@@ -17,6 +17,7 @@ from themis.core.config import (
     RuntimeConfig,
     StorageConfig,
 )
+from themis.core.dataset_sources import inline_dataset_source
 from themis.core.experiment import (
     Experiment,
     _raise_if_running_loop,
@@ -214,9 +215,9 @@ def _build_experiment(
                 dict[str, JSONValue], dict(workflow_overrides or {})
             ),
         ),
-        storage=storage or StorageConfig(store="memory"),
+        storage=storage or StorageConfig(target="memory"),
         runtime=runtime or RuntimeConfig(),
-        datasets=datasets,
+        dataset_sources=[inline_dataset_source(dataset) for dataset in datasets],
         seeds=list(seeds or []),
         environment_metadata=dict(environment_metadata or {}),
         themis_version=themis_version or _resolve_themis_version(),

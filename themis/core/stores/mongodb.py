@@ -9,6 +9,7 @@ from pathlib import Path
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
+from themis.core.registry import RunRecord
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -127,6 +128,25 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             upsert=True,
         )
 
+    def _write_run_record(self, run_id: str, record: RunRecord) -> None:
+        self._db()["run_registry"].replace_one(
+            {"run_id": run_id},
+            {"run_id": run_id, "record_json": record.model_dump(mode="json")},
+            upsert=True,
+        )
+
+    def _read_run_record(self, run_id: str) -> RunRecord | None:
+        row = self._db()["run_registry"].find_one({"run_id": run_id})
+        if row is None:
+            return None
+        return RunRecord.model_validate(dict(row["record_json"]))
+
+    def _list_run_records(self) -> list[RunRecord]:
+        return [
+            RunRecord.model_validate(dict(row["record_json"]))
+            for row in self._db()["run_registry"].find({})
+        ]
+
     def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
         row = self._db()["stage_cache"].find_one(
             {"stage_name": stage_name, "cache_key": cache_key}
@@ -153,6 +173,7 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         self._db()["run_event_counters"].delete_many({"run_id": run_id})
         self._db()["run_projections"].delete_many({"run_id": run_id})
         self._db()["run_snapshots"].delete_many({"run_id": run_id})
+        self._db()["run_registry"].delete_many({"run_id": run_id})
 
     def _allocate_sequence(self, run_id: str) -> int:
         pymongo = self._pymongo()

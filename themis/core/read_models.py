@@ -1,4 +1,4 @@
-"""Projection-backed read models for the Phase 4 read side."""
+"""Projection-backed read models for persisted inspection and reporting."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import Field
 
 from themis.core.base import FrozenModel, JSONValue
+from themis.core.models import GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
 from themis.core.workflows import EvaluationExecution
 
 
@@ -101,3 +102,77 @@ class TraceView(FrozenModel):
     generation_traces: list[GenerationTraceRecord] = Field(default_factory=list)
     conversation_traces: list[ConversationTraceRecord] = Field(default_factory=list)
     evaluation_traces: list[EvaluationTraceRecord] = Field(default_factory=list)
+
+
+class TelemetryBreakdown(FrozenModel):
+    """Aggregated telemetry for one persisted artifact."""
+
+    token_usage: dict[str, int] = Field(default_factory=dict)
+    latency_ms: float = 0.0
+    request_ids: list[str] = Field(default_factory=list)
+    retry_count: int = 0
+    estimated_cost: float = 0.0
+
+
+class GenerationAuditRecord(FrozenModel):
+    """Case-scoped audit record for one generation attempt."""
+
+    candidate_id: str
+    candidate_index: int | None = None
+    result: GenerationResult
+    telemetry: TelemetryBreakdown = Field(default_factory=TelemetryBreakdown)
+
+
+class MetricAuditRecord(FrozenModel):
+    """Case-scoped audit record for one metric."""
+
+    metric_id: str
+    score: Score | None = None
+    score_error: ScoreError | None = None
+    evaluation_execution: EvaluationExecution | None = None
+    evaluation_failure: str | None = None
+    evaluation_input: dict[str, JSONValue] = Field(default_factory=dict)
+    failure_records: list[str] = Field(default_factory=list)
+    telemetry: TelemetryBreakdown = Field(default_factory=TelemetryBreakdown)
+
+
+class CaseAuditRecord(FrozenModel):
+    """Unified pipeline audit record for one case."""
+
+    case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
+    generation_attempts: list[GenerationAuditRecord] = Field(default_factory=list)
+    generation_failures: dict[str, str] = Field(default_factory=dict)
+    selected_candidate_ids: list[str] | None = None
+    selection_metadata: dict[str, object] = Field(default_factory=dict)
+    selection_error: str | None = None
+    reduced_candidate: ReducedCandidate | None = None
+    reduction_source_candidate_ids: list[str] = Field(default_factory=list)
+    reduction_metadata: dict[str, JSONValue] = Field(default_factory=dict)
+    reduction_error: str | None = None
+    parse_candidate_id: str | None = None
+    parse_input: dict[str, JSONValue] = Field(default_factory=dict)
+    parsed_output: ParsedOutput | None = None
+    parse_error: str | None = None
+    metric_records: list[MetricAuditRecord] = Field(default_factory=list)
+
+
+class CaseAuditView(FrozenModel):
+    """Case-audit projection for a run."""
+
+    run_id: str
+    cases: list[CaseAuditRecord] = Field(default_factory=list)
+
+
+class TelemetrySummary(FrozenModel):
+    """Run-level telemetry summary derived from persisted case audits."""
+
+    run_id: str
+    generation_tokens: dict[str, int] = Field(default_factory=dict)
+    judge_tokens: dict[str, int] = Field(default_factory=dict)
+    generation_latency_ms: float = 0.0
+    judge_latency_ms: float = 0.0
+    request_ids: list[str] = Field(default_factory=list)
+    retry_count: int = 0
+    estimated_cost: float = 0.0

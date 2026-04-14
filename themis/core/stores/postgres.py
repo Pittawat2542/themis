@@ -9,6 +9,7 @@ from pathlib import Path
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
+from themis.core.registry import RunRecord
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -183,6 +184,44 @@ class PostgresRunStore(ProjectionRefreshingStore):
             )
             connection.commit()
 
+    def _write_run_record(self, run_id: str, record: RunRecord) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO run_registry (run_id, record_json)
+                VALUES (%s, %s::jsonb)
+                ON CONFLICT (run_id) DO UPDATE
+                SET record_json = EXCLUDED.record_json
+                """,
+                (run_id, record.model_dump_json()),
+            )
+            connection.commit()
+
+    def _read_run_record(self, run_id: str) -> RunRecord | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT record_json::text AS record_json
+                FROM run_registry
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return RunRecord.model_validate_json(row["record_json"])
+
+    def _list_run_records(self) -> list[RunRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT record_json::text AS record_json
+                FROM run_registry
+                ORDER BY run_id ASC
+                """
+            ).fetchall()
+        return [RunRecord.model_validate_json(row["record_json"]) for row in rows]
+
     def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -219,6 +258,7 @@ class PostgresRunStore(ProjectionRefreshingStore):
                 "DELETE FROM run_projections WHERE run_id = %s", (run_id,)
             )
             connection.execute("DELETE FROM run_snapshots WHERE run_id = %s", (run_id,))
+            connection.execute("DELETE FROM run_registry WHERE run_id = %s", (run_id,))
             connection.commit()
 
     def _migrate_to_v1(self, connection) -> None:
@@ -253,6 +293,14 @@ class PostgresRunStore(ProjectionRefreshingStore):
                 projection_name TEXT NOT NULL,
                 projection_json JSONB NOT NULL,
                 PRIMARY KEY (run_id, projection_name)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS run_registry (
+                run_id TEXT PRIMARY KEY,
+                record_json JSONB NOT NULL
             )
             """
         )

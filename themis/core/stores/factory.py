@@ -25,19 +25,19 @@ def memory_store() -> InMemoryRunStore:
 _STORE_BUILDERS: dict[str, StoreBuilder] = {
     "memory": lambda config: memory_store(),
     "jsonl": lambda config: jsonl_store(
-        Path(str(config.parameters.get("root", "runs/jsonl")))
+        Path(str(config.kwargs.get("root", "runs/jsonl")))
     ),
     "mongodb": lambda config: mongodb_store(
-        str(config.parameters.get("url", "mongodb://localhost:27017")),
-        str(config.parameters.get("database", "themis")),
-        Path(str(config.parameters.get("blob_root", "runs/mongodb-blobs"))),
+        str(config.kwargs.get("url", "mongodb://localhost:27017")),
+        str(config.kwargs.get("database", "themis")),
+        Path(str(config.kwargs.get("blob_root", "runs/mongodb-blobs"))),
     ),
     "postgres": lambda config: postgres_store(
-        str(config.parameters.get("url", "postgresql://localhost/themis")),
-        Path(str(config.parameters.get("blob_root", "runs/postgres-blobs"))),
+        str(config.kwargs.get("url", "postgresql://localhost/themis")),
+        Path(str(config.kwargs.get("blob_root", "runs/postgres-blobs"))),
     ),
     "sqlite": lambda config: sqlite_store(
-        Path(str(config.parameters.get("path", "runs/themis.sqlite3")))
+        Path(str(config.kwargs.get("path", "runs/themis.sqlite3")))
     ),
 }
 
@@ -58,7 +58,7 @@ def create_run_store(config: StorageConfig) -> RunStore:
     """Instantiate a run store from storage configuration."""
 
     try:
-        builder = _STORE_BUILDERS[config.store]
+        builder = _STORE_BUILDERS[config.target]
     except KeyError as exc:
-        raise ValueError(f"Unsupported store backend: {config.store}") from exc
+        raise ValueError(f"Unsupported store backend: {config.target}") from exc
     return builder(config)

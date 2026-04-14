@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import cast
 
-from themis.catalog.registry import load_component
+from themis.catalog.loaders import load_symbol
+from themis.catalog.registry import component_specs, load_component
+from themis.core.config import TargetSpec
 from themis.core.protocols import (
     CandidateReducer,
     CandidateSelector,
@@ -20,7 +22,31 @@ from themis.core.protocols import (
 BuiltinMetric = PureMetric | LLMMetric | SelectionMetric | TraceMetric
 
 
+def resolve_target_spec(spec: TargetSpec) -> object:
+    """Resolve a declarative target spec into a runtime object."""
+
+    if spec.target.startswith("builtin/") and not spec.kwargs:
+        kind = component_specs()[spec.target].kind
+        return load_component(spec.target, kind=kind)
+
+    loaded = load_symbol(spec.target)
+    if isinstance(loaded, type):
+        return loaded(**spec.kwargs)
+    if callable(loaded):
+        return loaded(**spec.kwargs)
+    if spec.kwargs:
+        raise TypeError(
+            f"Resolved target {spec.target} is not callable but kwargs were provided"
+        )
+    return loaded
+
+
 def _resolve(value: object, *, kind: str) -> object:
+    if isinstance(value, TargetSpec):
+        if value.target.startswith("builtin/") and not value.kwargs:
+            resolved_kind = component_specs()[value.target].kind
+            return load_component(value.target, kind=resolved_kind)
+        return resolve_target_spec(value)
     if isinstance(value, str):
         return load_component(value, kind=kind)
     return value

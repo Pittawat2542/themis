@@ -20,7 +20,9 @@ from themis.core.config import (
     GenerationConfig,
     RuntimeConfig,
     StorageConfig,
+    TargetSpec,
 )
+from themis.core.dataset_sources import DatasetSourceSpec
 from themis.core.contexts import (
     EvalScoreContext,
     GenerateContext,
@@ -52,12 +54,28 @@ from themis.core.events import (
 from themis.core.evaluate import evaluate, evaluate_async
 from themis.core.experiment import Experiment
 from themis.core.inspection import (
+    get_case_audit,
     get_evaluation_execution,
     get_execution_state,
+    get_run_record,
     get_run_snapshot,
+    get_telemetry_summary,
+    query_run_records,
+    resolve_run_id,
+    resolve_run_record,
 )
 from themis.core.quickcheck import quickcheck
-from themis.core.read_models import BenchmarkResult, TimelineView, TraceView
+from themis.core.read_models import (
+    BenchmarkResult,
+    CaseAuditRecord,
+    CaseAuditView,
+    MetricAuditRecord,
+    TelemetryBreakdown,
+    TelemetrySummary,
+    TimelineView,
+    TraceView,
+)
+from themis.core.registry import RunLineage, RunQuery, RunRecord
 from themis.core.reporter import Reporter, snapshot_report
 from themis.core.models import (
     Case,
@@ -124,7 +142,7 @@ from themis.core.store import RunStore
 from themis.core.snapshot import (
     ComponentRef,
     ComponentRefs,
-    DatasetRef,
+    DatasetSourceRef,
     RunIdentity,
     RunProvenance,
     RunSnapshot,
@@ -176,7 +194,8 @@ __all__ = [
     "ConversationTrace",
     "ConversationSubject",
     "Dataset",
-    "DatasetRef",
+    "DatasetSourceSpec",
+    "DatasetSourceRef",
     "EvalScoreContext",
     "EvaluationExecution",
     "EvaluationCompletedEvent",
@@ -228,12 +247,21 @@ __all__ = [
     "RunFailedEvent",
     "RunResult",
     "RunIdentity",
+    "RunLineage",
     "RunProvenance",
+    "RunQuery",
+    "RunRecord",
     "RunSnapshot",
     "RunStartedEvent",
     "RunStatus",
     "RunStore",
     "RuntimeConfig",
+    "TargetSpec",
+    "CaseAuditRecord",
+    "CaseAuditView",
+    "MetricAuditRecord",
+    "TelemetryBreakdown",
+    "TelemetrySummary",
     "snapshot_report",
     "CaseResult",
     "EvaluationBundle",
@@ -246,10 +274,14 @@ __all__ = [
     "export_score_bundle",
     "GenerationBundle",
     "GenerationBundleRecord",
+    "get_case_audit",
     "get_evaluation_execution",
     "get_execution_state",
+    "get_run_record",
     "get_run_snapshot",
+    "get_telemetry_summary",
     "ProgressSnapshot",
+    "query_run_records",
     "quickcheck",
     "Reporter",
     "RunEstimate",
@@ -287,6 +319,8 @@ __all__ = [
     "import_score_bundle",
     "ParseBundle",
     "ParseBundleRecord",
+    "resolve_run_id",
+    "resolve_run_record",
     "resolve_judge_model_component",
     "resolve_selector_component",
     "ScoreBundle",

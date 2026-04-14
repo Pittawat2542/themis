@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, model_validator
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
 from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef
 from themis.core.config import RuntimeConfig, StorageConfig
+from themis.core.dataset_sources import DatasetSourceSpec, materialize_dataset_sources
 from themis.core.events import RunEvent
 from themis.core.models import Dataset
 from themis.core.prompts import PromptSpec
@@ -24,7 +25,9 @@ __all__ = [
     "BUILTIN_COMPONENT_REFS",
     "ComponentRef",
     "ComponentRefs",
-    "DatasetRef",
+    "CaseManifest",
+    "DatasetManifest",
+    "DatasetSourceRef",
     "RunIdentity",
     "RunProvenance",
     "RunSnapshot",
@@ -33,12 +36,39 @@ __all__ = [
 ]
 
 
-class DatasetRef(HashableModel):
-    """Identity-bearing reference to one dataset."""
+class DatasetSourceRef(HashableModel):
+    """Identity-bearing reference to one dataset source."""
+
+    dataset_id: str
+    revision: str | None = None
+    target: str
+    fingerprint: str
+    source_id: str
+    source_revision: str | None = None
+    source_fingerprint: str
+    transform_kwargs: dict[str, JSONValue] = Field(default_factory=dict)
+    provenance_metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class CaseManifest(HashableModel):
+    """Persisted manifest for one case without embedding full payloads."""
+
+    case_id: str
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class DatasetManifest(HashableModel):
+    """Persisted manifest for one materialized dataset."""
 
     dataset_id: str
     revision: str | None = None
     fingerprint: str
+    source_id: str
+    source_revision: str | None = None
+    source_fingerprint: str
+    metadata: dict[str, str] = Field(default_factory=dict)
+    materialization_receipt: dict[str, JSONValue] = Field(default_factory=dict)
+    cases: list[CaseManifest] = Field(default_factory=list)
 
 
 class ComponentRefs(FrozenModel):
@@ -55,7 +85,7 @@ class ComponentRefs(FrozenModel):
 class RunIdentity(HashableModel):
     """Inputs that determine the logical identity and `run_id` of a run."""
 
-    dataset_refs: list[DatasetRef] = Field(default_factory=list)
+    dataset_source_refs: list[DatasetSourceRef] = Field(default_factory=list)
     generator_ref: ComponentRef
     selector_ref: ComponentRef | None = None
     reducer_ref: ComponentRef | None = None
@@ -87,7 +117,6 @@ class RunIdentity(HashableModel):
             }
         )
 
-
 class RunProvenance(FrozenModel):
     """Environment metadata recorded with a run but excluded from `run_id`."""
 
@@ -103,8 +132,8 @@ class RunProvenance(FrozenModel):
 
     def sanitized(self) -> RunProvenance:
         storage_parameters = sanitize_persisted_json_value(
-            self.storage.parameters,
-            field_path="provenance.storage.parameters",
+            self.storage.kwargs,
+            field_path="provenance.storage.kwargs",
         )
         environment_metadata = sanitize_persisted_string_mapping(
             self.environment_metadata,
@@ -118,7 +147,7 @@ class RunProvenance(FrozenModel):
                     field_path="provenance.provider_metadata",
                 ),
                 "storage": self.storage.model_copy(
-                    update={"parameters": storage_parameters}
+                    update={"kwargs": storage_parameters}
                 ),
                 "environment_metadata": environment_metadata,
             }
@@ -131,8 +160,29 @@ class RunSnapshot(FrozenModel):
     identity: RunIdentity
     provenance: RunProvenance
     component_refs: ComponentRefs
-    datasets: list[Dataset] = Field(default_factory=list)
+    dataset_sources: list[DatasetSourceSpec] = Field(default_factory=list)
+    dataset_manifests: list[DatasetManifest] = Field(default_factory=list)
+    datasets: list[Dataset] = Field(default_factory=list, exclude=True)
     metric_kinds: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _materialize_datasets(self) -> RunSnapshot:
+        if self.datasets or not self.dataset_sources:
+            return self
+        datasets = materialize_dataset_sources(self.dataset_sources)
+        expected = {
+            manifest.dataset_id: manifest.fingerprint
+            for manifest in self.dataset_manifests
+        }
+        for dataset in datasets:
+            expected_fingerprint = expected.get(dataset.dataset_id)
+            if expected_fingerprint and dataset.compute_hash() != expected_fingerprint:
+                raise ValueError(
+                    "Dataset source materialization no longer matches the persisted snapshot "
+                    f"for dataset_id={dataset.dataset_id}"
+                )
+        object.__setattr__(self, "datasets", datasets)
+        return self
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -160,3 +210,21 @@ def snapshot_from_dict(payload: dict[str, Any]) -> RunSnapshot:
     normalized = dict(payload)
     normalized.pop("run_id", None)
     return RunSnapshot.model_validate(normalized)
+
+
+def dataset_manifest_from_dataset(dataset: Dataset) -> DatasetManifest:
+    """Build a persisted manifest for a materialized dataset."""
+
+    return DatasetManifest(
+        dataset_id=dataset.dataset_id,
+        revision=dataset.revision,
+        fingerprint=dataset.compute_hash(),
+        source_id=dataset.dataset_id,
+        source_revision=dataset.revision,
+        source_fingerprint=dataset.compute_hash(),
+        metadata=dataset.metadata,
+        cases=[
+            CaseManifest(case_id=case.case_id, metadata=case.metadata)
+            for case in dataset.cases
+        ],
+    )

@@ -6,6 +6,13 @@ from abc import ABC, abstractmethod
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
+from themis.core.registry import (
+    RunLineage,
+    RunQuery,
+    RunRecord,
+    build_run_record,
+    matches_run_query,
+)
 from themis.core.projections import (
     STORE_PROJECTION_NAMES,
     apply_event_to_store_projection_payloads,
@@ -13,6 +20,7 @@ from themis.core.projections import (
     build_store_projection_payloads,
 )
 from themis.core.snapshot import RunSnapshot
+from themis.core.results import ExecutionState
 
 
 class ProjectionRefreshingStore(ABC):
@@ -34,11 +42,21 @@ class ProjectionRefreshingStore(ABC):
     @abstractmethod
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None: ...
 
+    @abstractmethod
+    def _write_run_record(self, run_id: str, record: RunRecord) -> None: ...
+
+    @abstractmethod
+    def _read_run_record(self, run_id: str) -> RunRecord | None: ...
+
+    @abstractmethod
+    def _list_run_records(self) -> list[RunRecord]: ...
+
     def _bootstrap_projections(self, snapshot: RunSnapshot) -> None:
         for projection_name, payload in build_initial_store_projection_payloads(
             snapshot
         ).items():
             self._write_projection(snapshot.run_id, projection_name, payload)
+        self._write_run_record(snapshot.run_id, build_run_record(snapshot))
 
     def _refresh_projections_for_event(
         self, snapshot: RunSnapshot, event: RunEvent
@@ -51,6 +69,7 @@ class ProjectionRefreshingStore(ABC):
             snapshot, projections, event
         ).items():
             self._write_projection(snapshot.run_id, projection_name, payload)
+        self._refresh_run_record(snapshot)
 
     def _get_projection_with_backfill(
         self, run_id: str, projection_name: str
@@ -75,3 +94,60 @@ class ProjectionRefreshingStore(ABC):
             projection_name: self._read_projection(run_id, projection_name)
             for projection_name in STORE_PROJECTION_NAMES
         }
+
+    def get_run_record(self, run_id: str) -> RunRecord | None:
+        return self._read_run_record(run_id)
+
+    def query_runs(self, query: RunQuery | None = None) -> list[RunRecord]:
+        records = self._list_run_records()
+        if query is None:
+            return sorted(records, key=lambda item: item.created_at)
+        return [
+            record
+            for record in sorted(records, key=lambda item: item.created_at)
+            if matches_run_query(record, query)
+        ]
+
+    def update_run_record(
+        self,
+        run_id: str,
+        *,
+        tags: list[str] | None = None,
+        baseline_label: str | None = None,
+        lineage: list[RunLineage] | None = None,
+    ) -> None:
+        snapshot = self._load_snapshot(run_id)
+        if snapshot is None:
+            raise ValueError(f"Unknown run_id: {run_id}")
+        current = self._read_run_record(run_id)
+        if current is None:
+            current = build_run_record(snapshot)
+        self._write_run_record(
+            run_id,
+            current.model_copy(
+                update={
+                    "tags": list(tags) if tags is not None else list(current.tags),
+                    "baseline_label": (
+                        baseline_label
+                        if baseline_label is not None
+                        else current.baseline_label
+                    ),
+                    "lineage": list(lineage)
+                    if lineage is not None
+                    else list(current.lineage),
+                }
+            ),
+        )
+
+    def _refresh_run_record(self, snapshot: RunSnapshot) -> None:
+        existing = self._read_run_record(snapshot.run_id)
+        state_payload = self._read_projection(snapshot.run_id, "execution_state")
+        state = (
+            ExecutionState.model_validate(state_payload)
+            if isinstance(state_payload, dict)
+            else None
+        )
+        self._write_run_record(
+            snapshot.run_id,
+            build_run_record(snapshot, state=state, existing=existing),
+        )

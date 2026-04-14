@@ -13,6 +13,7 @@ from themis.catalog.benchmarks.materializers import materialize_benchmark_datase
 from themis.catalog.loaders import load_toml
 from themis.core.base import FrozenModel, JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.dataset_sources import catalog_dataset_source, inline_dataset_source
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.protocols import Generator
@@ -108,8 +109,17 @@ class BenchmarkDefinition(FrozenModel):
                 judge_models=[*self.judge_model_ids],
                 workflow_overrides=self.workflow_overrides,
             ),
-            storage=storage or StorageConfig(store="memory"),
-            datasets=[resolved_dataset],
+            storage=storage or StorageConfig(target="memory"),
+            dataset_sources=[
+                inline_dataset_source(resolved_dataset)
+                if dataset is not None
+                else catalog_dataset_source(
+                    benchmark_name=self.benchmark_id,
+                    dataset_id=resolved_dataset.dataset_id,
+                    revision=resolved_dataset.revision,
+                    provenance_metadata=resolved_dataset.metadata,
+                )
+            ],
             seeds=seeds,
         )
 
@@ -258,7 +268,7 @@ def run_benchmark(
 ):
     definition = load_benchmark(name)
     dataset = definition.materialize_dataset()
-    storage = StorageConfig(store="memory") if store is None else None
+    storage = StorageConfig(target="memory") if store is None else None
     experiment = definition.build_experiment(
         dataset=dataset, model=model, storage=storage
     )

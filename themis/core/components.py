@@ -27,6 +27,13 @@ BUILTIN_COMPONENT_REFS: dict[str, ComponentRef] = {
 def component_ref_from_value(value: Any) -> ComponentRef:
     if isinstance(value, ComponentRef):
         return value
+    if isinstance(getattr(value, "target", None), str) and isinstance(
+        getattr(value, "kwargs", None), dict
+    ):
+        from themis.core.builtins import resolve_target_spec
+
+        resolved = resolve_target_spec(value)
+        return component_ref_from_value(resolved)
     if isinstance(value, str):
         try:
             return BUILTIN_COMPONENT_REFS[value]

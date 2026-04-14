@@ -20,13 +20,20 @@ from themis.core.protocols import (
     TraceMetric,
 )
 
-GeneratorComponent: TypeAlias = Generator | str
-SelectorComponent: TypeAlias = CandidateSelector | str
-ReducerComponent: TypeAlias = CandidateReducer | str
-ParserComponent: TypeAlias = Parser | str
-JudgeModelComponent: TypeAlias = JudgeModel | str
+class TargetSpec(HashableModel):
+    """Declarative target + kwargs specification for config-driven wiring."""
+
+    target: str
+    kwargs: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+GeneratorComponent: TypeAlias = Generator | TargetSpec | str
+SelectorComponent: TypeAlias = CandidateSelector | TargetSpec | str
+ReducerComponent: TypeAlias = CandidateReducer | TargetSpec | str
+ParserComponent: TypeAlias = Parser | TargetSpec | str
+JudgeModelComponent: TypeAlias = JudgeModel | TargetSpec | str
 MetricComponent: TypeAlias = (
-    PureMetric | LLMMetric | SelectionMetric | TraceMetric | str
+    PureMetric | LLMMetric | SelectionMetric | TraceMetric | TargetSpec | str
 )
 
 
@@ -60,8 +67,8 @@ class EvaluationConfig(HashableModel):
 class StorageConfig(HashableModel):
     """Store backend configuration used for persistence."""
 
-    store: str
-    parameters: dict[str, JSONValue] = Field(default_factory=dict)
+    target: str = "memory"
+    kwargs: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class RuntimeConfig(HashableModel):

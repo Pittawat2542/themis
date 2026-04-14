@@ -16,9 +16,15 @@ from themis.core.models import GenerationResult, Score, ScoreError
 from themis.core.read_models import (
     BenchmarkResult,
     BenchmarkScoreRow,
+    CaseAuditRecord,
+    CaseAuditView,
     ConversationTraceRecord,
     EvaluationTraceRecord,
+    GenerationAuditRecord,
     GenerationTraceRecord,
+    MetricAuditRecord,
+    TelemetryBreakdown,
+    TelemetrySummary,
     TimelineEntry,
     TimelineView,
     TraceView,
@@ -40,6 +46,8 @@ PROJECTION_NAMES = (
     "benchmark_result",
     "timeline_view",
     "trace_view",
+    "case_audit_view",
+    "telemetry_summary",
 )
 STORE_PROJECTION_NAMES = PROJECTION_NAMES + ("execution_state",)
 
@@ -234,6 +242,216 @@ def build_trace_view(snapshot: RunSnapshot, events: list[RunEvent]) -> TraceView
     return view
 
 
+def _generation_telemetry(result: GenerationResult) -> TelemetryBreakdown:
+    artifacts = result.artifacts or {}
+    request_ids = [
+        str(value)
+        for key in ("provider_request_id", "request_id")
+        if (value := artifacts.get(key)) is not None
+    ]
+    retry_history = artifacts.get("retry_history", [])
+    retry_count = len(retry_history) if isinstance(retry_history, list) else 0
+    estimated_cost = artifacts.get("cost_estimate", artifacts.get("cost_usd", 0.0))
+    return TelemetryBreakdown(
+        token_usage=dict(result.token_usage or {}),
+        latency_ms=float(result.latency_ms or 0.0),
+        request_ids=request_ids,
+        retry_count=retry_count,
+        estimated_cost=float(estimated_cost)
+        if isinstance(estimated_cost, (int, float))
+        else 0.0,
+    )
+
+
+def _evaluation_telemetry(execution: EvaluationExecution | None) -> TelemetryBreakdown:
+    if execution is None:
+        return TelemetryBreakdown()
+    token_usage: dict[str, int] = {}
+    latency_ms = 0.0
+    request_ids: list[str] = []
+    retry_count = 0
+    for response in execution.judge_responses:
+        token_usage = _merge_token_usage(token_usage, dict(response.token_usage))
+        latency_ms += float(response.latency_ms or 0.0)
+        if response.provider_request_id is not None:
+            request_ids.append(response.provider_request_id)
+        retry_count += len(response.retry_history)
+    return TelemetryBreakdown(
+        token_usage=token_usage,
+        latency_ms=latency_ms,
+        request_ids=request_ids,
+        retry_count=retry_count,
+    )
+
+
+def _merge_token_usage(
+    left: dict[str, int], right: dict[str, int]
+) -> dict[str, int]:
+    merged = dict(left)
+    for key, value in right.items():
+        merged[key] = int(merged.get(key, 0)) + int(value)
+    return merged
+
+
+def build_case_audit_view(snapshot: RunSnapshot, events: list[RunEvent]) -> CaseAuditView:
+    state = ExecutionState.from_events(snapshot.run_id, events)
+    return build_case_audit_view_from_state(snapshot, state)
+
+
+def build_case_audit_view_from_state(
+    snapshot: RunSnapshot, state: ExecutionState
+) -> CaseAuditView:
+    case_identities = _snapshot_case_identities(snapshot)
+    audits: list[CaseAuditRecord] = []
+    for dataset in snapshot.datasets:
+        for case in dataset.cases:
+            case_ref = CaseRef(dataset_id=dataset.dataset_id, case_id=case.case_id)
+            case_state = _case_state_for_snapshot_case(state, case_ref, case_identities)
+            if case_state is None:
+                audits.append(
+                    CaseAuditRecord(
+                        case_id=case.case_id,
+                        dataset_id=dataset.dataset_id,
+                        case_key=case_ref.case_key,
+                    )
+                )
+                continue
+            generation_attempts = [
+                GenerationAuditRecord(
+                    candidate_id=result.candidate_id,
+                    candidate_index=index,
+                    result=result,
+                    telemetry=_generation_telemetry(result),
+                )
+                for index, result in sorted(
+                    case_state.generated_candidates_by_index.items()
+                )
+            ] or [
+                GenerationAuditRecord(
+                    candidate_id=result.candidate_id,
+                    result=result,
+                    telemetry=_generation_telemetry(result),
+                )
+                for result in case_state.generated_candidates.values()
+            ]
+            metric_ids = sorted(
+                set(case_state.successful_scores)
+                | set(case_state.score_failures)
+                | set(case_state.evaluation_executions)
+                | set(case_state.evaluation_failures)
+            )
+            metric_records = [
+                MetricAuditRecord(
+                    metric_id=metric_id,
+                    score=case_state.successful_scores.get(metric_id),
+                    score_error=case_state.score_failures.get(metric_id),
+                    evaluation_execution=case_state.evaluation_executions.get(metric_id),
+                    evaluation_failure=case_state.evaluation_failures.get(metric_id),
+                    evaluation_input=(
+                        {"candidate_id": case_state.reduced_candidate.candidate_id}
+                        if case_state.reduced_candidate is not None
+                        else {}
+                    ),
+                    failure_records=(
+                        [case_state.evaluation_failures[metric_id]]
+                        if metric_id in case_state.evaluation_failures
+                        else []
+                    ),
+                    telemetry=_evaluation_telemetry(
+                        case_state.evaluation_executions.get(metric_id)
+                    ),
+                )
+                for metric_id in metric_ids
+            ]
+            audits.append(
+                CaseAuditRecord(
+                    case_id=case.case_id,
+                    dataset_id=dataset.dataset_id,
+                    case_key=case_ref.case_key,
+                    generation_attempts=generation_attempts,
+                    generation_failures=dict(case_state.generation_failures),
+                    selected_candidate_ids=case_state.selected_candidate_ids,
+                    selection_metadata=dict(case_state.selection_metadata),
+                    selection_error=case_state.selection_error,
+                    reduced_candidate=case_state.reduced_candidate,
+                    reduction_source_candidate_ids=(
+                        []
+                        if case_state.reduced_candidate is None
+                        else list(case_state.reduced_candidate.source_candidate_ids)
+                    ),
+                    reduction_metadata=(
+                        {}
+                        if case_state.reduced_candidate is None
+                        else dict(case_state.reduced_candidate.metadata)
+                    ),
+                    reduction_error=case_state.reduction_error,
+                    parse_candidate_id=(
+                        None
+                        if case_state.reduced_candidate is None
+                        else case_state.reduced_candidate.candidate_id
+                    ),
+                    parse_input=(
+                        {}
+                        if case_state.reduced_candidate is None
+                        else dict(case_state.reduced_candidate.final_output)
+                        if isinstance(case_state.reduced_candidate.final_output, dict)
+                        else {"value": case_state.reduced_candidate.final_output}
+                    ),
+                    parsed_output=case_state.parsed_output,
+                    parse_error=case_state.parse_error,
+                    metric_records=metric_records,
+                )
+            )
+    return CaseAuditView(run_id=snapshot.run_id, cases=audits)
+
+
+def build_telemetry_summary(
+    snapshot: RunSnapshot, events: list[RunEvent]
+) -> TelemetrySummary:
+    return build_telemetry_summary_from_case_audit(
+        snapshot.run_id, build_case_audit_view(snapshot, events)
+    )
+
+
+def build_telemetry_summary_from_case_audit(
+    run_id: str, case_audit_view: CaseAuditView
+) -> TelemetrySummary:
+    generation_tokens: dict[str, int] = {}
+    judge_tokens: dict[str, int] = {}
+    generation_latency_ms = 0.0
+    judge_latency_ms = 0.0
+    request_ids: list[str] = []
+    retry_count = 0
+    estimated_cost = 0.0
+    for case in case_audit_view.cases:
+        for attempt in case.generation_attempts:
+            generation_tokens = _merge_token_usage(
+                generation_tokens, attempt.telemetry.token_usage
+            )
+            generation_latency_ms += attempt.telemetry.latency_ms
+            request_ids.extend(attempt.telemetry.request_ids)
+            retry_count += attempt.telemetry.retry_count
+            estimated_cost += attempt.telemetry.estimated_cost
+        for metric_record in case.metric_records:
+            judge_tokens = _merge_token_usage(
+                judge_tokens, metric_record.telemetry.token_usage
+            )
+            judge_latency_ms += metric_record.telemetry.latency_ms
+            request_ids.extend(metric_record.telemetry.request_ids)
+            retry_count += metric_record.telemetry.retry_count
+            estimated_cost += metric_record.telemetry.estimated_cost
+    return TelemetrySummary(
+        run_id=run_id,
+        generation_tokens=generation_tokens,
+        judge_tokens=judge_tokens,
+        generation_latency_ms=generation_latency_ms,
+        judge_latency_ms=judge_latency_ms,
+        request_ids=sorted(dict.fromkeys(request_ids)),
+        retry_count=retry_count,
+        estimated_cost=estimated_cost,
+    )
+
+
 def build_projection_payloads(
     snapshot: RunSnapshot, events: list[RunEvent]
 ) -> dict[str, JSONValue]:
@@ -266,6 +484,12 @@ def build_store_projection_payloads(
         "benchmark_result": benchmark_result.model_dump(mode="json"),
         "timeline_view": build_timeline_view(snapshot, events).model_dump(mode="json"),
         "trace_view": build_trace_view(snapshot, events).model_dump(mode="json"),
+        "case_audit_view": build_case_audit_view(snapshot, events).model_dump(
+            mode="json"
+        ),
+        "telemetry_summary": build_telemetry_summary(snapshot, events).model_dump(
+            mode="json"
+        ),
     }
 
 
@@ -307,6 +531,13 @@ def apply_event_to_store_projection_payloads(
         "benchmark_result": benchmark_result.model_dump(mode="json"),
         "timeline_view": timeline_view.model_dump(mode="json"),
         "trace_view": trace_view.model_dump(mode="json"),
+        "case_audit_view": build_case_audit_view_from_state(snapshot, state).model_dump(
+            mode="json"
+        ),
+        "telemetry_summary": build_telemetry_summary_from_case_audit(
+            snapshot.run_id,
+            build_case_audit_view_from_state(snapshot, state),
+        ).model_dump(mode="json"),
     }
 
 

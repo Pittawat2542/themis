@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any, cast
 
 from omegaconf import OmegaConf
-from pydantic import Field
+from pydantic import Field, model_validator
 
-from themis.catalog.loaders import load_symbol, load_toml, load_yaml
+from themis.catalog.loaders import load_toml, load_yaml
 from themis.core.base import FrozenModel
+from themis.core.config import TargetSpec
 from themis.core.security import is_secret_reference
 
 _SINGLE_COMPONENT_FIELDS = (
@@ -27,12 +28,31 @@ _STORAGE_PATH_FIELDS = ("path", "root", "blob_root")
 
 
 class ExecutionComponentTargets(FrozenModel):
-    generator: str
-    selector: str | None = None
-    reducer: str | None = None
-    parsers: list[str] = Field(default_factory=list)
-    metrics: list[str] = Field(default_factory=list)
-    judge_models: list[str] = Field(default_factory=list)
+    generator: TargetSpec
+    selector: TargetSpec | None = None
+    reducer: TargetSpec | None = None
+    parsers: list[TargetSpec] = Field(default_factory=list)
+    metrics: list[TargetSpec] = Field(default_factory=list)
+    judge_models: list[TargetSpec] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_strings(cls, payload):
+        if not isinstance(payload, dict):
+            return payload
+        normalized = dict(payload)
+        for key in ("generator", "selector", "reducer"):
+            value = normalized.get(key)
+            if isinstance(value, str):
+                normalized[key] = TargetSpec(target=value)
+        for key in ("parsers", "metrics", "judge_models"):
+            value = normalized.get(key)
+            if isinstance(value, list):
+                normalized[key] = [
+                    TargetSpec(target=item) if isinstance(item, str) else item
+                    for item in value
+                ]
+        return normalized
 
 
 @dataclass(frozen=True)
@@ -62,8 +82,9 @@ def load_experiment_definition(
     normalized = _normalize_paths(
         cast(dict[str, Any], payload), base_dir=config_path.parent
     )
+    normalized = _normalize_component_specs(normalized)
     return LoadedExperimentConfig(
-        payload=_materialize_components(normalized),
+        payload=normalized,
         metadata=ExperimentConfigMetadata(
             config_path=config_path,
             base_dir=config_path.parent,
@@ -93,7 +114,11 @@ def _normalize_paths(payload: dict[str, Any], *, base_dir: Path) -> dict[str, An
     storage_payload = normalized.get("storage")
     if isinstance(storage_payload, dict):
         updated_storage = dict(storage_payload)
-        parameters = updated_storage.get("parameters")
+        if "store" in updated_storage:
+            updated_storage["target"] = updated_storage.pop("store")
+        if "parameters" in updated_storage and "kwargs" not in updated_storage:
+            updated_storage["kwargs"] = updated_storage.pop("parameters")
+        parameters = updated_storage.get("kwargs")
         if isinstance(parameters, dict):
             updated_parameters = dict(parameters)
             for key in _STORAGE_PATH_FIELDS:
@@ -101,7 +126,7 @@ def _normalize_paths(payload: dict[str, Any], *, base_dir: Path) -> dict[str, An
                     updated_parameters[key] = _normalize_path_value(
                         updated_parameters[key], base_dir=base_dir
                     )
-            updated_storage["parameters"] = updated_parameters
+            updated_storage["kwargs"] = updated_parameters
         normalized["storage"] = updated_storage
 
     runtime_payload = normalized.get("runtime")
@@ -113,6 +138,34 @@ def _normalize_paths(payload: dict[str, Any], *, base_dir: Path) -> dict[str, An
                     updated_runtime[key], base_dir=base_dir
                 )
         normalized["runtime"] = updated_runtime
+
+    return normalized
+
+
+def _normalize_component_specs(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+
+    generation = normalized.get("generation")
+    if isinstance(generation, dict):
+        updated_generation = dict(generation)
+        for field in ("generator", "selector", "reducer"):
+            if field in updated_generation and updated_generation[field] is not None:
+                updated_generation[field] = _require_component_target(
+                    updated_generation[field],
+                    field=f"generation.{field}",
+                )
+        normalized["generation"] = updated_generation
+
+    evaluation = normalized.get("evaluation")
+    if isinstance(evaluation, dict):
+        updated_evaluation = dict(evaluation)
+        for field in ("metrics", "parsers", "judge_models"):
+            if field in updated_evaluation:
+                updated_evaluation[field] = _component_target_list(
+                    updated_evaluation[field],
+                    field=f"evaluation.{field}",
+                )
+        normalized["evaluation"] = updated_evaluation
 
     return normalized
 
@@ -165,62 +218,40 @@ def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
-def _require_component_target(value: Any, *, field: str) -> str:
+def _require_component_target(value: Any, *, field: str) -> TargetSpec:
     target = _optional_component_target(value, field=field)
     if target is None:
         raise ValueError(
-            f"Config field {field} must be a builtin component id or importable module path"
+            f"Config field {field} must be a builtin component id, importable module path, or target+kwargs mapping"
         )
     return target
 
 
-def _optional_component_target(value: Any, *, field: str) -> str | None:
+def _optional_component_target(value: Any, *, field: str) -> TargetSpec | None:
     if value is None:
         return None
-    if isinstance(value, str):
+    if isinstance(value, TargetSpec):
         return value
+    if isinstance(value, str):
+        return TargetSpec(target=value)
+    if isinstance(value, dict):
+        target = value.get("target")
+        if not isinstance(target, str):
+            raise ValueError(f"Config field {field} mapping must include string target")
+        kwargs = value.get("kwargs", {})
+        if not isinstance(kwargs, dict):
+            raise ValueError(f"Config field {field} mapping kwargs must be a mapping")
+        return TargetSpec(target=target, kwargs=dict(kwargs))
     raise ValueError(
-        f"Config field {field} must be a builtin component id or importable module path"
+        f"Config field {field} must be a builtin component id, importable module path, or target+kwargs mapping"
     )
 
 
-def _component_target_list(value: Any, *, field: str) -> list[str]:
+def _component_target_list(value: Any, *, field: str) -> list[TargetSpec]:
     if value is None:
         return []
     if not isinstance(value, list):
         raise ValueError(
-            f"Config field {field} must be a list of builtin component ids or importable module paths"
+            f"Config field {field} must be a list of builtin component ids, importable module paths, or target+kwargs mappings"
         )
     return [_require_component_target(item, field=field) for item in value]
-
-
-def _materialize_components(payload: dict[str, Any]) -> dict[str, Any]:
-    normalized = dict(payload)
-    for group, field in _SINGLE_COMPONENT_FIELDS:
-        group_payload = normalized.get(group)
-        if isinstance(group_payload, dict) and field in group_payload:
-            updated_group = dict(group_payload)
-            updated_group[field] = _maybe_load_component(updated_group[field])
-            normalized[group] = updated_group
-
-    for group, field in _LIST_COMPONENT_FIELDS:
-        group_payload = normalized.get(group)
-        if isinstance(group_payload, dict) and isinstance(
-            group_payload.get(field), list
-        ):
-            updated_group = dict(group_payload)
-            updated_group[field] = [
-                _maybe_load_component(item) for item in updated_group[field]
-            ]
-            normalized[group] = updated_group
-
-    return normalized
-
-
-def _maybe_load_component(value: Any) -> Any:
-    if not isinstance(value, str) or ":" not in value:
-        return value
-    loaded = load_symbol(value)
-    if isinstance(loaded, type):
-        return loaded()
-    return loaded

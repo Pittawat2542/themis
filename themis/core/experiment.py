@@ -9,7 +9,7 @@ from pathlib import Path
 import tomllib
 from typing import Literal
 
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, model_validator
 
 from themis.core.builtins import (
     resolve_generator_component,
@@ -29,6 +29,15 @@ from themis.core.config import (
     StorageConfig,
 )
 from themis.core.config_loading import ExperimentConfigMetadata
+from themis.core.dataset_sources import (
+    DatasetSourceSpec,
+    dataset_materialization_receipt,
+    resolved_source_fingerprint,
+    resolved_source_id,
+    resolved_source_revision,
+    inline_dataset_source,
+    materialize_dataset_sources,
+)
 from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
 from themis.core.projections import build_run_result
@@ -45,10 +54,11 @@ from themis.core.stores.factory import create_run_store
 from themis.core.tracing import NoOpTracingProvider
 from themis.core.snapshot import (
     ComponentRefs,
-    DatasetRef,
+    DatasetSourceRef,
     RunIdentity,
     RunProvenance,
     RunSnapshot,
+    dataset_manifest_from_dataset,
 )
 
 
@@ -84,7 +94,7 @@ class Experiment(FrozenModel):
     evaluation: EvaluationConfig
     storage: StorageConfig
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
-    datasets: list[Dataset] = Field(default_factory=list)
+    dataset_sources: list[DatasetSourceSpec] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
     themis_version: str = Field(default_factory=_resolve_themis_version)
@@ -95,6 +105,27 @@ class Experiment(FrozenModel):
     provider_metadata: dict[str, JSONValue] = Field(default_factory=dict)
     _config_metadata: ExperimentConfigMetadata | None = PrivateAttr(default=None)
     _compiled_snapshot: RunSnapshot | None = PrivateAttr(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_dataset_sources(cls, payload):
+        if not isinstance(payload, dict):
+            return payload
+        normalized = dict(payload)
+        sources = normalized.get("dataset_sources")
+        if not isinstance(sources, list):
+            return normalized
+        normalized["dataset_sources"] = [
+            item
+            if isinstance(item, DatasetSourceSpec)
+            else inline_dataset_source(item)
+            if isinstance(item, Dataset)
+            else item
+            if isinstance(item, dict) and "target" in item
+            else inline_dataset_source(Dataset.model_validate(item))
+            for item in sources
+        ]
+        return normalized
 
     @classmethod
     def from_config(
@@ -117,6 +148,8 @@ class Experiment(FrozenModel):
         return self._compiled_snapshot
 
     def _compile_with_runtime(self, runtime: RuntimeConfig) -> RunSnapshot:
+        dataset_sources = self._resolved_dataset_sources()
+        datasets = self._materialized_datasets()
         component_refs = ComponentRefs(
             generator=component_ref_from_value(self.generation.generator),
             selector=component_ref_from_value(self.generation.selector)
@@ -137,13 +170,19 @@ class Experiment(FrozenModel):
             ],
         )
         identity = RunIdentity(
-            dataset_refs=[
-                DatasetRef(
+            dataset_source_refs=[
+                DatasetSourceRef(
                     dataset_id=dataset.dataset_id,
                     revision=dataset.revision,
+                    target=source.target,
                     fingerprint=dataset.compute_hash(),
+                    source_id=resolved_source_id(source),
+                    source_revision=resolved_source_revision(source),
+                    source_fingerprint=resolved_source_fingerprint(source),
+                    transform_kwargs=source.transform_kwargs,
+                    provenance_metadata=source.provenance_metadata,
                 )
-                for dataset in self.datasets
+                for source, dataset in zip(dataset_sources, datasets, strict=False)
             ],
             generator_ref=component_refs.generator,
             selector_ref=component_refs.selector,
@@ -175,7 +214,21 @@ class Experiment(FrozenModel):
             identity=identity,
             provenance=provenance,
             component_refs=component_refs,
-            datasets=self.datasets,
+            dataset_sources=dataset_sources,
+            dataset_manifests=[
+                dataset_manifest_from_dataset(dataset).model_copy(
+                    update={
+                        "source_id": resolved_source_id(source),
+                        "source_revision": resolved_source_revision(source),
+                        "source_fingerprint": resolved_source_fingerprint(source),
+                        "materialization_receipt": dataset_materialization_receipt(
+                            source, dataset
+                        ),
+                    }
+                )
+                for source, dataset in zip(dataset_sources, datasets, strict=False)
+            ],
+            datasets=datasets,
             metric_kinds=[
                 self._metric_kind(metric) for metric in self.evaluation.metrics
             ],
@@ -258,7 +311,7 @@ class Experiment(FrozenModel):
 
         effective_runtime = runtime or self.runtime
         snapshot = self._snapshot_for_runtime(effective_runtime)
-        if store is None and self.storage.store == "memory":
+        if store is None and self.storage.target == "memory":
             raise ValueError(
                 "Memory-backed replay requires the original store instance; pass store=... or use sqlite storage."
             )
@@ -398,10 +451,30 @@ class Experiment(FrozenModel):
             )
         )
 
+    def _resolved_dataset_sources(self) -> list[DatasetSourceSpec]:
+        return list(self.dataset_sources)
+
+    def _materialized_datasets(self) -> list[Dataset]:
+        return materialize_dataset_sources(self._resolved_dataset_sources())
+
+    @property
+    def datasets(self) -> list[Dataset]:
+        """Return the materialized runtime datasets for this experiment."""
+
+        return self._materialized_datasets()
+
     def _metric_kind(self, metric: object) -> str:
         metric_family = getattr(metric, "metric_family", None)
         if metric_family in {"pure", "llm", "selection", "trace"}:
             return metric_family
+        target = getattr(metric, "target", None)
+        kwargs = getattr(metric, "kwargs", None)
+        if isinstance(target, str) and isinstance(kwargs, dict):
+            resolved_metric = resolve_metric_component(metric)
+            resolved_metric_family = getattr(resolved_metric, "metric_family", None)
+            if resolved_metric_family in {"pure", "llm", "selection", "trace"}:
+                return resolved_metric_family
+            raise ValueError(f"Unknown metric family for target spec: {target}")
         if isinstance(metric, str):
             resolved_metric = resolve_metric_component(metric)
             resolved_metric_family = getattr(resolved_metric, "metric_family", None)

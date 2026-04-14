@@ -60,7 +60,10 @@ def dataset_from_jsonl(
 def dataset_from_huggingface(
     *,
     dataset_name: str,
+    config_name: str | None = None,
     split: str,
+    revision: str | None = None,
+    cache_dir: str | None = None,
     input_field: str,
     expected_output_field: str | None = None,
     case_id_field: str | None = None,
@@ -73,7 +76,14 @@ def dataset_from_huggingface(
             'Install it with: uv add "themis-eval[datasets]"'
         ) from exc
 
-    rows = datasets_module.load_dataset(dataset_name, split=split)
+    load_kwargs = {"split": split}
+    if config_name is not None:
+        load_kwargs["name"] = config_name
+    if revision is not None:
+        load_kwargs["revision"] = revision
+    if cache_dir is not None:
+        load_kwargs["cache_dir"] = cache_dir
+    rows = datasets_module.load_dataset(dataset_name, **load_kwargs)
     cases: list[Case] = []
     for index, row in enumerate(rows):
         if input_field not in row:
@@ -104,4 +114,4 @@ def dataset_from_huggingface(
             )
         )
 
-    return Dataset(dataset_id=dataset_name, revision=split, cases=cases)
+    return Dataset(dataset_id=dataset_name, revision=revision or split, cases=cases)

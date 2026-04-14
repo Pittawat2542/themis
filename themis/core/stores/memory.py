@@ -6,6 +6,7 @@ import hashlib
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
+from themis.core.registry import RunRecord
 from themis.core.snapshot import RunSnapshot, StoredRun
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -18,6 +19,7 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         self._events: dict[str, list[RunEvent]] = {}
         self._blobs: dict[str, tuple[str, bytes]] = {}
         self._projections: dict[tuple[str, str], JSONValue] = {}
+        self._run_records: dict[str, RunRecord] = {}
 
     def initialize(self) -> None:
         return None
@@ -59,6 +61,15 @@ class InMemoryRunStore(ProjectionRefreshingStore):
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         return self._snapshots.get(run_id)
 
+    def _write_run_record(self, run_id: str, record: RunRecord) -> None:
+        self._run_records[run_id] = record
+
+    def _read_run_record(self, run_id: str) -> RunRecord | None:
+        return self._run_records.get(run_id)
+
+    def _list_run_records(self) -> list[RunRecord]:
+        return list(self._run_records.values())
+
     def _write_projection(
         self, run_id: str, projection_name: str, payload: JSONValue
     ) -> None:
@@ -76,6 +87,7 @@ class InMemoryRunStore(ProjectionRefreshingStore):
     def clear_run(self, run_id: str) -> None:
         self._snapshots.pop(run_id, None)
         self._events.pop(run_id, None)
+        self._run_records.pop(run_id, None)
         stale_projection_keys = [
             projection_key
             for projection_key in self._projections

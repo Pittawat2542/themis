@@ -9,7 +9,7 @@ from typing import Literal, Sequence, cast
 from themis.catalog.loaders import load_symbol
 from themis.catalog.registry import component_specs, load_component
 from themis.core.base import FrozenModel
-from themis.core.config import EvaluationConfig, GenerationConfig
+from themis.core.config import EvaluationConfig, GenerationConfig, TargetSpec
 from themis.core.config_loading import (
     ExecutionComponentTargets,
     load_experiment_definition,
@@ -181,7 +181,7 @@ def _experiment_from_manifest(manifest: SubmissionManifest) -> Experiment:
         ),
         storage=snapshot.provenance.storage,
         runtime=snapshot.provenance.runtime,
-        datasets=snapshot.datasets,
+        dataset_sources=snapshot.dataset_sources,
         seeds=snapshot.identity.seeds,
         environment_metadata=snapshot.provenance.environment_metadata,
         themis_version=snapshot.provenance.themis_version,
@@ -195,12 +195,24 @@ def _experiment_from_manifest(manifest: SubmissionManifest) -> Experiment:
     return experiment
 
 
-def _resolve_execution_target(target: str, *, kind: str) -> object:
-    if target in component_specs():
-        return load_component(target, kind=kind)
-    loaded = load_symbol(target)
+def _resolve_execution_target(target: TargetSpec | str, *, kind: str) -> object:
+    if isinstance(target, TargetSpec):
+        target_id = target.target
+        kwargs = target.kwargs
+    else:
+        target_id = target
+        kwargs = {}
+    if target_id in component_specs() and not kwargs:
+        return load_component(target_id, kind=kind)
+    loaded = load_symbol(target_id)
     if isinstance(loaded, type):
-        return loaded()
+        return loaded(**kwargs)
+    if callable(loaded):
+        return loaded(**kwargs)
+    if kwargs:
+        raise TypeError(
+            f"Resolved execution target {target_id} is not callable but kwargs were provided"
+        )
     return loaded
 
 
@@ -304,26 +316,36 @@ def _resolve_execution_targets(
     )
 
 
-def _select_target(value: object | None, fallback: str | None) -> str | None:
+def _select_target(
+    value: object | None, fallback: TargetSpec | str | None
+) -> TargetSpec | None:
     if value is None:
         return None
-    if isinstance(value, str):
+    if isinstance(value, TargetSpec):
         return value
-    return fallback
+    if isinstance(value, str):
+        return TargetSpec(target=value)
+    if isinstance(fallback, TargetSpec):
+        return fallback
+    if isinstance(fallback, str):
+        return TargetSpec(target=fallback)
+    return None
 
 
 def _select_target_list(
-    values: Sequence[object], fallback: list[str] | None
-) -> list[str | None]:
+    values: Sequence[object], fallback: list[TargetSpec] | None
+) -> list[TargetSpec | None]:
     fallback_values = list(fallback or [])
     if fallback_values and len(fallback_values) != len(values):
         raise ValueError(
             "Config component target metadata does not match experiment component counts"
         )
-    targets: list[str | None] = []
+    targets: list[TargetSpec | None] = []
     for index, value in enumerate(values):
         targets.append(
             value
+            if isinstance(value, TargetSpec)
+            else TargetSpec(target=value)
             if isinstance(value, str)
             else (fallback_values[index] if fallback_values else None)
         )

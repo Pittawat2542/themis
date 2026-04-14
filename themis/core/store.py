@@ -6,6 +6,7 @@ from typing import Protocol, runtime_checkable
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
+from themis.core.registry import RunLineage, RunQuery, RunRecord
 from themis.core.snapshot import RunSnapshot, StoredRun
 
 
@@ -28,6 +29,19 @@ class RunStore(Protocol):
     def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None: ...
 
     def resume(self, run_id: str) -> StoredRun | None: ...
+
+    def get_run_record(self, run_id: str) -> RunRecord | None: ...
+
+    def query_runs(self, query: RunQuery | None = None) -> list[RunRecord]: ...
+
+    def update_run_record(
+        self,
+        run_id: str,
+        *,
+        tags: list[str] | None = None,
+        baseline_label: str | None = None,
+        lineage: list[RunLineage] | None = None,
+    ) -> None: ...
 
     def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None: ...
 
