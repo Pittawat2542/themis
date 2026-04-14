@@ -21,10 +21,10 @@ evaluation:
   parsers:
     - builtin/json_identity
 storage:
-  store: sqlite
-  parameters:
+  target: sqlite
+  kwargs:
     path: runs/themis.sqlite3
-datasets:
+dataset_sources:
   - dataset_id: sample
     cases: []
 seeds: [7]

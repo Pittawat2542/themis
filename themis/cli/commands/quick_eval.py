@@ -20,7 +20,7 @@ from themis.core.dataset_inputs import (
 from themis.core.evaluate import evaluate
 
 quick_eval_app = App(name="quick-eval", help="Quick evaluation workflows.")
-_DEFAULT_STORAGE = StorageConfig(store="memory")
+_DEFAULT_STORAGE = StorageConfig(target="memory")
 
 
 def _result_payload(*, run_id: str, status: str, metric_means: dict[str, float]) -> str:

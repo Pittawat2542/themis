@@ -17,7 +17,7 @@ def run(
     store = initialize_store(experiment)
     result = experiment.run(store=store, until_stage=until_stage)
     report_store = (
-        store if experiment.storage.store == "memory" else initialize_store(experiment)
+        store if experiment.storage.target == "memory" else initialize_store(experiment)
     )
     benchmark = report_store.get_projection(result.run_id, "benchmark_result")
     metric_means = {}
