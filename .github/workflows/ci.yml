@@ -368,7 +368,7 @@ jobs:
 
       - name: Check for prior successful compatibility matrix
         id: evaluate
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TARGET_SHA: ${{ steps.resolve-sha.outputs.sha }}
         with:
