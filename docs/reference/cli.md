@@ -14,6 +14,7 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 | `quick-eval` | Runs inline examples, files, Hugging Face datasets, or catalog benchmarks with minimal setup | You want the shortest path to an evaluation run | Trades flexibility for convenience |
 | `run` | Compiles and executes a config-backed experiment | You want the main config-driven runtime path | Accepts `--config` and optional `--until-stage` |
 | `replay` | Re-runs downstream stages from stored upstream artifacts | You want to regenerate reduction, parse, score, or judge results without fresh generation | Requires persisted upstream artifacts |
+| `rerun` | Re-runs a targeted subset of a stored run | You want to retry failed cases, specific cases, metadata slices, or selected metrics | Requires persisted state for the compiled `run_id` |
 | `submit` | Writes deferred-execution manifests | You want worker-pool or batch execution instead of immediate in-process execution | Requires `--mode worker-pool` or `--mode batch` |
 | `resume` | Reopens a stored run and continues according to runtime policy | You want to continue interrupted or partially completed persistent work | Depends on a persistent store |
 | `estimate` | Prints planner and token-estimate output for a compiled snapshot | You want execution counts and token assumptions before running | Estimates are informational, not pricing |
@@ -32,6 +33,7 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 | --- | --- | --- | --- |
 | `run --config ... [--until-stage ...]` | Executes the experiment and prints JSON with `run_id`, `status`, `completed_through_stage`, and `metric_means` | You want the main config-driven execution path | `--until-stage` stops intentionally at a stage boundary |
 | `replay --config ... --stage reduce|parse|score|judge` | Re-runs downstream stages from stored upstream artifacts | You want fresh downstream scoring without new generation | Requires stored upstream artifacts |
+| `rerun --config ... --stage generate|reduce|parse|score|judge` | Re-runs matching cases from the requested stage onward | You want targeted recovery instead of a full replay | Filter with `--failed-only`, `--case-id`, `--case-key`, `--metadata key=value`, and `--metric-id` |
 | `resume --config ...` | Reopens the compiled `run_id` and continues if the store shows pending work | You want to continue interrupted persistent work | Depends on a persistent store |
 | `estimate --config ...` | Prints planner output, task counts, token estimates, and estimate assumptions | You want pre-run sizing and cost-model inputs | No pricing is applied by Themis |
 | `quickcheck --config ...` | Prints a compact status summary for a stored run | You want a quick operational check | Less detail than `report` or `inspect` |

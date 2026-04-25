@@ -78,6 +78,7 @@ class RuntimeConfig(HashableModel):
     stage_concurrency: dict[str, int] = Field(default_factory=dict)
     provider_concurrency: dict[str, int] = Field(default_factory=dict)
     provider_rate_limits: dict[str, int] = Field(default_factory=dict)
+    provider_token_limits: dict[str, int] = Field(default_factory=dict)
     generation_retry_attempts: int = 3
     generation_retry_delay: float = 0.01
     generation_retry_backoff: float = 2.0

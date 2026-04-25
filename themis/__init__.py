@@ -7,6 +7,7 @@ import tomllib
 from themis.core import (
     DatasetSourceSpec,
     Experiment,
+    ExecutionCheckpoint,
     InMemoryRunStore,
     PromptSpec,
     Reporter,
@@ -19,6 +20,9 @@ from themis.core import (
     RunSnapshot,
     RunStatus,
     RunStore,
+    ProjectionCursor,
+    RerunPlan,
+    RerunSelector,
     SqliteRunStore,
     StatsEngine,
     evaluate,
@@ -62,6 +66,7 @@ __version__ = _resolve_version()
 
 __all__ = [
     "Experiment",
+    "ExecutionCheckpoint",
     "DatasetSourceSpec",
     "InMemoryRunStore",
     "PromptSpec",
@@ -75,6 +80,9 @@ __all__ = [
     "RunSnapshot",
     "RunStatus",
     "RunStore",
+    "ProjectionCursor",
+    "RerunPlan",
+    "RerunSelector",
     "__version__",
     "SqliteRunStore",
     "StatsEngine",

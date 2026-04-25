@@ -47,7 +47,7 @@ from themis.core.models import (
     WorkflowTrace,
 )
 from themis.core.planner import Planner
-from themis.core.projections import build_run_result
+from themis.core.projections import build_run_result, build_run_result_from_state
 from themis.core.protocols import (
     CandidateReducer,
     CandidateSelector,
@@ -67,8 +67,10 @@ from themis.core.results import (
     CaseResult,
     ExecutionState,
     GenerationWorkItem,
+    RerunPlan,
     RunResult,
     RunStatus,
+    _case_state_has_failures,
 )
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
@@ -117,16 +119,17 @@ class TokenBucketRateLimiter:
         self._updated_at = monotonic()
         self._lock = asyncio.Lock()
 
-    async def acquire(self) -> None:
-        while True:
-            async with self._lock:
-                now = monotonic()
-                self._refill(now)
-                if self._tokens >= 1.0:
-                    self._tokens -= 1.0
-                    return
-                wait_time = (1.0 - self._tokens) / self._tokens_per_second
-            await asyncio.sleep(wait_time)
+    async def acquire(self, tokens: int = 1) -> None:
+        for _ in range(max(0, tokens)):
+            while True:
+                async with self._lock:
+                    now = monotonic()
+                    self._refill(now)
+                    if self._tokens >= 1.0:
+                        self._tokens -= 1.0
+                        break
+                    wait_time = (1.0 - self._tokens) / self._tokens_per_second
+                await asyncio.sleep(wait_time)
 
     async def update_limit(self, requests_per_minute: int) -> None:
         async with self._lock:
@@ -170,6 +173,7 @@ class Orchestrator:
         store_retry_attempts: int | None = None,
         force_workflow_metrics: set[str] | None = None,
         replay_stage: Literal["reduce", "parse", "score", "judge"] | None = None,
+        rerun_plan: RerunPlan | None = None,
         until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
     ) -> None:
         self.store = store
@@ -181,6 +185,7 @@ class Orchestrator:
         self.judge_models = list(judge_models or [])
         self.force_workflow_metrics = set(force_workflow_metrics or set())
         self.replay_stage = replay_stage
+        self.rerun_plan = rerun_plan
         self.until_stage = until_stage
         self.planner = planner or Planner()
         self.subscribers = list(subscribers or [])
@@ -253,17 +258,12 @@ class Orchestrator:
         )
         self._provider_semaphores: dict[str, asyncio.Semaphore] = {}
         self._provider_limiters: dict[str, TokenBucketRateLimiter] = {}
+        self._provider_token_limiters: dict[str, TokenBucketRateLimiter] = {}
 
     async def run(self, snapshot: RunSnapshot) -> RunResult:
-        stored_run = self.store.resume(snapshot.run_id)
-        existing_events = stored_run.events if stored_run is not None else []
-        existing_state = (
-            stored_run.execution_state
-            if stored_run is not None
-            else ExecutionState(run_id=snapshot.run_id)
-        )
+        existing_state = self._load_execution_state(snapshot)
         run_span = self.tracing_provider.start_span("run", {"run_id": snapshot.run_id})
-        if not any(isinstance(event, RunStartedEvent) for event in existing_events):
+        if existing_state.status is RunStatus.PENDING:
             await self._persist_event(RunStartedEvent(run_id=snapshot.run_id))
 
         case_results: list[CaseResult] = []
@@ -288,16 +288,33 @@ class Orchestrator:
                 run_span, "error" if status is RunStatus.PARTIAL_FAILURE else "ok"
             )
             del status, case_results, case_failures
-            stored_run = self.store.resume(snapshot.run_id)
-            if stored_run is None:
-                raise RuntimeError(f"Run disappeared from store: {snapshot.run_id}")
-            return build_run_result(stored_run.snapshot, stored_run.events)
+            return self._build_run_result(snapshot)
         except Exception as exc:
             await self._persist_event(
                 RunFailedEvent(run_id=snapshot.run_id, error_message=str(exc))
             )
             self.tracing_provider.end_span(run_span, "error")
             raise
+
+    def _load_execution_state(self, snapshot: RunSnapshot) -> ExecutionState:
+        checkpoint = self.store.load_execution_checkpoint(snapshot.run_id)
+        event_count = self.store.count_events(snapshot.run_id)
+        if checkpoint is not None and checkpoint.event_count == event_count:
+            return checkpoint.execution_state
+        stored_run = self.store.resume(snapshot.run_id)
+        if stored_run is None:
+            return ExecutionState(run_id=snapshot.run_id)
+        return stored_run.execution_state
+
+    def _build_run_result(self, snapshot: RunSnapshot) -> RunResult:
+        checkpoint = self.store.load_execution_checkpoint(snapshot.run_id)
+        event_count = self.store.count_events(snapshot.run_id)
+        if checkpoint is not None and checkpoint.event_count == event_count:
+            return build_run_result_from_state(snapshot, checkpoint.execution_state)
+        stored_run = self.store.resume(snapshot.run_id)
+        if stored_run is None:
+            raise RuntimeError(f"Run disappeared from store: {snapshot.run_id}")
+        return build_run_result(stored_run.snapshot, stored_run.events)
 
     async def _run_cases(self, snapshot: RunSnapshot, existing_state: ExecutionState):
         max_in_flight_cases = max(1, self.runtime.max_concurrent_tasks)
@@ -350,17 +367,20 @@ class Orchestrator:
             "dataset_id": item0.dataset_id,
             "case_key": item0.case_key,
         }
+        existing_case_state = existing_state.case_states.get(item0.case_key)
+        use_legacy_case_events = False
+        if existing_case_state is None:
+            existing_case_state = existing_state.case_states.get(case.case_id)
+            use_legacy_case_events = existing_case_state is not None
         case_event_kwargs: _CaseIdentityKwargs = {
             "case_id": case.case_id,
-            "dataset_id": item0.dataset_id,
-            "case_key": item0.case_key,
+            "dataset_id": None if use_legacy_case_events else item0.dataset_id,
+            "case_key": None if use_legacy_case_events else item0.case_key,
         }
         prior_case_state = self._replay_case_state(
-            existing_state.case_states.get(
-                item0.case_key,
-                existing_state.case_states.get(case.case_id, CaseExecutionState()),
-            )
+            existing_case_state or CaseExecutionState()
         )
+        prior_case_state = self._rerun_case_state(prior_case_state, case, item0)
         generated_by_index = dict(prior_case_state.generated_candidates_by_index)
         workflow_executions = dict(prior_case_state.evaluation_executions)
         evaluation_failures = dict(prior_case_state.evaluation_failures)
@@ -945,10 +965,17 @@ class Orchestrator:
                     if provider_key is not None
                     else None
                 )
+                provider_token_limiter = (
+                    self._provider_token_limiter(provider_key)
+                    if provider_key is not None
+                    else None
+                )
                 if provider_semaphore is not None:
                     await provider_semaphore.acquire()
                 if provider_limiter is not None:
                     await provider_limiter.acquire()
+                if provider_token_limiter is not None:
+                    await provider_token_limiter.acquire()
                 try:
                     self._notify("before_generate", case, generate_ctx)
                     span = self.tracing_provider.start_span(
@@ -958,6 +985,10 @@ class Orchestrator:
                         generated = await self._generate_with_retries(
                             case, generate_ctx
                         )
+                        if provider_token_limiter is not None:
+                            await provider_token_limiter.acquire(
+                                _observed_token_cost(generated.token_usage) - 1
+                            )
                         await self._update_rate_limit(provider_key, generated.artifacts)
                         self._notify("after_generate", generated, generate_ctx)
                         blob_ref = await self._store_blob(
@@ -1158,14 +1189,26 @@ class Orchestrator:
                     if provider_key is not None
                     else None
                 )
+                provider_token_limiter = (
+                    self._provider_token_limiter(provider_key)
+                    if provider_key is not None
+                    else None
+                )
                 if provider_semaphore is not None:
                     await provider_semaphore.acquire()
                 if provider_limiter is not None:
                     await provider_limiter.acquire()
+                if provider_token_limiter is not None:
+                    await provider_token_limiter.acquire()
                 try:
-                    return await self._judge_with_retries(
+                    response = await self._judge_with_retries(
                         judge_model, prompt, seed=seed
                     )
+                    if provider_token_limiter is not None:
+                        await provider_token_limiter.acquire(
+                            _observed_token_cost(response.token_usage) - 1
+                        )
+                    return response
                 finally:
                     if provider_semaphore is not None:
                         provider_semaphore.release()
@@ -1235,6 +1278,107 @@ class Orchestrator:
                 "score_failures": {},
             }
         )
+
+    def _rerun_case_state(
+        self,
+        case_state: CaseExecutionState,
+        case,
+        item: GenerationWorkItem,
+    ) -> CaseExecutionState:
+        if self.rerun_plan is None:
+            return case_state
+        if not self._case_matches_rerun_plan(case_state, case, item):
+            return case_state
+
+        metric_ids = set(self.rerun_plan.selector.metric_ids)
+        stage = self.rerun_plan.stage
+        if stage == "generate":
+            return CaseExecutionState()
+        if stage == "reduce":
+            return case_state.model_copy(
+                update={
+                    "selected_candidate_ids": None,
+                    "selection_metadata": {},
+                    "selection_error": None,
+                    "reduced_candidate": None,
+                    "reduction_error": None,
+                    "parsed_output": None,
+                    "parse_error": None,
+                    "evaluation_executions": {},
+                    "evaluation_execution_blob_refs": {},
+                    "evaluation_failures": {},
+                    "successful_scores": {},
+                    "score_failures": {},
+                }
+            )
+        if stage == "parse":
+            return case_state.model_copy(
+                update={
+                    "parsed_output": None,
+                    "parse_error": None,
+                    "evaluation_executions": {},
+                    "evaluation_execution_blob_refs": {},
+                    "evaluation_failures": {},
+                    "successful_scores": {},
+                    "score_failures": {},
+                }
+            )
+
+        successful_scores = dict(case_state.successful_scores)
+        score_failures = dict(case_state.score_failures)
+        evaluation_executions = dict(case_state.evaluation_executions)
+        evaluation_execution_blob_refs = dict(case_state.evaluation_execution_blob_refs)
+        evaluation_failures = dict(case_state.evaluation_failures)
+        score_ids_to_clear = metric_ids or set(successful_scores) | set(score_failures)
+        for metric_id in score_ids_to_clear:
+            successful_scores.pop(metric_id, None)
+            score_failures.pop(metric_id, None)
+
+        if stage == "judge":
+            workflow_metric_ids = metric_ids or {
+                metric.component_id
+                for metric, metric_kind in zip(
+                    self.metrics, self._metric_kinds(), strict=False
+                )
+                if metric_kind != "pure"
+            }
+            for metric_id in workflow_metric_ids:
+                evaluation_executions.pop(metric_id, None)
+                evaluation_execution_blob_refs.pop(metric_id, None)
+                evaluation_failures.pop(metric_id, None)
+                successful_scores.pop(metric_id, None)
+                score_failures.pop(metric_id, None)
+
+        return case_state.model_copy(
+            update={
+                "evaluation_executions": evaluation_executions,
+                "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
+                "evaluation_failures": evaluation_failures,
+                "successful_scores": successful_scores,
+                "score_failures": score_failures,
+            }
+        )
+
+    def _case_matches_rerun_plan(
+        self,
+        case_state: CaseExecutionState,
+        case,
+        item: GenerationWorkItem,
+    ) -> bool:
+        if self.rerun_plan is None:
+            return False
+        selector = self.rerun_plan.selector
+        if selector.failed_only and not _case_state_has_failures(case_state):
+            return False
+        if selector.case_ids and case.case_id not in selector.case_ids:
+            return False
+        if selector.case_keys and item.case_key not in selector.case_keys:
+            return False
+        if selector.metadata and any(
+            case.metadata.get(key) != value for key, value in selector.metadata.items()
+        ):
+            return False
+        return True
 
     def _metric_kinds(self) -> list[str]:
         return [
@@ -1389,6 +1533,16 @@ class Orchestrator:
             )
         return self._provider_limiters[provider_key]
 
+    def _provider_token_limiter(self, provider_key: str) -> TokenBucketRateLimiter | None:
+        tokens_per_minute = self.runtime.provider_token_limits.get(provider_key)
+        if tokens_per_minute is None:
+            return None
+        if provider_key not in self._provider_token_limiters:
+            self._provider_token_limiters[provider_key] = TokenBucketRateLimiter(
+                tokens_per_minute
+            )
+        return self._provider_token_limiters[provider_key]
+
     async def _update_rate_limit(
         self,
         provider_key: str | None,
@@ -1517,6 +1671,10 @@ class Orchestrator:
                 provider: max(1, limit)
                 for provider, limit in provider_rate_limits.items()
             }
+        updates["provider_token_limits"] = {
+            provider: max(1, limit)
+            for provider, limit in base.provider_token_limits.items()
+        }
         updates["generation_retry_attempts"] = max(1, base.generation_retry_attempts)
         updates["generation_retry_delay"] = max(0.0, base.generation_retry_delay)
         updates["generation_retry_backoff"] = max(1.0, base.generation_retry_backoff)
@@ -1572,6 +1730,15 @@ def _retry_delay_seconds(
     if isinstance(retry_after_s, (int, float)):
         return max(jittered_delay, float(retry_after_s))
     return jittered_delay
+
+
+def _observed_token_cost(token_usage: Mapping[str, int] | None) -> int:
+    if not token_usage:
+        return 1
+    total = token_usage.get("total_tokens")
+    if isinstance(total, int) and total > 0:
+        return total
+    return max(1, sum(value for value in token_usage.values() if isinstance(value, int)))
 
 
 def _score_pure_metric(

@@ -10,6 +10,7 @@ from pathlib import Path
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
 from themis.core.registry import RunRecord
+from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -58,8 +59,46 @@ class JsonlRunStore(ProjectionRefreshingStore):
                     continue
         return events
 
+    def count_events(self, run_id: str) -> int:
+        events_path = self._run_root(run_id) / "events.jsonl"
+        if not events_path.is_file():
+            return 0
+        with events_path.open("r", encoding="utf-8") as handle:
+            return sum(1 for line in handle if line.strip())
+
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         return self._get_projection_with_backfill(run_id, projection_name)
+
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None:
+        path = self._run_root(run_id) / "execution_checkpoint.json"
+        if not path.is_file():
+            return None
+        return ExecutionCheckpoint.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None:
+        run_root = self._run_root(checkpoint.run_id)
+        run_root.mkdir(parents=True, exist_ok=True)
+        (run_root / "execution_checkpoint.json").write_text(
+            checkpoint.model_dump_json(indent=2),
+            encoding="utf-8",
+        )
+
+    def load_projection_cursor(
+        self, run_id: str, projection_name: str
+    ) -> ProjectionCursor | None:
+        path = self._run_root(run_id) / "projection_cursors" / f"{projection_name}.json"
+        if not path.is_file():
+            return None
+        return ProjectionCursor.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None:
+        path = (
+            self._run_root(cursor.run_id)
+            / "projection_cursors"
+            / f"{cursor.projection_name}.json"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(cursor.model_dump_json(indent=2), encoding="utf-8")
 
     def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         projection_path = (
@@ -95,7 +134,12 @@ class JsonlRunStore(ProjectionRefreshingStore):
         snapshot = self._load_snapshot(run_id)
         if snapshot is None:
             return None
-        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+        return StoredRun(
+            snapshot=snapshot,
+            events=self.query_events(run_id),
+            execution_checkpoint=self.load_execution_checkpoint(run_id),
+            event_count=self.count_events(run_id),
+        )
 
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         snapshot_path = self._run_root(run_id) / "snapshot.json"

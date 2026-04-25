@@ -23,6 +23,10 @@ def get_run_snapshot(store: RunStore, run_id: str) -> RunSnapshot:
 def get_execution_state(store: RunStore, run_id: str) -> ExecutionState:
     """Return the persisted execution state for a run."""
 
+    checkpoint = store.load_execution_checkpoint(run_id)
+    event_count = store.count_events(run_id)
+    if checkpoint is not None and checkpoint.event_count == event_count:
+        return checkpoint.execution_state
     return _require_stored_run(store, run_id).execution_state
 
 

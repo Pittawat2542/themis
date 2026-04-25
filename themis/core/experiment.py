@@ -41,7 +41,7 @@ from themis.core.dataset_sources import (
 )
 from themis.core.models import Dataset
 from themis.core.orchestrator import Orchestrator
-from themis.core.projections import build_run_result
+from themis.core.projections import build_run_result, build_run_result_from_state
 from themis.core.protocols import (
     LLMMetric,
     LifecycleSubscriber,
@@ -50,6 +50,8 @@ from themis.core.protocols import (
     TraceMetric,
     TracingProvider,
 )
+from themis.core.registry import RunLineage
+from themis.core.results import ExecutionState, RerunPlan, RerunSelector
 from themis.core.store import RunStore
 from themis.core.stores.factory import create_run_store
 from themis.core.tracing import NoOpTracingProvider
@@ -252,22 +254,39 @@ class Experiment(FrozenModel):
         run_store.initialize()
         resolved_component_refs = self._resolved_component_refs()
         self._validate_component_refs(snapshot, resolved_component_refs)
-        stored_run = run_store.resume(snapshot.run_id)
-        if stored_run is not None:
+        existing_state = _fresh_execution_state(run_store, snapshot.run_id)
+        stored_run = None
+        if existing_state is not None:
             existing_run_policy = effective_runtime.existing_run_policy
             if existing_run_policy == "error":
                 raise ValueError(f"Run already exists for run_id={snapshot.run_id}")
             if existing_run_policy == "rerun":
                 run_store.clear_run(snapshot.run_id)
-                stored_run = None
+                existing_state = None
             elif (
                 existing_run_policy == "auto"
-                and stored_run.execution_state.status.value == "completed"
-                and _stage_index(stored_run.execution_state.completed_through_stage)
+                and existing_state.status.value == "completed"
+                and _stage_index(existing_state.completed_through_stage)
                 >= _stage_index(until_stage)
             ):
-                return build_run_result(stored_run.snapshot, stored_run.events)
-        if stored_run is None:
+                return build_run_result_from_state(snapshot, existing_state)
+        else:
+            stored_run = run_store.resume(snapshot.run_id)
+            if stored_run is not None:
+                existing_run_policy = effective_runtime.existing_run_policy
+                if existing_run_policy == "error":
+                    raise ValueError(f"Run already exists for run_id={snapshot.run_id}")
+                if existing_run_policy == "rerun":
+                    run_store.clear_run(snapshot.run_id)
+                    stored_run = None
+                elif (
+                    existing_run_policy == "auto"
+                    and stored_run.execution_state.status.value == "completed"
+                    and _stage_index(stored_run.execution_state.completed_through_stage)
+                    >= _stage_index(until_stage)
+                ):
+                    return build_run_result(stored_run.snapshot, stored_run.events)
+        if existing_state is None and stored_run is None:
             run_store.persist_snapshot(snapshot)
         orchestrator = Orchestrator(
             store=run_store,
@@ -378,6 +397,77 @@ class Experiment(FrozenModel):
             tracing_provider=tracing_provider,
         )
 
+    async def rerun_async(
+        self,
+        *,
+        stage: Literal["generate", "reduce", "parse", "score", "judge"],
+        failed_only: bool = False,
+        case_ids: list[str] | None = None,
+        case_keys: list[str] | None = None,
+        metadata: dict[str, str] | None = None,
+        metric_ids: list[str] | None = None,
+        runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
+        """Rerun a targeted subset of an existing stored run."""
+
+        effective_runtime = runtime or self.runtime
+        snapshot = self._snapshot_for_runtime(effective_runtime)
+        if store is None and self.storage.target == "memory":
+            raise ValueError(
+                "Memory-backed rerun requires the original store instance; pass store=... or use sqlite storage."
+            )
+        run_store = store or self._build_store()
+        run_store.initialize()
+        if run_store.load_execution_checkpoint(snapshot.run_id) is None and (
+            run_store.resume(snapshot.run_id) is None
+        ):
+            raise ValueError(f"No stored run found for rerun: {snapshot.run_id}")
+        self._validate_component_refs(snapshot, self._resolved_component_refs())
+        rerun_plan = RerunPlan(
+            stage=stage,
+            selector=RerunSelector(
+                failed_only=failed_only,
+                case_ids=list(case_ids or []),
+                case_keys=list(case_keys or []),
+                metadata=dict(metadata or {}),
+                metric_ids=list(metric_ids or []),
+            ),
+        )
+        orchestrator = Orchestrator(
+            store=run_store,
+            generator=resolve_generator_component(self.generation.generator),
+            selector=resolve_selector_component(self.generation.selector)
+            if self.generation.selector is not None
+            else None,
+            reducer=resolve_reducer_component(self.generation.reducer)
+            if self.generation.reducer is not None
+            else None,
+            parser=resolve_parser_component(self.evaluation.parsers[0])
+            if self.evaluation.parsers
+            else None,
+            metrics=[
+                resolve_metric_component(metric) for metric in self.evaluation.metrics
+            ],
+            judge_models=[
+                resolve_judge_model_component(judge_model)
+                for judge_model in self.evaluation.judge_models
+            ],
+            subscribers=subscribers or [],
+            tracing_provider=tracing_provider or NoOpTracingProvider(),
+            runtime=effective_runtime,
+            force_workflow_metrics=set(metric_ids or []) if stage == "judge" else set(),
+            rerun_plan=rerun_plan,
+        )
+        result = await orchestrator.run(snapshot)
+        record = run_store.get_run_record(snapshot.run_id)
+        lineage = list(record.lineage) if record is not None else []
+        lineage.append(RunLineage(parent_run_id=snapshot.run_id, relationship="rerun"))
+        run_store.update_run_record(snapshot.run_id, lineage=lineage)
+        return result
+
     def run(
         self,
         *,
@@ -418,6 +508,40 @@ class Experiment(FrozenModel):
         )
         return asyncio.run(
             self.rejudge_async(
+                metric_ids=metric_ids,
+                runtime=runtime,
+                store=store,
+                subscribers=subscribers,
+                tracing_provider=tracing_provider,
+            )
+        )
+
+    def rerun(
+        self,
+        *,
+        stage: Literal["generate", "reduce", "parse", "score", "judge"],
+        failed_only: bool = False,
+        case_ids: list[str] | None = None,
+        case_keys: list[str] | None = None,
+        metadata: dict[str, str] | None = None,
+        metric_ids: list[str] | None = None,
+        runtime: RuntimeConfig | None = None,
+        store: RunStore | None = None,
+        subscribers: list[LifecycleSubscriber] | None = None,
+        tracing_provider: TracingProvider | None = None,
+    ):
+        """Rerun a targeted subset of an existing stored run synchronously."""
+
+        _raise_if_running_loop(
+            "Experiment.rerun() cannot be called from a running event loop. Use await Experiment.rerun_async()."
+        )
+        return asyncio.run(
+            self.rerun_async(
+                stage=stage,
+                failed_only=failed_only,
+                case_ids=case_ids,
+                case_keys=case_keys,
+                metadata=metadata,
                 metric_ids=metric_ids,
                 runtime=runtime,
                 store=store,
@@ -611,6 +735,15 @@ def _stage_index(stage: str | None) -> int:
         "judge": 4,
     }
     return order.get(stage or "judge", 4)
+
+
+def _fresh_execution_state(store: RunStore, run_id: str) -> ExecutionState | None:
+    checkpoint = store.load_execution_checkpoint(run_id)
+    if checkpoint is None:
+        return None
+    if checkpoint.event_count != store.count_events(run_id):
+        return None
+    return checkpoint.execution_state
 
 
 def _default_dependency_versions(themis_version: str) -> dict[str, str]:

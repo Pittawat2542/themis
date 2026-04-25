@@ -103,3 +103,55 @@ def replay(
         )
     )
     return 0
+
+
+def rerun(
+    *,
+    config: str,
+    stage: Literal["generate", "reduce", "parse", "score", "judge"],
+    failed_only: bool = False,
+    case_id: list[str] | None = None,
+    case_key: list[str] | None = None,
+    metadata: list[str] | None = None,
+    metric_id: list[str] | None = None,
+) -> int:
+    experiment = load_experiment(config)
+    store = initialize_store(experiment)
+    metadata_filter = _metadata_filter_from_cli(metadata or [])
+    result = experiment.rerun(
+        stage=stage,
+        failed_only=failed_only,
+        case_ids=case_id or [],
+        case_keys=case_key or [],
+        metadata=metadata_filter,
+        metric_ids=metric_id or [],
+        store=store,
+    )
+    benchmark = store.get_projection(result.run_id, "benchmark_result")
+    metric_means = {}
+    if isinstance(benchmark, dict):
+        metric_means_payload = benchmark.get("metric_means", {})
+        if isinstance(metric_means_payload, dict):
+            metric_means = dict(metric_means_payload)
+    print(
+        dump_json(
+            {
+                "run_id": result.run_id,
+                "status": result.status.value,
+                "metric_means": metric_means,
+            }
+        )
+    )
+    return 0
+
+
+def _metadata_filter_from_cli(values: list[str]) -> dict[str, str]:
+    filters: dict[str, str] = {}
+    for value in values:
+        if "=" not in value:
+            raise ValueError(
+                f"Metadata filters must use key=value syntax, got {value!r}"
+            )
+        key, filter_value = value.split("=", 1)
+        filters[key] = filter_value
+    return filters

@@ -7,6 +7,7 @@ from typing import Protocol, runtime_checkable
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
 from themis.core.registry import RunLineage, RunQuery, RunRecord
+from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun
 
 
@@ -22,7 +23,19 @@ class RunStore(Protocol):
 
     def query_events(self, run_id: str) -> list[RunEvent]: ...
 
+    def count_events(self, run_id: str) -> int: ...
+
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None: ...
+
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None: ...
+
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None: ...
+
+    def load_projection_cursor(
+        self, run_id: str, projection_name: str
+    ) -> ProjectionCursor | None: ...
+
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None: ...
 
     def store_blob(self, blob: bytes, media_type: str) -> str: ...
 

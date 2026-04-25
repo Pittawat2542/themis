@@ -37,6 +37,9 @@ Important distinctions:
 - `completed_through_stage` explains whether a run intentionally stopped at `generate`, `reduce`, `parse`, `score`, or `judge`
 - resume continues unfinished persisted work
 - replay re-runs downstream stages from stored upstream artifacts
+- rerun targets failed cases, case slices, or metric subsets while preserving the compiled run identity
+
+Resume uses store-level execution checkpoints when they are fresh. The event stream remains authoritative for audit and recovery, so older stores or stale checkpoints can still rebuild state by replaying stored events.
 
 Retry classification is built around common endpoint failures: explicit retryable exceptions, timeouts, connection failures, `429` rate limits, and `5xx` server failures. Persisted retry history includes the attempt number, delay, reason, and any `retry_after_s` hint that the provider returned.
 

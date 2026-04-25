@@ -58,7 +58,8 @@ goal: Document config model fields, defaults, and identity/persistence implicati
 | `max_concurrent_tasks` | No | Sets the global execution cap | No | Use for coarse operational throttling |
 | `stage_concurrency` | No | Sets per-stage concurrency caps | No | Useful when generation and judging need different limits |
 | `provider_concurrency` | No | Limits concurrency per provider endpoint | No | Helps share one process fairly across models or services |
-| `provider_rate_limits` | No | Sets explicit per-provider request or token limits | No | Use when the endpoint enforces quotas or rate contracts |
+| `provider_rate_limits` | No | Sets explicit per-provider request limits | No | Use when the endpoint enforces request-per-minute quotas |
+| `provider_token_limits` | No | Sets explicit per-provider token limits | No | Uses observed token usage when providers return it; otherwise each call consumes one token unit |
 | `generation_retry_attempts`, `generation_retry_delay`, `generation_retry_backoff` | No | Controls generation retry behavior | No | Retries transient provider failures without changing identity |
 | `judge_retry_attempts`, `judge_retry_delay`, `judge_retry_backoff` | No | Controls judge retry behavior | No | Applies only to workflow-backed metrics |
 | `store_retry_attempts`, `store_retry_delay` | No | Controls persistence retry behavior | No | Use when the store can fail transiently |

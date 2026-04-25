@@ -10,6 +10,7 @@ from pathlib import Path
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
 from themis.core.registry import RunRecord
+from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -45,6 +46,7 @@ class PostgresRunStore(ProjectionRefreshingStore):
             current_version = str(row["value"]) if row is not None else "0"
             if current_version == "0":
                 self._migrate_to_v1(connection)
+            self._ensure_checkpoint_schema(connection)
             connection.execute(
                 """
                 INSERT INTO run_store_meta (key, value)
@@ -109,8 +111,76 @@ class PostgresRunStore(ProjectionRefreshingStore):
                 continue
         return events
 
+    def count_events(self, run_id: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS event_count
+                FROM run_events
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            ).fetchone()
+        return int(row["event_count"]) if row is not None else 0
+
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         return self._get_projection_with_backfill(run_id, projection_name)
+
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT checkpoint_json::text AS checkpoint_json
+                FROM execution_checkpoints
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return ExecutionCheckpoint.model_validate_json(row["checkpoint_json"])
+
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO execution_checkpoints (run_id, checkpoint_json)
+                VALUES (%s, %s::jsonb)
+                ON CONFLICT (run_id) DO UPDATE
+                SET checkpoint_json = EXCLUDED.checkpoint_json
+                """,
+                (checkpoint.run_id, checkpoint.model_dump_json()),
+            )
+            connection.commit()
+
+    def load_projection_cursor(
+        self, run_id: str, projection_name: str
+    ) -> ProjectionCursor | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT cursor_json::text AS cursor_json
+                FROM projection_cursors
+                WHERE run_id = %s AND projection_name = %s
+                """,
+                (run_id, projection_name),
+            ).fetchone()
+        if row is None:
+            return None
+        return ProjectionCursor.model_validate_json(row["cursor_json"])
+
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO projection_cursors (run_id, projection_name, cursor_json)
+                VALUES (%s, %s, %s::jsonb)
+                ON CONFLICT (run_id, projection_name) DO UPDATE
+                SET cursor_json = EXCLUDED.cursor_json
+                """,
+                (cursor.run_id, cursor.projection_name, cursor.model_dump_json()),
+            )
+            connection.commit()
 
     def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         with self._connect() as connection:
@@ -153,7 +223,12 @@ class PostgresRunStore(ProjectionRefreshingStore):
         snapshot = self._load_snapshot(run_id)
         if snapshot is None:
             return None
-        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+        return StoredRun(
+            snapshot=snapshot,
+            events=self.query_events(run_id),
+            execution_checkpoint=self.load_execution_checkpoint(run_id),
+            event_count=self.count_events(run_id),
+        )
 
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         with self._connect() as connection:
@@ -255,6 +330,12 @@ class PostgresRunStore(ProjectionRefreshingStore):
         with self._connect() as connection:
             connection.execute("DELETE FROM run_events WHERE run_id = %s", (run_id,))
             connection.execute(
+                "DELETE FROM execution_checkpoints WHERE run_id = %s", (run_id,)
+            )
+            connection.execute(
+                "DELETE FROM projection_cursors WHERE run_id = %s", (run_id,)
+            )
+            connection.execute(
                 "DELETE FROM run_projections WHERE run_id = %s", (run_id,)
             )
             connection.execute("DELETE FROM run_snapshots WHERE run_id = %s", (run_id,))
@@ -311,6 +392,27 @@ class PostgresRunStore(ProjectionRefreshingStore):
                 cache_key TEXT NOT NULL,
                 payload_json JSONB NOT NULL,
                 PRIMARY KEY (stage_name, cache_key)
+            )
+            """
+        )
+        self._ensure_checkpoint_schema(connection)
+
+    def _ensure_checkpoint_schema(self, connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS execution_checkpoints (
+                run_id TEXT PRIMARY KEY,
+                checkpoint_json JSONB NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projection_cursors (
+                run_id TEXT NOT NULL,
+                projection_name TEXT NOT NULL,
+                cursor_json JSONB NOT NULL,
+                PRIMARY KEY (run_id, projection_name)
             )
             """
         )

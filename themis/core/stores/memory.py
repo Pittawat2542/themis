@@ -7,6 +7,7 @@ import hashlib
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
 from themis.core.registry import RunRecord
+from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -20,6 +21,8 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         self._blobs: dict[str, tuple[str, bytes]] = {}
         self._projections: dict[tuple[str, str], JSONValue] = {}
         self._run_records: dict[str, RunRecord] = {}
+        self._execution_checkpoints: dict[str, ExecutionCheckpoint] = {}
+        self._projection_cursors: dict[tuple[str, str], ProjectionCursor] = {}
 
     def initialize(self) -> None:
         return None
@@ -37,8 +40,25 @@ class InMemoryRunStore(ProjectionRefreshingStore):
     def query_events(self, run_id: str) -> list[RunEvent]:
         return list(self._events.get(run_id, []))
 
+    def count_events(self, run_id: str) -> int:
+        return len(self._events.get(run_id, []))
+
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         return self._get_projection_with_backfill(run_id, projection_name)
+
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None:
+        return self._execution_checkpoints.get(run_id)
+
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None:
+        self._execution_checkpoints[checkpoint.run_id] = checkpoint
+
+    def load_projection_cursor(
+        self, run_id: str, projection_name: str
+    ) -> ProjectionCursor | None:
+        return self._projection_cursors.get((run_id, projection_name))
+
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None:
+        self._projection_cursors[(cursor.run_id, cursor.projection_name)] = cursor
 
     def store_blob(self, blob: bytes, media_type: str) -> str:
         digest = hashlib.sha256(blob).hexdigest()
@@ -53,7 +73,12 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         snapshot = self._snapshots.get(run_id)
         if snapshot is None:
             return None
-        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+        return StoredRun(
+            snapshot=snapshot,
+            events=self.query_events(run_id),
+            execution_checkpoint=self.load_execution_checkpoint(run_id),
+            event_count=self.count_events(run_id),
+        )
 
     def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         return self._projections.get((run_id, projection_name))
@@ -88,6 +113,7 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         self._snapshots.pop(run_id, None)
         self._events.pop(run_id, None)
         self._run_records.pop(run_id, None)
+        self._execution_checkpoints.pop(run_id, None)
         stale_projection_keys = [
             projection_key
             for projection_key in self._projections
@@ -95,3 +121,8 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         ]
         for projection_key in stale_projection_keys:
             self._projections.pop(projection_key, None)
+        stale_cursor_keys = [
+            cursor_key for cursor_key in self._projection_cursors if cursor_key[0] == run_id
+        ]
+        for cursor_key in stale_cursor_keys:
+            self._projection_cursors.pop(cursor_key, None)

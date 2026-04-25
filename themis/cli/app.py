@@ -13,7 +13,7 @@ from themis.cli.commands.init import init
 from themis.cli.commands.inspect import inspect_app
 from themis.cli.commands.quick_eval import quick_eval_app
 from themis.cli.commands.reporting import report
-from themis.cli.commands.run import estimate, quickcheck, replay, resume, run
+from themis.cli.commands.run import estimate, quickcheck, replay, rerun, resume, run
 from themis.cli.commands.worker import worker_app
 from themis.cli.helpers import dump_json, load_experiment
 from themis.core.submission import submit_experiment
@@ -41,6 +41,7 @@ def submit(*, config: str, mode: Literal["worker-pool", "batch"]) -> int:
 
 app.command(run)
 app.command(replay)
+app.command(rerun)
 app.command(resume)
 app.command(estimate)
 app.command(report)

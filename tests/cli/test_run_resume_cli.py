@@ -155,6 +155,22 @@ def test_inspect_and_replay_commands_expose_persisted_state(tmp_path: Path) -> N
     assert replay_payload["run_id"] == run_payload["run_id"]
     assert replay_payload["status"] == "completed"
 
+    rerun = _run_cli(
+        "rerun",
+        "--config",
+        str(config_path),
+        "--stage",
+        "score",
+        "--case-id",
+        "case-1",
+        "--metric-id",
+        "builtin/exact_match",
+    )
+    assert rerun.returncode == 0, rerun.stderr
+    rerun_payload = json.loads(rerun.stdout)
+    assert rerun_payload["run_id"] == run_payload["run_id"]
+    assert rerun_payload["status"] == "completed"
+
 
 def test_inspect_evaluation_returns_workflow_execution(tmp_path: Path) -> None:
     config_path = tmp_path / "judge-experiment.yaml"

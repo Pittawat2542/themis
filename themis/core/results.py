@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import Field
@@ -301,6 +302,26 @@ class ExecutionState(FrozenModel):
         return self.model_copy(update={"status": status, "case_states": case_states})
 
 
+class ExecutionCheckpoint(FrozenModel):
+    """Store-level checkpoint for fast resume state lookup."""
+
+    schema_version: str = "1"
+    run_id: str
+    event_count: int
+    execution_state: ExecutionState
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ProjectionCursor(FrozenModel):
+    """Projection progress marker over a run event stream."""
+
+    schema_version: str = "1"
+    run_id: str
+    projection_name: str
+    event_count: int
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 def _case_state_has_failures(case_state: CaseExecutionState) -> bool:
     return any(
         (
@@ -379,6 +400,23 @@ class RunEstimate(FrozenModel):
     estimated_judge_output_tokens: int = 0
     estimated_total_tokens: int = 0
     assumptions: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class RerunSelector(FrozenModel):
+    """Target subset for a stored-run rerun."""
+
+    failed_only: bool = False
+    case_ids: list[str] = Field(default_factory=list)
+    case_keys: list[str] = Field(default_factory=list)
+    metadata: dict[str, str] = Field(default_factory=dict)
+    metric_ids: list[str] = Field(default_factory=list)
+
+
+class RerunPlan(FrozenModel):
+    """Runtime rerun request over an existing compiled run."""
+
+    stage: str
+    selector: RerunSelector = Field(default_factory=RerunSelector)
 
 
 class ReductionBundleRecord(FrozenModel):

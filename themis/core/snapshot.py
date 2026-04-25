@@ -195,11 +195,19 @@ class StoredRun(FrozenModel):
 
     snapshot: RunSnapshot
     events: list[RunEvent] = Field(default_factory=list)
+    execution_checkpoint: object | None = None
+    event_count: int | None = None
 
     @computed_field(return_type=object)  # type: ignore[prop-decorator]
     @property
     def execution_state(self) -> ExecutionState:
-        from themis.core.results import ExecutionState
+        from themis.core.results import ExecutionCheckpoint, ExecutionState
+
+        if isinstance(self.execution_checkpoint, ExecutionCheckpoint) and (
+            self.event_count is None
+            or self.execution_checkpoint.event_count == self.event_count
+        ):
+            return self.execution_checkpoint.execution_state
 
         return ExecutionState.from_events(self.snapshot.run_id, self.events)
 

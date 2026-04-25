@@ -18,6 +18,7 @@ from themis.core.events import (
     GenerationCompletedEvent,
     ParseCompletedEvent,
     ReductionCompletedEvent,
+    RunCompletedEvent,
     RunStartedEvent,
     ScoreCompletedEvent,
     ScoreFailedEvent,
@@ -170,6 +171,17 @@ class RateLimitedGenerator:
             final_output=case.expected_output,
             artifacts=artifacts,
         )
+
+
+class TokenLimitedGenerator(RateLimitedGenerator):
+    component_id = "generator/token-limited"
+
+    def fingerprint(self) -> str:
+        return "generator-token-limited"
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        generated = await super().generate(case, ctx)
+        return generated.model_copy(update={"token_usage": {"total_tokens": 60}})
 
 
 class FlakyStore(InMemoryRunStore):
@@ -445,6 +457,206 @@ async def test_orchestrator_resumes_without_regenerating_completed_candidates() 
 
 
 @pytest.mark.asyncio
+async def test_orchestrator_resumes_from_checkpoint_without_event_replay() -> None:
+    class NoEventReplayStore(InMemoryRunStore):
+        def query_events(self, run_id: str):
+            raise AssertionError(f"query_events should not be called for {run_id}")
+
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = _experiment(
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metric=metric,
+        num_samples=2,
+    )
+    snapshot = experiment.compile()
+    store = NoEventReplayStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-candidate-7",
+            candidate_index=0,
+            seed=7,
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+
+    orchestrator = Orchestrator(
+        store=store,
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metrics=[metric],
+    )
+
+    result = await orchestrator.run(snapshot)
+
+    assert result.status.value == "completed"
+    assert generator.calls == 1
+
+
+def test_experiment_reuses_completed_checkpoint_without_event_replay() -> None:
+    class NoEventReplayStore(InMemoryRunStore):
+        def query_events(self, run_id: str):
+            raise AssertionError(f"query_events should not be called for {run_id}")
+
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = _experiment(
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metric=metric,
+    )
+    snapshot = experiment.compile()
+    store = NoEventReplayStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-candidate-7",
+            candidate_index=0,
+            seed=7,
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    store.persist_event(
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["case-1-candidate-7"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["case-1-candidate-7"],
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    store.persist_event(
+        ParseCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            result={"value": {"answer": "4"}, "format": "json"},
+        )
+    )
+    store.persist_event(
+        ScoreCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id=metric.component_id,
+            score={"metric_id": metric.component_id, "value": 1.0},
+        )
+    )
+    store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+
+    result = experiment.run(store=store)
+
+    assert result.status.value == "completed"
+    assert generator.calls == 0
+
+
+def test_experiment_reruns_failed_scores_without_regenerating_upstream_artifacts() -> None:
+    generator = CountingGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = _experiment(
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metric=metric,
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+
+    store.initialize()
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    store.persist_event(
+        GenerationCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-candidate-7",
+            candidate_index=0,
+            seed=7,
+            result={
+                "candidate_id": "case-1-candidate-7",
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    store.persist_event(
+        ReductionCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            source_candidate_ids=["case-1-candidate-7"],
+            result={
+                "candidate_id": "case-1-reduced",
+                "source_candidate_ids": ["case-1-candidate-7"],
+                "final_output": {"answer": "4"},
+            },
+        )
+    )
+    store.persist_event(
+        ParseCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            result={"value": {"answer": "4"}, "format": "json"},
+        )
+    )
+    store.persist_event(
+        ScoreFailedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            candidate_id="case-1-reduced",
+            metric_id=metric.component_id,
+            error=ScoreError(metric_id=metric.component_id, reason="temporary").model_dump(
+                mode="json"
+            ),
+        )
+    )
+
+    result = experiment.rerun(
+        failed_only=True,
+        stage="score",
+        metric_ids=[metric.component_id],
+        store=store,
+    )
+
+    assert result.status.value == "completed"
+    assert generator.calls == 0
+    assert reducer.calls == 0
+    assert parser.calls == 0
+    assert metric.calls == 1
+
+
+@pytest.mark.asyncio
 async def test_orchestrator_rescores_without_regeneration_or_reparse() -> None:
     generator = CountingGenerator()
     reducer = CountingReducer()
@@ -685,6 +897,66 @@ async def test_orchestrator_updates_provider_rate_limit_from_generation_artifact
         monkeypatch.undo()
 
     assert generator.timestamps == [0.0, 0.5, 1.0]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_applies_provider_token_limit() -> None:
+    generator = TokenLimitedGenerator()
+    reducer = CountingReducer()
+    parser = CountingParser()
+    metric = CountingMetric()
+    experiment = _experiment(
+        generator=generator,
+        reducer=reducer,
+        parser=parser,
+        metric=metric,
+        num_samples=2,
+    )
+    snapshot = experiment.compile()
+    store = InMemoryRunStore()
+    current_time = {"value": 0.0}
+
+    def fake_monotonic() -> float:
+        return current_time["value"]
+
+    async def fake_sleep(delay: float) -> None:
+        current_time["value"] += delay
+
+    import themis.core.orchestrator as orchestrator_module
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(orchestrator_module, "monotonic", fake_monotonic)
+    monkeypatch.setattr(orchestrator_module.asyncio, "sleep", fake_sleep)
+
+    try:
+        store.initialize()
+        store.persist_snapshot(snapshot)
+        orchestrator = Orchestrator(
+            store=store,
+            generator=generator,
+            reducer=reducer,
+            parser=parser,
+            metrics=[metric],
+            max_concurrent_tasks=2,
+            stage_concurrency={"generation": 2},
+            provider_rate_limits={
+                "openai:https://api.openai.com/v1": 6000,
+            },
+            runtime=experiment.runtime.model_copy(
+                update={
+                    "provider_token_limits": {
+                        "openai:https://api.openai.com/v1": 60,
+                    }
+                }
+            ),
+        )
+
+        await orchestrator.run(snapshot)
+    finally:
+        monkeypatch.undo()
+
+    assert len(generator.timestamps) == 2
+    assert generator.timestamps[1] - generator.timestamps[0] >= 60.0
 
 
 @pytest.mark.asyncio

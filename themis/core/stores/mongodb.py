@@ -10,6 +10,7 @@ from pathlib import Path
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent, event_from_dict
 from themis.core.registry import RunRecord
+from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
 from themis.core.stores.base import ProjectionRefreshingStore
 
@@ -69,8 +70,48 @@ class MongoDbRunStore(ProjectionRefreshingStore):
                 continue
         return events
 
+    def count_events(self, run_id: str) -> int:
+        return len(self._db()["run_events"].find({"run_id": run_id}))
+
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         return self._get_projection_with_backfill(run_id, projection_name)
+
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None:
+        row = self._db()["execution_checkpoints"].find_one({"run_id": run_id})
+        if row is None:
+            return None
+        return ExecutionCheckpoint.model_validate(dict(row["checkpoint_json"]))
+
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None:
+        self._db()["execution_checkpoints"].replace_one(
+            {"run_id": checkpoint.run_id},
+            {
+                "run_id": checkpoint.run_id,
+                "checkpoint_json": checkpoint.model_dump(mode="json"),
+            },
+            upsert=True,
+        )
+
+    def load_projection_cursor(
+        self, run_id: str, projection_name: str
+    ) -> ProjectionCursor | None:
+        row = self._db()["projection_cursors"].find_one(
+            {"run_id": run_id, "projection_name": projection_name}
+        )
+        if row is None:
+            return None
+        return ProjectionCursor.model_validate(dict(row["cursor_json"]))
+
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None:
+        self._db()["projection_cursors"].replace_one(
+            {"run_id": cursor.run_id, "projection_name": cursor.projection_name},
+            {
+                "run_id": cursor.run_id,
+                "projection_name": cursor.projection_name,
+                "cursor_json": cursor.model_dump(mode="json"),
+            },
+            upsert=True,
+        )
 
     def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         row = self._db()["run_projections"].find_one(
@@ -107,7 +148,12 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         snapshot = self._load_snapshot(run_id)
         if snapshot is None:
             return None
-        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
+        return StoredRun(
+            snapshot=snapshot,
+            events=self.query_events(run_id),
+            execution_checkpoint=self.load_execution_checkpoint(run_id),
+            event_count=self.count_events(run_id),
+        )
 
     def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
         row = self._db()["run_snapshots"].find_one({"run_id": run_id})
@@ -171,6 +217,8 @@ class MongoDbRunStore(ProjectionRefreshingStore):
     def clear_run(self, run_id: str) -> None:
         self._db()["run_events"].delete_many({"run_id": run_id})
         self._db()["run_event_counters"].delete_many({"run_id": run_id})
+        self._db()["execution_checkpoints"].delete_many({"run_id": run_id})
+        self._db()["projection_cursors"].delete_many({"run_id": run_id})
         self._db()["run_projections"].delete_many({"run_id": run_id})
         self._db()["run_snapshots"].delete_many({"run_id": run_id})
         self._db()["run_registry"].delete_many({"run_id": run_id})

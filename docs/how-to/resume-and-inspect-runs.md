@@ -34,6 +34,12 @@ The safe order is reopen, inspect, and only then decide whether to continue exec
 4. Decide whether you want to continue the same run, stop at a stage boundary, or replay only a downstream stage.
 5. Use the CLI or Python helpers to examine progress and failures.
 
+Checkpointed resume:
+
+- stores persist execution checkpoints alongside the event stream
+- normal resume and state inspection use a fresh checkpoint when available
+- stale or missing checkpoints fall back to the authoritative event stream
+
 Stage-limited execution:
 
 - `Experiment.run(..., until_stage="generate"|"reduce"|"parse"|"score"|"judge")`
@@ -45,6 +51,12 @@ Existing-run behavior:
 - `RuntimeConfig(existing_run_policy="auto")`: completed runs are reused and incomplete runs resume
 - `RuntimeConfig(existing_run_policy="error")`: fail fast if the compiled `run_id` already exists
 - `RuntimeConfig(existing_run_policy="rerun")`: clear the stored run and execute it again
+
+Targeted reruns:
+
+- `Experiment.rerun(stage="score", failed_only=True, metric_ids=[...])`
+- `themis rerun --config ... --stage score --failed-only --metric-id ...`
+- use `--case-id`, `--case-key`, or `--metadata key=value` to target slices without cloning the whole experiment
 
 Portable stage artifacts:
 
@@ -65,6 +77,7 @@ Imported artifacts are persisted through normal events, so `resume`, `report`, c
 | Explicit persisted state inspection | You need stage completion, counts, and failure state | Lower-level than a report | `get_execution_state(...)`, `themis inspect state` |
 | Workflow execution inspection | You need judge prompts, responses, or workflow artifacts for one case | Only applies to workflow-backed metrics | `get_evaluation_execution(...)`, `themis inspect evaluation` |
 | Downstream-only recompute | Upstream artifacts are good and only later stages should rerun | Requires stored artifacts and careful stage choice | `Experiment.replay(stage="reduce"|"parse"|"score"|"judge")` |
+| Targeted rerun | Only failed cases, a case slice, or a metric should rerun | Preserves the compiled run identity and records rerun lineage | `Experiment.rerun(...)`, `themis rerun` |
 | Report generation from the stored run | You want shareable output after inspection | Requires a persistent run state to report from | `Reporter`, `themis report` |
 
 ## Expected result

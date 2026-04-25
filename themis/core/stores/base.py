@@ -20,7 +20,7 @@ from themis.core.projections import (
     build_store_projection_payloads,
 )
 from themis.core.snapshot import RunSnapshot
-from themis.core.results import ExecutionState
+from themis.core.results import ExecutionCheckpoint, ExecutionState, ProjectionCursor
 
 
 class ProjectionRefreshingStore(ABC):
@@ -28,6 +28,9 @@ class ProjectionRefreshingStore(ABC):
 
     @abstractmethod
     def resume(self, run_id: str): ...
+
+    @abstractmethod
+    def query_events(self, run_id: str) -> list[RunEvent]: ...
 
     @abstractmethod
     def _write_projection(
@@ -51,11 +54,49 @@ class ProjectionRefreshingStore(ABC):
     @abstractmethod
     def _list_run_records(self) -> list[RunRecord]: ...
 
+    @abstractmethod
+    def count_events(self, run_id: str) -> int: ...
+
+    @abstractmethod
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None: ...
+
+    @abstractmethod
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None: ...
+
+    @abstractmethod
+    def load_projection_cursor(
+        self, run_id: str, projection_name: str
+    ) -> ProjectionCursor | None: ...
+
+    @abstractmethod
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None: ...
+
     def _bootstrap_projections(self, snapshot: RunSnapshot) -> None:
-        for projection_name, payload in build_initial_store_projection_payloads(
-            snapshot
-        ).items():
+        event_count = self.count_events(snapshot.run_id)
+        payloads = (
+            build_store_projection_payloads(snapshot, self.query_events(snapshot.run_id))
+            if event_count
+            else build_initial_store_projection_payloads(snapshot)
+        )
+        execution_state = ExecutionState(run_id=snapshot.run_id)
+        for projection_name, payload in payloads.items():
             self._write_projection(snapshot.run_id, projection_name, payload)
+            self.store_projection_cursor(
+                ProjectionCursor(
+                    run_id=snapshot.run_id,
+                    projection_name=projection_name,
+                    event_count=event_count,
+                )
+            )
+            if projection_name == "execution_state" and isinstance(payload, dict):
+                execution_state = ExecutionState.model_validate(payload)
+        self.store_execution_checkpoint(
+            ExecutionCheckpoint(
+                run_id=snapshot.run_id,
+                event_count=event_count,
+                execution_state=execution_state,
+            )
+        )
         self._write_run_record(snapshot.run_id, build_run_record(snapshot))
 
     def _refresh_projections_for_event(
@@ -65,10 +106,26 @@ class ProjectionRefreshingStore(ABC):
         if any(projections.get(name) is None for name in STORE_PROJECTION_NAMES):
             self._backfill_projections(snapshot.run_id)
             projections = self._store_projections(snapshot.run_id)
+        event_count = self.count_events(snapshot.run_id)
         for projection_name, payload in apply_event_to_store_projection_payloads(
             snapshot, projections, event
         ).items():
             self._write_projection(snapshot.run_id, projection_name, payload)
+            self.store_projection_cursor(
+                ProjectionCursor(
+                    run_id=snapshot.run_id,
+                    projection_name=projection_name,
+                    event_count=event_count,
+                )
+            )
+            if projection_name == "execution_state" and isinstance(payload, dict):
+                self.store_execution_checkpoint(
+                    ExecutionCheckpoint(
+                        run_id=snapshot.run_id,
+                        event_count=event_count,
+                        execution_state=ExecutionState.model_validate(payload),
+                    )
+                )
         self._refresh_run_record(snapshot)
 
     def _get_projection_with_backfill(
@@ -84,10 +141,26 @@ class ProjectionRefreshingStore(ABC):
         stored = self.resume(run_id)
         if stored is None:
             return
+        event_count = self.count_events(run_id)
         for projection_name, payload in build_store_projection_payloads(
             stored.snapshot, stored.events
         ).items():
             self._write_projection(run_id, projection_name, payload)
+            self.store_projection_cursor(
+                ProjectionCursor(
+                    run_id=run_id,
+                    projection_name=projection_name,
+                    event_count=event_count,
+                )
+            )
+            if projection_name == "execution_state" and isinstance(payload, dict):
+                self.store_execution_checkpoint(
+                    ExecutionCheckpoint(
+                        run_id=run_id,
+                        event_count=event_count,
+                        execution_state=ExecutionState.model_validate(payload),
+                    )
+                )
 
     def _store_projections(self, run_id: str) -> dict[str, JSONValue | None]:
         return {

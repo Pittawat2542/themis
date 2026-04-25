@@ -16,9 +16,12 @@ This page is the generated entry point into the public Python API. Use the small
 | `__version__` | Constant | You want the installed package version | Useful for docs, debugging, and release checks |
 | `Experiment` | Core class | You want the main reusable experiment authoring surface | Use for config-backed or Python-authored experiments |
 | `DatasetSourceSpec` | Config model | You want reusable, identity-bearing dataset inputs for experiments | Use with `Experiment(dataset_sources=[...])` or config-authored dataset sources |
+| `ExecutionCheckpoint` | Store model | You want to inspect or implement checkpointed resume state | Acceleration artifact; events remain authoritative |
 | `InMemoryRunStore` | Store implementation | You want ephemeral local storage | No cross-process persistence |
+| `ProjectionCursor` | Store model | You want to inspect projection progress over a run event stream | Used by store backends to track projection freshness |
 | `PromptSpec` | Prompt model | You want prompt instructions, prefixes, suffixes, or prompt blocks as part of experiment identity | Shared across generation and builtin judge workflows |
 | `Reporter` | Reporting API | You want exports such as JSON, Markdown, CSV, or LaTeX | Works from stored projections |
+| `RerunPlan` / `RerunSelector` | Rerun models | You want targeted rerun request payloads | Used by `Experiment.rerun(...)` and the CLI rerun command |
 | `RunEstimate` | Data model | You want planned task counts and token estimates | Informational only; not pricing |
 | `RunLineage` | Registry model | You want parent-child run relationships such as replay or rerun links | Stored as part of run records |
 | `RunQuery` | Registry model | You want to resolve or list stored runs by registry metadata | Supports tags, baselines, dataset identity, lineage, and timestamps |
