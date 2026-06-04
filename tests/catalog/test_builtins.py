@@ -6,7 +6,7 @@ import pytest
 
 from themis.catalog import load
 from themis.core.contexts import GenerateContext, ParseContext, ScoreContext
-from themis.core.models import Case, ParsedOutput, ReducedCandidate, Score
+from themis.core.models import Case, ParsedOutput, ReducedCandidate, MetricResult
 from themis.core.protocols import Generator, Parser, PureMetric
 
 
@@ -46,7 +46,7 @@ def test_catalog_builtin_pure_metrics_score_expected_values() -> None:
     exact_ctx = ScoreContext(
         run_id="run-1",
         case=case,
-        parsed_output=ParsedOutput(value="the quick brown fox"),
+        parsed_views={"default": ParsedOutput(value="the quick brown fox")},
     )
 
     exact_score = exact_match.score(
@@ -55,9 +55,9 @@ def test_catalog_builtin_pure_metrics_score_expected_values() -> None:
     f1_score = f1.score(ParsedOutput(value="quick fox"), case, exact_ctx)
     bleu_score = bleu.score(ParsedOutput(value="the quick fox"), case, exact_ctx)
 
-    assert isinstance(exact_score, Score)
-    assert isinstance(f1_score, Score)
-    assert isinstance(bleu_score, Score)
+    assert isinstance(exact_score, MetricResult)
+    assert isinstance(f1_score, MetricResult)
+    assert isinstance(bleu_score, MetricResult)
     assert exact_score.value == 1.0
     assert f1_score.value == 2 / 3
     assert bleu_score.value == 1.0

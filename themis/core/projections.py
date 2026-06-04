@@ -12,7 +12,7 @@ from themis.core.events import (
     GenerationCompletedEvent,
     RunEvent,
 )
-from themis.core.models import GenerationResult, Score, ScoreError
+from themis.core.models import GenerationResult, MetricResult, ScoreError
 from themis.core.read_models import (
     BenchmarkResult,
     BenchmarkScoreRow,
@@ -99,8 +99,8 @@ def build_run_result_from_state(
                     generation_failures=dict(case_state.generation_failures),
                     reduced_candidate=case_state.reduced_candidate,
                     reduction_error=case_state.reduction_error,
-                    parsed_output=case_state.parsed_output,
-                    parse_error=case_state.parse_error,
+                    parsed_views=case_state.parsed_views,
+                    parse_errors=case_state.parse_errors,
                     evaluation_executions=list(
                         case_state.evaluation_executions.values()
                     ),
@@ -108,7 +108,7 @@ def build_run_result_from_state(
                         case_state.evaluation_execution_blob_refs
                     ),
                     evaluation_failures=dict(case_state.evaluation_failures),
-                    scores=list(case_state.successful_scores.values())
+                    metric_results=list(case_state.metric_results.values())
                     + list(case_state.score_failures.values()),
                 )
             )
@@ -159,16 +159,18 @@ def build_benchmark_result_from_run_result(
             if case.reduced_candidate is not None
             else None
         )
-        score_results = {
-            score.metric_id: score for score in case.scores if isinstance(score, Score)
+        metric_results = {
+            metric_result.metric_id: metric_result
+            for metric_result in case.metric_results
+            if isinstance(metric_result, MetricResult)
         }
         score_errors = {
-            score.metric_id: score
-            for score in case.scores
-            if isinstance(score, ScoreError)
+            metric_result.metric_id: metric_result
+            for metric_result in case.metric_results
+            if isinstance(metric_result, ScoreError)
         }
         execution_failures = _execution_failures_by_metric(case)
-        case_metric_ids = explicit_metric_ids or set(score_results) | set(
+        case_metric_ids = explicit_metric_ids or set(metric_results) | set(
             score_errors
         ) | set(case.evaluation_failures) | set(execution_failures)
         known_metric_ids.update(case_metric_ids)
@@ -178,7 +180,7 @@ def build_benchmark_result_from_run_result(
                 case=case,
                 metric_id=metric_id,
                 candidate_id=candidate_id,
-                score_results=score_results,
+                metric_results=metric_results,
                 score_errors=score_errors,
                 execution_failures=execution_failures,
             )
@@ -188,8 +190,8 @@ def build_benchmark_result_from_run_result(
             outcome_counts[row.metric_id][row.outcome] += 1
             if row.outcome != "error" and row.value is not None:
                 metric_scores[row.metric_id].append(row.value)
-            if row.error_category is not None:
-                error_counts[row.metric_id][row.error_category] += 1
+            if row.failure_category is not None:
+                error_counts[row.metric_id][row.failure_category] += 1
 
     return BenchmarkResult(
         run_id=run_result.run_id,
@@ -284,16 +286,16 @@ def _evaluation_telemetry(execution: EvaluationExecution | None) -> TelemetryBre
     )
 
 
-def _merge_token_usage(
-    left: dict[str, int], right: dict[str, int]
-) -> dict[str, int]:
+def _merge_token_usage(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
     merged = dict(left)
     for key, value in right.items():
         merged[key] = int(merged.get(key, 0)) + int(value)
     return merged
 
 
-def build_case_audit_view(snapshot: RunSnapshot, events: list[RunEvent]) -> CaseAuditView:
+def build_case_audit_view(
+    snapshot: RunSnapshot, events: list[RunEvent]
+) -> CaseAuditView:
     state = ExecutionState.from_events(snapshot.run_id, events)
     return build_case_audit_view_from_state(snapshot, state)
 
@@ -335,7 +337,7 @@ def build_case_audit_view_from_state(
                 for result in case_state.generated_candidates.values()
             ]
             metric_ids = sorted(
-                set(case_state.successful_scores)
+                set(case_state.metric_results)
                 | set(case_state.score_failures)
                 | set(case_state.evaluation_executions)
                 | set(case_state.evaluation_failures)
@@ -343,9 +345,11 @@ def build_case_audit_view_from_state(
             metric_records = [
                 MetricAuditRecord(
                     metric_id=metric_id,
-                    score=case_state.successful_scores.get(metric_id),
+                    metric_result=case_state.metric_results.get(metric_id),
                     score_error=case_state.score_failures.get(metric_id),
-                    evaluation_execution=case_state.evaluation_executions.get(metric_id),
+                    evaluation_execution=case_state.evaluation_executions.get(
+                        metric_id
+                    ),
                     evaluation_failure=case_state.evaluation_failures.get(metric_id),
                     evaluation_input=(
                         {"candidate_id": case_state.reduced_candidate.candidate_id}
@@ -397,8 +401,8 @@ def build_case_audit_view_from_state(
                         if isinstance(case_state.reduced_candidate.final_output, dict)
                         else {"value": case_state.reduced_candidate.final_output}
                     ),
-                    parsed_output=case_state.parsed_output,
-                    parse_error=case_state.parse_error,
+                    parsed_views=case_state.parsed_views,
+                    parse_errors=case_state.parse_errors,
                     metric_records=metric_records,
                 )
             )
@@ -546,13 +550,10 @@ def _benchmark_row_for_metric(
     case: CaseResult,
     metric_id: str,
     candidate_id: str | None,
-    score_results: dict[str, Score],
+    metric_results: dict[str, MetricResult],
     score_errors: dict[str, ScoreError],
     execution_failures: dict[str, str],
 ) -> BenchmarkScoreRow | None:
-    parse_error_row = _parse_error_row(case, metric_id, candidate_id)
-    if parse_error_row is not None:
-        return parse_error_row
     if metric_id in case.evaluation_failures:
         return BenchmarkScoreRow(
             case_id=case.case_id,
@@ -561,7 +562,7 @@ def _benchmark_row_for_metric(
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
-            error_category="evaluation_failure",
+            failure_category="evaluation_failure",
             error_message=case.evaluation_failures[metric_id],
         )
     if metric_id in execution_failures:
@@ -572,7 +573,7 @@ def _benchmark_row_for_metric(
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
-            error_category="evaluation_partial_failure",
+            failure_category="evaluation_partial_failure",
             error_message=execution_failures[metric_id],
         )
     if metric_id in score_errors:
@@ -584,31 +585,41 @@ def _benchmark_row_for_metric(
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
-            error_category="score_failure",
+            failure_category=str(score_error.category),
             error_message=score_error.reason,
-            details=dict(score_error.details),
+            metadata=dict(score_error.metadata),
         )
-    if metric_id in score_results:
-        score = score_results[metric_id]
+    if metric_id in metric_results:
+        metric_result = metric_results[metric_id]
         return BenchmarkScoreRow(
             case_id=case.case_id,
             dataset_id=case.dataset_id,
             case_key=case.case_key,
             metric_id=metric_id,
-            value=float(score.value),
+            result_type=metric_result.result_type,
+            value=float(metric_result.value)
+            if metric_result.value is not None
+            else None,
+            confidence=metric_result.confidence,
+            dimensions=dict(metric_result.dimensions),
+            labels=dict(metric_result.labels),
             candidate_id=candidate_id,
-            outcome=_score_outcome(score),
-            details=dict(score.details),
+            outcome=_score_outcome(metric_result),
+            metadata=dict(metric_result.metadata),
         )
+    parse_errors_row = _parse_errors_row(case, metric_id, candidate_id)
+    if parse_errors_row is not None:
+        return parse_errors_row
     return None
 
 
-def _parse_error_row(
+def _parse_errors_row(
     case: CaseResult,
     metric_id: str,
     candidate_id: str | None,
 ) -> BenchmarkScoreRow | None:
-    if case.parse_error is not None:
+    if case.parse_errors:
+        parser_view, message = next(iter(case.parse_errors.items()))
         return BenchmarkScoreRow(
             case_id=case.case_id,
             dataset_id=case.dataset_id,
@@ -616,12 +627,18 @@ def _parse_error_row(
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
-            error_category="parse_failure",
-            error_message=case.parse_error,
+            failure_category="parse_failure",
+            error_message=message,
+            metadata={"parser_view": parser_view},
         )
-    if case.parsed_output is None:
+    if not case.parsed_views:
         return None
-    if case.parsed_output.value is None:
+    invalid_views = [
+        parser_view
+        for parser_view, parsed in case.parsed_views.items()
+        if parsed.value is None or parsed.metadata.get("invalid") is True
+    ]
+    if invalid_views:
         return BenchmarkScoreRow(
             case_id=case.case_id,
             dataset_id=case.dataset_id,
@@ -629,19 +646,9 @@ def _parse_error_row(
             metric_id=metric_id,
             candidate_id=candidate_id,
             outcome="error",
-            error_category="parse_null",
-            error_message="Parser returned null output",
-        )
-    if case.parsed_output.metadata.get("invalid") is True:
-        return BenchmarkScoreRow(
-            case_id=case.case_id,
-            dataset_id=case.dataset_id,
-            case_key=case.case_key,
-            metric_id=metric_id,
-            candidate_id=candidate_id,
-            outcome="error",
-            error_category="parse_invalid",
-            error_message="Parser marked output as invalid",
+            failure_category="parse_null",
+            error_message="Parser returned null or invalid output",
+            metadata={"parser_view": invalid_views[0]},
         )
     return None
 
@@ -651,7 +658,9 @@ def _execution_failures_by_metric(case: CaseResult) -> dict[str, str]:
     for execution in case.evaluation_executions:
         if execution.status != "partial_failure" and not execution.failures:
             continue
-        metric_ids = {score.metric_id for score in execution.scores}
+        metric_ids = {
+            metric_result.metric_id for metric_result in execution.metric_results
+        }
         if not metric_ids:
             continue
         error_message = (
@@ -663,8 +672,8 @@ def _execution_failures_by_metric(case: CaseResult) -> dict[str, str]:
     return failures
 
 
-def _score_outcome(score: Score) -> Literal["correct", "incorrect"]:
-    return "correct" if float(score.value) >= 1.0 else "incorrect"
+def _score_outcome(metric_result: MetricResult) -> Literal["correct", "incorrect"]:
+    return "correct" if float(metric_result.value or 0.0) >= 1.0 else "incorrect"
 
 
 def _current_execution_state(

@@ -4,7 +4,7 @@ from typing import cast
 
 from themis.catalog import load
 from themis.core.contexts import ScoreContext
-from themis.core.models import Case, ParsedOutput, Score
+from themis.core.models import Case, ParsedOutput, MetricResult
 from themis.core.protocols import PureMetric
 
 
@@ -18,12 +18,12 @@ def test_exact_match_metric_treats_type_mismatch_as_failure() -> None:
     ctx = ScoreContext(
         run_id="run-1",
         case=case,
-        parsed_output=ParsedOutput(value="4"),
+        parsed_views={"default": ParsedOutput(value="4")},
     )
 
     score = metric.score(ParsedOutput(value="4"), case, ctx)
 
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.value == 0.0
 
 
@@ -33,12 +33,12 @@ def test_f1_metric_returns_one_for_both_empty_sequences() -> None:
     ctx = ScoreContext(
         run_id="run-1",
         case=case,
-        parsed_output=ParsedOutput(value=None),
+        parsed_views={"default": ParsedOutput(value=None)},
     )
 
     score = metric.score(ParsedOutput(value=None), case, ctx)
 
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.value == 1.0
 
 
@@ -52,10 +52,10 @@ def test_bleu_metric_returns_zero_for_empty_prediction() -> None:
     ctx = ScoreContext(
         run_id="run-1",
         case=case,
-        parsed_output=ParsedOutput(value=None),
+        parsed_views={"default": ParsedOutput(value=None)},
     )
 
     score = metric.score(ParsedOutput(value=None), case, ctx)
 
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.value == 0.0

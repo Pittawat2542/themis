@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    ParserView,
+    StorageConfig,
+)
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.planner import Planner
@@ -127,11 +132,18 @@ async def test_planner_honors_explicit_seeds_per_candidate() -> None:
     assert [item.seed for item in items[2:]] == [7, 11]
 
 
-def test_planner_rejects_multiple_parsers_for_phase_2() -> None:
-    with pytest.raises(ValueError, match="at most one parser"):
-        _experiment(
-            parsers=["builtin/json_identity", "builtin/json_identity"]
-        ).compile()
+def test_planner_counts_multiple_parser_views() -> None:
+    planner = Planner()
+    snapshot = _experiment(
+        parsers=[
+            ParserView(id="json", parser="builtin/json_identity"),
+            ParserView(id="text", parser="builtin/text"),
+        ]
+    ).compile()
+
+    estimate = planner.estimate(snapshot)
+
+    assert estimate.planned_parse_tasks == 4
 
 
 def test_planner_requires_reducer_or_selector_for_multi_candidate_runs() -> None:

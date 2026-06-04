@@ -13,7 +13,12 @@ from themis.core.builtins import (
     resolve_parser_component,
     resolve_reducer_component,
 )
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    ParserView,
+    StorageConfig,
+)
 from themis.core.config import RuntimeConfig
 from themis.core.contexts import EvalScoreContext, GenerateContext, ScoreContext
 from themis.core.events import (
@@ -32,10 +37,10 @@ from themis.core.models import (
     Case,
     Dataset,
     GenerationResult,
+    MetricResult,
     Message,
     ParsedOutput,
     ReducedCandidate,
-    Score,
     ScoreError,
     TraceStep,
 )
@@ -187,23 +192,24 @@ class DemoJudgeWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(
+        return MetricResult(
             metric_id="metric/llm",
             value=float(judgment.score or 0.0),
-            details={"label": judgment.label},
+            metadata={"label": judgment.label},
         )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
+        values = [score.value for score in scores if score.value is not None]
         return AggregationResult(
-            method="mean", value=sum(score.value for score in scores) / len(scores)
+            method="mean", value=sum(values) / len(values) if values else 0.0
         )
 
 
@@ -241,16 +247,16 @@ class PairwiseSelectionWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(
+        return MetricResult(
             metric_id="metric/select", value=1.0 if judgment.label == "a" else 0.0
         )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del scores, ctx
@@ -259,7 +265,7 @@ class PairwiseSelectionWorkflow:
             key=[judgment.label for judgment in judgments].count,
         )
         return AggregationResult(
-            method="majority_vote", value=winner, details={"winner": winner}
+            method="majority_vote", value=winner, metadata={"winner": winner}
         )
 
 
@@ -467,21 +473,24 @@ class PartialFailureWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(metric_id="metric/partial", value=float(judgment.score or 0.0))
+        return MetricResult(
+            metric_id="metric/partial", value=float(judgment.score or 0.0)
+        )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
         if not scores:
             return None
+        values = [score.value for score in scores if score.value is not None]
         return AggregationResult(
-            method="mean", value=sum(score.value for score in scores) / len(scores)
+            method="mean", value=sum(values) / len(values) if values else 0.0
         )
 
 
@@ -607,15 +616,58 @@ class SlowMetric:
     def fingerprint(self) -> str:
         return "metric-slow"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del parsed, case, ctx
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
             time.sleep(0.02)
-            return Score(metric_id=self.component_id, value=1.0)
+            return MetricResult(metric_id=self.component_id, value=1.0)
         finally:
             self.active -= 1
+
+
+class AnswerOnlyParser:
+    component_id = "parser/answer_only"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "parser-answer-only"
+
+    def parse(self, candidate: ReducedCandidate, ctx) -> ParsedOutput:
+        del ctx
+        if isinstance(candidate.final_output, dict):
+            return ParsedOutput(
+                value=candidate.final_output.get("answer"),
+                format="answer_text",
+            )
+        return ParsedOutput(value=candidate.final_output, format="answer_text")
+
+
+class AnswerOnlyMetric:
+    component_id = "metric/answer_only"
+    version = "1.0"
+    metric_family = "pure"
+    parser_view = "answer"
+
+    def fingerprint(self) -> str:
+        return "metric-answer-only"
+
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
+        assert ctx.parser_view == "answer"
+        assert set(ctx.parsed_views) == {"default", "answer"}
+        expected = case.expected_output
+        if isinstance(expected, dict):
+            expected = expected.get("answer")
+        return MetricResult(
+            metric_id=self.component_id,
+            value=float(parsed.value == expected),
+            metadata={"view": ctx.parser_view},
+        )
 
 
 def _experiment() -> Experiment:
@@ -655,8 +707,46 @@ async def test_experiment_run_async_executes_builtin_pipeline_end_to_end() -> No
     assert len(result.cases) == 1
     assert len(result.cases[0].generated_candidates) == 2
     assert result.cases[0].reduced_candidate is not None
-    assert result.cases[0].parsed_output is not None
-    assert result.cases[0].scores[0].value == 1.0
+    assert "default" in result.cases[0].parsed_views
+    assert result.cases[0].metric_results[0].value == 1.0
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_scores_metric_with_bound_parser_view() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=[AnswerOnlyMetric()],
+            parsers=[
+                ParserView(id="default", parser="builtin/json_identity"),
+                ParserView(id="answer", parser=AnswerOnlyParser()),
+            ],
+        ),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
+    )
+
+    result = await experiment.run_async()
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.cases[0].parsed_views["default"].value == {"answer": "4"}
+    assert result.cases[0].parsed_views["answer"].value == "4"
+    assert result.cases[0].metric_results[0].metadata == {"view": "answer"}
 
 
 @pytest.mark.asyncio
@@ -673,7 +763,9 @@ async def test_orchestrator_writes_stage_events_and_dispatches_hooks() -> None:
         store=store,
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[
             resolve_metric_component(metric) for metric in experiment.evaluation.metrics
         ],
@@ -728,7 +820,9 @@ async def test_orchestrator_emits_tracing_spans_for_each_stage() -> None:
         store=store,
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[
             resolve_metric_component(metric) for metric in experiment.evaluation.metrics
         ],
@@ -771,7 +865,9 @@ async def test_orchestrator_marks_score_errors_as_partial_failures_and_error_spa
         store=store,
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[ErrorMetric()],
         tracing_provider=tracer,
     )
@@ -799,7 +895,9 @@ async def test_orchestrator_awaits_async_reducers() -> None:
         store=store,
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=reducer,
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[
             resolve_metric_component(metric) for metric in experiment.evaluation.metrics
         ],
@@ -854,7 +952,9 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         store=store,
         generator=TracedGenerator(),
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[
             resolve_metric_component(metric) for metric in experiment.evaluation.metrics
         ],
@@ -869,7 +969,7 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
     events = store.query_events(snapshot.run_id)
 
     assert result.status is RunStatus.COMPLETED
-    assert sorted(score.metric_id for score in result.cases[0].scores) == [
+    assert sorted(score.metric_id for score in result.cases[0].metric_results) == [
         "builtin/exact_match",
         "metric/llm",
         "metric/select",
@@ -939,7 +1039,9 @@ async def test_orchestrator_persists_workflow_events_through_orchestrator_event_
         store=store,
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[llm_metric],
         judge_models=[resolve_judge_model_component("builtin/demo_judge")],
         subscribers=[subscriber],
@@ -997,7 +1099,9 @@ async def test_orchestrator_persists_partial_workflow_failures_without_dropping_
         store=store,
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[metric],
         judge_models=[
             FlakyJudgeModel("judge/ok"),
@@ -1016,7 +1120,7 @@ async def test_orchestrator_persists_partial_workflow_failures_without_dropping_
     assert len(case.evaluation_executions[0].judge_responses) == 1
     assert len(case.evaluation_executions[0].failures) == 1
     assert case.evaluation_executions[0].failures[0].call_id == "call-fail"
-    assert case.scores[0].metric_id == "metric/partial"
+    assert case.metric_results[0].metric_id == "metric/partial"
     assert any(isinstance(event, EvaluationCompletedEvent) for event in events)
 
 
@@ -1060,7 +1164,7 @@ async def test_orchestrator_retries_retryable_generation_failures_and_persists_h
         store=store,
         generator=generator,
         reducer=resolve_reducer_component("builtin/majority_vote"),
-        parser=resolve_parser_component("builtin/json_identity"),
+        parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[resolve_metric_component("builtin/exact_match")],
     )
 
@@ -1116,7 +1220,9 @@ async def test_orchestrator_retries_timeout_generation_failures_by_default() -> 
         store=store,
         generator=generator,
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[resolve_metric_component("builtin/exact_match")],
         runtime=RuntimeConfig(generation_retry_delay=0),
     )
@@ -1168,7 +1274,9 @@ async def test_orchestrator_retries_rate_limited_judge_failures_and_persists_ret
         store=store,
         generator=resolve_generator_component(experiment.generation.generator),
         reducer=resolve_reducer_component(experiment.generation.reducer),
-        parser=resolve_parser_component(experiment.evaluation.parsers[0]),
+        parsers=[
+            ("default", resolve_parser_component(experiment.evaluation.parsers[0]))
+        ],
         metrics=[metric],
         judge_models=[judge_model],
         runtime=RuntimeConfig(judge_retry_delay=0),
@@ -1224,7 +1332,7 @@ async def test_orchestrator_retries_retryable_judge_failures_and_persists_histor
         store=store,
         generator=resolve_generator_component("builtin/demo_generator"),
         reducer=resolve_reducer_component("builtin/majority_vote"),
-        parser=resolve_parser_component("builtin/json_identity"),
+        parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[metric],
         judge_models=[judge_model],
     )
@@ -1333,7 +1441,7 @@ async def test_orchestrator_limits_parsing_stage_concurrency() -> None:
         store=store,
         generator=resolve_generator_component("builtin/demo_generator"),
         reducer=resolve_reducer_component("builtin/majority_vote"),
-        parser=parser,
+        parsers=[("default", parser)],
         metrics=[metric],
         max_concurrent_tasks=4,
         stage_concurrency={"parsing": 1},
@@ -1384,7 +1492,7 @@ async def test_orchestrator_limits_selection_stage_concurrency() -> None:
         generator=resolve_generator_component("builtin/demo_generator"),
         selector=selector,
         reducer=None,
-        parser=resolve_parser_component("builtin/json_identity"),
+        parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[resolve_metric_component("builtin/exact_match")],
         max_concurrent_tasks=4,
         stage_concurrency={"selection": 1},
@@ -1433,7 +1541,7 @@ async def test_orchestrator_limits_reduction_stage_concurrency() -> None:
         store=store,
         generator=resolve_generator_component("builtin/demo_generator"),
         reducer=reducer,
-        parser=resolve_parser_component("builtin/json_identity"),
+        parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[resolve_metric_component("builtin/exact_match")],
         max_concurrent_tasks=4,
         stage_concurrency={"reduction": 1},
@@ -1482,7 +1590,7 @@ async def test_orchestrator_limits_scoring_stage_concurrency() -> None:
         store=store,
         generator=resolve_generator_component("builtin/demo_generator"),
         reducer=resolve_reducer_component("builtin/majority_vote"),
-        parser=resolve_parser_component("builtin/json_identity"),
+        parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[metric],
         max_concurrent_tasks=4,
         stage_concurrency={"scoring": 1},

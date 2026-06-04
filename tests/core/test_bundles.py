@@ -139,7 +139,7 @@ def test_export_evaluation_bundle_collects_evaluation_executions_from_store() ->
     execution_payload: dict[str, JSONValue] = {
         "execution_id": "execution-1",
         "subject_kind": "candidate_set",
-        "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+        "metric_results": [{"metric_id": "metric/judge", "value": 1.0}],
         "trace": {"trace_id": "trace-1", "steps": []},
     }
     store.persist_event(
@@ -173,7 +173,7 @@ def test_import_evaluation_bundle_round_trips_evaluation_events() -> None:
     execution_payload: dict[str, JSONValue] = {
         "execution_id": "execution-1",
         "subject_kind": "candidate_set",
-        "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+        "metric_results": [{"metric_id": "metric/judge", "value": 1.0}],
         "trace": {"trace_id": "trace-1", "steps": []},
     }
     source_store.persist_event(
@@ -215,7 +215,7 @@ def test_import_evaluation_bundle_preserves_partial_failures() -> None:
     execution_payload: dict[str, JSONValue] = {
         "execution_id": "execution-1",
         "subject_kind": "candidate_set",
-        "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+        "metric_results": [{"metric_id": "metric/judge", "value": 1.0}],
         "failures": [
             {
                 "call_id": "call-2",
@@ -287,7 +287,7 @@ def test_reduction_parse_and_score_bundles_round_trip_stage_artifacts() -> None:
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id="builtin/exact_match",
-            score={"metric_id": "builtin/exact_match", "value": 1.0},
+            metric_result={"metric_id": "builtin/exact_match", "value": 1.0},
         )
     )
 
@@ -311,8 +311,8 @@ def test_reduction_parse_and_score_bundles_round_trip_stage_artifacts() -> None:
     ]
     case_state = next(iter(resumed.execution_state.case_states.values()))
     assert case_state.reduced_candidate is not None
-    assert case_state.parsed_output is not None
-    assert case_state.successful_scores["builtin/exact_match"].value == 1.0
+    assert case_state.parsed_views is not None
+    assert case_state.metric_results["builtin/exact_match"].value == 1.0
 
 
 def test_import_reduction_bundle_rejects_unknown_case_ids() -> None:
@@ -376,7 +376,7 @@ def test_import_parse_bundle_rejects_unknown_case_ids() -> None:
 
 def test_import_score_bundle_rejects_unknown_case_ids() -> None:
     snapshot = _snapshot()
-    from themis.core.models import Score
+    from themis.core.models import MetricResult
     from themis.core.results import ScoreBundle, ScoreBundleRecord
 
     bundle = ScoreBundle(
@@ -387,7 +387,7 @@ def test_import_score_bundle_rejects_unknown_case_ids() -> None:
                 case_id="missing-case",
                 candidate_id="case-1-reduced",
                 metric_id="builtin/exact_match",
-                score=Score(metric_id="builtin/exact_match", value=1.0),
+                metric_result=MetricResult(metric_id="builtin/exact_match", value=1.0),
             )
         ],
     )

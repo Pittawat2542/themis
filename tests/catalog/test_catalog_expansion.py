@@ -9,7 +9,7 @@ from themis.catalog.loaders import BenchmarkSourceRequest
 from themis.catalog.registry import list_component_ids
 from themis.core.base import JSONValue
 from themis.core.contexts import ParseContext, ScoreContext
-from themis.core.models import ParsedOutput, ReducedCandidate, Score
+from themis.core.models import ParsedOutput, ReducedCandidate, MetricResult
 from themis.core.protocols import Parser, PureMetric
 
 
@@ -76,12 +76,12 @@ def test_catalog_exposes_reusable_parser_and_metric_components() -> None:
                 input_value="Question:\n2+2?\n\nOptions:\nA. 3\nB. 4",
                 expected_output={"choice": "B"},
             ),
-            parsed_output=parsed,
+            parsed_views={"default": parsed},
         ),
     )
 
     assert parsed == ParsedOutput(value="B", format="choice_letter")
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.value == 1.0
     assert "builtin/choice_letter" in list_component_ids(kind="parser")
     assert "builtin/choice_accuracy" in list_component_ids(kind="metric")
@@ -120,11 +120,11 @@ def test_catalog_math_answer_and_metric_are_reusable(
     score = metric.score(
         parsed,
         case,
-        ScoreContext(run_id="run-1", case=case, parsed_output=parsed),
+        ScoreContext(run_id="run-1", case=case, parsed_views={"default": parsed}),
     )
 
     assert parsed == ParsedOutput(value="4", format="math_answer")
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.value == 1.0
 
 
@@ -168,10 +168,10 @@ def test_catalog_code_execution_metric_is_reusable() -> None:
     score = metric.score(
         parsed,
         case,
-        ScoreContext(run_id="run-1", case=case, parsed_output=parsed),
+        ScoreContext(run_id="run-1", case=case, parsed_views={"default": parsed}),
     )
 
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.metric_id == "builtin/codeforces_pass_rate"
     assert score.value == 1.0
 

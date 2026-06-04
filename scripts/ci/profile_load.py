@@ -31,7 +31,7 @@ from themis.core.models import (
     GenerationResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
+    MetricResult,
 )  # noqa: E402
 from themis.core.protocols import JudgeModel  # noqa: E402
 from themis.core.registry import RunLineage, RunQuery, RunRecord  # noqa: E402
@@ -43,6 +43,7 @@ from themis.core.contexts import (
 )  # noqa: E402
 from themis.core.snapshot import RunSnapshot, StoredRun  # noqa: E402
 from themis.core.store import RunStore  # noqa: E402
+from themis.core.results import ExecutionCheckpoint, ProjectionCursor  # noqa: E402
 from themis.core.workflows import (
     AggregationResult,
     JudgeCall,
@@ -163,22 +164,25 @@ class ProfileWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(metric_id="metric/profile", value=float(judgment.score or 0.0))
+        return MetricResult(
+            metric_id="metric/profile", value=float(judgment.score or 0.0)
+        )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        metric_results: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
-        if not scores:
+        if not metric_results:
             return None
+        values = [result.value for result in metric_results if result.value is not None]
         return AggregationResult(
             method="mean",
-            value=sum(score.value for score in scores) / len(scores),
+            value=sum(values) / len(values) if values else 0.0,
         )
 
 
@@ -204,6 +208,8 @@ class ProfileStore(RunStore):
         self._events: dict[str, list[RunEvent]] = {}
         self._blobs: dict[str, tuple[str, bytes]] = {}
         self._stage_cache: dict[tuple[str, str], object] = {}
+        self._execution_checkpoints: dict[str, ExecutionCheckpoint] = {}
+        self._projection_cursors: dict[tuple[str, str], ProjectionCursor] = {}
 
     def initialize(self) -> None:
         return None
@@ -216,6 +222,23 @@ class ProfileStore(RunStore):
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         return list(self._events.get(run_id, []))
+
+    def count_events(self, run_id: str) -> int:
+        return len(self._events.get(run_id, []))
+
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None:
+        return self._execution_checkpoints.get(run_id)
+
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None:
+        self._execution_checkpoints[checkpoint.run_id] = checkpoint
+
+    def load_projection_cursor(
+        self, run_id: str, projection_name: str
+    ) -> ProjectionCursor | None:
+        return self._projection_cursors.get((run_id, projection_name))
+
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None:
+        self._projection_cursors[(cursor.run_id, cursor.projection_name)] = cursor
 
     def get_projection(self, run_id: str, projection_name: str):
         del run_id, projection_name
@@ -275,9 +298,7 @@ def _build_experiment(
 ) -> tuple[Experiment, ProfileGenerator, list[ProfileJudgeModel]]:
     generator = ProfileGenerator()
     judge_models = [ProfileJudgeModel(index) for index in range(judge_count)]
-    configured_judge_models = cast(
-        list[JudgeModel | TargetSpec | str], judge_models
-    )
+    configured_judge_models = cast(list[JudgeModel | TargetSpec | str], judge_models)
     experiment = Experiment(
         generation=GenerationConfig(
             generator=generator,
@@ -298,17 +319,19 @@ def _build_experiment(
             },
         ),
         dataset_sources=[
-            inline_dataset_source(Dataset(
-                dataset_id="profile",
-                cases=[
-                    Case(
-                        case_id=f"case-{index}",
-                        input={"question": f"{index}+{index}"},
-                        expected_output={"answer": str(index * 2)},
-                    )
-                    for index in range(cases)
-                ],
-            ))
+            inline_dataset_source(
+                Dataset(
+                    dataset_id="profile",
+                    cases=[
+                        Case(
+                            case_id=f"case-{index}",
+                            input={"question": f"{index}+{index}"},
+                            expected_output={"answer": str(index * 2)},
+                        )
+                        for index in range(cases)
+                    ],
+                )
+            )
         ],
         seeds=list(range(samples)),
     )

@@ -15,9 +15,12 @@
     ],
     "parsers": [
       {
-        "component_id": "builtin/json_identity",
-        "fingerprint": "parser-fingerprint",
-        "version": "1.0"
+        "id": "default",
+        "parser": {
+          "component_id": "builtin/json_identity",
+          "fingerprint": "parser-fingerprint",
+          "version": "1.0"
+        }
       }
     ],
     "reducer": {
@@ -122,9 +125,12 @@
     ],
     "parser_refs": [
       {
-        "component_id": "builtin/json_identity",
-        "fingerprint": "parser-fingerprint",
-        "version": "1.0"
+        "id": "default",
+        "parser": {
+          "component_id": "builtin/json_identity",
+          "fingerprint": "parser-fingerprint",
+          "version": "1.0"
+        }
       }
     ],
     "reducer_ref": {
@@ -185,5 +191,5 @@
     },
     "themis_version": "4.0.2"
   },
-  "run_id": "013b36c75efc539e389f2cfd20e0ff6e5eb90bb97804db3fd6325b38d36d757b"
+  "run_id": "1f370fe16fff9806408512d3018ae844e899a8e604413ccf4c3d314201509ecd"
 }

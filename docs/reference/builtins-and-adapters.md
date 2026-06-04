@@ -35,6 +35,7 @@ The catalog now exposes reusable shipped components directly through
 | `builtin/demo_judge` | Judge model | You need a deterministic local judge for examples and tests | Replace with a real judge model for meaningful evaluation |
 | `builtin/llm_rubric` | Workflow metric | One judge should score against a rubric | Requires judge models plus optional rubric overrides |
 | `builtin/pairwise_judge` | Workflow metric | Two candidates should be compared head-to-head | Useful for selection or pairwise preference evaluation |
+| `builtin/ranking_judge` | Workflow metric | Generated candidates should be ranked best-to-worst | Emits ranking metadata and a winner label |
 | `builtin/panel_of_judges` | Workflow metric | Multiple judges should score the same output and aggregate | Higher cost than a single-judge rubric |
 | `builtin/majority_vote_judge` | Workflow metric | Several judge votes should collapse to a majority decision | Useful when categorical consensus matters more than scalar averaging |
 

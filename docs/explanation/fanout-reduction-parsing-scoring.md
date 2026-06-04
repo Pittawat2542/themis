@@ -22,7 +22,7 @@ flowchart LR
     A["One dataset case"] --> B["Fan out N candidates"]
     B --> C["Reduce to one candidate or summary"]
     C --> D["Parse into metric-ready shape"]
-    D --> E["Score or run workflow-backed evaluation"]
+    D --> E["Emit metric result or run workflow-backed evaluation"]
     E --> F["Persist artifacts and projections"]
 ```
 

@@ -26,7 +26,7 @@ from themis.core.models import (
     GenerationResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
+    MetricResult,
 )
 from themis.core.snapshot import BUILTIN_COMPONENT_REFS, ComponentRef
 from tests.release import CURRENT_VERSION
@@ -87,9 +87,11 @@ class DummyMetric:
     def fingerprint(self) -> str:
         return "metric-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
-        return Score(
+        return MetricResult(
             metric_id="builtin/exact_match",
             value=float(parsed.value == case.expected_output),
         )
@@ -113,9 +115,7 @@ def _experiment(
             judge_config={"panel_size": 1},
             workflow_overrides=workflow_overrides or {},
         ),
-        storage=StorageConfig(
-            target="sqlite", kwargs={"path": "runs/themis.sqlite3"}
-        ),
+        storage=StorageConfig(target="sqlite", kwargs={"path": "runs/themis.sqlite3"}),
         runtime=RuntimeConfig(
             max_concurrent_tasks=16,
             stage_concurrency={"generation": 8},
@@ -262,9 +262,7 @@ def test_storage_dsn_credentials_are_redacted_in_snapshot_provenance() -> None:
         ),
         storage=StorageConfig(
             target="postgres",
-            kwargs={
-                "url": "postgresql://themis:swordfish@db.example.com:5432/themis"
-            },
+            kwargs={"url": "postgresql://themis:swordfish@db.example.com:5432/themis"},
         ),
         dataset_sources=[
             Dataset(
@@ -320,9 +318,12 @@ def test_builtin_component_strings_resolve_to_registry_entries() -> None:
         snapshot.component_refs.reducer
         == BUILTIN_COMPONENT_REFS["builtin/majority_vote"]
     )
-    assert snapshot.component_refs.parsers == [
-        BUILTIN_COMPONENT_REFS["builtin/json_identity"]
-    ]
+    assert len(snapshot.component_refs.parsers) == 1
+    assert snapshot.component_refs.parsers[0].id == "default"
+    assert (
+        snapshot.component_refs.parsers[0].parser
+        == BUILTIN_COMPONENT_REFS["builtin/json_identity"]
+    )
     assert snapshot.component_refs.metrics == [
         BUILTIN_COMPONENT_REFS["builtin/exact_match"]
     ]

@@ -94,8 +94,6 @@ class Planner:
             )
 
         candidate_count = self.candidate_count(snapshot)
-        if len(snapshot.component_refs.parsers) > 1:
-            raise ValueError("Phase 2 supports at most one parser")
         if (
             candidate_count > 1
             and snapshot.component_refs.reducer is None
@@ -132,7 +130,7 @@ class Planner:
         workflow_metric_count = metric_count - pure_metric_count
         planned_generation_tasks = total_cases * candidate_count
         planned_reduction_tasks = total_cases if candidate_count > 1 else 0
-        planned_parse_tasks = total_cases if snapshot.component_refs.parsers else 0
+        planned_parse_tasks = total_cases * max(1, len(snapshot.component_refs.parsers))
         planned_score_tasks = total_cases * metric_count
         estimated_generation_input_tokens = (
             planned_generation_tasks * DEFAULT_GENERATION_INPUT_TOKENS_PER_CASE

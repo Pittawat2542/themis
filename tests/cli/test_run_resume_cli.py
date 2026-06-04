@@ -193,4 +193,4 @@ def test_inspect_evaluation_returns_workflow_execution(tmp_path: Path) -> None:
     assert inspect_evaluation.returncode == 0, inspect_evaluation.stderr
     payload = json.loads(inspect_evaluation.stdout)
     assert payload["execution_id"]
-    assert payload["scores"][0]["metric_id"] == "builtin/llm_rubric"
+    assert payload["metric_results"][0]["metric_id"] == "builtin/llm_rubric"

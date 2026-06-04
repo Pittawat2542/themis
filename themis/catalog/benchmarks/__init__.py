@@ -540,7 +540,8 @@ def _score_smoke(definition: BenchmarkDefinition, dataset: Dataset) -> None:
         ScoreContext(
             run_id="benchmark-validation",
             case=case,
-            parsed_output=parsed,
+            parsed_views={"default": parsed},
+            parser_view="default",
         ),
     )
 

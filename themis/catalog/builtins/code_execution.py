@@ -11,7 +11,7 @@ from urllib import request
 
 from themis.core.base import JSONValue
 from themis.core.contexts import ScoreContext
-from themis.core.models import Case, ParsedOutput, Score
+from themis.core.models import Case, ParsedOutput, MetricResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,7 +195,9 @@ class CodeExecutionMetric:
     def fingerprint(self) -> str:
         return f"{self.component_id}-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         code = str(parsed.value).strip()
         payload = case.expected_output if isinstance(case.expected_output, dict) else {}
@@ -277,7 +279,9 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
             executor=executor,
         )
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         code = str(parsed.value).strip()
         payload = case.expected_output if isinstance(case.expected_output, dict) else {}
@@ -483,11 +487,11 @@ def _score(
     metric_id: str,
     value: float,
     details: dict[str, object],
-) -> Score:
+) -> MetricResult:
     resolved: dict[str, JSONValue] = {}
     for key, item in details.items():
         if item is None or isinstance(item, (str, int, float, bool)):
             resolved[key] = item
         else:
             resolved[key] = str(item)
-    return Score(metric_id=metric_id, value=value, details=resolved)
+    return MetricResult(metric_id=metric_id, value=value, metadata=resolved)

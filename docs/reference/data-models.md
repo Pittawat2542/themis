@@ -12,7 +12,7 @@ goal: Document runtime models, snapshot models, and projection/read-model types.
 | Name | Kind | Use when | Key constraints / notes |
 | --- | --- | --- | --- |
 | `RunEstimate` | Planning model | You want task counts plus token estimate fields such as `estimated_generation_input_tokens`, `estimated_generation_output_tokens`, `estimated_judge_prompt_tokens`, `estimated_judge_output_tokens`, `estimated_total_tokens`, and `assumptions` | Informational only; pair with your own pricing model |
-| `BenchmarkScoreRow` | Per-case score model | You want one scored row with `outcome`, `value`, `error_category`, `error_message`, and `details` | Includes additive `dataset_id` and `case_key` fields so duplicate `case_id`s across datasets stay distinguishable |
+| `BenchmarkScoreRow` | Per-case metric-result model | You want one scored row with `result_type`, `value`, `confidence`, `failure_category`, `error_message`, and `metadata` | Includes additive `dataset_id` and `case_key` fields so duplicate `case_id`s across datasets stay distinguishable |
 | `BenchmarkResult` | Aggregated benchmark model | You want combined `score_rows`, `metric_means`, `outcome_counts`, and `error_counts` | Best for reporting and comparison |
 
 ## Dataset-scoped case identity

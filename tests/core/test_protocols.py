@@ -14,7 +14,7 @@ from themis.core.models import (
     GenerationResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
+    MetricResult,
     ScoreError,
     TraceStep,
     WorkflowTrace,
@@ -80,19 +80,20 @@ class DummyWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(metric_id="judge", value=float(judgment.label == "pass"))
+        return MetricResult(metric_id="judge", value=float(judgment.label == "pass"))
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
+        values = [score.value for score in scores if score.value is not None]
         return AggregationResult(
-            method="mean", value=sum(score.value for score in scores) / len(scores)
+            method="mean", value=sum(values) / len(values) if values else 0.0
         )
 
 
@@ -150,9 +151,9 @@ class DummyPureMetric:
 
     def score(
         self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
-    ) -> Score | ScoreError:
+    ) -> MetricResult | ScoreError:
         del ctx
-        return Score(
+        return MetricResult(
             metric_id="exact_match", value=float(parsed.value == case.expected_output)
         )
 
@@ -262,7 +263,7 @@ class DummySubscriber:
     def before_score(self, parsed: ParsedOutput, ctx: ScoreContext) -> None:
         del parsed, ctx
 
-    def after_score(self, score: Score | ScoreError, ctx: ScoreContext) -> None:
+    def after_score(self, score: MetricResult | ScoreError, ctx: ScoreContext) -> None:
         del score, ctx
 
     def before_judge(
@@ -297,7 +298,7 @@ def _score_context() -> EvalScoreContext:
     return EvalScoreContext(
         run_id="run-1",
         case=case,
-        parsed_output=parsed,
+        parsed_views={"default": parsed},
         dataset_metadata={"split": "test"},
         seed=7,
         judge_model_refs=[
@@ -362,7 +363,7 @@ def test_workflow_and_execution_models_capture_judge_artifacts() -> None:
             )
         ],
         parsed_judgments=[ParsedJudgment(label="pass", score=1.0)],
-        scores=[Score(metric_id="judge", value=1.0)],
+        metric_results=[MetricResult(metric_id="judge", value=1.0)],
         aggregation_output=AggregationResult(method="mean", value=1.0),
         trace=WorkflowTrace(
             trace_id="trace-1",

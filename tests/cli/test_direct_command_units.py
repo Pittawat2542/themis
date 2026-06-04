@@ -72,7 +72,7 @@ def test_report_export_and_compare_commands(
     assert report(config=str(baseline_config), format="csv") == 0
     assert (
         capsys.readouterr().out.splitlines()[0]
-        == "case_id,dataset_id,case_key,metric_id,outcome,value,candidate_id,error_category,error_message,details"
+        == "case_id,dataset_id,case_key,metric_id,result_type,outcome,value,confidence,dimensions,labels,candidate_id,failure_category,error_message,metadata"
     )
 
     assert report(config=str(baseline_config), format="latex") == 0
@@ -112,7 +112,9 @@ def test_report_export_and_compare_commands(
     compare_by_id_payload = json.loads(capsys.readouterr().out)
     assert compare_by_id_payload["metrics"]["builtin/exact_match"]["ties"] == 1
 
-    candidate_store.update_run_record(candidate_experiment.compile().run_id, baseline_label="candidate")
+    candidate_store.update_run_record(
+        candidate_experiment.compile().run_id, baseline_label="candidate"
+    )
     assert (
         compare(
             baseline_config=str(baseline_config),
@@ -177,9 +179,15 @@ def test_inspect_commands_and_replay_command(
     assert lineage_payload["run_id"] == result.run_id
     assert lineage_payload["lineage"][0]["parent_run_id"] == "parent-run"
 
-    assert inspect_case(
-        config=str(config_path), run_id=result.run_id, case_id="case-1", dataset_id="cases"
-    ) == 0
+    assert (
+        inspect_case(
+            config=str(config_path),
+            run_id=result.run_id,
+            case_id="case-1",
+            dataset_id="cases",
+        )
+        == 0
+    )
     case_payload = json.loads(capsys.readouterr().out)
     assert case_payload["case_id"] == "case-1"
 

@@ -30,7 +30,7 @@ from themis.core.models import (
     GenerationResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
+    MetricResult,
     ScoreError,
 )
 from themis.core.orchestrator import Orchestrator
@@ -132,10 +132,12 @@ class CountingMetric:
     def fingerprint(self) -> str:
         return "metric-counting"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         self.calls += 1
-        return Score(
+        return MetricResult(
             metric_id=self.component_id,
             value=float(parsed.value == case.expected_output),
         )
@@ -264,19 +266,20 @@ class DemoWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(metric_id="metric/llm", value=float(judgment.score or 0.0))
+        return MetricResult(metric_id="metric/llm", value=float(judgment.score or 0.0))
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
+        values = [score.value for score in scores if score.value is not None]
         return AggregationResult(
-            method="mean", value=sum(score.value for score in scores) / len(scores)
+            method="mean", value=sum(values) / len(values) if values else 0.0
         )
 
 
@@ -568,7 +571,7 @@ def test_experiment_reuses_completed_checkpoint_without_event_replay() -> None:
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id=metric.component_id,
-            score={"metric_id": metric.component_id, "value": 1.0},
+            metric_result={"metric_id": metric.component_id, "value": 1.0},
         )
     )
     store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
@@ -579,7 +582,9 @@ def test_experiment_reuses_completed_checkpoint_without_event_replay() -> None:
     assert generator.calls == 0
 
 
-def test_experiment_reruns_failed_scores_without_regenerating_upstream_artifacts() -> None:
+def test_experiment_reruns_failed_scores_without_regenerating_upstream_artifacts() -> (
+    None
+):
     generator = CountingGenerator()
     reducer = CountingReducer()
     parser = CountingParser()
@@ -636,9 +641,9 @@ def test_experiment_reruns_failed_scores_without_regenerating_upstream_artifacts
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id=metric.component_id,
-            error=ScoreError(metric_id=metric.component_id, reason="temporary").model_dump(
-                mode="json"
-            ),
+            error=ScoreError(
+                metric_id=metric.component_id, reason="temporary"
+            ).model_dump(mode="json"),
         )
     )
 
@@ -1041,7 +1046,7 @@ async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metr
             execution={
                 "execution_id": "execution-1",
                 "subject_kind": "candidate_set",
-                "scores": [{"metric_id": metric.component_id, "value": 1.0}],
+                "metric_results": [{"metric_id": metric.component_id, "value": 1.0}],
                 "trace": {"trace_id": "trace-1", "steps": []},
             },
         )
@@ -1052,7 +1057,7 @@ async def test_orchestrator_resumes_without_reevaluating_completed_workflow_metr
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id=metric.component_id,
-            score={"metric_id": metric.component_id, "value": 1.0},
+            metric_result={"metric_id": metric.component_id, "value": 1.0},
         )
     )
 
@@ -1264,7 +1269,7 @@ async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume(
             execution={
                 "execution_id": "execution-1",
                 "subject_kind": "candidate_set",
-                "scores": [{"metric_id": metric.component_id, "value": 1.0}],
+                "metric_results": [{"metric_id": metric.component_id, "value": 1.0}],
                 "failures": [
                     {
                         "call_id": "call-1",
@@ -1284,7 +1289,7 @@ async def test_orchestrator_retries_partially_failed_workflow_metrics_on_resume(
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id=metric.component_id,
-            score={"metric_id": metric.component_id, "value": 1.0},
+            metric_result={"metric_id": metric.component_id, "value": 1.0},
         )
     )
 

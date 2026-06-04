@@ -85,7 +85,9 @@ def runs(
         updated_before=updated_before,
     )
     print(
-        dump_json([record.model_dump(mode="json") for record in store.query_runs(query)])
+        dump_json(
+            [record.model_dump(mode="json") for record in store.query_runs(query)]
+        )
     )
     return 0
 
@@ -99,7 +101,9 @@ def run_record(*, config: str, run_id: str) -> int:
 
 
 @inspect_app.command
-def lineage(*, config: str, run_id: str | None = None, baseline_label: str | None = None) -> int:
+def lineage(
+    *, config: str, run_id: str | None = None, baseline_label: str | None = None
+) -> int:
     experiment = load_experiment(config)
     store = initialize_store(experiment)
     resolved_run_id = resolve_persisted_run_id(

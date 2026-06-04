@@ -101,10 +101,10 @@ def _store() -> tuple[InMemoryRunStore, str]:
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id="builtin/exact_match",
-            score={
+            metric_result={
                 "metric_id": "builtin/exact_match",
                 "value": 1.0,
-                "details": {"matched": True},
+                "metadata": {"matched": True},
             },
         )
     )
@@ -140,12 +140,16 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
             "dataset_id": "dataset-1",
             "case_key": "9:dataset-1:case-1",
             "metric_id": "builtin/exact_match",
+            "result_type": "scalar",
             "outcome": "correct",
             "value": 1.0,
+            "confidence": None,
+            "dimensions": {},
+            "labels": {},
             "candidate_id": "case-1-reduced",
-            "error_category": None,
+            "failure_category": None,
             "error_message": None,
-            "details": {"matched": True},
+            "metadata": {"matched": True},
         }
     ]
 
@@ -166,7 +170,7 @@ def test_reporter_escapes_latex_special_characters() -> None:
                 "outcome": "error",
                 "value": r"value_1%&${}\path",
                 "candidate_id": None,
-                "error_category": "parse_failure",
+                "failure_category": "parse_failure",
                 "error_message": r"bad_%&${}\path",
             }
         ],

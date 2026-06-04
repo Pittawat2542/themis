@@ -13,7 +13,12 @@ from themis.core.events import (
     ReductionCompletedEvent,
     ScoreCompletedEvent,
 )
-from themis.core.models import GenerationResult, ParsedOutput, ReducedCandidate, Score
+from themis.core.models import (
+    GenerationResult,
+    ParsedOutput,
+    ReducedCandidate,
+    MetricResult,
+)
 from themis.core.results import (
     EvaluationBundle,
     EvaluationBundleRecord,
@@ -237,7 +242,7 @@ def export_score_bundle(store: RunStore, run_id: str) -> ScoreBundle:
     case_refs = _bundle_case_refs(stored.snapshot)
     records: list[ScoreBundleRecord] = []
     for event in stored.events:
-        if isinstance(event, ScoreCompletedEvent) and event.score is not None:
+        if isinstance(event, ScoreCompletedEvent) and event.metric_result is not None:
             case_ref = _bundle_record_case_ref(case_refs, event)
             records.append(
                 ScoreBundleRecord(
@@ -250,7 +255,7 @@ def export_score_bundle(store: RunStore, run_id: str) -> ScoreBundle:
                     else getattr(event, "case_key", None),
                     candidate_id=event.candidate_id,
                     metric_id=event.metric_id,
-                    score=Score.model_validate(event.score),
+                    metric_result=MetricResult.model_validate(event.metric_result),
                 )
             )
 
@@ -283,7 +288,7 @@ def import_score_bundle(store: RunStore, bundle: ScoreBundle) -> None:
                 case_key=case_ref.case_key,
                 candidate_id=record.candidate_id,
                 metric_id=record.metric_id,
-                score=record.score.model_dump(mode="json"),
+                metric_result=record.metric_result.model_dump(mode="json"),
             )
         )
 
@@ -375,22 +380,23 @@ def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
                     case_key=case_ref.case_key,
                     candidate_id=record.candidate_id,
                     metric_id=record.metric_id,
-                    score=final_score.model_dump(mode="json"),
+                    metric_result=final_score.model_dump(mode="json"),
                 )
             )
 
 
-def _final_score(metric_id: str, execution: EvaluationExecution) -> Score | None:
-    if execution.aggregation_output is not None and isinstance(
-        execution.aggregation_output.value, (int, float)
-    ):
-        return Score(
-            metric_id=metric_id,
-            value=float(execution.aggregation_output.value),
-            details=execution.aggregation_output.details,
-        )
-    if not execution.failures and len(execution.scores) == 1:
-        return execution.scores[-1]
+def _final_score(metric_id: str, execution: EvaluationExecution) -> MetricResult | None:
+    if execution.aggregation_output is not None:
+        if execution.aggregation_output.metric_result is not None:
+            return execution.aggregation_output.metric_result
+        if isinstance(execution.aggregation_output.value, (int, float)):
+            return MetricResult(
+                metric_id=metric_id,
+                value=float(execution.aggregation_output.value),
+                metadata=execution.aggregation_output.metadata,
+            )
+    if not execution.failures and len(execution.metric_results) == 1:
+        return execution.metric_results[-1]
     return None
 
 

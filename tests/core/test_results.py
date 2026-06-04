@@ -80,7 +80,7 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
                 execution={
                     "execution_id": "execution-1",
                     "subject_kind": "candidate_set",
-                    "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                    "metric_results": [{"metric_id": "metric/judge", "value": 1.0}],
                     "trace": {"trace_id": "trace-1", "steps": []},
                 },
             ),
@@ -89,10 +89,10 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
                 case_id="case-1",
                 candidate_id="case-1-reduced",
                 metric_id="builtin/exact_match",
-                score={
+                metric_result={
                     "metric_id": "builtin/exact_match",
                     "value": 1.0,
-                    "details": {"matched": True},
+                    "metadata": {"matched": True},
                 },
             ),
             RunCompletedEvent(run_id="run-1"),
@@ -106,11 +106,11 @@ def test_execution_state_reconstructs_completed_pipeline_from_events() -> None:
         "answer": "4"
     }
     assert case_state.reduced_candidate is not None
-    assert case_state.parsed_output is not None
+    assert "default" in case_state.parsed_views
     assert (
         case_state.evaluation_executions["metric/judge"].execution_id == "execution-1"
     )
-    assert case_state.successful_scores["builtin/exact_match"].value == 1.0
+    assert case_state.metric_results["builtin/exact_match"].value == 1.0
 
 
 def test_stored_run_exposes_execution_state() -> None:

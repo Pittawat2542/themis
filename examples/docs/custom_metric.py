@@ -4,7 +4,7 @@ from themis import Experiment
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import ScoreContext
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset, ParsedOutput, Score
+from themis.core.models import Case, Dataset, ParsedOutput, MetricResult
 
 
 class ExactAnswerMetric:
@@ -17,13 +17,15 @@ class ExactAnswerMetric:
     def fingerprint(self) -> str:
         return "metric-exact-answer"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         matched = parsed.value == case.expected_output
-        return Score(
+        return MetricResult(
             metric_id=self.component_id,
             value=1.0 if matched else 0.0,
-            details={"matched": matched},
+            metadata={"matched": matched},
         )
 
 
@@ -39,23 +41,25 @@ def run_example() -> dict[str, object]:
         ),
         storage=StorageConfig(target="memory"),
         dataset_sources=[
-            inline_dataset_source(Dataset(
-                dataset_id="sample",
-                cases=[
-                    Case(
-                        case_id="case-1",
-                        input={"question": "2+2"},
-                        expected_output={"answer": "4"},
-                    )
-                ],
-            ))
+            inline_dataset_source(
+                Dataset(
+                    dataset_id="sample",
+                    cases=[
+                        Case(
+                            case_id="case-1",
+                            input={"question": "2+2"},
+                            expected_output={"answer": "4"},
+                        )
+                    ],
+                )
+            )
         ],
     )
     result = experiment.run()
     return {
         "run_id": result.run_id,
         "status": result.status.value,
-        "score_ids": [score.metric_id for score in result.cases[0].scores],
+        "score_ids": [score.metric_id for score in result.cases[0].metric_results],
     }
 
 

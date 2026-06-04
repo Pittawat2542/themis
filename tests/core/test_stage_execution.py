@@ -13,7 +13,7 @@ from themis.core.models import (
     GenerationResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
+    MetricResult,
 )
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.stores.sqlite import SqliteRunStore
@@ -72,7 +72,7 @@ def test_full_run_after_stage_limited_generation_resumes_downstream_work() -> No
     assert generated_only.completed_through_stage == "generate"
     assert completed.completed_through_stage == "judge"
     assert completed.cases[0].reduced_candidate is not None
-    assert completed.cases[0].scores[0].metric_id == "builtin/exact_match"
+    assert completed.cases[0].metric_results[0].metric_id == "builtin/exact_match"
 
 
 class CountingGenerator:
@@ -135,9 +135,9 @@ class ExactMetric:
     def fingerprint(self) -> str:
         return "metric-exact"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx) -> Score:
+    def score(self, parsed: ParsedOutput, case: Case, ctx) -> MetricResult:
         del ctx
-        return Score(
+        return MetricResult(
             metric_id=self.component_id,
             value=float(parsed.value == case.expected_output),
         )
@@ -150,9 +150,9 @@ class AlternateMetric:
     def fingerprint(self) -> str:
         return "metric-alternate"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx) -> Score:
+    def score(self, parsed: ParsedOutput, case: Case, ctx) -> MetricResult:
         del ctx
-        return Score(
+        return MetricResult(
             metric_id=self.component_id,
             value=float(parsed.value == case.expected_output),
         )

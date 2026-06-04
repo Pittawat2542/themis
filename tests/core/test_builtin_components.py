@@ -95,7 +95,7 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
     score = metric.score(
         parsed,
         case,
-        ScoreContext(run_id="run-1", case=case, parsed_output=parsed, seed=7),
+        ScoreContext(run_id="run-1", case=case, parsed_views={"default": parsed}, seed=7),
     )
 
     assert reduced.source_candidate_ids == ["case-1-candidate-0", "case-1-candidate-1"]

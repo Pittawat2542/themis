@@ -74,12 +74,12 @@ class Reporter:
         ]
         for row in score_rows:
             lines.append(
-                f"- dataset={row.get('dataset_id')} case={row['case_id']} case_key={row.get('case_key')} metric={row['metric_id']} outcome={row['outcome']} value={row['value']} candidate={row['candidate_id']} error_category={row.get('error_category')} error_message={row.get('error_message')}"
+                f"- dataset={row.get('dataset_id')} case={row['case_id']} case_key={row.get('case_key')} metric={row['metric_id']} outcome={row['outcome']} value={row['value']} candidate={row['candidate_id']} failure_category={row.get('failure_category')} error_message={row.get('error_message')}"
             )
         return "\n".join(lines) + "\n"
 
     def export_csv(self, run_id: str) -> str:
-        """Export benchmark score rows as CSV."""
+        """Export benchmark metric_result rows as CSV."""
 
         buffer = StringIO()
         writer = csv.DictWriter(
@@ -89,12 +89,16 @@ class Reporter:
                 "dataset_id",
                 "case_key",
                 "metric_id",
+                "result_type",
                 "outcome",
                 "value",
+                "confidence",
+                "dimensions",
+                "labels",
                 "candidate_id",
-                "error_category",
+                "failure_category",
                 "error_message",
-                "details",
+                "metadata",
             ],
         )
         writer.writeheader()
@@ -102,11 +106,11 @@ class Reporter:
         return buffer.getvalue()
 
     def export_latex(self, run_id: str) -> str:
-        """Export benchmark score rows as a compact LaTeX table."""
+        """Export benchmark metric_result rows as a compact LaTeX table."""
 
         lines = [
             r"\begin{tabular}{llllllllll}",
-            r"case\_id & dataset\_id & case\_key & metric\_id & outcome & value & candidate\_id & error\_category & error\_message & details \\",
+            r"case\_id & dataset\_id & case\_key & metric\_id & result\_type & outcome & value & confidence & candidate\_id & failure\_category & error\_message & metadata \\",
             r"\hline",
         ]
         for row in self.export_score_table(run_id):
@@ -117,12 +121,14 @@ class Reporter:
                         _latex_cell(row["dataset_id"]),
                         _latex_cell(row["case_key"]),
                         _latex_cell(row["metric_id"]),
+                        _latex_cell(row["result_type"]),
                         _latex_cell(row["outcome"]),
                         _latex_cell(row["value"]),
+                        _latex_cell(row["confidence"]),
                         _latex_cell(row["candidate_id"]),
-                        _latex_cell(row["error_category"]),
+                        _latex_cell(row["failure_category"]),
                         _latex_cell(row["error_message"]),
-                        _latex_cell(row["details"]),
+                        _latex_cell(row["metadata"]),
                     ]
                 )
                 + r" \\"
@@ -131,7 +137,7 @@ class Reporter:
         return "\n".join(lines) + "\n"
 
     def export_score_table(self, run_id: str) -> list[dict[str, JSONValue]]:
-        """Return benchmark score rows in a normalized table structure."""
+        """Return benchmark metric_result rows in a normalized table structure."""
 
         benchmark_result = self._projection(run_id, "benchmark_result")
         score_rows = _require_rows(
@@ -143,12 +149,16 @@ class Reporter:
                 "dataset_id": row.get("dataset_id"),
                 "case_key": row.get("case_key"),
                 "metric_id": row["metric_id"],
+                "result_type": row.get("result_type"),
                 "outcome": row["outcome"],
                 "value": row["value"],
+                "confidence": row.get("confidence"),
+                "dimensions": row.get("dimensions", {}),
+                "labels": row.get("labels", {}),
                 "candidate_id": row["candidate_id"],
-                "error_category": row.get("error_category"),
+                "failure_category": row.get("failure_category"),
                 "error_message": row.get("error_message"),
-                "details": row.get("details", {}),
+                "metadata": row.get("metadata", {}),
             }
             for row in score_rows
         ]

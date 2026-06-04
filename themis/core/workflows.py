@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from pydantic import Field
 
 from themis.core.base import HashableModel, JSONValue
-from themis.core.models import ConversationTrace, Score, WorkflowTrace
+from themis.core.models import ConversationTrace, MetricResult, WorkflowTrace
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 
 if TYPE_CHECKING:
@@ -40,7 +40,8 @@ class ParsedJudgment(HashableModel):
 class AggregationResult(HashableModel):
     method: str
     value: JSONValue
-    details: dict[str, JSONValue] = Field(default_factory=dict)
+    metric_result: MetricResult | None = None
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class JudgeResponse(HashableModel):
@@ -72,7 +73,7 @@ class EvaluationExecution(HashableModel):
     rendered_prompts: list[RenderedJudgePrompt] = Field(default_factory=list)
     judge_responses: list[JudgeResponse] = Field(default_factory=list)
     parsed_judgments: list[ParsedJudgment] = Field(default_factory=list)
-    scores: list[Score] = Field(default_factory=list)
+    metric_results: list[MetricResult] = Field(default_factory=list)
     failures: list[WorkflowFailure] = Field(default_factory=list)
     aggregation_output: AggregationResult | None = None
     trace: WorkflowTrace
@@ -112,7 +113,11 @@ def build_prompt_template_context(
         "dataset_id": ctx.dataset_id,
         "case_key": ctx.case_key,
         "case_input": ctx.case.input,
-        "parsed_output": ctx.parsed_output.value,
+        "parsed_views": {
+            view_id: parsed.model_dump(mode="json")
+            for view_id, parsed in ctx.parsed_views.items()
+        },
+        "parser_view": ctx.parser_view,
         "judge_config": ctx.judge_config,
         "workflow_config": ctx.eval_workflow_config,
     }

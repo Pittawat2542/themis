@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from themis.core.base import HashableModel, JSONValue
 from themis.core.components import ComponentRef
@@ -57,6 +57,7 @@ class ParseContext(HashableModel):
     dataset_id: str | None = None
     case_key: str | None = None
     candidate_id: str
+    parser_view: str = "default"
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
@@ -65,15 +66,29 @@ class ScoreContext(HashableModel):
 
     run_id: str
     case: Case
-    parsed_output: ParsedOutput
+    parsed_views: dict[str, ParsedOutput] = Field(default_factory=dict)
+    parser_view: str = "default"
     dataset_id: str | None = None
     case_key: str | None = None
     dataset_metadata: dict[str, JSONValue] = Field(default_factory=dict)
     seed: int | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_single_parsed_view(cls, payload):
+        if not isinstance(payload, dict):
+            return payload
+        parsed_views = payload.get("parsed_views")
+        if isinstance(parsed_views, ParsedOutput):
+            normalized = dict(payload)
+            normalized["parsed_views"] = {"default": parsed_views}
+            normalized.setdefault("parser_view", "default")
+            return normalized
+        return payload
+
 
 class EvalScoreContext(ScoreContext):
-    """Score context extended with judge workflow configuration."""
+    """Metric scoring context extended with judge workflow configuration."""
 
     judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     judge_seed: int | None = None

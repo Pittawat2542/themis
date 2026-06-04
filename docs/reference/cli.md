@@ -64,7 +64,7 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 
 JSON-producing commands generally emit compact machine-readable JSON to stdout. Commands that inspect stored runs require a persistent store unless the current process still owns the original memory store.
 
-`report` and exported score tables include `outcome`, `error_category`, `error_message`, and `details` columns alongside metric values.
+`report` and exported score tables include `result_type`, `confidence`, `dimensions`, `labels`, `failure_category`, `error_message`, and `metadata` columns alongside metric values.
 
 ## Current CLI boundary
 

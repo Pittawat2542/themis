@@ -39,10 +39,11 @@ from themis.core.events import (
 )
 from themis.core.models import (
     ConversationTrace,
+    FailureCategory,
     GenerationResult,
+    MetricResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
     ScoreError,
     WorkflowTrace,
 )
@@ -156,6 +157,7 @@ class Orchestrator:
         generator: Generator,
         selector: CandidateSelector | None = None,
         reducer: CandidateReducer | None = None,
+        parsers: list[tuple[str, Parser]] | None = None,
         parser: Parser | None = None,
         metrics: list[RuntimeMetric] | None = None,
         judge_models: list[JudgeModel] | None = None,
@@ -180,7 +182,7 @@ class Orchestrator:
         self.generator = generator
         self.selector = selector
         self.reducer = reducer
-        self.parser = parser
+        self.parsers = list(parsers or ([("default", parser)] if parser else []))
         self.metrics = list(metrics or [])
         self.judge_models = list(judge_models or [])
         self.force_workflow_metrics = set(force_workflow_metrics or set())
@@ -384,7 +386,7 @@ class Orchestrator:
         generated_by_index = dict(prior_case_state.generated_candidates_by_index)
         workflow_executions = dict(prior_case_state.evaluation_executions)
         evaluation_failures = dict(prior_case_state.evaluation_failures)
-        successful_scores = dict(prior_case_state.successful_scores)
+        metric_results = dict(prior_case_state.metric_results)
         score_failures = dict(prior_case_state.score_failures)
         had_failure = False
 
@@ -551,21 +553,32 @@ class Orchestrator:
                 had_failure,
             )
 
-        parsed = prior_case_state.parsed_output
-        if parsed is None:
+        parser_views: list[tuple[str, Parser | None]]
+        if self.parsers:
+            parser_views = list(self.parsers)
+        else:
+            parser_views = [("default", None)]
+        parsed_views = dict(prior_case_state.parsed_views)
+        parse_errors = dict(prior_case_state.parse_errors)
+        for parser_view, parser in parser_views:
+            if parser_view in parsed_views:
+                continue
             cached_parse = self._load_stage_cache(
                 "parse",
-                self._parse_cache_key(snapshot, reduced),
+                self._parse_cache_key(snapshot, reduced, parser_view),
             )
             if isinstance(cached_parse, dict) and isinstance(
                 cached_parse.get("result"), dict
             ):
                 parsed = ParsedOutput.model_validate(cached_parse["result"])
+                parsed_views[parser_view] = parsed
+                parse_errors.pop(parser_view, None)
                 await self._persist_event(
                     ParseCompletedEvent(
                         run_id=snapshot.run_id,
                         **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
+                        parser_id=parser_view,
                         result=parsed.model_dump(mode="json"),
                         cache_hit=True,
                         source_run_id=cast(
@@ -573,34 +586,40 @@ class Orchestrator:
                         ),
                     )
                 )
-        if parsed is None:
+                continue
             parse_ctx = ParseContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
                 dataset_id=item0.dataset_id,
                 case_key=item0.case_key,
                 candidate_id=reduced.candidate_id,
+                parser_view=parser_view,
             )
             self._notify("before_parse", reduced, parse_ctx)
-            span = self.tracing_provider.start_span("parse", {"case_id": case.case_id})
+            span = self.tracing_provider.start_span(
+                "parse", {"case_id": case.case_id, "parser_view": parser_view}
+            )
             try:
                 async with self._global_semaphore:
                     async with self._stage_semaphores["parsing"]:
                         parsed = await asyncio.to_thread(
-                            self._parse_candidate, reduced, parse_ctx
+                            self._parse_candidate, reduced, parse_ctx, parser
                         )
+                parsed_views[parser_view] = parsed
+                parse_errors.pop(parser_view, None)
                 self._notify("after_parse", parsed, parse_ctx)
                 await self._persist_event(
                     ParseCompletedEvent(
                         run_id=snapshot.run_id,
                         **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
+                        parser_id=parser_view,
                         result=parsed.model_dump(mode="json"),
                     )
                 )
                 self._store_stage_cache(
                     "parse",
-                    self._parse_cache_key(snapshot, reduced),
+                    self._parse_cache_key(snapshot, reduced, parser_view),
                     {
                         "source_run_id": snapshot.run_id,
                         "result": parsed.model_dump(mode="json"),
@@ -608,30 +627,26 @@ class Orchestrator:
                 )
                 self.tracing_provider.end_span(span, "ok")
             except Exception as exc:
+                parse_errors[parser_view] = str(exc)
                 await self._persist_event(
                     ParseFailedEvent(
                         run_id=snapshot.run_id,
                         **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
+                        parser_id=parser_view,
                         error_message=str(exc),
                     )
                 )
                 self.tracing_provider.end_span(span, "error")
-                return (
-                    CaseResult(
-                        **case_result_kwargs,
-                        generated_candidates=generated_candidates,
-                        reduced_candidate=reduced,
-                    ),
-                    True,
-                )
+                had_failure = True
         if self.until_stage == "parse":
             return (
                 CaseResult(
                     **case_result_kwargs,
                     generated_candidates=generated_candidates,
                     reduced_candidate=reduced,
-                    parsed_output=parsed,
+                    parsed_views=parsed_views,
+                    parse_errors=parse_errors,
                 ),
                 had_failure,
             )
@@ -644,34 +659,64 @@ class Orchestrator:
             if (
                 metric_kind != "pure"
                 and metric.component_id not in self.force_workflow_metrics
-                and metric.component_id in successful_scores
+                and metric.component_id in metric_results
                 and metric.component_id in workflow_executions
                 and workflow_executions[metric.component_id].status == "completed"
                 and not workflow_executions[metric.component_id].failures
             ):
                 continue
-            if metric_kind == "pure" and metric.component_id in successful_scores:
+            if metric_kind == "pure" and metric.component_id in metric_results:
+                continue
+            parser_view = str(getattr(metric, "parser_view", "default"))
+            selected_parsed = parsed_views.get(parser_view)
+            if selected_parsed is None:
+                score_error = ScoreError(
+                    metric_id=metric.component_id,
+                    reason=parse_errors.get(
+                        parser_view, f"Missing parser view: {parser_view}"
+                    ),
+                    category=FailureCategory.PARSE_FAILURE
+                    if parser_view in parse_errors
+                    else FailureCategory.METRIC_FAILURE,
+                    metadata={"parser_view": parser_view},
+                )
+                metric_results.pop(metric.component_id, None)
+                score_failures[metric.component_id] = score_error
+                await self._persist_event(
+                    ScoreFailedEvent(
+                        run_id=snapshot.run_id,
+                        **case_event_kwargs,
+                        candidate_id=reduced.candidate_id,
+                        metric_id=metric.component_id,
+                        error=score_error.model_dump(mode="json"),
+                    )
+                )
+                had_failure = True
                 continue
             if metric_kind == "pure":
                 if not _is_pure_metric(metric):
                     raise TypeError(
                         f"Metric {metric.component_id} does not implement PureMetric"
                     )
-                cache_key = self._score_cache_key(snapshot, case, parsed, metric)
+                cache_key = self._score_cache_key(
+                    snapshot, case, selected_parsed, metric
+                )
                 cached_score = self._load_stage_cache("score", cache_key)
                 if isinstance(cached_score, dict) and isinstance(
-                    cached_score.get("score"), dict
+                    cached_score.get("metric_result"), dict
                 ):
-                    cached_score_result = Score.model_validate(cached_score["score"])
-                    successful_scores[metric.component_id] = cached_score_result
+                    cached_metric_result = MetricResult.model_validate(
+                        cached_score["metric_result"]
+                    )
+                    metric_results[metric.component_id] = cached_metric_result
                     score_failures.pop(metric.component_id, None)
                     await self._persist_event(
                         ScoreCompletedEvent(
                             run_id=snapshot.run_id,
                             **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
-                            metric_id=cached_score_result.metric_id,
-                            score=cached_score_result.model_dump(mode="json"),
+                            metric_id=cached_metric_result.metric_id,
+                            metric_result=cached_metric_result.model_dump(mode="json"),
                             cache_hit=True,
                             source_run_id=cast(
                                 str | None, cached_score.get("source_run_id")
@@ -682,50 +727,51 @@ class Orchestrator:
                 score_ctx = ScoreContext(
                     run_id=snapshot.run_id,
                     case=case,
-                    parsed_output=parsed,
+                    parsed_views=parsed_views,
+                    parser_view=parser_view,
                     dataset_id=item0.dataset_id,
                     case_key=item0.case_key,
                     seed=item0.seed,
                 )
-                self._notify("before_score", parsed, score_ctx)
+                self._notify("before_score", selected_parsed, score_ctx)
                 span = self.tracing_provider.start_span(
                     "score",
                     {"case_id": case.case_id, "metric_id": metric.component_id},
                 )
                 try:
                     async with self._stage_semaphores["scoring"]:
-                        score_result = await asyncio.to_thread(
+                        metric_result = await asyncio.to_thread(
                             _score_pure_metric,
                             metric,
-                            parsed,
+                            selected_parsed,
                             case,
                             score_ctx,
                         )
-                    self._notify("after_score", score_result, score_ctx)
-                    if isinstance(score_result, ScoreError):
-                        score_failures[metric.component_id] = score_result
-                        successful_scores.pop(metric.component_id, None)
+                    self._notify("after_score", metric_result, score_ctx)
+                    if isinstance(metric_result, ScoreError):
+                        score_failures[metric.component_id] = metric_result
+                        metric_results.pop(metric.component_id, None)
                         await self._persist_event(
                             ScoreFailedEvent(
                                 run_id=snapshot.run_id,
                                 **case_event_kwargs,
                                 candidate_id=reduced.candidate_id,
-                                metric_id=score_result.metric_id,
-                                error=score_result.model_dump(mode="json"),
+                                metric_id=metric_result.metric_id,
+                                error=metric_result.model_dump(mode="json"),
                             )
                         )
                         had_failure = True
                         self.tracing_provider.end_span(span, "error")
                         continue
-                    successful_scores[metric.component_id] = score_result
+                    metric_results[metric.component_id] = metric_result
                     score_failures.pop(metric.component_id, None)
                     await self._persist_event(
                         ScoreCompletedEvent(
                             run_id=snapshot.run_id,
                             **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
-                            metric_id=score_result.metric_id,
-                            score=score_result.model_dump(mode="json"),
+                            metric_id=metric_result.metric_id,
+                            metric_result=metric_result.model_dump(mode="json"),
                         )
                     )
                     self._store_stage_cache(
@@ -733,7 +779,7 @@ class Orchestrator:
                         cache_key,
                         {
                             "source_run_id": snapshot.run_id,
-                            "score": score_result.model_dump(mode="json"),
+                            "metric_result": metric_result.model_dump(mode="json"),
                         },
                     )
                     self.tracing_provider.end_span(span, "ok")
@@ -742,7 +788,7 @@ class Orchestrator:
                         metric_id=metric.component_id, reason=str(exc)
                     )
                     score_failures[metric.component_id] = score_error
-                    successful_scores.pop(metric.component_id, None)
+                    metric_results.pop(metric.component_id, None)
                     await self._persist_event(
                         ScoreFailedEvent(
                             run_id=snapshot.run_id,
@@ -763,7 +809,8 @@ class Orchestrator:
             eval_ctx = self._evaluation_context(
                 snapshot,
                 case,
-                parsed,
+                parsed_views,
+                parser_view,
                 item0.seed,
                 dataset_id=item0.dataset_id,
                 case_key=item0.case_key,
@@ -812,7 +859,7 @@ class Orchestrator:
                     or bool(execution.failures)
                 )
                 if final_score is not None:
-                    successful_scores[metric.component_id] = final_score
+                    metric_results[metric.component_id] = final_score
                     score_failures.pop(metric.component_id, None)
                     await self._persist_event(
                         ScoreCompletedEvent(
@@ -820,7 +867,7 @@ class Orchestrator:
                             **case_event_kwargs,
                             candidate_id=reduced.candidate_id,
                             metric_id=final_score.metric_id,
-                            score=final_score.model_dump(mode="json"),
+                            metric_result=final_score.model_dump(mode="json"),
                         )
                     )
                 else:
@@ -828,7 +875,7 @@ class Orchestrator:
                         metric_id=metric.component_id,
                         reason="workflow execution completed without a usable final score",
                     )
-                    successful_scores.pop(metric.component_id, None)
+                    metric_results.pop(metric.component_id, None)
                     score_failures[metric.component_id] = score_error
                     await self._persist_event(
                         ScoreFailedEvent(
@@ -845,7 +892,7 @@ class Orchestrator:
                 workflow_executions.pop(metric.component_id, None)
                 evaluation_failures[metric.component_id] = str(exc)
                 score_error = ScoreError(metric_id=metric.component_id, reason=str(exc))
-                successful_scores.pop(metric.component_id, None)
+                metric_results.pop(metric.component_id, None)
                 score_failures[metric.component_id] = score_error
                 await self._persist_event(
                     EvaluationFailedEvent(
@@ -881,7 +928,8 @@ class Orchestrator:
                 **case_result_kwargs,
                 generated_candidates=generated_candidates,
                 reduced_candidate=reduced,
-                parsed_output=parsed,
+                parsed_views=parsed_views,
+                parse_errors=parse_errors,
                 evaluation_executions=[
                     workflow_executions[metric.component_id]
                     for metric, metric_kind in zip(
@@ -890,19 +938,19 @@ class Orchestrator:
                     if metric_kind != "pure"
                     and metric.component_id in workflow_executions
                 ],
-                scores=[
-                    score
+                metric_results=[
+                    result
                     for metric, _metric_kind in zip(
                         self.metrics, snapshot.metric_kinds, strict=False
                     )
-                    for score in [
-                        successful_scores.get(metric.component_id)
+                    for result in [
+                        metric_results.get(metric.component_id)
                         or score_failures.get(metric.component_id)
                     ]
-                    if score is not None
+                    if result is not None
                 ],
             ),
-            had_failure or len(successful_scores) != len(expected_metric_ids),
+            had_failure or len(metric_results) != len(expected_metric_ids),
         )
 
     async def _generate_candidate(
@@ -1072,17 +1120,21 @@ class Orchestrator:
                 return await self.reducer.reduce(generated_candidates, reduce_ctx)
 
     def _parse_candidate(
-        self, reduced: ReducedCandidate, parse_ctx: ParseContext
+        self,
+        reduced: ReducedCandidate,
+        parse_ctx: ParseContext,
+        parser: Parser | None,
     ) -> ParsedOutput:
-        if self.parser is None:
+        if parser is None:
             return ParsedOutput(value=reduced.final_output)
-        return self.parser.parse(reduced, parse_ctx)
+        return parser.parse(reduced, parse_ctx)
 
     def _evaluation_context(
         self,
         snapshot: RunSnapshot,
         case,
-        parsed: ParsedOutput,
+        parsed_views: dict[str, ParsedOutput],
+        parser_view: str,
         seed: int | None,
         *,
         dataset_id: str | None,
@@ -1095,7 +1147,8 @@ class Orchestrator:
         return EvalScoreContext(
             run_id=snapshot.run_id,
             case=case,
-            parsed_output=parsed,
+            parsed_views=parsed_views,
+            parser_view=parser_view,
             dataset_id=dataset_id,
             case_key=case_key,
             seed=seed,
@@ -1157,17 +1210,18 @@ class Orchestrator:
         self,
         metric_id: str,
         execution,
-    ) -> Score | None:
-        if execution.aggregation_output is not None and isinstance(
-            execution.aggregation_output.value, (int, float)
-        ):
-            return Score(
-                metric_id=metric_id,
-                value=float(execution.aggregation_output.value),
-                details=execution.aggregation_output.details,
-            )
-        if not execution.failures and len(execution.scores) == 1:
-            return execution.scores[-1]
+    ) -> MetricResult | None:
+        if execution.aggregation_output is not None:
+            if execution.aggregation_output.metric_result is not None:
+                return execution.aggregation_output.metric_result
+            if isinstance(execution.aggregation_output.value, (int, float)):
+                return MetricResult(
+                    metric_id=metric_id,
+                    value=float(execution.aggregation_output.value),
+                    metadata=execution.aggregation_output.metadata,
+                )
+        if not execution.failures and len(execution.metric_results) == 1:
+            return execution.metric_results[-1]
         return None
 
     async def _execute_judge_model_call(
@@ -1224,19 +1278,19 @@ class Orchestrator:
             )
             if metric_kind != "pure"
         }
-        successful_scores = dict(case_state.successful_scores)
+        metric_results = dict(case_state.metric_results)
         score_failures = dict(case_state.score_failures)
 
         if self.replay_stage == "judge":
             for metric_id in workflow_metric_ids:
-                successful_scores.pop(metric_id, None)
+                metric_results.pop(metric_id, None)
                 score_failures.pop(metric_id, None)
             return case_state.model_copy(
                 update={
                     "evaluation_executions": {},
                     "evaluation_execution_blob_refs": {},
                     "evaluation_failures": {},
-                    "successful_scores": successful_scores,
+                    "metric_results": metric_results,
                     "score_failures": score_failures,
                 }
             )
@@ -1247,7 +1301,7 @@ class Orchestrator:
                     "evaluation_executions": {},
                     "evaluation_execution_blob_refs": {},
                     "evaluation_failures": {},
-                    "successful_scores": {},
+                    "metric_results": {},
                     "score_failures": {},
                 }
             )
@@ -1255,12 +1309,12 @@ class Orchestrator:
         if self.replay_stage == "parse":
             return case_state.model_copy(
                 update={
-                    "parsed_output": None,
-                    "parse_error": None,
+                    "parsed_views": {},
+                    "parse_errors": {},
                     "evaluation_executions": {},
                     "evaluation_execution_blob_refs": {},
                     "evaluation_failures": {},
-                    "successful_scores": {},
+                    "metric_results": {},
                     "score_failures": {},
                 }
             )
@@ -1269,12 +1323,12 @@ class Orchestrator:
             update={
                 "reduced_candidate": None,
                 "reduction_error": None,
-                "parsed_output": None,
-                "parse_error": None,
+                "parsed_views": {},
+                "parse_errors": {},
                 "evaluation_executions": {},
                 "evaluation_execution_blob_refs": {},
                 "evaluation_failures": {},
-                "successful_scores": {},
+                "metric_results": {},
                 "score_failures": {},
             }
         )
@@ -1302,36 +1356,36 @@ class Orchestrator:
                     "selection_error": None,
                     "reduced_candidate": None,
                     "reduction_error": None,
-                    "parsed_output": None,
-                    "parse_error": None,
+                    "parsed_views": {},
+                    "parse_errors": {},
                     "evaluation_executions": {},
                     "evaluation_execution_blob_refs": {},
                     "evaluation_failures": {},
-                    "successful_scores": {},
+                    "metric_results": {},
                     "score_failures": {},
                 }
             )
         if stage == "parse":
             return case_state.model_copy(
                 update={
-                    "parsed_output": None,
-                    "parse_error": None,
+                    "parsed_views": {},
+                    "parse_errors": {},
                     "evaluation_executions": {},
                     "evaluation_execution_blob_refs": {},
                     "evaluation_failures": {},
-                    "successful_scores": {},
+                    "metric_results": {},
                     "score_failures": {},
                 }
             )
 
-        successful_scores = dict(case_state.successful_scores)
+        metric_results = dict(case_state.metric_results)
         score_failures = dict(case_state.score_failures)
         evaluation_executions = dict(case_state.evaluation_executions)
         evaluation_execution_blob_refs = dict(case_state.evaluation_execution_blob_refs)
         evaluation_failures = dict(case_state.evaluation_failures)
-        score_ids_to_clear = metric_ids or set(successful_scores) | set(score_failures)
+        score_ids_to_clear = metric_ids or set(metric_results) | set(score_failures)
         for metric_id in score_ids_to_clear:
-            successful_scores.pop(metric_id, None)
+            metric_results.pop(metric_id, None)
             score_failures.pop(metric_id, None)
 
         if stage == "judge":
@@ -1346,7 +1400,7 @@ class Orchestrator:
                 evaluation_executions.pop(metric_id, None)
                 evaluation_execution_blob_refs.pop(metric_id, None)
                 evaluation_failures.pop(metric_id, None)
-                successful_scores.pop(metric_id, None)
+                metric_results.pop(metric_id, None)
                 score_failures.pop(metric_id, None)
 
         return case_state.model_copy(
@@ -1354,7 +1408,7 @@ class Orchestrator:
                 "evaluation_executions": evaluation_executions,
                 "evaluation_execution_blob_refs": evaluation_execution_blob_refs,
                 "evaluation_failures": evaluation_failures,
-                "successful_scores": successful_scores,
+                "metric_results": metric_results,
                 "score_failures": score_failures,
             }
         )
@@ -1533,7 +1587,9 @@ class Orchestrator:
             )
         return self._provider_limiters[provider_key]
 
-    def _provider_token_limiter(self, provider_key: str) -> TokenBucketRateLimiter | None:
+    def _provider_token_limiter(
+        self, provider_key: str
+    ) -> TokenBucketRateLimiter | None:
         tokens_per_minute = self.runtime.provider_token_limits.get(provider_key)
         if tokens_per_minute is None:
             return None
@@ -1607,13 +1663,24 @@ class Orchestrator:
             }
         )
 
-    def _parse_cache_key(self, snapshot: RunSnapshot, reduced: ReducedCandidate) -> str:
+    def _parse_cache_key(
+        self, snapshot: RunSnapshot, reduced: ReducedCandidate, parser_view: str
+    ) -> str:
+        parser_ref = next(
+            (
+                view_ref.parser
+                for view_ref in snapshot.component_refs.parsers
+                if view_ref.id == parser_view
+            ),
+            None,
+        )
         return _stable_hash(
             {
                 "stage": "parse",
+                "parser_view": parser_view,
                 "reduced_hash": reduced.compute_hash(),
-                "parser_ref": snapshot.component_refs.parsers[0].model_dump(mode="json")
-                if snapshot.component_refs.parsers
+                "parser_ref": parser_ref.model_dump(mode="json")
+                if parser_ref is not None
                 else None,
             }
         )
@@ -1738,7 +1805,9 @@ def _observed_token_cost(token_usage: Mapping[str, int] | None) -> int:
     total = token_usage.get("total_tokens")
     if isinstance(total, int) and total > 0:
         return total
-    return max(1, sum(value for value in token_usage.values() if isinstance(value, int)))
+    return max(
+        1, sum(value for value in token_usage.values() if isinstance(value, int))
+    )
 
 
 def _score_pure_metric(
@@ -1746,7 +1815,7 @@ def _score_pure_metric(
     parsed: ParsedOutput,
     case,
     score_ctx: ScoreContext,
-) -> Score | ScoreError:
+) -> MetricResult | ScoreError:
     return metric.score(parsed, case, score_ctx)
 
 

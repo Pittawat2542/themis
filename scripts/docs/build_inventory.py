@@ -95,8 +95,9 @@ def main() -> None:
                 "assumptions",
             ],
             "reporting_shape": [
-                "error_category",
+                "failure_category",
                 "error_message",
+                "metadata",
                 "outcome_counts",
                 "error_counts",
             ],

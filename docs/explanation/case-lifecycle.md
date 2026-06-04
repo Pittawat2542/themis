@@ -22,7 +22,7 @@ flowchart LR
     A["Dataset case"] --> B["Generate candidate set"]
     B --> C["Reduce candidate set"]
     C --> D["Parse reduced output"]
-    D --> E["Score or run evaluation workflow"]
+    D --> E["Emit metric result or run evaluation workflow"]
     E --> F["Persist events, artifacts, projections"]
 ```
 

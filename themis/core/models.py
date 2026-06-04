@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
+from typing import Literal
 
 from pydantic import Field
 
@@ -62,15 +64,33 @@ class ParsedOutput(HashableModel):
 
     value: JSONValue
     format: str | None = None
+    confidence: float | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
-class Score(HashableModel):
-    """Successful metric output."""
+class FailureCategory(StrEnum):
+    """Stable failure categories surfaced by projections and reports."""
+
+    PARSE_FAILURE = "parse_failure"
+    PROVIDER_FAILURE = "provider_failure"
+    JUDGE_PARSE_FAILURE = "judge_parse_failure"
+    RUBRIC_AMBIGUITY = "rubric_ambiguity"
+    DATA_PROBLEM = "data_problem"
+    METRIC_FAILURE = "metric_failure"
+
+
+class MetricResult(HashableModel):
+    """Successful metric output with a numeric summary and rich metadata."""
 
     metric_id: str
-    value: float
-    details: dict[str, JSONValue] = Field(default_factory=dict)
+    result_type: Literal[
+        "scalar", "rubric", "preference", "ranking", "agreement", "calibration"
+    ] = "scalar"
+    value: float | None = None
+    dimensions: dict[str, float] = Field(default_factory=dict)
+    labels: dict[str, str] = Field(default_factory=dict)
+    confidence: float | None = None
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class ScoreError(HashableModel):
@@ -78,8 +98,9 @@ class ScoreError(HashableModel):
 
     metric_id: str
     reason: str
+    category: FailureCategory = FailureCategory.METRIC_FAILURE
     retryable: bool = False
-    details: dict[str, JSONValue] = Field(default_factory=dict)
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class ReducedCandidate(HashableModel):

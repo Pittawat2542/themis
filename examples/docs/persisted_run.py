@@ -32,16 +32,18 @@ def run_example(root: Path) -> dict[str, object]:
         ),
         storage=StorageConfig(target="sqlite", kwargs={"path": str(store_path)}),
         dataset_sources=[
-            inline_dataset_source(Dataset(
-                dataset_id="sample",
-                cases=[
-                    Case(
-                        case_id="case-1",
-                        input={"question": "2+2"},
-                        expected_output={"answer": "4"},
-                    )
-                ],
-            ))
+            inline_dataset_source(
+                Dataset(
+                    dataset_id="sample",
+                    cases=[
+                        Case(
+                            case_id="case-1",
+                            input={"question": "2+2"},
+                            expected_output={"answer": "4"},
+                        )
+                    ],
+                )
+            )
         ],
         seeds=[7],
     )

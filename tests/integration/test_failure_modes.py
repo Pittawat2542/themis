@@ -17,7 +17,7 @@ from themis.core.models import (
     GenerationResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
+    MetricResult,
 )
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
@@ -75,7 +75,9 @@ class FailingMetric:
     def fingerprint(self) -> str:
         return "metric-failing"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del parsed, case, ctx
         raise RuntimeError("metric failed")
 
@@ -174,21 +176,24 @@ class PartialWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx: EvalScoreContext
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(metric_id="metric/partial", value=float(judgment.score or 0.0))
+        return MetricResult(
+            metric_id="metric/partial", value=float(judgment.score or 0.0)
+        )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
         if not scores:
             return None
+        values = [score.value for score in scores if score.value is not None]
         return AggregationResult(
-            method="mean", value=sum(score.value for score in scores) / len(scores)
+            method="mean", value=sum(values) / len(values) if values else 0.0
         )
 
 
@@ -289,7 +294,7 @@ def test_failure_modes_persist_partial_workflow_failures() -> None:
     assert execution.status == "partial_failure"
     assert execution.failures[0].error_message == "judge timeout"
     assert execution.aggregation_output is not None
-    assert result.cases[0].scores[0].metric_id == "metric/partial"
+    assert result.cases[0].metric_results[0].metric_id == "metric/partial"
 
 
 def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging() -> (

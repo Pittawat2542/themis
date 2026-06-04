@@ -74,9 +74,7 @@ def test_compile_redacts_credentials_in_storage_urls() -> None:
     experiment = _experiment(
         storage=StorageConfig(
             target="postgres",
-            kwargs={
-                "url": "postgresql://themis:swordfish@db.example.com:5432/themis"
-            },
+            kwargs={"url": "postgresql://themis:swordfish@db.example.com:5432/themis"},
         )
     )
 

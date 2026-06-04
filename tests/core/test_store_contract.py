@@ -267,7 +267,9 @@ def test_run_store_contract_round_trips_execution_checkpoints_and_projection_cur
     store.initialize()
     store.persist_snapshot(snapshot)
     store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
-    state = ExecutionState.from_events(snapshot.run_id, store.query_events(snapshot.run_id))
+    state = ExecutionState.from_events(
+        snapshot.run_id, store.query_events(snapshot.run_id)
+    )
     checkpoint = ExecutionCheckpoint(
         run_id=snapshot.run_id,
         event_count=store.count_events(snapshot.run_id),

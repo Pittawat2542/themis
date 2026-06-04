@@ -262,9 +262,7 @@ dataset_sources:
 
     experiment = Experiment.from_config(path)
 
-    assert experiment.storage.kwargs["path"] == str(
-        root / "runs" / "themis.sqlite3"
-    )
+    assert experiment.storage.kwargs["path"] == str(root / "runs" / "themis.sqlite3")
     assert experiment.runtime.queue_root == str(root / "runs" / "queue")
     assert experiment.runtime.batch_root == str(root / "runs" / "batch")
 

@@ -33,9 +33,9 @@ Portable artifact handoff is stage-aware:
 Reporting output is now outcome-aware. `benchmark_result.score_rows` and CSV exports include:
 
 - `outcome`: `correct`, `incorrect`, or `error`
-- `error_category`: for example `parse_failure`, `parse_null`, `parse_invalid`, `evaluation_failure`, `evaluation_partial_failure`, or `score_failure`
+- `failure_category`: for example `parse_failure`, `evaluation_failure`, `evaluation_partial_failure`, or `metric_failure`
 - `error_message`: the stored failure reason when the row is an error
-- `details`: metric-specific structured payload for downstream qualitative analysis
+- `metadata`: metric-specific structured payload for downstream qualitative analysis
 
 Outside Themis workflows:
 

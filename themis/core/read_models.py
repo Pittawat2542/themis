@@ -8,23 +8,33 @@ from typing import Literal
 from pydantic import Field
 
 from themis.core.base import FrozenModel, JSONValue
-from themis.core.models import GenerationResult, ParsedOutput, ReducedCandidate, Score, ScoreError
+from themis.core.models import (
+    GenerationResult,
+    MetricResult,
+    ParsedOutput,
+    ReducedCandidate,
+    ScoreError,
+)
 from themis.core.workflows import EvaluationExecution
 
 
 class BenchmarkScoreRow(FrozenModel):
-    """One score row in the benchmark projection."""
+    """One metric_result row in the benchmark projection."""
 
     case_id: str
     dataset_id: str | None = None
     case_key: str | None = None
     metric_id: str
+    result_type: str | None = None
     value: float | None = None
+    confidence: float | None = None
+    dimensions: dict[str, float] = Field(default_factory=dict)
+    labels: dict[str, str] = Field(default_factory=dict)
     candidate_id: str | None = None
     outcome: Literal["correct", "incorrect", "error"] = "incorrect"
-    error_category: str | None = None
+    failure_category: str | None = None
     error_message: str | None = None
-    details: dict[str, JSONValue] = Field(default_factory=dict)
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
 class BenchmarkResult(FrozenModel):
@@ -127,7 +137,7 @@ class MetricAuditRecord(FrozenModel):
     """Case-scoped audit record for one metric."""
 
     metric_id: str
-    score: Score | None = None
+    metric_result: MetricResult | None = None
     score_error: ScoreError | None = None
     evaluation_execution: EvaluationExecution | None = None
     evaluation_failure: str | None = None
@@ -153,8 +163,8 @@ class CaseAuditRecord(FrozenModel):
     reduction_error: str | None = None
     parse_candidate_id: str | None = None
     parse_input: dict[str, JSONValue] = Field(default_factory=dict)
-    parsed_output: ParsedOutput | None = None
-    parse_error: str | None = None
+    parsed_views: dict[str, ParsedOutput] = Field(default_factory=dict)
+    parse_errors: dict[str, str] = Field(default_factory=dict)
     metric_records: list[MetricAuditRecord] = Field(default_factory=list)
 
 

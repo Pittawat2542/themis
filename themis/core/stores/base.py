@@ -74,7 +74,9 @@ class ProjectionRefreshingStore(ABC):
     def _bootstrap_projections(self, snapshot: RunSnapshot) -> None:
         event_count = self.count_events(snapshot.run_id)
         payloads = (
-            build_store_projection_payloads(snapshot, self.query_events(snapshot.run_id))
+            build_store_projection_payloads(
+                snapshot, self.query_events(snapshot.run_id)
+            )
             if event_count
             else build_initial_store_projection_payloads(snapshot)
         )

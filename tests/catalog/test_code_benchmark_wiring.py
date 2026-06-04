@@ -11,7 +11,7 @@ from themis.catalog.builtins.parsers import CodeTextParser
 from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.core.base import JSONValue
 from themis.core.contexts import ParseContext, ScoreContext
-from themis.core.models import ParsedOutput, ReducedCandidate, Score
+from themis.core.models import ParsedOutput, ReducedCandidate, MetricResult
 
 
 def test_humaneval_benchmarks_use_code_execution_wiring() -> None:
@@ -91,7 +91,7 @@ def test_humaneval_execution_metric_scores_candidate_against_reference_solution(
         ScoreContext(
             run_id="run-1",
             case=case_obj,
-            parsed_output=parsed,
+            parsed_views={"default": parsed},
         ),
     )
 
@@ -99,7 +99,7 @@ def test_humaneval_execution_metric_scores_candidate_against_reference_solution(
         value="def add(a, b):\n    return a + b",
         format="code",
     )
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.metric_id == "builtin/humaneval_pass_rate"
     assert score.value == 1.0
 
@@ -147,14 +147,16 @@ def test_humaneval_execution_metric_caches_reference_solution_results() -> None:
         ScoreContext(
             run_id="run-1",
             case=case_obj,
-            parsed_output=ParsedOutput(
-                value="def add(a, b):\n    return 1 + 2",
-                format="code",
-            ),
+            parsed_views={
+                "default": ParsedOutput(
+                    value="def add(a, b):\n    return 1 + 2",
+                    format="code",
+                )
+            },
         ),
     )
 
-    assert isinstance(score, Score)
+    assert isinstance(score, MetricResult)
     assert score.value == 1.0
     assert len(executor.reference_runs) == 1
 

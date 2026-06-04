@@ -20,6 +20,7 @@ from themis.core.protocols import (
     TraceMetric,
 )
 
+
 class TargetSpec(HashableModel):
     """Declarative target + kwargs specification for config-driven wiring."""
 
@@ -37,6 +38,13 @@ MetricComponent: TypeAlias = (
 )
 
 
+class ParserView(HashableModel):
+    """Named parser view available to metrics during scoring."""
+
+    id: str
+    parser: ParserComponent
+
+
 class GenerationConfig(HashableModel):
     """Generation-stage configuration for a run."""
 
@@ -51,17 +59,37 @@ class EvaluationConfig(HashableModel):
     """Evaluation-stage configuration for parsing, metrics, and judges."""
 
     metrics: list[MetricComponent] = Field(default_factory=list)
-    parsers: list[ParserComponent] = Field(default_factory=list)
+    parsers: list[ParserView | ParserComponent] = Field(default_factory=list)
     judge_models: list[JudgeModelComponent] = Field(default_factory=list)
     prompt_spec: PromptSpec | None = None
     judge_config: dict[str, JSONValue] = Field(default_factory=dict)
     workflow_overrides: dict[str, JSONValue] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _validate_single_parser(self) -> EvaluationConfig:
-        if len(self.parsers) > 1:
-            raise ValueError("Themis supports at most one parser")
+    def _validate_parser_views(self) -> EvaluationConfig:
+        seen: set[str] = set()
+        for view in self.parser_views:
+            if not view.id:
+                raise ValueError("Parser view id cannot be empty")
+            if view.id in seen:
+                raise ValueError(f"Duplicate parser view id: {view.id}")
+            seen.add(view.id)
         return self
+
+    @property
+    def parser_views(self) -> list[ParserView]:
+        if not self.parsers:
+            return []
+        if len(self.parsers) == 1 and not isinstance(self.parsers[0], ParserView):
+            return [ParserView(id="default", parser=self.parsers[0])]
+        views: list[ParserView] = []
+        for parser in self.parsers:
+            if not isinstance(parser, ParserView):
+                raise ValueError(
+                    "Multiple parsers must be configured as ParserView(id=..., parser=...)"
+                )
+            views.append(parser)
+        return views
 
 
 class StorageConfig(HashableModel):

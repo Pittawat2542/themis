@@ -19,11 +19,12 @@ from themis.core.models import (
     Case,
     ConversationTrace,
     Dataset,
+    FailureCategory,
     GenerationResult,
+    MetricResult,
     Message,
     ParsedOutput,
     ReducedCandidate,
-    Score,
     ScoreError,
     TraceStep,
     WorkflowTrace,
@@ -162,14 +163,16 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
     score = ScoreContext(
         run_id="run-1",
         case=Case(case_id="case-1", input={"question": "2+2"}, expected_output="4"),
-        parsed_output=ParsedOutput(value={"answer": "4"}),
+        parsed_views={"default": ParsedOutput(value={"answer": "4"})},
+        parser_view="default",
         dataset_metadata={"split": "test"},
         seed=7,
     )
     eval_score = EvalScoreContext(
         run_id="run-1",
         case=score.case,
-        parsed_output=score.parsed_output,
+        parsed_views=score.parsed_views,
+        parser_view=score.parser_view,
         dataset_metadata={"split": "test"},
         seed=7,
         dataset_id="dataset-1",
@@ -217,13 +220,22 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
     assert StorageConfig.model_validate_json(storage.model_dump_json()) == storage
 
 
-def test_score_models_capture_success_and_failure() -> None:
-    score = Score(metric_id="exact_match", value=1.0, details={"matched": True})
+def test_metric_result_models_capture_rich_success_and_failure() -> None:
+    result = MetricResult(
+        metric_id="exact_match",
+        result_type="scalar",
+        value=1.0,
+        dimensions={"precision": 1.0},
+        labels={"winner": "candidate-a"},
+        confidence=0.95,
+        metadata={"matched": True},
+    )
     error = ScoreError(
         metric_id="llm_judge",
         reason="judge timeout",
         retryable=True,
-        details={"attempt": 1},
+        category=FailureCategory.PROVIDER_FAILURE,
+        metadata={"attempt": 1},
     )
     reduced = ReducedCandidate(
         candidate_id="reduced-1",
@@ -232,6 +244,12 @@ def test_score_models_capture_success_and_failure() -> None:
         metadata={"strategy": "majority_vote"},
     )
 
-    assert score.value == 1.0
+    assert result.value == 1.0
+    assert result.result_type == "scalar"
+    assert result.dimensions == {"precision": 1.0}
+    assert result.labels == {"winner": "candidate-a"}
+    assert result.confidence == 0.95
+    assert result.metadata == {"matched": True}
+    assert error.category is FailureCategory.PROVIDER_FAILURE
     assert error.retryable is True
     assert reduced.source_candidate_ids == ["candidate-1", "candidate-2"]

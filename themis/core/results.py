@@ -30,9 +30,9 @@ from themis.core.events import (
 from themis.core.models import (
     Case,
     GenerationResult,
+    MetricResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
     ScoreError,
 )
 from themis.core.snapshot import RunSnapshot
@@ -87,19 +87,19 @@ class CaseExecutionState(FrozenModel):
     selection_error: str | None = None
     reduced_candidate: ReducedCandidate | None = None
     reduction_error: str | None = None
-    parsed_output: ParsedOutput | None = None
-    parse_error: str | None = None
+    parsed_views: dict[str, ParsedOutput] = Field(default_factory=dict)
+    parse_errors: dict[str, str] = Field(default_factory=dict)
     evaluation_executions: dict[str, EvaluationExecution] = Field(default_factory=dict)
     evaluation_execution_blob_refs: dict[str, str] = Field(default_factory=dict)
     evaluation_failures: dict[str, str] = Field(default_factory=dict)
-    successful_scores: dict[str, Score] = Field(default_factory=dict)
+    metric_results: dict[str, MetricResult] = Field(default_factory=dict)
     score_failures: dict[str, ScoreError] = Field(default_factory=dict)
 
     @property
-    def scores(self) -> dict[str, Score | ScoreError]:
+    def scores(self) -> dict[str, MetricResult | ScoreError]:
         return {
             **self.score_failures,
-            **self.successful_scores,
+            **self.metric_results,
         }
 
 
@@ -226,11 +226,17 @@ class ExecutionState(FrozenModel):
                 update={"reduction_error": event.error_message}
             )
         elif isinstance(event, ParseCompletedEvent) and event.result is not None:
+            parsed_views = dict(current.parsed_views)
+            parse_errors = dict(current.parse_errors)
+            parsed_views[event.parser_id] = ParsedOutput.model_validate(event.result)
+            parse_errors.pop(event.parser_id, None)
             updated = current.model_copy(
-                update={"parsed_output": ParsedOutput.model_validate(event.result)}
+                update={"parsed_views": parsed_views, "parse_errors": parse_errors}
             )
         elif isinstance(event, ParseFailedEvent):
-            updated = current.model_copy(update={"parse_error": event.error_message})
+            parse_errors = dict(current.parse_errors)
+            parse_errors[event.parser_id] = event.error_message
+            updated = current.model_copy(update={"parse_errors": parse_errors})
         elif (
             isinstance(event, EvaluationCompletedEvent) and event.execution is not None
         ):
@@ -270,25 +276,27 @@ class ExecutionState(FrozenModel):
                     "evaluation_failures": evaluation_failures,
                 }
             )
-        elif isinstance(event, ScoreCompletedEvent) and event.score is not None:
-            successful_scores = dict(current.successful_scores)
+        elif isinstance(event, ScoreCompletedEvent) and event.metric_result is not None:
+            metric_results = dict(current.metric_results)
             score_failures = dict(current.score_failures)
-            successful_scores[event.metric_id] = Score.model_validate(event.score)
+            metric_results[event.metric_id] = MetricResult.model_validate(
+                event.metric_result
+            )
             score_failures.pop(event.metric_id, None)
             updated = current.model_copy(
                 update={
-                    "successful_scores": successful_scores,
+                    "metric_results": metric_results,
                     "score_failures": score_failures,
                 }
             )
         elif isinstance(event, ScoreFailedEvent) and event.error is not None:
-            successful_scores = dict(current.successful_scores)
+            metric_results = dict(current.metric_results)
             score_failures = dict(current.score_failures)
-            successful_scores.pop(event.metric_id, None)
+            metric_results.pop(event.metric_id, None)
             score_failures[event.metric_id] = ScoreError.model_validate(event.error)
             updated = current.model_copy(
                 update={
-                    "successful_scores": successful_scores,
+                    "metric_results": metric_results,
                     "score_failures": score_failures,
                 }
             )
@@ -328,7 +336,7 @@ def _case_state_has_failures(case_state: CaseExecutionState) -> bool:
             case_state.generation_failures,
             case_state.selection_error is not None,
             case_state.reduction_error is not None,
-            case_state.parse_error is not None,
+            case_state.parse_errors,
             case_state.evaluation_failures,
             any(
                 execution.status == "partial_failure" or bool(execution.failures)
@@ -363,12 +371,12 @@ class CaseResult(FrozenModel):
     generation_failures: dict[str, str] = Field(default_factory=dict)
     reduced_candidate: ReducedCandidate | None = None
     reduction_error: str | None = None
-    parsed_output: ParsedOutput | None = None
-    parse_error: str | None = None
+    parsed_views: dict[str, ParsedOutput] = Field(default_factory=dict)
+    parse_errors: dict[str, str] = Field(default_factory=dict)
     evaluation_executions: list[EvaluationExecution] = Field(default_factory=list)
     evaluation_execution_blob_refs: dict[str, str] = Field(default_factory=dict)
     evaluation_failures: dict[str, str] = Field(default_factory=dict)
-    scores: list[Score | ScoreError] = Field(default_factory=list)
+    metric_results: list[MetricResult | ScoreError] = Field(default_factory=list)
 
 
 class RunResult(FrozenModel):
@@ -465,7 +473,7 @@ class ScoreBundleRecord(FrozenModel):
     case_key: str | None = None
     candidate_id: str
     metric_id: str
-    score: Score
+    metric_result: MetricResult
 
 
 class ScoreBundle(FrozenModel):

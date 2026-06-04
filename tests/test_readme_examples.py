@@ -217,7 +217,7 @@ def test_readme_evaluation_bundle_example_round_trips() -> None:
             execution={
                 "execution_id": "execution-1",
                 "subject_kind": "candidate_set",
-                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "metric_results": [{"metric_id": "metric/judge", "value": 1.0}],
                 "trace": {"trace_id": "trace-1", "steps": []},
             },
         )

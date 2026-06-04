@@ -11,6 +11,7 @@ from themis.core.base import JSONValue
 from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
+    ParserView,
     RuntimeConfig,
     StorageConfig,
 )
@@ -518,32 +519,38 @@ async def test_sync_experiment_entrypoints_reject_running_event_loops(
     ]
 
 
-def test_compile_rejects_multiple_parsers() -> None:
-    with pytest.raises(ValueError, match="at most one parser"):
-        Experiment(
-            generation=GenerationConfig(
-                generator="builtin/demo_generator",
-                candidate_policy={"num_samples": 1},
-                reducer="builtin/majority_vote",
-            ),
-            evaluation=EvaluationConfig(
-                metrics=["builtin/exact_match"],
-                parsers=["builtin/json_identity", "builtin/json_identity"],
-            ),
-            storage=StorageConfig(target="memory"),
-            dataset_sources=[
-                Dataset(
-                    dataset_id="dataset-1",
-                    cases=[
-                        Case(
-                            case_id="case-1",
-                            input={"question": "2+2"},
-                            expected_output={"answer": "4"},
-                        )
-                    ],
-                )
+def test_compile_records_multiple_parser_views() -> None:
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=[
+                ParserView(id="json", parser="builtin/json_identity"),
+                ParserView(id="text", parser="builtin/text"),
             ],
-        )
+        ),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
+    )
+
+    snapshot = experiment.compile()
+
+    assert [view.id for view in snapshot.component_refs.parsers] == ["json", "text"]
 
 
 def test_replay_rejects_unknown_stage() -> None:

@@ -17,7 +17,7 @@ from themis import (
 from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Score
+from themis.core.models import MetricResult
 from themis.core.models import Case, Dataset
 from themis.core.workflows import (
     AggregationResult,
@@ -57,22 +57,23 @@ class JudgeConfigWorkflow:
 
     def score_judgment(
         self, call: JudgeCall, judgment: ParsedJudgment, ctx
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(
+        return MetricResult(
             metric_id="metric/judge-config", value=float(judgment.score or 0.0)
         )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx,
     ) -> AggregationResult | None:
         del judgments, ctx
+        values = [score.value for score in scores if score.value is not None]
         return AggregationResult(
             method="mean",
-            value=sum(score.value for score in scores) / len(scores),
+            value=sum(values) / len(values) if values else 0.0,
         )
 
 

@@ -102,7 +102,9 @@ def get_run_record(store: RunStore, run_id: str) -> RunRecord:
     return record
 
 
-def query_run_records(store: RunStore, query: RunQuery | None = None) -> list[RunRecord]:
+def query_run_records(
+    store: RunStore, query: RunQuery | None = None
+) -> list[RunRecord]:
     """Query registry records from a run store."""
 
     return store.query_runs(query)

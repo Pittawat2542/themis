@@ -58,6 +58,7 @@ from themis.core.tracing import NoOpTracingProvider
 from themis.core.snapshot import (
     ComponentRefs,
     DatasetSourceRef,
+    ParserViewRef,
     RunIdentity,
     RunProvenance,
     RunSnapshot,
@@ -162,7 +163,11 @@ class Experiment(FrozenModel):
             if self.generation.reducer is not None
             else None,
             parsers=[
-                component_ref_from_value(parser) for parser in self.evaluation.parsers
+                ParserViewRef(
+                    id=view.id,
+                    parser=component_ref_from_value(view.parser),
+                )
+                for view in self.evaluation.parser_views
             ],
             metrics=[
                 component_ref_from_value(metric) for metric in self.evaluation.metrics
@@ -297,9 +302,10 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parser=resolve_parser_component(self.evaluation.parsers[0])
-            if self.evaluation.parsers
-            else None,
+            parsers=[
+                (view.id, resolve_parser_component(view.parser))
+                for view in self.evaluation.parser_views
+            ],
             metrics=[
                 resolve_metric_component(metric) for metric in self.evaluation.metrics
             ],
@@ -360,9 +366,10 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parser=resolve_parser_component(self.evaluation.parsers[0])
-            if self.evaluation.parsers
-            else None,
+            parsers=[
+                (view.id, resolve_parser_component(view.parser))
+                for view in self.evaluation.parser_views
+            ],
             metrics=[
                 resolve_metric_component(metric) for metric in self.evaluation.metrics
             ],
@@ -445,9 +452,10 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parser=resolve_parser_component(self.evaluation.parsers[0])
-            if self.evaluation.parsers
-            else None,
+            parsers=[
+                (view.id, resolve_parser_component(view.parser))
+                for view in self.evaluation.parser_views
+            ],
             metrics=[
                 resolve_metric_component(metric) for metric in self.evaluation.metrics
             ],
@@ -652,8 +660,13 @@ class Experiment(FrozenModel):
             if self.generation.reducer is not None
             else None,
             parsers=[
-                component_ref_from_value(resolve_parser_component(parser))
-                for parser in self.evaluation.parsers
+                ParserViewRef(
+                    id=view.id,
+                    parser=component_ref_from_value(
+                        resolve_parser_component(view.parser)
+                    ),
+                )
+                for view in self.evaluation.parser_views
             ],
             metrics=[
                 component_ref_from_value(resolve_metric_component(metric))
@@ -677,7 +690,7 @@ class Experiment(FrozenModel):
         self._validate_component_ref(
             "reducer", snapshot.component_refs.reducer, resolved.reducer
         )
-        self._validate_component_ref_list(
+        self._validate_parser_ref_list(
             "parser", snapshot.component_refs.parsers, resolved.parsers
         )
         self._validate_component_ref_list(
@@ -704,6 +717,18 @@ class Experiment(FrozenModel):
         label: str,
         expected: list[ComponentRef],
         actual: list[ComponentRef],
+    ) -> None:
+        if expected == actual:
+            return
+        raise RuntimeError(
+            f"Component fingerprint mismatch for {label}: expected {expected}, got {actual}. Recompile the experiment."
+        )
+
+    def _validate_parser_ref_list(
+        self,
+        label: str,
+        expected: list[ParserViewRef],
+        actual: list[ParserViewRef],
     ) -> None:
         if expected == actual:
             return

@@ -117,6 +117,7 @@ class ParseCompletedEvent(CaseRunEvent):
 
     event_type: Literal["parse_completed"] = "parse_completed"
     candidate_id: str
+    parser_id: str = "default"
     result: dict[str, JSONValue] | None = None
     cache_hit: bool = False
     source_run_id: str | None = None
@@ -127,7 +128,9 @@ class ParseFailedEvent(CaseRunEvent):
 
     event_type: Literal["parse_failed"] = "parse_failed"
     candidate_id: str
+    parser_id: str = "default"
     error_message: str
+    failure_category: str = "parse_failure"
 
 
 class EvaluationCompletedEvent(CaseRunEvent):
@@ -155,7 +158,7 @@ class ScoreCompletedEvent(CaseRunEvent):
     event_type: Literal["score_completed"] = "score_completed"
     candidate_id: str
     metric_id: str
-    score: dict[str, JSONValue] | None = None
+    metric_result: dict[str, JSONValue] | None = None
     cache_hit: bool = False
     source_run_id: str | None = None
 

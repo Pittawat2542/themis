@@ -64,18 +64,20 @@ def build_run_record(
 
     return RunRecord(
         run_id=snapshot.run_id,
-        status=existing.status if existing is not None and state is None else (
-            state.status.value if state is not None else "pending"
-        ),
+        status=existing.status
+        if existing is not None and state is None
+        else (state.status.value if state is not None else "pending"),
         dataset_source_ids=[
-            dataset_ref.dataset_id for dataset_ref in snapshot.identity.dataset_source_refs
+            dataset_ref.dataset_id
+            for dataset_ref in snapshot.identity.dataset_source_refs
         ],
         dataset_fingerprints=[
             dataset_ref.fingerprint
             for dataset_ref in snapshot.identity.dataset_source_refs
         ],
         metric_ids=[
-            component_ref.component_id for component_ref in snapshot.component_refs.metrics
+            component_ref.component_id
+            for component_ref in snapshot.component_refs.metrics
         ],
         tags=[] if existing is None else list(existing.tags),
         baseline_label=None if existing is None else existing.baseline_label,
@@ -104,15 +106,16 @@ def matches_run_query(record: RunRecord, query: RunQuery) -> bool:
         return False
     if query.tags and any(tag not in record.tags for tag in query.tags):
         return False
-    if query.baseline_label is not None and record.baseline_label != query.baseline_label:
+    if (
+        query.baseline_label is not None
+        and record.baseline_label != query.baseline_label
+    ):
         return False
     if query.status is not None and record.status != query.status:
         return False
-    if (
-        query.lineage_parent_run_id is not None
-        and query.lineage_parent_run_id
-        not in {lineage.parent_run_id for lineage in record.lineage}
-    ):
+    if query.lineage_parent_run_id is not None and query.lineage_parent_run_id not in {
+        lineage.parent_run_id for lineage in record.lineage
+    }:
         return False
     if query.created_after is not None and record.created_at < query.created_after:
         return False

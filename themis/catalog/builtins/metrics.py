@@ -8,7 +8,7 @@ from typing import Any
 
 from themis.core.base import JSONValue
 from themis.core.contexts import ScoreContext
-from themis.core.models import Case, ParsedOutput, Score, ScoreError
+from themis.core.models import Case, MetricResult, ParsedOutput, ScoreError
 
 
 class ExactMatchMetric:
@@ -19,9 +19,11 @@ class ExactMatchMetric:
     def fingerprint(self) -> str:
         return "builtin-exact-match-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
-        return Score(
+        return MetricResult(
             metric_id=self.component_id,
             value=float(parsed.value == case.expected_output),
         )
@@ -35,7 +37,9 @@ class F1Metric:
     def fingerprint(self) -> str:
         return "builtin-f1-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         predicted = _tokenize(parsed.value)
         expected = _tokenize(case.expected_output)
@@ -48,7 +52,7 @@ class F1Metric:
             precision = overlap / len(predicted)
             recall = overlap / len(expected)
             value = (2 * precision * recall) / (precision + recall)
-        return Score(metric_id=self.component_id, value=value)
+        return MetricResult(metric_id=self.component_id, value=value)
 
 
 class BleuMetric:
@@ -59,7 +63,9 @@ class BleuMetric:
     def fingerprint(self) -> str:
         return "builtin-bleu-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         predicted = _tokenize(parsed.value)
         expected = Counter(_tokenize(case.expected_output))
@@ -73,7 +79,7 @@ class BleuMetric:
                     matches += 1
                     remaining[token] -= 1
             value = matches / len(predicted)
-        return Score(metric_id=self.component_id, value=value)
+        return MetricResult(metric_id=self.component_id, value=value)
 
 
 class ChoiceAccuracyMetric:
@@ -84,11 +90,15 @@ class ChoiceAccuracyMetric:
     def fingerprint(self) -> str:
         return "builtin-choice-accuracy-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         expected = _expected_text(case.expected_output, key="choice").strip().upper()
         actual = str(parsed.value).strip().upper()
-        return Score(metric_id=self.component_id, value=float(actual == expected))
+        return MetricResult(
+            metric_id=self.component_id, value=float(actual == expected)
+        )
 
 
 class MathEquivalenceMetric:
@@ -101,26 +111,28 @@ class MathEquivalenceMetric:
 
     def score(
         self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
-    ) -> Score | ScoreError:
+    ) -> MetricResult | ScoreError:
         del ctx
         gold_answer = _expected_text(case.expected_output, key="answer").strip()
         candidate_answer = str(parsed.value).strip()
-        details: dict[str, JSONValue] = {
+        metadata: dict[str, JSONValue] = {
             "candidate_answer": candidate_answer,
             "gold_answer": gold_answer,
         }
         if not candidate_answer or not gold_answer:
-            return Score(metric_id=self.component_id, value=0.0, details=details)
+            return MetricResult(
+                metric_id=self.component_id, value=0.0, metadata=metadata
+            )
         try:
             math_verify = _import_math_verify()
         except RuntimeError:
             normalized_candidate = _normalize_math_text(candidate_answer)
             normalized_gold = _normalize_math_text(gold_answer)
-            return Score(
+            return MetricResult(
                 metric_id=self.component_id,
                 value=float(normalized_candidate == normalized_gold),
-                details={
-                    **details,
+                metadata={
+                    **metadata,
                     "fallback": "normalized_text",
                 },
             )
@@ -132,13 +144,13 @@ class MathEquivalenceMetric:
             return ScoreError(
                 metric_id=self.component_id,
                 reason=str(exc),
-                details=details,
+                metadata=metadata,
             )
         equivalent = bool(verified[0] if isinstance(verified, tuple) else verified)
-        return Score(
+        return MetricResult(
             metric_id=self.component_id,
             value=float(equivalent),
-            details=details,
+            metadata=metadata,
         )
 
 
@@ -150,16 +162,18 @@ class ProcbenchFinalAccuracyMetric:
     def fingerprint(self) -> str:
         return "builtin-procbench-final-accuracy-fingerprint"
 
-    def score(self, parsed: ParsedOutput, case: Case, ctx: ScoreContext) -> Score:
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
         del ctx
         actual = _canonical_procbench_value(parsed.value)
         expected = _canonical_procbench_value(
             _expected_value(case.expected_output, key="answer")
         )
-        return Score(
+        return MetricResult(
             metric_id=self.component_id,
             value=float(actual == expected),
-            details=_json_details(
+            metadata=_json_details(
                 {
                     "canonical_actual": actual,
                     "canonical_expected": expected,

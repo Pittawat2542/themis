@@ -124,6 +124,12 @@ target = "themis.catalog.builtins.workflows:PairwiseJudgeMetric"
 version = "1.0"
 fingerprint = "builtin-pairwise-judge-fingerprint"
 
+[components."builtin/ranking_judge"]
+kind = "metric"
+target = "themis.catalog.builtins.workflows:RankingJudgeMetric"
+version = "1.0"
+fingerprint = "builtin-ranking-judge-fingerprint"
+
 [components."builtin/panel_of_judges"]
 kind = "metric"
 target = "themis.catalog.builtins.workflows:PanelOfJudgesMetric"

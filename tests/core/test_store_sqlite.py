@@ -24,9 +24,7 @@ def _snapshot():
             parsers=["builtin/json_identity"],
             judge_config={"panel_size": 1},
         ),
-        storage=StorageConfig(
-            target="sqlite", kwargs={"path": "runs/themis.sqlite3"}
-        ),
+        storage=StorageConfig(target="sqlite", kwargs={"path": "runs/themis.sqlite3"}),
         dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",

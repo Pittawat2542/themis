@@ -13,6 +13,7 @@ from themis.core.config import (
     JudgeModelComponent,
     MetricComponent,
     ParserComponent,
+    ParserView,
     ReducerComponent,
     RuntimeConfig,
     StorageConfig,
@@ -208,7 +209,7 @@ def _build_experiment(
         ),
         evaluation=EvaluationConfig(
             metrics=cast(list[MetricComponent], metrics),
-            parsers=cast(list[ParserComponent], parsers),
+            parsers=cast(list[ParserView | ParserComponent], parsers),
             judge_models=cast(list[JudgeModelComponent], judge_models),
             judge_config=cast(dict[str, JSONValue], dict(judge_config or {})),
             workflow_overrides=cast(

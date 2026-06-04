@@ -28,7 +28,7 @@ flowchart LR
     C --> D["Parser"]
     D --> E["Parsed subject"]
     E --> F["Metric"]
-    F --> G["Score or judgment output"]
+    F --> G["Metric result or judgment output"]
 ```
 
 Reducers choose, parsers normalize, and metrics judge; crossing those boundaries is usually the source of design confusion.

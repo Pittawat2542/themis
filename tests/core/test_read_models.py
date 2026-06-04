@@ -132,11 +132,11 @@ def _events(run_id: str):
                     }
                 ],
                 "parsed_judgments": [{"label": "pass", "score": 1.0}],
-                "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+                "metric_results": [{"metric_id": "metric/judge", "value": 1.0}],
                 "aggregation_output": {
                     "method": "mean",
                     "value": 1.0,
-                    "details": {"votes": 1},
+                    "metadata": {"votes": 1},
                 },
                 "trace": {"trace_id": "trace-1", "steps": []},
             },
@@ -154,10 +154,10 @@ def _events(run_id: str):
             case_id="case-1",
             candidate_id="case-1-reduced",
             metric_id="builtin/exact_match",
-            score={
+            metric_result={
                 "metric_id": "builtin/exact_match",
                 "value": 1.0,
-                "details": {"matched": True},
+                "metadata": {"matched": True},
             },
         ),
         RunCompletedEvent(run_id=run_id),
@@ -186,13 +186,13 @@ def test_build_run_result_projects_case_drill_down_from_events() -> None:
     assert case.generated_candidate_blob_refs == {"candidate-1": "sha256:generation-1"}
     assert case.generation_failures == {"candidate-2": "provider timeout"}
     assert case.reduced_candidate is not None
-    assert case.parsed_output is not None
+    assert case.parsed_views is not None
     assert case.evaluation_executions[0].execution_id == "execution-1"
     assert case.evaluation_execution_blob_refs == {
         "metric/judge": "sha256:evaluation-1"
     }
     assert case.evaluation_failures == {"metric/trace": "judge unavailable"}
-    assert case.scores[0].metric_id == "builtin/exact_match"
+    assert case.metric_results[0].metric_id == "builtin/exact_match"
 
 
 def test_build_benchmark_result_aggregates_scores_from_run_result() -> None:
@@ -218,7 +218,9 @@ def test_build_benchmark_result_aggregates_scores_from_run_result() -> None:
     assert result.metric_means == {"builtin/exact_match": 1.0}
 
 
-def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures() -> None:
+def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures() -> (
+    None
+):
     snapshot = _snapshot()
     events = [
         RunStartedEvent(run_id=snapshot.run_id),
@@ -290,7 +292,7 @@ def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures()
                     }
                 ],
                 "parsed_judgments": [{"label": "pass", "score": 1.0}],
-                "scores": [{"metric_id": "builtin/llm_rubric", "value": 1.0}],
+                "metric_results": [{"metric_id": "builtin/llm_rubric", "value": 1.0}],
                 "trace": {"trace_id": "trace-1", "steps": []},
             },
         ),
@@ -310,7 +312,7 @@ def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures()
             case_key="9:dataset-1:case-1",
             candidate_id="case-1-reduced",
             metric_id="builtin/exact_match",
-            score={"metric_id": "builtin/exact_match", "value": 1.0},
+            metric_result={"metric_id": "builtin/exact_match", "value": 1.0},
         ),
         RunCompletedEvent(run_id=snapshot.run_id),
     ]
@@ -320,7 +322,9 @@ def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures()
     for event in events:
         store.persist_event(event)
 
-    case_audit = get_case_audit(store, snapshot.run_id, "case-1", dataset_id="dataset-1")
+    case_audit = get_case_audit(
+        store, snapshot.run_id, "case-1", dataset_id="dataset-1"
+    )
     telemetry = get_telemetry_summary(store, snapshot.run_id)
     metric_records = {record.metric_id: record for record in case_audit.metric_records}
 
@@ -328,7 +332,10 @@ def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures()
     assert case_audit.reduction_source_candidate_ids == ["candidate-1"]
     assert case_audit.parse_candidate_id == "case-1-reduced"
     assert metric_records["metric/trace"].failure_records == ["judge unavailable"]
-    assert metric_records["builtin/llm_rubric"].evaluation_input["candidate_id"] == "case-1-reduced"
+    assert (
+        metric_records["builtin/llm_rubric"].evaluation_input["candidate_id"]
+        == "case-1-reduced"
+    )
     assert telemetry.generation_tokens == {"prompt_tokens": 10, "completion_tokens": 2}
     assert telemetry.judge_tokens == {"prompt_tokens": 3, "completion_tokens": 1}
 
@@ -341,17 +348,17 @@ def test_build_benchmark_result_marks_incorrect_scores_separately_from_errors() 
         case_id="case-1",
         candidate_id="case-1-reduced",
         metric_id="builtin/exact_match",
-        score={
+        metric_result={
             "metric_id": "builtin/exact_match",
             "value": 0.0,
-            "details": {"matched": False},
+            "metadata": {"matched": False},
         },
     )
 
     result = build_benchmark_result(snapshot, events)
 
     assert result.score_rows[0].outcome == "incorrect"
-    assert result.score_rows[0].error_category is None
+    assert result.score_rows[0].failure_category is None
     assert result.outcome_counts == {"builtin/exact_match": {"incorrect": 1}}
     assert result.metric_means == {"builtin/exact_match": 0.0}
 
@@ -398,9 +405,9 @@ def test_build_benchmark_result_surfaces_parse_and_score_errors_as_error_rows() 
                 "value": None,
                 "candidate_id": "case-1-reduced",
                 "outcome": "error",
-                "error_category": "parse_failure",
+                "failure_category": "parse_failure",
                 "error_message": "invalid json",
-                "details": {},
+                "metadata": {"parser_view": "default"},
             }
         )
     ]
@@ -409,7 +416,7 @@ def test_build_benchmark_result_surfaces_parse_and_score_errors_as_error_rows() 
     assert result.error_counts == {"builtin/exact_match": {"parse_failure": 1}}
 
 
-def test_build_benchmark_result_marks_score_failures_as_error_rows() -> None:
+def test_build_benchmark_result_marks_metric_failures_as_error_rows() -> None:
     snapshot = _snapshot()
     events = _events(snapshot.run_id)
     events[7] = ScoreFailedEvent(
@@ -423,11 +430,11 @@ def test_build_benchmark_result_marks_score_failures_as_error_rows() -> None:
     result = build_benchmark_result(snapshot, events)
 
     assert result.score_rows[0].outcome == "error"
-    assert result.score_rows[0].error_category == "score_failure"
+    assert result.score_rows[0].failure_category == "metric_failure"
     assert result.score_rows[0].error_message == "missing expected output"
     assert result.metric_means == {}
     assert result.outcome_counts == {"builtin/exact_match": {"error": 1}}
-    assert result.error_counts == {"builtin/exact_match": {"score_failure": 1}}
+    assert result.error_counts == {"builtin/exact_match": {"metric_failure": 1}}
 
 
 def test_build_run_result_does_not_apply_ambiguous_legacy_case_state() -> None:
@@ -541,7 +548,7 @@ def test_build_run_result_marks_partial_workflow_execution_failures() -> None:
         execution={
             "execution_id": "execution-1",
             "subject_kind": "candidate_set",
-            "scores": [{"metric_id": "metric/judge", "value": 1.0}],
+            "metric_results": [{"metric_id": "metric/judge", "value": 1.0}],
             "failures": [
                 {
                     "call_id": "call-2",

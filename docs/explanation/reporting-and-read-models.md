@@ -31,7 +31,7 @@ Reporting helpers do not bypass persistence; they sit on top of projection-backe
 Benchmark projections now separate scored outcomes from pipeline errors:
 
 - successful scored rows are labeled `correct` or `incorrect`
-- pipeline problems produce `error` rows with `error_category` and `error_message`
+- pipeline problems produce `error` rows with `failure_category` and `error_message`
 - metric means are computed only from scored rows, not from error rows
 - per-metric `outcome_counts` and `error_counts` make it possible to distinguish model quality from parser, evaluator, or workflow instability
 
@@ -42,6 +42,6 @@ The important semantic boundary is:
 - `correct` and `incorrect` mean the metric produced a usable score
 - `error` means the pipeline failed before a usable score existed
 
-That distinction is why `error_counts` and `outcome_counts` are the intended downstream analysis surface for failure-mode tracking, parser debugging, and qualitative tagging built on top of custom metric `details`.
+That distinction is why `error_counts` and `outcome_counts` are the intended downstream analysis surface for failure-mode tracking, parser debugging, and qualitative tagging built on top of custom metric `metadata`.
 
 What to inspect when it goes wrong: compare the raw stored run with the benchmark and trace projections to determine whether the issue is in execution or in derived reporting.

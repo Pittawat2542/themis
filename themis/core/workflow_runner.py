@@ -14,7 +14,7 @@ from themis.core.events import (
     StepFailedEvent,
     StepStartedEvent,
 )
-from themis.core.models import Score, TraceStep, WorkflowTrace
+from themis.core.models import MetricResult, TraceStep, WorkflowTrace
 from themis.core.planner import Planner
 from themis.core.protocols import EvaluationWorkflow, JudgeModel
 from themis.core.store import RunStore
@@ -38,7 +38,7 @@ class WorkflowBuildError(ValueError):
 class _CallExecutionResult:
     response: JudgeResponse | None
     judgment: ParsedJudgment | None
-    score: Score | None
+    metric_result: MetricResult | None
     trace_steps: list[TraceStep]
     failure: WorkflowFailure | None = None
 
@@ -152,7 +152,11 @@ class DefaultWorkflowRunner:
         parsed_judgments = [
             result.judgment for result in call_results if result.judgment is not None
         ]
-        scores = [result.score for result in call_results if result.score is not None]
+        metric_results = [
+            result.metric_result
+            for result in call_results
+            if result.metric_result is not None
+        ]
         failures = [
             result.failure for result in call_results if result.failure is not None
         ]
@@ -171,7 +175,9 @@ class DefaultWorkflowRunner:
             )
         )
         try:
-            aggregation_output = workflow.aggregate(parsed_judgments, scores, ctx)
+            aggregation_output = workflow.aggregate(
+                parsed_judgments, metric_results, ctx
+            )
             details: dict[str, JSONValue] = {}
             if aggregation_output is not None:
                 details["aggregation_method"] = aggregation_output.method
@@ -181,7 +187,7 @@ class DefaultWorkflowRunner:
                     step_name=aggregate_step_id,
                     step_type="aggregate_scores",
                     input={
-                        "score_count": len(scores),
+                        "metric_result_count": len(metric_results),
                         "judgment_count": len(parsed_judgments),
                     },
                     output={
@@ -230,7 +236,7 @@ class DefaultWorkflowRunner:
             rendered_prompts=rendered_prompts,
             judge_responses=judge_responses,
             parsed_judgments=parsed_judgments,
-            scores=scores,
+            metric_results=metric_results,
             failures=failures,
             aggregation_output=aggregation_output,
             trace=WorkflowTrace(
@@ -252,7 +258,7 @@ class DefaultWorkflowRunner:
         trace_steps: list[TraceStep] = []
         model_step_id = f"{call.call_id}:model_call"
         parse_step_id = f"{call.call_id}:parse_judgment"
-        score_step_id = f"{call.call_id}:emit_score"
+        score_step_id = f"{call.call_id}:emit_metric_result"
 
         await self._persist_event(
             StepStartedEvent(
@@ -314,7 +320,7 @@ class DefaultWorkflowRunner:
             return _CallExecutionResult(
                 response=None,
                 judgment=None,
-                score=None,
+                metric_result=None,
                 trace_steps=trace_steps,
                 failure=WorkflowFailure(
                     call_id=call.call_id,
@@ -368,7 +374,7 @@ class DefaultWorkflowRunner:
             return _CallExecutionResult(
                 response=response,
                 judgment=None,
-                score=None,
+                metric_result=None,
                 trace_steps=trace_steps,
                 failure=WorkflowFailure(
                     call_id=call.call_id,
@@ -383,19 +389,21 @@ class DefaultWorkflowRunner:
                 run_id=ctx.run_id,
                 workflow_id=workflow_id,
                 step_id=score_step_id,
-                step_type="emit_score",
+                step_type="emit_metric_result",
             )
         )
         try:
-            score = workflow.score_judgment(call, judgment, ctx)
+            metric_result = workflow.score_judgment(call, judgment, ctx)
             trace_steps.append(
                 TraceStep(
                     step_name=score_step_id,
-                    step_type="emit_score",
+                    step_type="emit_metric_result",
                     input={"label": judgment.label, "call_id": call.call_id},
                     output={
                         "metric_id": metric_id,
-                        "value": score.value if score is not None else None,
+                        "value": metric_result.value
+                        if metric_result is not None
+                        else None,
                     },
                 )
             )
@@ -404,10 +412,12 @@ class DefaultWorkflowRunner:
                     run_id=ctx.run_id,
                     workflow_id=workflow_id,
                     step_id=score_step_id,
-                    step_type="emit_score",
+                    step_type="emit_metric_result",
                     details={
-                        "score_emitted": score is not None,
-                        "score": score.value if score is not None else None,
+                        "metric_result_emitted": metric_result is not None,
+                        "value": metric_result.value
+                        if metric_result is not None
+                        else None,
                     },
                 )
             )
@@ -417,19 +427,19 @@ class DefaultWorkflowRunner:
                     run_id=ctx.run_id,
                     workflow_id=workflow_id,
                     step_id=score_step_id,
-                    step_type="emit_score",
+                    step_type="emit_metric_result",
                     error_message=str(exc),
                 )
             )
             return _CallExecutionResult(
                 response=response,
                 judgment=judgment,
-                score=None,
+                metric_result=None,
                 trace_steps=trace_steps,
                 failure=WorkflowFailure(
                     call_id=call.call_id,
                     step_id=score_step_id,
-                    step_type="emit_score",
+                    step_type="emit_metric_result",
                     error_message=str(exc),
                 ),
             )
@@ -437,7 +447,7 @@ class DefaultWorkflowRunner:
         return _CallExecutionResult(
             response=response,
             judgment=judgment,
-            score=score,
+            metric_result=metric_result,
             trace_steps=trace_steps,
         )
 

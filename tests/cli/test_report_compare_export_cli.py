@@ -84,7 +84,7 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(
     assert report_csv.returncode == 0, report_csv.stderr
     assert (
         report_csv.stdout.splitlines()[0]
-        == "case_id,dataset_id,case_key,metric_id,outcome,value,candidate_id,error_category,error_message,details"
+        == "case_id,dataset_id,case_key,metric_id,result_type,outcome,value,confidence,dimensions,labels,candidate_id,failure_category,error_message,metadata"
     )
 
     report_latex = _run_cli(

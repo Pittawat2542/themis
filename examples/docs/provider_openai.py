@@ -40,10 +40,12 @@ def run_example() -> dict[str, object]:
         evaluation=EvaluationConfig(),
         storage=StorageConfig(target="memory"),
         dataset_sources=[
-            inline_dataset_source(Dataset(
-                dataset_id="sample",
-                cases=[Case(case_id="case-1", input={"question": "2+2"})],
-            ))
+            inline_dataset_source(
+                Dataset(
+                    dataset_id="sample",
+                    cases=[Case(case_id="case-1", input={"question": "2+2"})],
+                )
+            )
         ],
         seeds=[7],
     )

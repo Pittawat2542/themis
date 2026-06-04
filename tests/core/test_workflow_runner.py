@@ -6,7 +6,7 @@ from themis.core.builtins import resolve_judge_model_component
 from themis.core.components import component_ref_from_value
 from themis.core.contexts import EvalScoreContext
 from themis.core.events import StepCompletedEvent, StepStartedEvent
-from themis.core.models import Case, GenerationResult, ParsedOutput, Score
+from themis.core.models import Case, GenerationResult, ParsedOutput, MetricResult
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.workflow_runner import DefaultWorkflowRunner
@@ -61,23 +61,24 @@ class DemoEvaluationWorkflow:
         call: JudgeCall,
         judgment: ParsedJudgment,
         ctx: EvalScoreContext,
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del call, ctx
-        return Score(
+        return MetricResult(
             metric_id="metric/judge",
             value=float(judgment.score or 0.0),
-            details={"label": judgment.label},
+            metadata={"label": judgment.label},
         )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del judgments, ctx
+        values = [score.value for score in scores if score.value is not None]
         return AggregationResult(
-            method="mean", value=sum(score.value for score in scores) / len(scores)
+            method="mean", value=sum(values) / len(values) if values else 0.0
         )
 
 
@@ -137,26 +138,26 @@ class PairwiseSelectionWorkflow:
         call: JudgeCall,
         judgment: ParsedJudgment,
         ctx: EvalScoreContext,
-    ) -> Score | None:
+    ) -> MetricResult | None:
         del ctx
         winner_index = 0 if judgment.label == "a" else 1
-        return Score(
+        return MetricResult(
             metric_id="metric/select",
             value=float(winner_index),
-            details={"call_id": call.call_id, "winner": judgment.label},
+            metadata={"call_id": call.call_id, "winner": judgment.label},
         )
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None:
         del ctx, scores
         labels = [judgment.label for judgment in judgments]
         winner = max(sorted(set(labels)), key=labels.count)
         return AggregationResult(
-            method="majority_vote", value=winner, details={"winner": winner}
+            method="majority_vote", value=winner, metadata={"winner": winner}
         )
 
 
@@ -200,7 +201,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
         case=Case(
             case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
         ),
-        parsed_output=ParsedOutput(value={"answer": "4"}),
+        parsed_views={"default": ParsedOutput(value={"answer": "4"})},
         judge_model_refs=[component_ref_from_value("builtin/demo_judge")],
         judge_seed=11,
     )
@@ -215,7 +216,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
     assert execution.rendered_prompts
     assert execution.judge_responses[0].judge_model_id == "builtin/demo_judge"
     assert execution.parsed_judgments
-    assert execution.scores
+    assert execution.metric_results
     assert execution.trace.steps
 
     events = store.query_events("run-1")
@@ -249,7 +250,7 @@ async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vo
         case=Case(
             case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
         ),
-        parsed_output=ParsedOutput(value={"answer": "4"}),
+        parsed_views={"default": ParsedOutput(value={"answer": "4"})},
         judge_model_refs=[
             component_ref_from_value("builtin/demo_judge"),
             component_ref_from_value("builtin/demo_judge"),
@@ -285,11 +286,11 @@ async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vo
         "A={'answer': '4'}; B={'answer': '5'}",
         "A={'answer': '4'}; B={'answer': '5'}",
     ]
-    assert len(first.scores) == 2
+    assert len(first.metric_results) == 2
     assert first.aggregation_output is not None
     assert first.aggregation_output.method == "majority_vote"
     assert first.aggregation_output.value == "a"
-    assert first.aggregation_output.details["winner"] == "a"
+    assert first.aggregation_output.metadata["winner"] == "a"
     assert [response.effective_seed for response in first.judge_responses] == [
         response.effective_seed for response in second.judge_responses
     ]

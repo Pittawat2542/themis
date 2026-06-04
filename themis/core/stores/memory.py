@@ -122,7 +122,9 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         for projection_key in stale_projection_keys:
             self._projections.pop(projection_key, None)
         stale_cursor_keys = [
-            cursor_key for cursor_key in self._projection_cursors if cursor_key[0] == run_id
+            cursor_key
+            for cursor_key in self._projection_cursors
+            if cursor_key[0] == run_id
         ]
         for cursor_key in stale_cursor_keys:
             self._projection_cursors.pop(cursor_key, None)

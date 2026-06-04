@@ -70,6 +70,7 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
     panel = cast(LLMMetric, load("builtin/panel_of_judges"))
     majority = cast(LLMMetric, load("builtin/majority_vote_judge"))
     pairwise = cast(SelectionMetric, load("builtin/pairwise_judge"))
+    ranking = cast(SelectionMetric, load("builtin/ranking_judge"))
     candidate = GenerationResult(
         candidate_id="case-1-reduced", final_output={"answer": "4"}
     )
@@ -84,7 +85,7 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
         case=Case(
             case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
         ),
-        parsed_output=ParsedOutput(value={"answer": "4"}),
+        parsed_views={"default": ParsedOutput(value={"answer": "4"})},
         judge_model_refs=[
             component_ref_from_value("builtin/demo_judge"),
             component_ref_from_value("builtin/demo_judge"),
@@ -114,6 +115,9 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
     pairwise_workflow = pairwise.build_workflow(
         CandidateSetSubject(candidates=[pair_a, pair_b]), ctx
     )
+    ranking_workflow = ranking.build_workflow(
+        CandidateSetSubject(candidates=[pair_a, pair_b]), ctx
+    )
 
     assert len(llm_workflow.judge_calls()) == 2
     assert (
@@ -134,6 +138,45 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
     assert len(panel_workflow.judge_calls()) == 2
     assert len(majority_workflow.judge_calls()) == 2
     assert pairwise_workflow.judge_calls()[0].candidate_indices == [0, 1]
+    assert ranking_workflow.judge_calls()[0].candidate_indices == [0, 1]
+
+
+def test_pairwise_judge_emits_preference_metric_result() -> None:
+    pairwise = cast(SelectionMetric, load("builtin/pairwise_judge"))
+    ctx = EvalScoreContext(
+        run_id="run-1",
+        case=Case(case_id="case-1", input={}, expected_output=None),
+        parsed_views={"default": ParsedOutput(value={})},
+        judge_model_refs=[component_ref_from_value("builtin/demo_judge")],
+    )
+    workflow = pairwise.build_workflow(
+        CandidateSetSubject(
+            candidates=[
+                GenerationResult(candidate_id="a", final_output="A"),
+                GenerationResult(candidate_id="b", final_output="B"),
+            ]
+        ),
+        ctx,
+    )
+
+    result = workflow.score_judgment(
+        workflow.judge_calls()[0],
+        workflow.parse_judgment(
+            workflow.judge_calls()[0],
+            JudgeResponse(
+                judge_model_id="builtin/demo_judge",
+                judge_model_version="1.0",
+                judge_model_fingerprint="builtin-judge-demo-fingerprint",
+                raw_response="A",
+            ),
+            ctx,
+        ),
+        ctx,
+    )
+
+    assert result is not None
+    assert result.result_type == "preference"
+    assert result.labels["winner"] == "a"
 
 
 def test_catalog_builtin_judge_metrics_run_end_to_end_through_experiment() -> None:
@@ -175,7 +218,7 @@ def test_catalog_builtin_judge_metrics_run_end_to_end_through_experiment() -> No
     result = experiment.run(store=store)
 
     assert result.status is RunStatus.COMPLETED
-    assert sorted(score.metric_id for score in result.cases[0].scores) == [
+    assert sorted(score.metric_id for score in result.cases[0].metric_results) == [
         "builtin/llm_rubric",
         "builtin/majority_vote_judge",
         "builtin/pairwise_judge",

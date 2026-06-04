@@ -24,16 +24,18 @@ def run_example() -> dict[str, object]:
         ),
         storage=StorageConfig(target="memory"),
         dataset_sources=[
-            inline_dataset_source(Dataset(
-                dataset_id="sample",
-                cases=[
-                    Case(
-                        case_id="case-1",
-                        input={"question": "2+2"},
-                        expected_output={"answer": "4"},
-                    )
-                ],
-            ))
+            inline_dataset_source(
+                Dataset(
+                    dataset_id="sample",
+                    cases=[
+                        Case(
+                            case_id="case-1",
+                            input={"question": "2+2"},
+                            expected_output={"answer": "4"},
+                        )
+                    ],
+                )
+            )
         ],
         seeds=[7],
     )
@@ -46,7 +48,7 @@ def run_example() -> dict[str, object]:
         "run_id": result.run_id,
         "status": result.status.value,
         "judge_calls": 0 if execution is None else len(execution.judge_calls),
-        "score_count": 0 if execution is None else len(execution.scores),
+        "score_count": 0 if execution is None else len(execution.metric_results),
     }
 
 

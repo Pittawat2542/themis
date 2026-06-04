@@ -16,9 +16,9 @@ from themis.core.events import RunEvent
 from themis.core.models import (
     Case,
     GenerationResult,
+    MetricResult,
     ParsedOutput,
     ReducedCandidate,
-    Score,
     ScoreError,
 )
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
@@ -118,12 +118,12 @@ class EvaluationWorkflow(Protocol):
         call: JudgeCall,
         judgment: ParsedJudgment,
         ctx: EvalScoreContext,
-    ) -> Score | None: ...
+    ) -> MetricResult | None: ...
 
     def aggregate(
         self,
         judgments: list[ParsedJudgment],
-        scores: list[Score],
+        scores: list[MetricResult],
         ctx: EvalScoreContext,
     ) -> AggregationResult | None: ...
 
@@ -151,7 +151,7 @@ class PureMetric(Protocol):
 
     def score(
         self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
-    ) -> Score | ScoreError: ...
+    ) -> MetricResult | ScoreError: ...
 
 
 @runtime_checkable
@@ -272,7 +272,9 @@ class BeforeScore(Protocol):
 class AfterScore(Protocol):
     """Hook invoked after a pure metric emits a score or error."""
 
-    def after_score(self, score: Score | ScoreError, ctx: ScoreContext) -> None: ...
+    def after_score(
+        self, metric_result: MetricResult | ScoreError, ctx: ScoreContext
+    ) -> None: ...
 
 
 @runtime_checkable

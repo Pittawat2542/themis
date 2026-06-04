@@ -28,6 +28,7 @@ __all__ = [
     "CaseManifest",
     "DatasetManifest",
     "DatasetSourceRef",
+    "ParserViewRef",
     "RunIdentity",
     "RunProvenance",
     "RunSnapshot",
@@ -71,13 +72,20 @@ class DatasetManifest(HashableModel):
     cases: list[CaseManifest] = Field(default_factory=list)
 
 
+class ParserViewRef(FrozenModel):
+    """Resolved parser component reference keyed by parser view id."""
+
+    id: str
+    parser: ComponentRef
+
+
 class ComponentRefs(FrozenModel):
     """Resolved component refs stored with the snapshot."""
 
     generator: ComponentRef
     selector: ComponentRef | None = None
     reducer: ComponentRef | None = None
-    parsers: list[ComponentRef] = Field(default_factory=list)
+    parsers: list[ParserViewRef] = Field(default_factory=list)
     metrics: list[ComponentRef] = Field(default_factory=list)
     judge_models: list[ComponentRef] = Field(default_factory=list)
 
@@ -89,7 +97,7 @@ class RunIdentity(HashableModel):
     generator_ref: ComponentRef
     selector_ref: ComponentRef | None = None
     reducer_ref: ComponentRef | None = None
-    parser_refs: list[ComponentRef] = Field(default_factory=list)
+    parser_refs: list[ParserViewRef] = Field(default_factory=list)
     metric_refs: list[ComponentRef] = Field(default_factory=list)
     judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
@@ -116,6 +124,7 @@ class RunIdentity(HashableModel):
                 ),
             }
         )
+
 
 class RunProvenance(FrozenModel):
     """Environment metadata recorded with a run but excluded from `run_id`."""
