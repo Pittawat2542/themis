@@ -142,10 +142,7 @@ class CasePipeline:
         selected_candidates = o._selected_candidates_from_state(
             prior_case_state, generated_candidates
         )
-        if (
-            o.selector is not None
-            and prior_case_state.selected_candidate_ids is None
-        ):
+        if o.selector is not None and prior_case_state.selected_candidate_ids is None:
             select_ctx = SelectContext(
                 run_id=snapshot.run_id,
                 case_id=case.case_id,
@@ -157,9 +154,7 @@ class CasePipeline:
                 seed=item0.seed,
                 judge_models=list(o.judge_models),
             )
-            span = o.tracing_provider.start_span(
-                "selection", {"case_id": case.case_id}
-            )
+            span = o.tracing_provider.start_span("selection", {"case_id": case.case_id})
             try:
                 selected_candidates = await o._select_candidates(
                     generated_candidates, select_ctx
@@ -229,9 +224,7 @@ class CasePipeline:
                 else {},
             )
             o._notify("before_reduce", selected_candidates, reduce_ctx)
-            span = o.tracing_provider.start_span(
-                "reduction", {"case_id": case.case_id}
-            )
+            span = o.tracing_provider.start_span("reduction", {"case_id": case.case_id})
             try:
                 reduced = await o._reduce_candidates(selected_candidates, reduce_ctx)
                 o._notify("after_reduce", reduced, reduce_ctx)
@@ -370,9 +363,7 @@ class CasePipeline:
                 had_failure,
             )
 
-        for metric, metric_kind in zip(
-            o.metrics, snapshot.metric_kinds, strict=False
-        ):
+        for metric, metric_kind in zip(o.metrics, snapshot.metric_kinds, strict=False):
             if o.until_stage == "score" and metric_kind != "pure":
                 continue
             if (
@@ -417,9 +408,7 @@ class CasePipeline:
                     raise TypeError(
                         f"Metric {metric.component_id} does not implement PureMetric"
                     )
-                cache_key = o._score_cache_key(
-                    snapshot, case, selected_parsed, metric
-                )
+                cache_key = o._score_cache_key(snapshot, case, selected_parsed, metric)
                 cached_score = o._load_stage_cache("score", cache_key)
                 if isinstance(cached_score, dict) and isinstance(
                     cached_score.get("metric_result"), dict
