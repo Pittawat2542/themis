@@ -8,6 +8,8 @@ from themis.catalog import load
 from themis.catalog.loaders import BenchmarkSourceRequest
 from themis.catalog.registry import list_component_ids
 from themis.core.base import JSONValue
+from themis.core.builtins import resolve_parser_component
+from themis.core.config import TargetSpec
 from themis.core.contexts import ParseContext, ScoreContext
 from themis.core.models import ParsedOutput, ReducedCandidate, MetricResult
 from themis.core.protocols import Parser, PureMetric
@@ -174,6 +176,223 @@ def test_catalog_code_execution_metric_is_reusable() -> None:
     assert isinstance(score, MetricResult)
     assert score.metric_id == "builtin/codeforces_pass_rate"
     assert score.value == 1.0
+
+
+def test_regex_parser_extracts_whole_numeric_and_named_groups() -> None:
+    parser = cast(
+        Parser,
+        resolve_parser_component(
+            TargetSpec(
+                target="builtin/regex",
+                kwargs={"pattern": r"answer:\s*(?P<answer>[A-Z])", "group": "answer"},
+            )
+        ),
+    )
+    numeric_parser = cast(
+        Parser,
+        resolve_parser_component(
+            TargetSpec(
+                target="builtin/regex",
+                kwargs={"pattern": r"score=(\d+)", "group": 1},
+            )
+        ),
+    )
+    whole_match_parser = cast(
+        Parser,
+        resolve_parser_component(
+            TargetSpec(
+                target="builtin/regex",
+                kwargs={"pattern": r"final:\s*\d+"},
+            )
+        ),
+    )
+    ctx = ParseContext(run_id="run-1", case_id="case-1", candidate_id="candidate-1")
+
+    named = parser.parse(
+        ReducedCandidate(candidate_id="candidate-1", final_output="answer: B"), ctx
+    )
+    numeric = numeric_parser.parse(
+        ReducedCandidate(candidate_id="candidate-1", final_output="score=42"), ctx
+    )
+    whole = whole_match_parser.parse(
+        ReducedCandidate(candidate_id="candidate-1", final_output="final: 42"), ctx
+    )
+
+    assert named == ParsedOutput(
+        value="B", format="regex", metadata={"group": "answer"}
+    )
+    assert numeric == ParsedOutput(value="42", format="regex", metadata={"group": 1})
+    assert whole == ParsedOutput(value="final: 42", format="regex")
+
+
+def test_regex_parser_supports_flags_and_reports_failures() -> None:
+    parser = cast(
+        Parser,
+        resolve_parser_component(
+            TargetSpec(
+                target="builtin/regex",
+                kwargs={
+                    "pattern": r"^answer:\s*(.+)$",
+                    "group": 1,
+                    "ignore_case": True,
+                    "multiline": True,
+                },
+            )
+        ),
+    )
+    ctx = ParseContext(run_id="run-1", case_id="case-1", candidate_id="candidate-1")
+
+    parsed = parser.parse(
+        ReducedCandidate(
+            candidate_id="candidate-1", final_output="notes\nANSWER: Correct"
+        ),
+        ctx,
+    )
+
+    assert parsed == ParsedOutput(
+        value="Correct", format="regex", metadata={"group": 1}
+    )
+    with pytest.raises(ValueError, match="Regex did not match"):
+        parser.parse(
+            ReducedCandidate(candidate_id="candidate-1", final_output="no answer"),
+            ctx,
+        )
+    with pytest.raises(ValueError, match="Regex group is not available"):
+        cast(
+            Parser,
+            resolve_parser_component(
+                TargetSpec(
+                    target="builtin/regex",
+                    kwargs={"pattern": r"answer:\s*(.+)", "group": "missing"},
+                )
+            ),
+        ).parse(
+            ReducedCandidate(candidate_id="candidate-1", final_output="answer: A"),
+            ctx,
+        )
+
+
+def test_schema_parser_validates_structured_values_and_extracts_path() -> None:
+    parser = cast(
+        Parser,
+        resolve_parser_component(
+            TargetSpec(
+                target="builtin/schema",
+                kwargs={
+                    "schema": {
+                        "type": "object",
+                        "required": ["answer", "steps"],
+                        "properties": {
+                            "answer": {"type": "string"},
+                            "steps": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                            },
+                        },
+                    },
+                    "path": "answer",
+                },
+            )
+        ),
+    )
+    ctx = ParseContext(run_id="run-1", case_id="case-1", candidate_id="candidate-1")
+
+    parsed_from_json = parser.parse(
+        ReducedCandidate(
+            candidate_id="candidate-1",
+            final_output='{"answer": "4", "steps": [1, 2]}',
+        ),
+        ctx,
+    )
+    parsed_from_dict = parser.parse(
+        ReducedCandidate(
+            candidate_id="candidate-1",
+            final_output={"answer": "5", "steps": [3]},
+        ),
+        ctx,
+    )
+
+    assert parsed_from_json == ParsedOutput(
+        value="4", format="schema", metadata={"path": "answer"}
+    )
+    assert parsed_from_dict == ParsedOutput(
+        value="5", format="schema", metadata={"path": "answer"}
+    )
+
+
+def test_schema_parser_reports_json_shape_and_path_failures() -> None:
+    parser = cast(
+        Parser,
+        resolve_parser_component(
+            TargetSpec(
+                target="builtin/schema",
+                kwargs={
+                    "schema": {
+                        "type": "object",
+                        "required": ["answer"],
+                        "properties": {"answer": {"type": "string"}},
+                    },
+                    "path": "answer.text",
+                },
+            )
+        ),
+    )
+    ctx = ParseContext(run_id="run-1", case_id="case-1", candidate_id="candidate-1")
+
+    with pytest.raises(ValueError, match="Invalid JSON"):
+        parser.parse(
+            ReducedCandidate(candidate_id="candidate-1", final_output="{bad json"),
+            ctx,
+        )
+    with pytest.raises(ValueError, match="Missing required field"):
+        parser.parse(
+            ReducedCandidate(candidate_id="candidate-1", final_output={}),
+            ctx,
+        )
+    with pytest.raises(ValueError, match="Expected string"):
+        parser.parse(
+            ReducedCandidate(candidate_id="candidate-1", final_output={"answer": 4}),
+            ctx,
+        )
+    with pytest.raises(ValueError, match="Schema path is not available"):
+        parser.parse(
+            ReducedCandidate(candidate_id="candidate-1", final_output={"answer": "4"}),
+            ctx,
+        )
+
+
+def test_rouge_metrics_are_manifest_backed_and_score_overlap() -> None:
+    rouge1 = cast(PureMetric, load("builtin/rouge1"))
+    rouge2 = cast(PureMetric, load("builtin/rouge2"))
+    rouge_l = cast(PureMetric, load("builtin/rouge_l"))
+    case = benchmark_case(
+        input_value="Summarize.",
+        expected_output="the quick brown fox",
+    )
+    ctx = ScoreContext(
+        run_id="run-1",
+        case=case,
+        parsed_views={"default": ParsedOutput(value="the quick fox")},
+    )
+
+    rouge1_score = rouge1.score(ParsedOutput(value="the quick quick fox"), case, ctx)
+    rouge2_score = rouge2.score(ParsedOutput(value="the quick fox"), case, ctx)
+    rouge_l_score = rouge_l.score(ParsedOutput(value="quick brown"), case, ctx)
+
+    assert "builtin/regex" in list_component_ids(kind="parser")
+    assert "builtin/schema" in list_component_ids(kind="parser")
+    assert "builtin/rouge1" in list_component_ids(kind="metric")
+    assert "builtin/rouge2" in list_component_ids(kind="metric")
+    assert "builtin/rouge_l" in list_component_ids(kind="metric")
+    assert isinstance(rouge1_score, MetricResult)
+    assert rouge1_score.value == pytest.approx(0.75)
+    assert rouge1_score.dimensions == pytest.approx(
+        {"precision": 0.75, "recall": 0.75, "f1": 0.75}
+    )
+    assert isinstance(rouge2_score, MetricResult)
+    assert rouge2_score.value == pytest.approx(0.4)
+    assert isinstance(rouge_l_score, MetricResult)
+    assert rouge_l_score.value == pytest.approx(2 / 3)
 
 
 def benchmark_case(*, input_value: JSONValue, expected_output: JSONValue):

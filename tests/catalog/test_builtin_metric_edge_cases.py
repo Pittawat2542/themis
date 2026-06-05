@@ -59,3 +59,37 @@ def test_bleu_metric_returns_zero_for_empty_prediction() -> None:
 
     assert isinstance(score, MetricResult)
     assert score.value == 0.0
+
+
+def test_rouge_metrics_return_one_when_prediction_and_expected_are_empty() -> None:
+    for metric_id in ("builtin/rouge1", "builtin/rouge2", "builtin/rouge_l"):
+        metric = cast(PureMetric, load(metric_id))
+        case = Case(case_id="case-1", input="summarize", expected_output="")
+        ctx = ScoreContext(
+            run_id="run-1",
+            case=case,
+            parsed_views={"default": ParsedOutput(value="")},
+        )
+
+        score = metric.score(ParsedOutput(value=""), case, ctx)
+
+        assert isinstance(score, MetricResult)
+        assert score.value == 1.0
+        assert score.dimensions == {"precision": 1.0, "recall": 1.0, "f1": 1.0}
+
+
+def test_rouge_metrics_return_zero_when_only_one_side_is_empty() -> None:
+    for metric_id in ("builtin/rouge1", "builtin/rouge2", "builtin/rouge_l"):
+        metric = cast(PureMetric, load(metric_id))
+        case = Case(case_id="case-1", input="summarize", expected_output="not empty")
+        ctx = ScoreContext(
+            run_id="run-1",
+            case=case,
+            parsed_views={"default": ParsedOutput(value="")},
+        )
+
+        score = metric.score(ParsedOutput(value=""), case, ctx)
+
+        assert isinstance(score, MetricResult)
+        assert score.value == 0.0
+        assert score.dimensions == {"precision": 0.0, "recall": 0.0, "f1": 0.0}

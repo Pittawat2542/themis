@@ -22,9 +22,14 @@ The catalog now exposes reusable shipped components directly through
 | `builtin/choice_letter` | Parser | The answer should resolve to a discrete option label | Best for MCQ benchmarks |
 | `builtin/math_answer` | Parser | Math answers need normalization before deterministic scoring | Pairs with `builtin/math_equivalence` |
 | `builtin/code_text` | Parser | The output is code, including fenced code blocks | Used by code-generation benchmarks and reusable execution metrics |
+| `builtin/regex` | Parser | A regular expression should extract the scoreable part of text output | Configure with `target + kwargs`; raises a parse failure when no match is found |
+| `builtin/schema` | Parser | JSON output should satisfy a small dependency-free schema before scoring | Supports `type`, `required`, `properties`, `items`, and optional dot-path extraction |
 | `builtin/exact_match` | Metric | Parsed output should match the expected value exactly | Good default for deterministic tasks with stable output format |
 | `builtin/f1` | Metric | Token overlap is a better fit than exact string equality | Still deterministic; no judge model required |
 | `builtin/bleu` | Metric | You need surface-form overlap for longer text outputs | Better for rough similarity than strict correctness |
+| `builtin/rouge1` | Metric | Unigram overlap should score summaries or free-text answers | Reports precision, recall, and F1 dimensions |
+| `builtin/rouge2` | Metric | Bigram overlap should reward local phrase similarity | Reports precision, recall, and F1 dimensions |
+| `builtin/rouge_l` | Metric | Longest-common-subsequence overlap should reward in-order coverage | Reports precision, recall, and F1 dimensions |
 | `builtin/choice_accuracy` | Metric | Parsed option labels should score as correct or incorrect | Expects parser output compatible with multiple choice |
 | `builtin/math_equivalence` | Metric | Equivalent math expressions or normalized answers should count as correct | Best for math families such as AIME or HMMT |
 | `builtin/procbench_final_accuracy` | Metric | You want deterministic final-answer checking for procedure-style tasks | Only use when the recipe is not already judge-backed |

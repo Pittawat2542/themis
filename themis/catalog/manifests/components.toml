@@ -46,6 +46,18 @@ target = "themis.catalog.builtins.parsers:CodeTextParser"
 version = "1.0"
 fingerprint = "builtin-code-text-fingerprint"
 
+[components."builtin/regex"]
+kind = "parser"
+target = "themis.catalog.builtins.parsers:RegexParser"
+version = "1.0"
+fingerprint = "builtin-regex-fingerprint"
+
+[components."builtin/schema"]
+kind = "parser"
+target = "themis.catalog.builtins.parsers:SchemaParser"
+version = "1.0"
+fingerprint = "builtin-schema-fingerprint"
+
 [components."builtin/exact_match"]
 kind = "metric"
 target = "themis.catalog.builtins.metrics:ExactMatchMetric"
@@ -81,6 +93,24 @@ kind = "metric"
 target = "themis.catalog.builtins.metrics:ProcbenchFinalAccuracyMetric"
 version = "1.0"
 fingerprint = "builtin-procbench-final-accuracy-fingerprint"
+
+[components."builtin/rouge1"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:Rouge1Metric"
+version = "1.0"
+fingerprint = "builtin-rouge1-fingerprint"
+
+[components."builtin/rouge2"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:Rouge2Metric"
+version = "1.0"
+fingerprint = "builtin-rouge2-fingerprint"
+
+[components."builtin/rouge_l"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:RougeLMetric"
+version = "1.0"
+fingerprint = "builtin-rouge-l-fingerprint"
 
 [components."builtin/codeforces_pass_rate"]
 kind = "metric"

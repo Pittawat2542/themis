@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 from collections import Counter
+from collections.abc import Sequence
 from typing import Any
 
 from themis.core.base import JSONValue
@@ -182,10 +183,128 @@ class ProcbenchFinalAccuracyMetric:
         )
 
 
+class Rouge1Metric:
+    component_id = "builtin/rouge1"
+    version = "1.0"
+    metric_family = "pure"
+
+    def fingerprint(self) -> str:
+        return "builtin-rouge1-fingerprint"
+
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
+        del ctx
+        return _rouge_result(
+            metric_id=self.component_id,
+            predicted=_tokenize(parsed.value),
+            expected=_tokenize(case.expected_output),
+        )
+
+
+class Rouge2Metric:
+    component_id = "builtin/rouge2"
+    version = "1.0"
+    metric_family = "pure"
+
+    def fingerprint(self) -> str:
+        return "builtin-rouge2-fingerprint"
+
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
+        del ctx
+        return _rouge_result(
+            metric_id=self.component_id,
+            predicted=_ngrams(_tokenize(parsed.value), 2),
+            expected=_ngrams(_tokenize(case.expected_output), 2),
+        )
+
+
+class RougeLMetric:
+    component_id = "builtin/rouge_l"
+    version = "1.0"
+    metric_family = "pure"
+
+    def fingerprint(self) -> str:
+        return "builtin-rouge-l-fingerprint"
+
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
+        del ctx
+        predicted = _tokenize(parsed.value)
+        expected = _tokenize(case.expected_output)
+        if not predicted and not expected:
+            return _rouge_score(self.component_id, precision=1.0, recall=1.0)
+        if not predicted or not expected:
+            return _rouge_score(self.component_id, precision=0.0, recall=0.0)
+        lcs = _lcs_length(predicted, expected)
+        return _rouge_score(
+            self.component_id,
+            precision=lcs / len(predicted),
+            recall=lcs / len(expected),
+        )
+
+
 def _tokenize(value: object) -> list[str]:
     if value is None:
         return []
     return str(value).lower().split()
+
+
+def _ngrams(tokens: Sequence[str], size: int) -> list[tuple[str, ...]]:
+    if len(tokens) < size:
+        return []
+    return [
+        tuple(tokens[index : index + size]) for index in range(len(tokens) - size + 1)
+    ]
+
+
+def _rouge_result(
+    *,
+    metric_id: str,
+    predicted: Sequence[str] | Sequence[tuple[str, ...]],
+    expected: Sequence[str] | Sequence[tuple[str, ...]],
+) -> MetricResult:
+    if not predicted and not expected:
+        return _rouge_score(metric_id, precision=1.0, recall=1.0)
+    if not predicted or not expected:
+        return _rouge_score(metric_id, precision=0.0, recall=0.0)
+    predicted_counts = Counter(predicted)
+    expected_counts = Counter(expected)
+    overlap = sum((predicted_counts & expected_counts).values())
+    return _rouge_score(
+        metric_id,
+        precision=overlap / len(predicted),
+        recall=overlap / len(expected),
+    )
+
+
+def _rouge_score(metric_id: str, *, precision: float, recall: float) -> MetricResult:
+    f1 = (
+        0.0
+        if precision + recall == 0.0
+        else (2 * precision * recall) / (precision + recall)
+    )
+    return MetricResult(
+        metric_id=metric_id,
+        value=f1,
+        dimensions={"precision": precision, "recall": recall, "f1": f1},
+    )
+
+
+def _lcs_length(left: Sequence[str], right: Sequence[str]) -> int:
+    previous = [0] * (len(right) + 1)
+    for left_token in left:
+        current = [0]
+        for index, right_token in enumerate(right, start=1):
+            if left_token == right_token:
+                current.append(previous[index - 1] + 1)
+            else:
+                current.append(max(previous[index], current[-1]))
+        previous = current
+    return previous[-1]
 
 
 def _expected_value(value: object, *, key: str) -> Any:

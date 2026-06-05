@@ -15,7 +15,7 @@ Use this guide when you do not need judge models or workflow execution.
 
 ## Procedure
 
-Choose one or more builtin pure metrics such as `builtin/exact_match`, `builtin/f1`, or `builtin/bleu`, and pair them with a parser that normalizes the reduced candidate into the shape the metric expects.
+Choose one or more builtin pure metrics such as `builtin/exact_match`, `builtin/f1`, `builtin/bleu`, or `builtin/rouge_l`, and pair them with a parser that normalizes the reduced candidate into the shape the metric expects.
 
 ```python
 --8<-- "examples/docs/pure_metrics.py"
@@ -29,6 +29,7 @@ Choose one or more builtin pure metrics such as `builtin/exact_match`, `builtin/
 | --- | --- | --- | --- |
 | Exact structured comparison | Parsed output should match the expected value exactly | Too strict for fuzzy or stylistic outputs | `builtin/exact_match` |
 | Token-overlap style scoring | Partial lexical overlap is more meaningful than exact equality | Still surface-form based, not semantic judging | `builtin/f1`, `builtin/bleu` |
+| Summary-style overlap scoring | Recall-oriented text overlap should score summaries or free-text answers | Surface-form based and not semantic equivalence | `builtin/rouge1`, `builtin/rouge2`, `builtin/rouge_l` |
 | Task-specific deterministic logic | The scoring rule is deterministic but domain-specific | Requires custom metric implementation | `PureMetric` |
 
 ## Expected result

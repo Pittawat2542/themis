@@ -14,7 +14,12 @@ def run_example() -> dict[str, object]:
             generator="builtin/demo_generator", reducer="builtin/majority_vote"
         ),
         evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match", "builtin/f1", "builtin/bleu"],
+            metrics=[
+                "builtin/exact_match",
+                "builtin/f1",
+                "builtin/bleu",
+                "builtin/rouge_l",
+            ],
             parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(target="memory"),

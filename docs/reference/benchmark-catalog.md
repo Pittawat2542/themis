@@ -41,9 +41,12 @@ discovery.
 | `builtin/choice_letter` | Parser | The model should end in an option label such as `A` or `B` | Pair with MCQ benchmarks and metrics such as `builtin/choice_accuracy` |
 | `builtin/math_answer` | Parser | You need short-answer math normalization before scoring | Pairs with `builtin/math_equivalence` |
 | `builtin/code_text` | Parser | The model emits raw or fenced code that should be scored as source text | Common in code-generation benchmarks |
+| `builtin/regex` | Parser | A regex should extract a compact answer from free-form text | Configure with `target + kwargs` |
+| `builtin/schema` | Parser | JSON output should be validated before scoring | Supports a small dependency-free schema subset |
 | `builtin/choice_accuracy` | Metric | You want deterministic correctness for parsed MCQ outputs | Expects parsed option labels rather than long free-form answers |
 | `builtin/math_equivalence` | Metric | You want symbolic or normalized math equivalence instead of string equality | Best for AIME-style numeric and short-answer math |
 | `builtin/procbench_final_accuracy` | Metric | You want deterministic final-answer checking for procbench-like outputs | Use only when the benchmark recipe is not already using a judge-backed rubric |
+| `builtin/rouge1`, `builtin/rouge2`, `builtin/rouge_l` | Metric | You want deterministic text-overlap scoring for summaries or free-form answers | Surface-form metrics with precision, recall, and F1 dimensions |
 
 ## Named benchmark entries
 

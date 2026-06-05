@@ -25,9 +25,16 @@ BuiltinMetric = PureMetric | LLMMetric | SelectionMetric | TraceMetric
 def resolve_target_spec(spec: TargetSpec) -> object:
     """Resolve a declarative target spec into a runtime object."""
 
-    if spec.target.startswith("builtin/") and not spec.kwargs:
-        kind = component_specs()[spec.target].kind
-        return load_component(spec.target, kind=kind)
+    if spec.target.startswith("builtin/"):
+        component_spec = component_specs()[spec.target]
+        if not spec.kwargs:
+            return load_component(spec.target, kind=component_spec.kind)
+        loaded = load_symbol(component_spec.target)
+        if isinstance(loaded, type) or callable(loaded):
+            return loaded(**spec.kwargs)
+        raise TypeError(
+            f"Builtin component {spec.target} cannot accept kwargs because its target is not callable"
+        )
 
     loaded = load_symbol(spec.target)
     if isinstance(loaded, type):
