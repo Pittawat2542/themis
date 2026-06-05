@@ -42,12 +42,8 @@ class ChoosingJudgeModel:
 async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> None:
     selector = cast(CandidateSelector, load("builtin/best_of_n"))
     candidates = [
-        SessionResult(
-            candidate_id="case-1-candidate-0", final_output={"answer": "4"}
-        ),
-        SessionResult(
-            candidate_id="case-1-candidate-1", final_output={"answer": "5"}
-        ),
+        SessionResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
+        SessionResult(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
     ]
 
     selected = await selector.select(

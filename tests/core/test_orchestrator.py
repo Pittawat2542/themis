@@ -544,9 +544,7 @@ class SlowSelector:
     def fingerprint(self) -> str:
         return "selector-slow"
 
-    async def select(
-        self, candidates: list[SessionResult], ctx
-    ) -> list[SessionResult]:
+    async def select(self, candidates: list[SessionResult], ctx) -> list[SessionResult]:
         del ctx
         self.active += 1
         self.max_active = max(self.max_active, self.active)

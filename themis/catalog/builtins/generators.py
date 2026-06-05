@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from themis.core.contexts import GenerateContext, SessionContext
-from themis.core.models import Case, GenerationResult, Message, SessionResult, SessionTurn
+from themis.core.models import (
+    Case,
+    GenerationResult,
+    Message,
+    SessionResult,
+    SessionTurn,
+)
 from themis.core.workflows import JudgeResponse
 
 

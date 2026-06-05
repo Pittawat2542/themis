@@ -426,9 +426,7 @@ def test_run_distinguishes_duplicate_case_ids_across_datasets() -> None:
         if entry["event_type"] == "session_completed"
     ]
     assert len(session_events) == 2
-    assert {
-        (entry["dataset_id"], entry["case_key"]) for entry in session_events
-    } == {
+    assert {(entry["dataset_id"], entry["case_key"]) for entry in session_events} == {
         ("dataset-1", result.cases[0].case_key),
         ("dataset-2", result.cases[1].case_key),
     }

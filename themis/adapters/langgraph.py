@@ -8,7 +8,13 @@ from typing import Any
 
 from themis.adapters._utils import normalize_json_value, stable_fingerprint
 from themis.core.contexts import GenerateContext, SessionContext
-from themis.core.models import Case, GenerationResult, SessionResult, SessionTurn, TraceStep
+from themis.core.models import (
+    Case,
+    GenerationResult,
+    SessionResult,
+    SessionTurn,
+    TraceStep,
+)
 
 
 class LangGraphGenerator:

@@ -74,12 +74,8 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
         case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
     )
     candidates = [
-        SessionResult(
-            candidate_id="case-1-candidate-0", final_output={"answer": "4"}
-        ),
-        SessionResult(
-            candidate_id="case-1-candidate-1", final_output={"answer": "4"}
-        ),
+        SessionResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
+        SessionResult(candidate_id="case-1-candidate-1", final_output={"answer": "4"}),
     ]
 
     reduced = await reducer.reduce(
@@ -101,7 +97,9 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
     score = metric.score(
         parsed,
         case,
-        ScoreContext(run_id="run-1", case=case, parsed_views={"default": parsed}, seed=7),
+        ScoreContext(
+            run_id="run-1", case=case, parsed_views={"default": parsed}, seed=7
+        ),
     )
 
     assert reduced.source_candidate_ids == ["case-1-candidate-0", "case-1-candidate-1"]
@@ -117,12 +115,8 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
 async def test_builtin_selector_component_is_executable() -> None:
     selector = resolve_selector_component("builtin/best_of_n")
     candidates = [
-        SessionResult(
-            candidate_id="case-1-candidate-0", final_output={"answer": "4"}
-        ),
-        SessionResult(
-            candidate_id="case-1-candidate-1", final_output={"answer": "5"}
-        ),
+        SessionResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
+        SessionResult(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
     ]
 
     selected = await selector.select(

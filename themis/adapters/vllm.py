@@ -12,7 +12,13 @@ from themis.adapters._utils import (
     stable_fingerprint,
 )
 from themis.core.contexts import GenerateContext, SessionContext
-from themis.core.models import Case, GenerationResult, Message, SessionResult, SessionTurn
+from themis.core.models import (
+    Case,
+    GenerationResult,
+    Message,
+    SessionResult,
+    SessionTurn,
+)
 
 
 class _ResponsesCreateAPI(Protocol):
