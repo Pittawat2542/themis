@@ -32,6 +32,7 @@ from themis.core.models import (
     ReducedCandidate,
     MetricResult,
     ScoreError,
+    SessionResult,
 )
 from themis.core.orchestrator import Orchestrator
 from themis.core.results import RunStatus
@@ -97,7 +98,7 @@ class CountingReducer:
         return "reducer-counting"
 
     async def reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[SessionResult], ctx: ReduceContext
     ) -> ReducedCandidate:
         self.calls += 1
         return ReducedCandidate(

@@ -6,9 +6,14 @@ from themis.core.builtins import resolve_judge_model_component
 from themis.core.components import component_ref_from_value
 from themis.core.contexts import EvalScoreContext
 from themis.core.events import StepCompletedEvent, StepStartedEvent
-from themis.core.models import Case, GenerationResult, ParsedOutput, MetricResult
+from themis.core.models import Case, ParsedOutput, MetricResult, SessionResult
 from themis.core.stores.memory import InMemoryRunStore
-from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
+from themis.core.subjects import (
+    CandidateSetSubject,
+    ConversationSubject,
+    SessionSubject,
+    TraceSubject,
+)
 from themis.core.workflow_runner import DefaultWorkflowRunner
 from themis.core.workflows import (
     AggregationResult,
@@ -32,7 +37,10 @@ class DemoEvaluationWorkflow:
     def render_prompt(
         self,
         call: JudgeCall,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         ctx: EvalScoreContext,
     ) -> RenderedJudgePrompt:
         del call, ctx
@@ -109,7 +117,10 @@ class PairwiseSelectionWorkflow:
     def render_prompt(
         self,
         call: JudgeCall,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         ctx: EvalScoreContext,
     ) -> RenderedJudgePrompt:
         del ctx
@@ -193,7 +204,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
     )
     subject = CandidateSetSubject(
         candidates=[
-            GenerationResult(candidate_id="candidate-1", final_output={"answer": "4"})
+            SessionResult(candidate_id="candidate-1", final_output={"answer": "4"})
         ]
     )
     ctx = EvalScoreContext(
@@ -241,8 +252,8 @@ async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vo
 ):
     subject = CandidateSetSubject(
         candidates=[
-            GenerationResult(candidate_id="candidate-a", final_output={"answer": "4"}),
-            GenerationResult(candidate_id="candidate-b", final_output={"answer": "5"}),
+            SessionResult(candidate_id="candidate-a", final_output={"answer": "4"}),
+            SessionResult(candidate_id="candidate-b", final_output={"answer": "5"}),
         ]
     )
     ctx = EvalScoreContext(

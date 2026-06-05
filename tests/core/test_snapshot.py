@@ -27,6 +27,7 @@ from themis.core.models import (
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
+    SessionResult,
 )
 from themis.core.snapshot import BUILTIN_COMPONENT_REFS, ComponentRef
 from tests.release import CURRENT_VERSION
@@ -57,7 +58,7 @@ class DummyReducer:
 
     async def reduce(
         self,
-        candidates: list[GenerationResult],
+        candidates: list[SessionResult],
         ctx: ReduceContext,
     ) -> ReducedCandidate:
         return ReducedCandidate(

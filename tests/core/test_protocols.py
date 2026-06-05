@@ -163,7 +163,7 @@ class DummyReducer:
 
     async def reduce(
         self,
-        candidates: list[GenerationResult],
+        candidates: list[SessionResult],
         ctx: ReduceContext,
     ) -> ReducedCandidate:
         return ReducedCandidate(
@@ -258,7 +258,10 @@ class DummyWorkflowRunner:
     async def run_evaluation(
         self,
         workflow: EvaluationWorkflow,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         metric_id: str,
         ctx: EvalScoreContext,
     ) -> EvaluationExecution:
@@ -274,11 +277,11 @@ class DummySubscriber:
     def before_generate(self, case: Case, ctx: GenerateContext) -> None:
         del case, ctx
 
-    def after_generate(self, result: GenerationResult, ctx: GenerateContext) -> None:
+    def after_generate(self, result: SessionResult, ctx: GenerateContext) -> None:
         del result, ctx
 
     def before_reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[SessionResult], ctx: ReduceContext
     ) -> None:
         del candidates, ctx
 
@@ -299,7 +302,10 @@ class DummySubscriber:
 
     def before_judge(
         self,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         ctx: EvalScoreContext,
     ) -> None:
         del subject, ctx

@@ -18,6 +18,7 @@ from themis.core.models import (
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
+    SessionResult,
 )
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
@@ -50,7 +51,7 @@ class FailingReducer:
         return "reducer-failing"
 
     async def reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[SessionResult], ctx: ReduceContext
     ) -> ReducedCandidate:
         del candidates, ctx
         raise RuntimeError("reducer failed")
@@ -104,7 +105,7 @@ class HappyReducer:
         return "reducer-happy"
 
     async def reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[SessionResult], ctx: ReduceContext
     ) -> ReducedCandidate:
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",

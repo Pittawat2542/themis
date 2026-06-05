@@ -16,7 +16,13 @@ from themis.core.contexts import (
     ScoreContext,
     SelectContext,
 )
-from themis.core.models import Case, GenerationResult, ParsedOutput, ScoreError
+from themis.core.models import (
+    Case,
+    GenerationResult,
+    ParsedOutput,
+    ScoreError,
+    SessionResult,
+)
 from themis.core.protocols import CandidateSelector, Generator, Parser, PureMetric
 from themis.core.workflows import JudgeResponse
 
@@ -68,10 +74,10 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
         case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
     )
     candidates = [
-        GenerationResult(
+        SessionResult(
             candidate_id="case-1-candidate-0", final_output={"answer": "4"}
         ),
-        GenerationResult(
+        SessionResult(
             candidate_id="case-1-candidate-1", final_output={"answer": "4"}
         ),
     ]
@@ -111,10 +117,10 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
 async def test_builtin_selector_component_is_executable() -> None:
     selector = resolve_selector_component("builtin/best_of_n")
     candidates = [
-        GenerationResult(
+        SessionResult(
             candidate_id="case-1-candidate-0", final_output={"answer": "4"}
         ),
-        GenerationResult(
+        SessionResult(
             candidate_id="case-1-candidate-1", final_output={"answer": "5"}
         ),
     ]

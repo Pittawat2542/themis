@@ -9,7 +9,7 @@ from themis.core.components import component_ref_from_value
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import EvalScoreContext, SelectContext
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult, ParsedOutput
+from themis.core.models import Case, Dataset, ParsedOutput, SessionResult
 from themis.core.prompts import PromptSpec
 from themis.core.protocols import CandidateSelector, LLMMetric, SelectionMetric
 from themis.core.results import RunStatus
@@ -42,10 +42,10 @@ class ChoosingJudgeModel:
 async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> None:
     selector = cast(CandidateSelector, load("builtin/best_of_n"))
     candidates = [
-        GenerationResult(
+        SessionResult(
             candidate_id="case-1-candidate-0", final_output={"answer": "4"}
         ),
-        GenerationResult(
+        SessionResult(
             candidate_id="case-1-candidate-1", final_output={"answer": "5"}
         ),
     ]
@@ -71,13 +71,13 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
     majority = cast(LLMMetric, load("builtin/majority_vote_judge"))
     pairwise = cast(SelectionMetric, load("builtin/pairwise_judge"))
     ranking = cast(SelectionMetric, load("builtin/ranking_judge"))
-    candidate = GenerationResult(
+    candidate = SessionResult(
         candidate_id="case-1-reduced", final_output={"answer": "4"}
     )
-    pair_a = GenerationResult(
+    pair_a = SessionResult(
         candidate_id="case-1-candidate-0", final_output={"answer": "4"}
     )
-    pair_b = GenerationResult(
+    pair_b = SessionResult(
         candidate_id="case-1-candidate-1", final_output={"answer": "5"}
     )
     ctx = EvalScoreContext(
@@ -152,8 +152,8 @@ def test_pairwise_judge_emits_preference_metric_result() -> None:
     workflow = pairwise.build_workflow(
         CandidateSetSubject(
             candidates=[
-                GenerationResult(candidate_id="a", final_output="A"),
-                GenerationResult(candidate_id="b", final_output="B"),
+                SessionResult(candidate_id="a", final_output="A"),
+                SessionResult(candidate_id="b", final_output="B"),
             ]
         ),
         ctx,

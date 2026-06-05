@@ -109,7 +109,7 @@ class CountingReducer:
     def fingerprint(self) -> str:
         return "reducer-counting"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx) -> ReducedCandidate:
+    async def reduce(self, candidates: list[SessionResult], ctx) -> ReducedCandidate:
         self.calls += 1
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
