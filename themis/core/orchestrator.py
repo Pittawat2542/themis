@@ -3,38 +3,26 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
-import random
 from time import monotonic
 from collections.abc import Mapping
-from typing import Literal, TypeGuard, TypedDict, cast
+from typing import Literal, TypeGuard, cast
 
 from themis.core.base import JSONValue
+from themis.core.case_pipeline import CasePipeline
 from themis.core.config import RuntimeConfig
 from themis.core.contexts import (
     EvalScoreContext,
     GenerateContext,
     ParseContext,
     ReduceContext,
-    ScoreContext,
     SelectContext,
     SessionContext,
 )
 from themis.core.events import (
-    EvaluationCompletedEvent,
-    EvaluationFailedEvent,
-    SelectionCompletedEvent,
-    SelectionFailedEvent,
-    ParseCompletedEvent,
-    ParseFailedEvent,
-    ReductionCompletedEvent,
-    ReductionFailedEvent,
     RunCompletedEvent,
     RunFailedEvent,
     RunStartedEvent,
-    ScoreCompletedEvent,
-    ScoreFailedEvent,
     SessionCompletedEvent,
     SessionFailedEvent,
     SessionStartedEvent,
@@ -42,11 +30,9 @@ from themis.core.events import (
 )
 from themis.core.models import (
     ConversationTrace,
-    FailureCategory,
     MetricResult,
     ParsedOutput,
     ReducedCandidate,
-    ScoreError,
     SessionResult,
     WorkflowTrace,
 )
@@ -76,9 +62,15 @@ from themis.core.results import (
     RunStatus,
     _case_state_has_failures,
 )
+from themis.core.runtime_support import (
+    RuntimeSupport,
+    classify_retryable_error,
+    observed_token_cost,
+    retry_delay_seconds,
+    stable_hash,
+)
 from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
-from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import (
     ConversationSubject,
     SessionSubject,
@@ -90,67 +82,17 @@ from themis.core.tracing import NoOpTracingProvider
 from themis.core.workflow_runner import DefaultWorkflowRunner, WorkflowBuildError
 from themis.core.workflows import JudgeResponse
 
-DEFAULT_PROVIDER_RATE_LIMIT = 60
 WorkflowMetric = LLMMetric | SelectionMetric | TraceMetric
 RuntimeMetric = PureMetric | WorkflowMetric
-ConnectionLikeErrors = (ConnectionError, OSError)
-_RETRY_JITTER_RNG = random.Random()
-
-
-class _CaseIdentityKwargs(TypedDict):
-    case_id: str
-    dataset_id: str | None
-    case_key: str | None
+_classify_retryable_error = classify_retryable_error
+_retry_delay_seconds = retry_delay_seconds
+_observed_token_cost = observed_token_cost
+_stable_hash = stable_hash
+_compat_monotonic = monotonic
 
 
 def _is_pure_metric(metric: RuntimeMetric) -> TypeGuard[PureMetric]:
     return isinstance(metric, PureMetric)
-
-
-def _is_workflow_metric(metric: RuntimeMetric) -> TypeGuard[WorkflowMetric]:
-    return (
-        isinstance(metric, LLMMetric)
-        or isinstance(metric, SelectionMetric)
-        or isinstance(metric, TraceMetric)
-    )
-
-
-class TokenBucketRateLimiter:
-    """Token-bucket limiter with a single-token bucket to smooth request rate."""
-
-    def __init__(self, requests_per_minute: int) -> None:
-        self._requests_per_minute = max(1, requests_per_minute)
-        self._tokens = 1.0
-        self._updated_at = monotonic()
-        self._lock = asyncio.Lock()
-
-    async def acquire(self, tokens: int = 1) -> None:
-        for _ in range(max(0, tokens)):
-            while True:
-                async with self._lock:
-                    now = monotonic()
-                    self._refill(now)
-                    if self._tokens >= 1.0:
-                        self._tokens -= 1.0
-                        break
-                    wait_time = (1.0 - self._tokens) / self._tokens_per_second
-                await asyncio.sleep(wait_time)
-
-    async def update_limit(self, requests_per_minute: int) -> None:
-        async with self._lock:
-            now = monotonic()
-            self._refill(now)
-            self._requests_per_minute = max(1, requests_per_minute)
-            self._tokens = min(self._tokens, 1.0)
-
-    @property
-    def _tokens_per_second(self) -> float:
-        return self._requests_per_minute / 60.0
-
-    def _refill(self, now: float) -> None:
-        elapsed = max(0.0, now - self._updated_at)
-        self._tokens = min(1.0, self._tokens + elapsed * self._tokens_per_second)
-        self._updated_at = now
 
 
 class Orchestrator:
@@ -205,66 +147,21 @@ class Orchestrator:
             store_retry_delay=store_retry_delay,
             store_retry_attempts=store_retry_attempts,
         )
-        self._global_semaphore = asyncio.Semaphore(self.runtime.max_concurrent_tasks)
-        self._stage_semaphores = {
-            "generation": asyncio.Semaphore(
-                max(
-                    1,
-                    self.runtime.stage_concurrency.get(
-                        "generation", self.runtime.max_concurrent_tasks
-                    ),
-                )
-            ),
-            "evaluation": asyncio.Semaphore(
-                max(
-                    1,
-                    self.runtime.stage_concurrency.get(
-                        "evaluation", self.runtime.max_concurrent_tasks
-                    ),
-                )
-            ),
-            "selection": asyncio.Semaphore(
-                max(
-                    1,
-                    self.runtime.stage_concurrency.get(
-                        "selection", self.runtime.max_concurrent_tasks
-                    ),
-                )
-            ),
-            "reduction": asyncio.Semaphore(
-                max(
-                    1,
-                    self.runtime.stage_concurrency.get(
-                        "reduction", self.runtime.max_concurrent_tasks
-                    ),
-                )
-            ),
-            "parsing": asyncio.Semaphore(
-                max(
-                    1,
-                    self.runtime.stage_concurrency.get(
-                        "parsing", self.runtime.max_concurrent_tasks
-                    ),
-                )
-            ),
-            "scoring": asyncio.Semaphore(
-                max(
-                    1,
-                    self.runtime.stage_concurrency.get(
-                        "scoring", self.runtime.max_concurrent_tasks
-                    ),
-                )
-            ),
-        }
+        self.runtime_support = RuntimeSupport(
+            store=store,
+            runtime=self.runtime,
+            subscribers=self.subscribers,
+            monotonic_clock=monotonic,
+        )
+        self._global_semaphore = self.runtime_support.global_semaphore
+        self._stage_semaphores = self.runtime_support.stage_semaphores
         self.workflow_runner = workflow_runner or DefaultWorkflowRunner(
             store=store,
             judge_models=self.judge_models,
             model_call_executor=self._execute_judge_model_call,
             persist_event=self._persist_event,
         )
-        self._provider_semaphores: dict[str, asyncio.Semaphore] = {}
-        self._provider_limiters: dict[str, TokenBucketRateLimiter] = {}
-        self._provider_token_limiters: dict[str, TokenBucketRateLimiter] = {}
+        self._case_pipeline = CasePipeline(self)
 
     async def run(self, snapshot: RunSnapshot) -> RunResult:
         existing_state = self._load_execution_state(snapshot)
@@ -366,596 +263,7 @@ class Orchestrator:
         items: list[GenerationWorkItem],
         existing_state: ExecutionState,
     ) -> tuple[CaseResult, bool]:
-        item0 = items[0]
-        case = item0.case
-        case_result_kwargs: _CaseIdentityKwargs = {
-            "case_id": case.case_id,
-            "dataset_id": item0.dataset_id,
-            "case_key": item0.case_key,
-        }
-        existing_case_state = existing_state.case_states.get(item0.case_key)
-        use_legacy_case_events = False
-        if existing_case_state is None:
-            existing_case_state = existing_state.case_states.get(case.case_id)
-            use_legacy_case_events = existing_case_state is not None
-        case_event_kwargs: _CaseIdentityKwargs = {
-            "case_id": case.case_id,
-            "dataset_id": None if use_legacy_case_events else item0.dataset_id,
-            "case_key": None if use_legacy_case_events else item0.case_key,
-        }
-        prior_case_state = self._replay_case_state(
-            existing_case_state or CaseExecutionState()
-        )
-        prior_case_state = self._rerun_case_state(prior_case_state, case, item0)
-        generated_by_index = dict(prior_case_state.generated_candidates_by_index)
-        workflow_executions = dict(prior_case_state.evaluation_executions)
-        evaluation_failures = dict(prior_case_state.evaluation_failures)
-        metric_results = dict(prior_case_state.metric_results)
-        score_failures = dict(prior_case_state.score_failures)
-        had_failure = False
-
-        pending_generation = [
-            self._generate_candidate(snapshot, case, item)
-            for item in items
-            if item.candidate_index not in generated_by_index
-        ]
-        for candidate_index, generated, failed in await asyncio.gather(
-            *pending_generation
-        ):
-            if generated is not None:
-                generated_by_index[candidate_index] = generated
-            had_failure = had_failure or failed
-
-        generated_candidates = [
-            generated_by_index[index] for index in sorted(generated_by_index)
-        ]
-        if not generated_candidates and prior_case_state.reduced_candidate is None:
-            return CaseResult(**case_result_kwargs), True
-        if self.until_stage == "generate":
-            return (
-                CaseResult(
-                    **case_result_kwargs,
-                    generated_candidates=generated_candidates,
-                ),
-                had_failure,
-            )
-
-        selected_candidates = self._selected_candidates_from_state(
-            prior_case_state, generated_candidates
-        )
-        if (
-            self.selector is not None
-            and prior_case_state.selected_candidate_ids is None
-        ):
-            select_ctx = SelectContext(
-                run_id=snapshot.run_id,
-                case_id=case.case_id,
-                dataset_id=item0.dataset_id,
-                case_key=item0.case_key,
-                candidate_ids=[
-                    candidate.candidate_id for candidate in generated_candidates
-                ],
-                seed=item0.seed,
-                judge_models=list(self.judge_models),
-            )
-            span = self.tracing_provider.start_span(
-                "selection", {"case_id": case.case_id}
-            )
-            try:
-                selected_candidates = await self._select_candidates(
-                    generated_candidates, select_ctx
-                )
-                if not selected_candidates:
-                    raise ValueError("Candidate selector returned no candidates")
-                await self._persist_event(
-                    SelectionCompletedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_ids=[
-                            candidate.candidate_id for candidate in selected_candidates
-                        ],
-                        metadata={"selector_id": self.selector.component_id},
-                    )
-                )
-                self.tracing_provider.end_span(span, "ok")
-            except Exception as exc:
-                await self._persist_event(
-                    SelectionFailedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        error_message=str(exc),
-                    )
-                )
-                self.tracing_provider.end_span(span, "error")
-                return CaseResult(
-                    **case_result_kwargs,
-                    generated_candidates=generated_candidates,
-                ), True
-
-        reduced = prior_case_state.reduced_candidate
-        if reduced is None:
-            cached_reduction = self._load_stage_cache(
-                "reduce",
-                self._reduction_cache_key(snapshot, selected_candidates),
-            )
-            if isinstance(cached_reduction, dict) and isinstance(
-                cached_reduction.get("result"), dict
-            ):
-                reduced = ReducedCandidate.model_validate(cached_reduction["result"])
-                await self._persist_event(
-                    ReductionCompletedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        source_candidate_ids=reduced.source_candidate_ids,
-                        result=reduced.model_dump(mode="json"),
-                        cache_hit=True,
-                        source_run_id=cast(
-                            str | None, cached_reduction.get("source_run_id")
-                        ),
-                    )
-                )
-        if reduced is None:
-            reduce_ctx = ReduceContext(
-                run_id=snapshot.run_id,
-                case_id=case.case_id,
-                dataset_id=item0.dataset_id,
-                case_key=item0.case_key,
-                candidate_ids=[
-                    candidate.candidate_id for candidate in selected_candidates
-                ],
-                seed=item0.seed,
-                metadata={"selector_id": self.selector.component_id}
-                if self.selector is not None
-                else {},
-            )
-            self._notify("before_reduce", selected_candidates, reduce_ctx)
-            span = self.tracing_provider.start_span(
-                "reduction", {"case_id": case.case_id}
-            )
-            try:
-                reduced = await self._reduce_candidates(selected_candidates, reduce_ctx)
-                self._notify("after_reduce", reduced, reduce_ctx)
-                await self._persist_event(
-                    ReductionCompletedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        source_candidate_ids=reduced.source_candidate_ids,
-                        result=reduced.model_dump(mode="json"),
-                    )
-                )
-                self._store_stage_cache(
-                    "reduce",
-                    self._reduction_cache_key(snapshot, selected_candidates),
-                    {
-                        "source_run_id": snapshot.run_id,
-                        "result": reduced.model_dump(mode="json"),
-                    },
-                )
-                self.tracing_provider.end_span(span, "ok")
-            except Exception as exc:
-                await self._persist_event(
-                    ReductionFailedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        error_message=str(exc),
-                    )
-                )
-                self.tracing_provider.end_span(span, "error")
-                return CaseResult(
-                    **case_result_kwargs,
-                    generated_candidates=generated_candidates,
-                ), True
-        if self.until_stage == "reduce":
-            return (
-                CaseResult(
-                    **case_result_kwargs,
-                    generated_candidates=generated_candidates,
-                    reduced_candidate=reduced,
-                ),
-                had_failure,
-            )
-
-        parser_views: list[tuple[str, Parser | None]]
-        if self.parsers:
-            parser_views = list(self.parsers)
-        else:
-            parser_views = [("default", None)]
-        parsed_views = dict(prior_case_state.parsed_views)
-        parse_errors = dict(prior_case_state.parse_errors)
-        for parser_view, parser in parser_views:
-            if parser_view in parsed_views:
-                continue
-            cached_parse = self._load_stage_cache(
-                "parse",
-                self._parse_cache_key(snapshot, reduced, parser_view),
-            )
-            if isinstance(cached_parse, dict) and isinstance(
-                cached_parse.get("result"), dict
-            ):
-                parsed = ParsedOutput.model_validate(cached_parse["result"])
-                parsed_views[parser_view] = parsed
-                parse_errors.pop(parser_view, None)
-                await self._persist_event(
-                    ParseCompletedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        parser_id=parser_view,
-                        result=parsed.model_dump(mode="json"),
-                        cache_hit=True,
-                        source_run_id=cast(
-                            str | None, cached_parse.get("source_run_id")
-                        ),
-                    )
-                )
-                continue
-            parse_ctx = ParseContext(
-                run_id=snapshot.run_id,
-                case_id=case.case_id,
-                dataset_id=item0.dataset_id,
-                case_key=item0.case_key,
-                candidate_id=reduced.candidate_id,
-                parser_view=parser_view,
-            )
-            self._notify("before_parse", reduced, parse_ctx)
-            span = self.tracing_provider.start_span(
-                "parse", {"case_id": case.case_id, "parser_view": parser_view}
-            )
-            try:
-                async with self._global_semaphore:
-                    async with self._stage_semaphores["parsing"]:
-                        parsed = await asyncio.to_thread(
-                            self._parse_candidate, reduced, parse_ctx, parser
-                        )
-                parsed_views[parser_view] = parsed
-                parse_errors.pop(parser_view, None)
-                self._notify("after_parse", parsed, parse_ctx)
-                await self._persist_event(
-                    ParseCompletedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        parser_id=parser_view,
-                        result=parsed.model_dump(mode="json"),
-                    )
-                )
-                self._store_stage_cache(
-                    "parse",
-                    self._parse_cache_key(snapshot, reduced, parser_view),
-                    {
-                        "source_run_id": snapshot.run_id,
-                        "result": parsed.model_dump(mode="json"),
-                    },
-                )
-                self.tracing_provider.end_span(span, "ok")
-            except Exception as exc:
-                parse_errors[parser_view] = str(exc)
-                await self._persist_event(
-                    ParseFailedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        parser_id=parser_view,
-                        error_message=str(exc),
-                    )
-                )
-                self.tracing_provider.end_span(span, "error")
-                had_failure = True
-        if self.until_stage == "parse":
-            return (
-                CaseResult(
-                    **case_result_kwargs,
-                    generated_candidates=generated_candidates,
-                    reduced_candidate=reduced,
-                    parsed_views=parsed_views,
-                    parse_errors=parse_errors,
-                ),
-                had_failure,
-            )
-
-        for metric, metric_kind in zip(
-            self.metrics, snapshot.metric_kinds, strict=False
-        ):
-            if self.until_stage == "score" and metric_kind != "pure":
-                continue
-            if (
-                metric_kind != "pure"
-                and metric.component_id not in self.force_workflow_metrics
-                and metric.component_id in metric_results
-                and metric.component_id in workflow_executions
-                and workflow_executions[metric.component_id].status == "completed"
-                and not workflow_executions[metric.component_id].failures
-            ):
-                continue
-            if metric_kind == "pure" and metric.component_id in metric_results:
-                continue
-            parser_view = str(getattr(metric, "parser_view", "default"))
-            selected_parsed = parsed_views.get(parser_view)
-            if selected_parsed is None:
-                score_error = ScoreError(
-                    metric_id=metric.component_id,
-                    reason=parse_errors.get(
-                        parser_view, f"Missing parser view: {parser_view}"
-                    ),
-                    category=FailureCategory.PARSE_FAILURE
-                    if parser_view in parse_errors
-                    else FailureCategory.METRIC_FAILURE,
-                    metadata={"parser_view": parser_view},
-                )
-                metric_results.pop(metric.component_id, None)
-                score_failures[metric.component_id] = score_error
-                await self._persist_event(
-                    ScoreFailedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        metric_id=metric.component_id,
-                        error=score_error.model_dump(mode="json"),
-                    )
-                )
-                had_failure = True
-                continue
-            if metric_kind == "pure":
-                if not _is_pure_metric(metric):
-                    raise TypeError(
-                        f"Metric {metric.component_id} does not implement PureMetric"
-                    )
-                cache_key = self._score_cache_key(
-                    snapshot, case, selected_parsed, metric
-                )
-                cached_score = self._load_stage_cache("score", cache_key)
-                if isinstance(cached_score, dict) and isinstance(
-                    cached_score.get("metric_result"), dict
-                ):
-                    cached_metric_result = MetricResult.model_validate(
-                        cached_score["metric_result"]
-                    )
-                    metric_results[metric.component_id] = cached_metric_result
-                    score_failures.pop(metric.component_id, None)
-                    await self._persist_event(
-                        ScoreCompletedEvent(
-                            run_id=snapshot.run_id,
-                            **case_event_kwargs,
-                            candidate_id=reduced.candidate_id,
-                            metric_id=cached_metric_result.metric_id,
-                            metric_result=cached_metric_result.model_dump(mode="json"),
-                            cache_hit=True,
-                            source_run_id=cast(
-                                str | None, cached_score.get("source_run_id")
-                            ),
-                        )
-                    )
-                    continue
-                score_ctx = ScoreContext(
-                    run_id=snapshot.run_id,
-                    case=case,
-                    parsed_views=parsed_views,
-                    parser_view=parser_view,
-                    dataset_id=item0.dataset_id,
-                    case_key=item0.case_key,
-                    seed=item0.seed,
-                )
-                self._notify("before_score", selected_parsed, score_ctx)
-                span = self.tracing_provider.start_span(
-                    "score",
-                    {"case_id": case.case_id, "metric_id": metric.component_id},
-                )
-                try:
-                    async with self._stage_semaphores["scoring"]:
-                        metric_result = await asyncio.to_thread(
-                            _score_pure_metric,
-                            metric,
-                            selected_parsed,
-                            case,
-                            score_ctx,
-                        )
-                    self._notify("after_score", metric_result, score_ctx)
-                    if isinstance(metric_result, ScoreError):
-                        score_failures[metric.component_id] = metric_result
-                        metric_results.pop(metric.component_id, None)
-                        await self._persist_event(
-                            ScoreFailedEvent(
-                                run_id=snapshot.run_id,
-                                **case_event_kwargs,
-                                candidate_id=reduced.candidate_id,
-                                metric_id=metric_result.metric_id,
-                                error=metric_result.model_dump(mode="json"),
-                            )
-                        )
-                        had_failure = True
-                        self.tracing_provider.end_span(span, "error")
-                        continue
-                    metric_results[metric.component_id] = metric_result
-                    score_failures.pop(metric.component_id, None)
-                    await self._persist_event(
-                        ScoreCompletedEvent(
-                            run_id=snapshot.run_id,
-                            **case_event_kwargs,
-                            candidate_id=reduced.candidate_id,
-                            metric_id=metric_result.metric_id,
-                            metric_result=metric_result.model_dump(mode="json"),
-                        )
-                    )
-                    self._store_stage_cache(
-                        "score",
-                        cache_key,
-                        {
-                            "source_run_id": snapshot.run_id,
-                            "metric_result": metric_result.model_dump(mode="json"),
-                        },
-                    )
-                    self.tracing_provider.end_span(span, "ok")
-                except Exception as exc:
-                    score_error = ScoreError(
-                        metric_id=metric.component_id, reason=str(exc)
-                    )
-                    score_failures[metric.component_id] = score_error
-                    metric_results.pop(metric.component_id, None)
-                    await self._persist_event(
-                        ScoreFailedEvent(
-                            run_id=snapshot.run_id,
-                            **case_event_kwargs,
-                            candidate_id=reduced.candidate_id,
-                            metric_id=metric.component_id,
-                            error=score_error.model_dump(mode="json"),
-                        )
-                    )
-                    self.tracing_provider.end_span(span, "error")
-                    had_failure = True
-                continue
-
-            if not _is_workflow_metric(metric):
-                raise TypeError(
-                    f"Metric {metric.component_id} does not implement a workflow metric protocol"
-                )
-            eval_ctx = self._evaluation_context(
-                snapshot,
-                case,
-                parsed_views,
-                parser_view,
-                item0.seed,
-                dataset_id=item0.dataset_id,
-                case_key=item0.case_key,
-            )
-            subject = self._evaluation_subject(
-                metric_kind=metric_kind,
-                generated_candidates=generated_candidates,
-                reduced=reduced,
-            )
-            self._notify("before_judge", subject, eval_ctx)
-            span = self.tracing_provider.start_span(
-                "judge",
-                {"case_id": case.case_id, "metric_id": metric.component_id},
-            )
-            try:
-                workflow = metric.build_workflow(subject, eval_ctx)
-                execution = await self.workflow_runner.run_evaluation(
-                    workflow=workflow,
-                    subject=subject,
-                    metric_id=metric.component_id,
-                    ctx=eval_ctx,
-                )
-                self._notify("after_judge", execution, eval_ctx)
-                workflow_executions[metric.component_id] = execution
-                evaluation_failures.pop(metric.component_id, None)
-                execution_blob_ref = await self._store_blob(
-                    json.dumps(
-                        execution.model_dump(mode="json"), sort_keys=True
-                    ).encode("utf-8"),
-                    "application/json",
-                )
-                await self._persist_event(
-                    EvaluationCompletedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        metric_id=metric.component_id,
-                        execution=execution.model_dump(mode="json"),
-                        execution_blob_ref=execution_blob_ref,
-                    )
-                )
-                final_score = self._final_workflow_score(metric.component_id, execution)
-                had_failure = (
-                    had_failure
-                    or execution.status == "partial_failure"
-                    or bool(execution.failures)
-                )
-                if final_score is not None:
-                    metric_results[metric.component_id] = final_score
-                    score_failures.pop(metric.component_id, None)
-                    await self._persist_event(
-                        ScoreCompletedEvent(
-                            run_id=snapshot.run_id,
-                            **case_event_kwargs,
-                            candidate_id=reduced.candidate_id,
-                            metric_id=final_score.metric_id,
-                            metric_result=final_score.model_dump(mode="json"),
-                        )
-                    )
-                else:
-                    score_error = ScoreError(
-                        metric_id=metric.component_id,
-                        reason="workflow execution completed without a usable final score",
-                    )
-                    metric_results.pop(metric.component_id, None)
-                    score_failures[metric.component_id] = score_error
-                    await self._persist_event(
-                        ScoreFailedEvent(
-                            run_id=snapshot.run_id,
-                            **case_event_kwargs,
-                            candidate_id=reduced.candidate_id,
-                            metric_id=metric.component_id,
-                            error=score_error.model_dump(mode="json"),
-                        )
-                    )
-                    had_failure = True
-                self.tracing_provider.end_span(span, "ok")
-            except (WorkflowBuildError, Exception) as exc:
-                workflow_executions.pop(metric.component_id, None)
-                evaluation_failures[metric.component_id] = str(exc)
-                score_error = ScoreError(metric_id=metric.component_id, reason=str(exc))
-                metric_results.pop(metric.component_id, None)
-                score_failures[metric.component_id] = score_error
-                await self._persist_event(
-                    EvaluationFailedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        metric_id=metric.component_id,
-                        error_message=str(exc),
-                    )
-                )
-                await self._persist_event(
-                    ScoreFailedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        metric_id=metric.component_id,
-                        error=score_error.model_dump(mode="json"),
-                    )
-                )
-                self.tracing_provider.end_span(span, "error")
-                had_failure = True
-
-        expected_metric_ids = {
-            metric.component_id
-            for metric, metric_kind in zip(
-                self.metrics, snapshot.metric_kinds, strict=False
-            )
-            if self.until_stage == "judge" or metric_kind == "pure"
-        }
-
-        return (
-            CaseResult(
-                **case_result_kwargs,
-                generated_candidates=generated_candidates,
-                reduced_candidate=reduced,
-                parsed_views=parsed_views,
-                parse_errors=parse_errors,
-                evaluation_executions=[
-                    workflow_executions[metric.component_id]
-                    for metric, metric_kind in zip(
-                        self.metrics, snapshot.metric_kinds, strict=False
-                    )
-                    if metric_kind != "pure"
-                    and metric.component_id in workflow_executions
-                ],
-                metric_results=[
-                    result
-                    for metric, _metric_kind in zip(
-                        self.metrics, snapshot.metric_kinds, strict=False
-                    )
-                    for result in [
-                        metric_results.get(metric.component_id)
-                        or score_failures.get(metric.component_id)
-                    ]
-                    if result is not None
-                ],
-            ),
-            had_failure or len(metric_results) != len(expected_metric_ids),
-        )
+        return await self._case_pipeline.run_case(snapshot, items, existing_state)
 
     async def _generate_candidate(
         self,
@@ -1597,94 +905,40 @@ class Orchestrator:
         raise RuntimeError("unreachable")
 
     async def _persist_event(self, event) -> None:
-        for attempt in range(self.runtime.store_retry_attempts):
-            try:
-                self.store.persist_event(event)
-                break
-            except Exception:
-                if attempt + 1 == self.runtime.store_retry_attempts:
-                    raise
-                await asyncio.sleep(self.runtime.store_retry_delay)
-        self._notify("on_event", event)
+        await self.runtime_support.persist_event(event)
 
     async def _store_blob(self, blob: bytes, media_type: str) -> str:
-        for attempt in range(self.runtime.store_retry_attempts):
-            try:
-                return self.store.store_blob(blob, media_type)
-            except Exception:
-                if attempt + 1 == self.runtime.store_retry_attempts:
-                    raise
-                await asyncio.sleep(self.runtime.store_retry_delay)
-        raise RuntimeError("unreachable")
+        return await self.runtime_support.store_blob(blob, media_type)
 
     def _notify(self, method_name: str, *args) -> None:
-        for subscriber in self.subscribers:
-            method = getattr(subscriber, method_name, None)
-            if method is not None:
-                method(*args)
+        self.runtime_support.notify(method_name, *args)
 
     def _provider_key(self) -> str | None:
         return getattr(self.generator, "provider_key", None)
 
     def _provider_semaphore(self, provider_key: str) -> asyncio.Semaphore:
-        if provider_key not in self._provider_semaphores:
-            limit = max(
-                1,
-                self.runtime.provider_concurrency.get(
-                    provider_key, self.runtime.max_concurrent_tasks
-                ),
-            )
-            self._provider_semaphores[provider_key] = asyncio.Semaphore(limit)
-        return self._provider_semaphores[provider_key]
+        return self.runtime_support.provider_semaphore(provider_key)
 
-    def _provider_limiter(self, provider_key: str) -> TokenBucketRateLimiter:
-        if provider_key not in self._provider_limiters:
-            requests_per_minute = self.runtime.provider_rate_limits.get(
-                provider_key,
-                DEFAULT_PROVIDER_RATE_LIMIT,
-            )
-            self._provider_limiters[provider_key] = TokenBucketRateLimiter(
-                requests_per_minute
-            )
-        return self._provider_limiters[provider_key]
+    def _provider_limiter(self, provider_key: str):
+        return self.runtime_support.provider_limiter(provider_key)
 
-    def _provider_token_limiter(
-        self, provider_key: str
-    ) -> TokenBucketRateLimiter | None:
-        tokens_per_minute = self.runtime.provider_token_limits.get(provider_key)
-        if tokens_per_minute is None:
-            return None
-        if provider_key not in self._provider_token_limiters:
-            self._provider_token_limiters[provider_key] = TokenBucketRateLimiter(
-                tokens_per_minute
-            )
-        return self._provider_token_limiters[provider_key]
+    def _provider_token_limiter(self, provider_key: str):
+        return self.runtime_support.provider_token_limiter(provider_key)
 
     async def _update_rate_limit(
         self,
         provider_key: str | None,
         artifacts: Mapping[str, object] | None,
     ) -> None:
-        if provider_key is None or not artifacts:
-            return
-        rate_limit = artifacts.get("rate_limit")
-        if not isinstance(rate_limit, dict):
-            return
-        requests_per_minute = rate_limit.get("requests_per_minute")
-        if isinstance(requests_per_minute, int):
-            await self._provider_limiter(provider_key).update_limit(requests_per_minute)
+        await self.runtime_support.update_rate_limit(provider_key, artifacts)
 
     def _load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
-        if isinstance(self.store, InMemoryRunStore):
-            return None
-        return self.store.load_stage_cache(stage_name, cache_key)
+        return self.runtime_support.load_stage_cache(stage_name, cache_key)
 
     def _store_stage_cache(
         self, stage_name: str, cache_key: str, payload: JSONValue
     ) -> None:
-        if isinstance(self.store, InMemoryRunStore):
-            return
-        self.store.store_stage_cache(stage_name, cache_key, payload)
+        self.runtime_support.store_stage_cache(stage_name, cache_key, payload)
 
     def _generation_cache_key(
         self, snapshot: RunSnapshot, case, item: GenerationWorkItem
@@ -1814,74 +1068,3 @@ class Orchestrator:
         if store_retry_attempts is not None:
             updates["store_retry_attempts"] = max(1, store_retry_attempts)
         return base.model_copy(update=updates)
-
-
-def _classify_retryable_error(exc: Exception) -> dict[str, JSONValue] | None:
-    if bool(getattr(exc, "retryable", False)):
-        return {"reason": "explicit_retryable"}
-    if isinstance(exc, TimeoutError | asyncio.TimeoutError):
-        return {"reason": "timeout"}
-    if isinstance(exc, ConnectionLikeErrors):
-        return {"reason": "connection"}
-    status_code = getattr(exc, "status_code", None)
-    retry_after_s = getattr(exc, "retry_after_s", None)
-    if status_code == 429:
-        payload: dict[str, JSONValue] = {"reason": "rate_limit"}
-        if isinstance(retry_after_s, (int, float)):
-            payload["retry_after_s"] = float(retry_after_s)
-        return payload
-    if isinstance(status_code, int) and 500 <= status_code < 600:
-        payload = {"reason": "server_error"}
-        if isinstance(retry_after_s, (int, float)):
-            payload["retry_after_s"] = float(retry_after_s)
-        return payload
-    return None
-
-
-def _retry_delay_seconds(
-    *,
-    base_delay: float,
-    backoff: float,
-    attempt: int,
-    retry_after_s: JSONValue | None = None,
-    rng: random.Random | None = None,
-) -> float:
-    computed_delay = max(0.0, base_delay) * (max(1.0, backoff) ** attempt)
-    jitter_window = computed_delay * 0.1
-    jittered_delay = computed_delay
-    if jitter_window > 0:
-        jitter_rng = rng or _RETRY_JITTER_RNG
-        jittered_delay = max(
-            0.0,
-            computed_delay + jitter_rng.uniform(-jitter_window, jitter_window),
-        )
-    if isinstance(retry_after_s, (int, float)):
-        return max(jittered_delay, float(retry_after_s))
-    return jittered_delay
-
-
-def _observed_token_cost(token_usage: Mapping[str, int] | None) -> int:
-    if not token_usage:
-        return 1
-    total = token_usage.get("total_tokens")
-    if isinstance(total, int) and total > 0:
-        return total
-    return max(
-        1, sum(value for value in token_usage.values() if isinstance(value, int))
-    )
-
-
-def _score_pure_metric(
-    metric: PureMetric,
-    parsed: ParsedOutput,
-    case,
-    score_ctx: ScoreContext,
-) -> MetricResult | ScoreError:
-    return metric.score(parsed, case, score_ctx)
-
-
-def _stable_hash(payload: dict[str, object]) -> str:
-    encoded = json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), allow_nan=False
-    )
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

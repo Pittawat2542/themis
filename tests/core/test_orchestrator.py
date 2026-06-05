@@ -13,6 +13,7 @@ from themis.core.builtins import (
     resolve_parser_component,
     resolve_reducer_component,
 )
+from themis.core.case_pipeline import CasePipeline
 from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
@@ -47,7 +48,8 @@ from themis.core.models import (
     TraceStep,
 )
 from themis.core.orchestrator import Orchestrator, _retry_delay_seconds
-from themis.core.results import RunStatus
+from themis.core.planner import Planner
+from themis.core.results import CaseResult, ExecutionState, RunStatus
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.tracing import NoOpTracingProvider
@@ -695,6 +697,55 @@ def _experiment() -> Experiment:
             )
         ],
     )
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_private_run_case_delegates_to_case_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = _experiment()
+    snapshot = experiment.compile()
+    items = [item async for item in Planner().iter_work_items(snapshot)]
+    store = InMemoryRunStore()
+    captured: dict[str, object] = {}
+
+    async def fake_run_case(self, snapshot_arg, items_arg, existing_state_arg):
+        captured["pipeline"] = self
+        captured["snapshot"] = snapshot_arg
+        captured["items"] = items_arg
+        captured["existing_state"] = existing_state_arg
+        return (
+            CaseResult(
+                case_id=items_arg[0].case_id,
+                dataset_id=items_arg[0].dataset_id,
+                case_key=items_arg[0].case_key,
+            ),
+            False,
+        )
+
+    monkeypatch.setattr(CasePipeline, "run_case", fake_run_case)
+    orchestrator = Orchestrator(
+        store=store,
+        generator=resolve_generator_component(experiment.generation.generator),
+        reducer=resolve_reducer_component(experiment.generation.reducer),
+        parsers=[
+            (view.id, resolve_parser_component(view.parser))
+            for view in experiment.evaluation.parser_views
+        ],
+        metrics=[
+            resolve_metric_component(metric) for metric in experiment.evaluation.metrics
+        ],
+    )
+    existing_state = ExecutionState(run_id=snapshot.run_id)
+
+    result, failed = await orchestrator._run_case(snapshot, items, existing_state)
+
+    assert isinstance(captured["pipeline"], CasePipeline)
+    assert captured["snapshot"] is snapshot
+    assert captured["items"] is items
+    assert captured["existing_state"] is existing_state
+    assert result.case_key == items[0].case_key
+    assert failed is False
 
 
 @pytest.mark.asyncio
