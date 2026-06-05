@@ -72,7 +72,7 @@ def test_report_export_and_compare_commands(
     assert report(config=str(baseline_config), format="csv") == 0
     assert (
         capsys.readouterr().out.splitlines()[0]
-        == "case_id,dataset_id,case_key,metric_id,result_type,outcome,value,confidence,dimensions,labels,candidate_id,failure_category,error_message,metadata"
+        == "metric_id,count,mean,min,max,ci_lower,ci_upper"
     )
 
     assert report(config=str(baseline_config), format="latex") == 0
@@ -98,7 +98,8 @@ def test_report_export_and_compare_commands(
         == 0
     )
     compare_payload = json.loads(capsys.readouterr().out)
-    assert compare_payload["metrics"]["builtin/exact_match"]["ties"] == 1
+    assert compare_payload["metrics"][0]["metric_id"] == "builtin/exact_match"
+    assert compare_payload["metrics"][0]["ties"] == 1
 
     assert (
         compare(
@@ -110,7 +111,8 @@ def test_report_export_and_compare_commands(
         == 0
     )
     compare_by_id_payload = json.loads(capsys.readouterr().out)
-    assert compare_by_id_payload["metrics"]["builtin/exact_match"]["ties"] == 1
+    assert compare_by_id_payload["metrics"][0]["metric_id"] == "builtin/exact_match"
+    assert compare_by_id_payload["metrics"][0]["ties"] == 1
 
     candidate_store.update_run_record(
         candidate_experiment.compile().run_id, baseline_label="candidate"
@@ -125,7 +127,8 @@ def test_report_export_and_compare_commands(
         == 0
     )
     compare_by_label_payload = json.loads(capsys.readouterr().out)
-    assert compare_by_label_payload["metrics"]["builtin/exact_match"]["ties"] == 1
+    assert compare_by_label_payload["metrics"][0]["metric_id"] == "builtin/exact_match"
+    assert compare_by_label_payload["metrics"][0]["ties"] == 1
 
     assert export_generation(config=str(baseline_config)) == 0
     generation_payload = json.loads(capsys.readouterr().out)

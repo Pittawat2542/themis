@@ -18,7 +18,7 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 | `submit` | Writes deferred-execution manifests | You want worker-pool or batch execution instead of immediate in-process execution | Requires `--mode worker-pool` or `--mode batch` |
 | `resume` | Reopens a stored run and continues according to runtime policy | You want to continue interrupted or partially completed persistent work | Depends on a persistent store |
 | `estimate` | Prints planner and token-estimate output for a compiled snapshot | You want execution counts and token assumptions before running | Estimates are informational, not pricing |
-| `report` | Exports score and outcome reports in multiple formats | You want shareable output from a stored run | Requires a stored run and a format choice |
+| `report` | Exports summary-first reports in multiple formats | You want shareable output from a stored run | Requires a stored run and a format choice |
 | `inspect` | Reads snapshots, state, or evaluation executions from the store | You want to diagnose or inspect persisted artifacts | Uses subcommands for each payload type |
 | `quickcheck` | Prints a compact status summary for one stored run | You want a fast health check instead of a full report | Depends on persisted state |
 | `compare` | Compares two persisted benchmark results | You want baseline vs candidate analysis across completed runs | Requires two config-backed runs |
@@ -37,7 +37,7 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 | `resume --config ...` | Reopens the compiled `run_id` and continues if the store shows pending work | You want to continue interrupted persistent work | Depends on a persistent store |
 | `estimate --config ...` | Prints planner output, task counts, token estimates, and estimate assumptions | You want pre-run sizing and cost-model inputs | No pricing is applied by Themis |
 | `quickcheck --config ...` | Prints a compact status summary for a stored run | You want a quick operational check | Less detail than `report` or `inspect` |
-| `report --config ... --format ...` | Exports JSON, Markdown, CSV, or LaTeX projections | You want a shareable report from stored state | Requires a supported `--format` |
+| `report --config ... --format ...` | Exports JSON projections or Markdown, CSV, and LaTeX metric summaries | You want a shareable report from stored state | Requires a supported `--format` |
 | `inspect snapshot --config ...` | Prints the stored `RunSnapshot` | You want identity and provenance details | Snapshot inspection is read-only |
 | `inspect state --config ...` | Prints stored execution state | You want stage completion, counters, and failure visibility | Persistent storage is required outside a still-live memory store |
 | `inspect evaluation --config ... --case-id ... --metric-id ...` | Prints one stored workflow execution | You want judge prompts, responses, or workflow artifacts for a specific case | Only applies to workflow-backed metrics |
@@ -64,7 +64,7 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 
 JSON-producing commands generally emit compact machine-readable JSON to stdout. Commands that inspect stored runs require a persistent store unless the current process still owns the original memory store.
 
-`report` and exported score tables include `result_type`, `confidence`, `dimensions`, `labels`, `failure_category`, `error_message`, and `metadata` columns alongside metric values.
+`report --format csv` and `report --format latex` emit compact metric summary tables with `metric_id`, `count`, `mean`, `min`, `max`, `ci_lower`, and `ci_upper`. `report --format json` includes the full stored projections plus `stats_summary`; raw per-case score rows remain in `benchmark_result.score_rows`.
 
 ## Current CLI boundary
 

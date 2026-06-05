@@ -46,9 +46,9 @@ def compare(
         if candidate_run_id is not None or candidate_baseline_label is not None
         else candidate_experiment.compile().run_id
     )
-    comparison = StatsEngine().paired_compare(
+    comparison = StatsEngine().compare(
         load_benchmark_result(baseline_store, resolved_baseline_run_id),
         load_benchmark_result(candidate_store, resolved_candidate_run_id),
     )
-    print(dump_json(comparison))
+    print(dump_json(comparison.model_dump(mode="json")))
     return 0

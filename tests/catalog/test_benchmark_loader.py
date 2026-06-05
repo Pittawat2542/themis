@@ -8,9 +8,13 @@ import pytest
 from themis.catalog import load
 from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.catalog.loaders import (
+    BenchmarkSourceRequest,
     MissingOptionalDependencyError,
+    load_benchmark_rows,
     load_huggingface_rows,
     load_huggingface_raw_rows,
+    load_symbol,
+    load_yaml,
 )
 from tests.catalog_ids import catalog_benchmark_ids
 
@@ -67,6 +71,35 @@ def test_catalog_manifest_covers_representative_benchmark_families() -> None:
     assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
 
 
+def test_loader_rejects_invalid_symbol_targets() -> None:
+    with pytest.raises(ValueError, match="Invalid load target"):
+        load_symbol("themis.catalog.loaders")
+
+
+def test_yaml_loader_requires_mapping_payload(tmp_path) -> None:
+    path = tmp_path / "not-a-map.yaml"
+    path.write_text("- one\n- two\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Expected mapping config"):
+        load_yaml(path)
+
+
+def test_raw_benchmark_loading_requires_files() -> None:
+    with pytest.raises(ValueError, match="No raw files configured"):
+        load_huggingface_raw_rows("demo", files=[])
+
+
+def test_load_benchmark_rows_rejects_unknown_source_kind() -> None:
+    request = BenchmarkSourceRequest(
+        source_kind="unsupported",
+        dataset_id="demo",
+        split="test",
+    )
+
+    with pytest.raises(ValueError, match="Unknown benchmark source kind"):
+        load_benchmark_rows(request)
+
+
 def test_raw_benchmark_loading_reports_missing_huggingface_hub_dependency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -83,6 +116,21 @@ def test_raw_benchmark_loading_reports_missing_huggingface_hub_dependency(
     assert "huggingface_hub" in message
     assert "pip install huggingface-hub" in message
     assert 'uv add "themis-eval[datasets]"' in message
+
+
+def test_huggingface_dataset_loading_reports_missing_datasets_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(sys.modules, "datasets", raising=False)
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: (_ for _ in ()).throw(ModuleNotFoundError(name)),
+    )
+
+    with pytest.raises(MissingOptionalDependencyError) as exc_info:
+        load_huggingface_rows("demo", "test")
+
+    assert "optional datasets dependency" in str(exc_info.value)
 
 
 def test_huggingface_dataset_loading_streams_rows_as_plain_dicts(
@@ -121,6 +169,108 @@ def test_huggingface_dataset_loading_streams_rows_as_plain_dicts(
         "args": ("openai/MMMLU", "ZH_CN"),
         "kwargs": {"split": "test", "revision": None, "streaming": True},
     }
+
+
+def test_load_benchmark_rows_dispatches_huggingface_dataset_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeDataset:
+        def __iter__(self):
+            yield {"question": "one", "answer": "A"}
+
+    class _FakeDatasetsModule:
+        @staticmethod
+        def load_dataset(*args, **kwargs):
+            del args, kwargs
+            return _FakeDataset()
+
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: _FakeDatasetsModule() if name == "datasets" else None,
+    )
+
+    rows = load_benchmark_rows(
+        BenchmarkSourceRequest(
+            dataset_id="demo",
+            split="test",
+            config_name="default",
+        )
+    )
+
+    assert rows == [{"question": "one", "answer": "A"}]
+
+
+def test_huggingface_raw_loading_supports_jsonl_rows(tmp_path) -> None:
+    path = tmp_path / "sample.jsonl"
+    path.write_text(
+        '{"question": "one", "answer": "A"}\n\n{"question": "two", "answer": "B"}\n',
+        encoding="utf-8",
+    )
+
+    class _FakeHubModule:
+        @staticmethod
+        def hf_hub_download(*, repo_id, filename, repo_type, revision=None):
+            del repo_id, filename, repo_type, revision
+            return str(path)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: _FakeHubModule() if name == "huggingface_hub" else None,
+    )
+    try:
+        rows = load_huggingface_raw_rows("demo", files=["sample.jsonl"])
+    finally:
+        monkeypatch.undo()
+
+    assert rows == [
+        {"question": "one", "answer": "A"},
+        {"question": "two", "answer": "B"},
+    ]
+
+
+def test_huggingface_raw_loading_rejects_non_object_jsonl_rows(tmp_path) -> None:
+    path = tmp_path / "sample.jsonl"
+    path.write_text('["not", "an", "object"]\n', encoding="utf-8")
+
+    class _FakeHubModule:
+        @staticmethod
+        def hf_hub_download(*, repo_id, filename, repo_type, revision=None):
+            del repo_id, filename, repo_type, revision
+            return str(path)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: _FakeHubModule() if name == "huggingface_hub" else None,
+    )
+    try:
+        with pytest.raises(ValueError, match="Expected JSON object rows"):
+            load_huggingface_raw_rows("demo", files=["sample.jsonl"])
+    finally:
+        monkeypatch.undo()
+
+
+def test_huggingface_raw_loading_rejects_unsupported_file_types(tmp_path) -> None:
+    path = tmp_path / "sample.txt"
+    path.write_text("plain text\n", encoding="utf-8")
+
+    class _FakeHubModule:
+        @staticmethod
+        def hf_hub_download(*, repo_id, filename, repo_type, revision=None):
+            del repo_id, filename, repo_type, revision
+            return str(path)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "themis.catalog.loaders.importlib.import_module",
+        lambda name: _FakeHubModule() if name == "huggingface_hub" else None,
+    )
+    try:
+        with pytest.raises(ValueError, match="Unsupported raw benchmark file type"):
+            load_huggingface_raw_rows("demo", files=["sample.txt"])
+    finally:
+        monkeypatch.undo()
 
 
 def test_huggingface_raw_loading_supports_parquet_rows(tmp_path) -> None:

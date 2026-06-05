@@ -120,7 +120,8 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
     exported_markdown = reporter.export_markdown(run_id)
     exported_csv = reporter.export_csv(run_id)
     exported_latex = reporter.export_latex(run_id)
-    score_table = reporter.export_score_table(run_id)
+    score_rows = reporter.score_rows(run_id)
+    summary = reporter.summary(run_id)
 
     parsed_json = json.loads(exported_json)
     csv_rows = list(csv.DictReader(StringIO(exported_csv)))
@@ -128,13 +129,20 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
     assert parsed_json["run_result"]["run_id"] == run_id
     assert parsed_json["snapshot"]["run_id"] == run_id
     assert parsed_json["execution_state"]["run_id"] == run_id
+    assert parsed_json["stats_summary"] == summary.model_dump(mode="json")
     assert "# Run Report" in exported_markdown
+    assert (
+        "| metric_id | count | mean | min | max | ci_lower | ci_upper |"
+        in exported_markdown
+    )
     assert "builtin/exact_match" in exported_markdown
+    assert "## Failures" not in exported_markdown
     assert len(csv_rows) == 1
-    assert csv_rows[0]["case_id"] == "case-1"
     assert csv_rows[0]["metric_id"] == "builtin/exact_match"
+    assert csv_rows[0]["mean"] == "1.0"
     assert "\\begin{tabular}" in exported_latex
-    assert score_table == [
+    assert r"\begin{tabular}{lrrrrrr}" in exported_latex
+    assert score_rows == [
         {
             "case_id": "case-1",
             "dataset_id": "dataset-1",
@@ -159,7 +167,7 @@ def test_reporter_escapes_latex_special_characters() -> None:
     store._projections[(run_id, "benchmark_result")] = {
         "run_id": run_id,
         "dataset_ids": ["data_set%1"],
-        "metric_ids": ["builtin/exact_match"],
+        "metric_ids": ["metric_^~#"],
         "total_cases": 1,
         "completed_cases": 1,
         "failed_cases": 0,
@@ -167,25 +175,61 @@ def test_reporter_escapes_latex_special_characters() -> None:
             {
                 "case_id": r"case_1%&${}\path",
                 "metric_id": "metric_^~#",
-                "outcome": "error",
-                "value": r"value_1%&${}\path",
+                "outcome": "correct",
+                "value": 1.0,
                 "candidate_id": None,
-                "failure_category": "parse_failure",
-                "error_message": r"bad_%&${}\path",
             }
         ],
-        "metric_means": {"builtin/exact_match": 1.0},
-        "outcome_counts": {"builtin/exact_match": {"error": 1}},
-        "error_counts": {"builtin/exact_match": {"parse_failure": 1}},
+        "metric_means": {"metric_^~#": 1.0},
+        "outcome_counts": {"metric_^~#": {"correct": 1}},
+        "error_counts": {},
     }
     reporter = Reporter(store)
 
     exported_latex = reporter.export_latex(run_id)
 
-    assert r"case\_1\%\&\$\{\}\textbackslash{}path" in exported_latex
     assert r"metric\_\textasciicircum{}\textasciitilde{}\#" in exported_latex
-    assert r"value\_1\%\&\$\{\}\textbackslash{}path" in exported_latex
-    assert r"bad\_\%\&\$\{\}\textbackslash{}path" in exported_latex
+
+
+def test_reporter_markdown_includes_failure_section_only_for_error_rows() -> None:
+    store, run_id = _store()
+    store._projections[(run_id, "benchmark_result")] = {
+        "run_id": run_id,
+        "dataset_ids": ["dataset-1"],
+        "metric_ids": ["builtin/exact_match"],
+        "total_cases": 1,
+        "completed_cases": 0,
+        "failed_cases": 1,
+        "score_rows": [
+            {
+                "case_id": "case-1",
+                "dataset_id": "dataset-1",
+                "case_key": "9:dataset-1:case-1",
+                "metric_id": "builtin/exact_match",
+                "outcome": "error",
+                "value": None,
+                "candidate_id": "case-1-reduced",
+                "failure_category": "parse_failure",
+                "error_message": "bad parse",
+            }
+        ],
+        "metric_means": {},
+        "outcome_counts": {"builtin/exact_match": {"error": 1}},
+        "error_counts": {"builtin/exact_match": {"parse_failure": 1}},
+    }
+    reporter = Reporter(store)
+
+    exported_markdown = reporter.export_markdown(run_id)
+
+    assert "## Failures" in exported_markdown
+    assert (
+        "| case_id | metric_id | failure_category | error_message |"
+        in exported_markdown
+    )
+    assert (
+        "| case-1 | builtin/exact_match | parse_failure | bad parse |"
+        in exported_markdown
+    )
 
 
 def test_snapshot_report_includes_identity_and_provenance() -> None:

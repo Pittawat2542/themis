@@ -16,7 +16,7 @@ def quickcheck(store: RunStore, run_id: str) -> dict[str, JSONValue]:
     if not isinstance(run_result, dict) or not isinstance(benchmark_result, dict):
         raise ValueError(f"Run projections unavailable for run_id={run_id}")
     progress = _require_mapping(run_result.get("progress"), name="run_result.progress")
-    score_rows = cast(JSONValue, reporter.export_score_table(run_id))
+    score_rows = cast(JSONValue, reporter.score_rows(run_id))
     return {
         "run_id": run_id,
         "status": run_result["status"],

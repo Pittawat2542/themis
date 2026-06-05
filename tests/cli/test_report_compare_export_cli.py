@@ -84,7 +84,7 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(
     assert report_csv.returncode == 0, report_csv.stderr
     assert (
         report_csv.stdout.splitlines()[0]
-        == "case_id,dataset_id,case_key,metric_id,result_type,outcome,value,confidence,dimensions,labels,candidate_id,failure_category,error_message,metadata"
+        == "metric_id,count,mean,min,max,ci_lower,ci_upper"
     )
 
     report_latex = _run_cli(
@@ -102,7 +102,8 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(
     )
     assert compare.returncode == 0, compare.stderr
     compare_payload = json.loads(compare.stdout)
-    assert compare_payload["metrics"]["builtin/exact_match"]["ties"] == 1
+    assert compare_payload["metrics"][0]["metric_id"] == "builtin/exact_match"
+    assert compare_payload["metrics"][0]["ties"] == 1
 
     generation_export = _run_cli(
         "export", "generation", "--config", str(baseline_config)

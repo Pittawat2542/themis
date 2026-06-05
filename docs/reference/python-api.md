@@ -20,7 +20,7 @@ This page is the generated entry point into the public Python API. Use the small
 | `InMemoryRunStore` | Store implementation | You want ephemeral local storage | No cross-process persistence |
 | `ProjectionCursor` | Store model | You want to inspect projection progress over a run event stream | Used by store backends to track projection freshness |
 | `PromptSpec` | Prompt model | You want prompt instructions, prefixes, suffixes, or prompt blocks as part of experiment identity | Shared across generation and builtin judge workflows |
-| `Reporter` | Reporting API | You want exports such as JSON, Markdown, CSV, or LaTeX | Works from stored projections |
+| `Reporter` | Reporting API | You want typed summaries or JSON, Markdown, CSV, and LaTeX exports | Summary exports work from stored projections; raw rows are available through `score_rows(...)` |
 | `RerunPlan` / `RerunSelector` | Rerun models | You want targeted rerun request payloads | Used by `Experiment.rerun(...)` and the CLI rerun command |
 | `RunEstimate` | Data model | You want planned task counts and token estimates | Informational only; not pricing |
 | `RunLineage` | Registry model | You want parent-child run relationships such as replay or rerun links | Stored as part of run records |
@@ -33,7 +33,7 @@ This page is the generated entry point into the public Python API. Use the small
 | `RuntimeConfig` | Config model | You want runtime tuning without changing logical identity | Covers concurrency, retries, and deferred execution paths |
 | `SessionConfig` | Config model | You want to configure session-native candidate execution | Carries generator, candidate policy, prompt, max-turn, termination, selector, and reducer settings |
 | `SqliteRunStore` | Store implementation | You want the default persistent local store | Good default for real runs |
-| `StatsEngine` | Analysis helper | You want statistical comparison utilities | Used in comparison and reporting flows |
+| `StatsEngine` | Analysis helper | You want typed metric summaries or paired comparison utilities | `summarize(...)` returns `StatsSummary`; `compare(...)` returns `ComparisonSummary` |
 | `evaluate` | Convenience function | You want the shortest synchronous Python path to a run | Best for simple scripts; call only when no event loop is already running |
 | `evaluate_async` | Convenience function | You want the shortest async Python path to a run | Use in notebooks, async apps, and any environment with a running event loop |
 | `export_evaluation_bundle` | Artifact helper | You want portable evaluation workflow artifacts | Best for judge-backed replay or handoff |

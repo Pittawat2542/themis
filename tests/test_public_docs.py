@@ -98,11 +98,12 @@ def test_reporting_surface_is_documented_and_typed() -> None:
     _assert_annotations(snapshot_report)
     _assert_docstring(Reporter)
     for method_name in (
+        "summary",
+        "score_rows",
         "export_json",
         "export_markdown",
         "export_csv",
         "export_latex",
-        "export_score_table",
     ):
         _assert_docstring(getattr(Reporter, method_name))
 

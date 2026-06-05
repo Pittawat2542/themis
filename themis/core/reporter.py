@@ -10,7 +10,9 @@ from typing import cast
 
 from themis.core.base import JSONValue
 from themis.core.inspection import get_execution_state, get_run_snapshot
+from themis.core.read_models import BenchmarkResult
 from themis.core.snapshot import RunSnapshot
+from themis.core.stats import StatsEngine, StatsSummary
 from themis.core.store import RunStore
 
 
@@ -44,21 +46,27 @@ class Reporter:
             ),
             "run_result": self._projection(run_id, "run_result"),
             "benchmark_result": self._projection(run_id, "benchmark_result"),
+            "stats_summary": self.summary(run_id).model_dump(mode="json"),
             "timeline_view": self._projection(run_id, "timeline_view"),
             "trace_view": self._projection(run_id, "trace_view"),
         }
         return json.dumps(payload, indent=2, sort_keys=True)
 
+    def summary(self, run_id: str) -> StatsSummary:
+        """Return a typed statistical summary for a persisted run."""
+
+        benchmark_result = BenchmarkResult.model_validate(
+            self._projection(run_id, "benchmark_result")
+        )
+        return StatsEngine().summarize(benchmark_result)
+
     def export_markdown(self, run_id: str) -> str:
-        """Export a human-readable Markdown summary for a persisted run."""
+        """Export a summary-first Markdown report for a persisted run."""
 
         run_result = self._projection(run_id, "run_result")
-        benchmark_result = self._projection(run_id, "benchmark_result")
+        summary = self.summary(run_id)
         progress = _require_mapping(
             run_result.get("progress"), name="run_result.progress"
-        )
-        score_rows = _require_rows(
-            benchmark_result.get("score_rows"), name="benchmark_result.score_rows"
         )
         lines = [
             "# Run Report",
@@ -71,64 +79,88 @@ class Reporter:
             "",
             "## Metrics",
             "",
+            "| metric_id | count | mean | min | max | ci_lower | ci_upper |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
-        for row in score_rows:
+        for metric in summary.metrics:
             lines.append(
-                f"- dataset={row.get('dataset_id')} case={row['case_id']} case_key={row.get('case_key')} metric={row['metric_id']} outcome={row['outcome']} value={row['value']} candidate={row['candidate_id']} failure_category={row.get('failure_category')} error_message={row.get('error_message')}"
+                " | ".join(
+                    [
+                        f"| {_markdown_cell(metric.metric_id)}",
+                        str(metric.count),
+                        str(metric.mean),
+                        str(metric.min),
+                        str(metric.max),
+                        str(metric.ci_lower),
+                        f"{metric.ci_upper} |",
+                    ]
+                )
             )
+        failures = [row for row in self.score_rows(run_id) if row["outcome"] == "error"]
+        if failures:
+            lines.extend(
+                [
+                    "",
+                    "## Failures",
+                    "",
+                    "| case_id | metric_id | failure_category | error_message |",
+                    "| --- | --- | --- | --- |",
+                ]
+            )
+            for row in failures:
+                lines.append(
+                    " | ".join(
+                        [
+                            f"| {_markdown_cell(row['case_id'])}",
+                            _markdown_cell(row["metric_id"]),
+                            _markdown_cell(row["failure_category"]),
+                            f"{_markdown_cell(row['error_message'])} |",
+                        ]
+                    )
+                )
         return "\n".join(lines) + "\n"
 
     def export_csv(self, run_id: str) -> str:
-        """Export benchmark metric_result rows as CSV."""
+        """Export benchmark metric summaries as CSV."""
 
         buffer = StringIO()
         writer = csv.DictWriter(
             buffer,
             fieldnames=[
-                "case_id",
-                "dataset_id",
-                "case_key",
                 "metric_id",
-                "result_type",
-                "outcome",
-                "value",
-                "confidence",
-                "dimensions",
-                "labels",
-                "candidate_id",
-                "failure_category",
-                "error_message",
-                "metadata",
+                "count",
+                "mean",
+                "min",
+                "max",
+                "ci_lower",
+                "ci_upper",
             ],
         )
         writer.writeheader()
-        writer.writerows(self.export_score_table(run_id))
+        writer.writerows(
+            metric.model_dump(mode="json") for metric in self.summary(run_id).metrics
+        )
         return buffer.getvalue()
 
     def export_latex(self, run_id: str) -> str:
-        """Export benchmark metric_result rows as a compact LaTeX table."""
+        """Export benchmark metric summaries as a compact LaTeX table."""
 
         lines = [
-            r"\begin{tabular}{llllllllll}",
-            r"case\_id & dataset\_id & case\_key & metric\_id & result\_type & outcome & value & confidence & candidate\_id & failure\_category & error\_message & metadata \\",
+            r"\begin{tabular}{lrrrrrr}",
+            r"metric\_id & count & mean & min & max & ci\_lower & ci\_upper \\",
             r"\hline",
         ]
-        for row in self.export_score_table(run_id):
+        for metric in self.summary(run_id).metrics:
             lines.append(
                 " & ".join(
                     [
-                        _latex_cell(row["case_id"]),
-                        _latex_cell(row["dataset_id"]),
-                        _latex_cell(row["case_key"]),
-                        _latex_cell(row["metric_id"]),
-                        _latex_cell(row["result_type"]),
-                        _latex_cell(row["outcome"]),
-                        _latex_cell(row["value"]),
-                        _latex_cell(row["confidence"]),
-                        _latex_cell(row["candidate_id"]),
-                        _latex_cell(row["failure_category"]),
-                        _latex_cell(row["error_message"]),
-                        _latex_cell(row["metadata"]),
+                        _latex_cell(metric.metric_id),
+                        _latex_cell(metric.count),
+                        _latex_cell(metric.mean),
+                        _latex_cell(metric.min),
+                        _latex_cell(metric.max),
+                        _latex_cell(metric.ci_lower),
+                        _latex_cell(metric.ci_upper),
                     ]
                 )
                 + r" \\"
@@ -136,8 +168,8 @@ class Reporter:
         lines.append(r"\end{tabular}")
         return "\n".join(lines) + "\n"
 
-    def export_score_table(self, run_id: str) -> list[dict[str, JSONValue]]:
-        """Return benchmark metric_result rows in a normalized table structure."""
+    def score_rows(self, run_id: str) -> list[dict[str, JSONValue]]:
+        """Return benchmark metric result rows in a normalized table structure."""
 
         benchmark_result = self._projection(run_id, "benchmark_result")
         score_rows = _require_rows(
@@ -193,6 +225,12 @@ def _latex_cell(value: JSONValue) -> str:
         return ""
     rendered = str(value)
     return "".join(_LATEX_ESCAPES.get(char, char) for char in rendered)
+
+
+def _markdown_cell(value: JSONValue) -> str:
+    if value is None:
+        return ""
+    return str(value).replace("|", r"\|").replace("\n", " ")
 
 
 def _require_mapping(value: JSONValue | None, *, name: str) -> dict[str, JSONValue]:

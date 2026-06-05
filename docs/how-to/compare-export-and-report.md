@@ -18,6 +18,8 @@ Use this guide when execution is already done and the next task is inspection, r
 Use:
 
 - `Reporter.export_json(...)`, `export_markdown(...)`, `export_csv(...)`, and `export_latex(...)`
+- `Reporter.summary(...)` for typed metric summaries
+- `Reporter.score_rows(...)` for raw per-case metric rows
 - `themis report --config ... --format ...`
 - `themis compare --baseline-config ... --candidate-config ...`
 - `themis export generation|evaluation --config ...`
@@ -30,7 +32,18 @@ Portable artifact handoff is stage-aware:
 - pure-score artifacts: `export_score_bundle(...)`
 - workflow execution artifacts: `export_evaluation_bundle(...)`
 
-Reporting output is now outcome-aware. `benchmark_result.score_rows` and CSV exports include:
+Reporting output is summary-first. Markdown, CSV, and LaTeX exports prioritize per-metric summary statistics:
+
+- `count`
+- `mean`
+- `min`
+- `max`
+- `ci_lower`
+- `ci_upper`
+
+JSON exports include both the existing projections and a typed `stats_summary` payload. Raw per-case metric rows remain available through `Reporter.score_rows(...)` and `benchmark_result.score_rows`.
+
+Raw score rows are outcome-aware and include:
 
 - `outcome`: `correct`, `incorrect`, or `error`
 - `failure_category`: for example `parse_failure`, `evaluation_failure`, `evaluation_partial_failure`, or `metric_failure`
@@ -45,7 +58,7 @@ Outside Themis workflows:
 
 Artifact-interop support for `R3-R4` is intentional but scriptable. Themis owns the persistent stage artifacts and downstream replay path, while the mapping from an external job result into Themis-compatible bundle records still happens in your code.
 
-Use this output shape when you build downstream leaderboards or prompt-sweep dashboards outside Themis. Themis owns the per-run read models; cross-run aggregation is expected to happen in your notebook, warehouse, or reporting job.
+Use `Reporter.export_csv(...)` or `Reporter.export_latex(...)` when you need paper-ready metric summary tables. Use `Reporter.score_rows(...)` when you build downstream leaderboards, prompt-sweep dashboards, or qualitative failure-analysis tables outside Themis. Themis owns the per-run read models; cross-run aggregation is expected to happen in your notebook, warehouse, or reporting job.
 
 ## Variants
 

@@ -142,9 +142,9 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
     )
     assert python_benchmark["metric_means"] == cli_quick_eval_payload["metric_means"]
     assert quickcheck_payload["metric_means"] == python_benchmark["metric_means"]
-    assert report_payload["benchmark_result"]["score_rows"] == Reporter(
-        python_store
-    ).export_score_table(python_result.run_id)
+    assert report_payload["stats_summary"] == Reporter(python_store).summary(
+        python_result.run_id
+    ).model_dump(mode="json")
 
 
 def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
@@ -185,17 +185,21 @@ def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
 
     assert cli_compare.returncode == 0, cli_compare.stderr
     cli_payload = json.loads(cli_compare.stdout)
-    python_payload = StatsEngine().paired_compare(
-        BenchmarkResult.model_validate(
-            store.get_projection(
-                baseline_experiment.compile().run_id, "benchmark_result"
-            )
-        ),
-        BenchmarkResult.model_validate(
-            store.get_projection(
-                candidate_experiment.compile().run_id, "benchmark_result"
-            )
-        ),
+    python_payload = (
+        StatsEngine()
+        .compare(
+            BenchmarkResult.model_validate(
+                store.get_projection(
+                    baseline_experiment.compile().run_id, "benchmark_result"
+                )
+            ),
+            BenchmarkResult.model_validate(
+                store.get_projection(
+                    candidate_experiment.compile().run_id, "benchmark_result"
+                )
+            ),
+        )
+        .model_dump(mode="json")
     )
 
     assert cli_payload == python_payload
