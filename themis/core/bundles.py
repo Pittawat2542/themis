@@ -12,12 +12,13 @@ from themis.core.events import (
     ParseCompletedEvent,
     ReductionCompletedEvent,
     ScoreCompletedEvent,
+    SessionCompletedEvent,
 )
 from themis.core.models import (
-    GenerationResult,
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
+    SessionResult,
 )
 from themis.core.results import (
     EvaluationBundle,
@@ -45,7 +46,10 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
     case_refs = _bundle_case_refs(stored.snapshot)
     records: list[GenerationBundleRecord] = []
     for event in stored.events:
-        if isinstance(event, GenerationCompletedEvent) and event.result is not None:
+        if (
+            isinstance(event, (SessionCompletedEvent, GenerationCompletedEvent))
+            and event.result is not None
+        ):
             case_ref = _bundle_record_case_ref(case_refs, event)
             records.append(
                 GenerationBundleRecord(
@@ -60,11 +64,11 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
                     candidate_index=event.candidate_index,
                     seed=event.seed,
                     result_blob_ref=_blob_ref(
-                        GenerationResult.model_validate(event.result).model_dump(
+                        SessionResult.model_validate(event.result).model_dump(
                             mode="json"
                         )
                     ),
-                    result=GenerationResult.model_validate(event.result),
+                    result=SessionResult.model_validate(event.result),
                 )
             )
 
@@ -99,7 +103,7 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
                 "Generation bundle blob ref does not match serialized result payload"
             )
         store.persist_event(
-            GenerationCompletedEvent(
+            SessionCompletedEvent(
                 run_id=bundle.run_id,
                 case_id=case_ref.case_id,
                 dataset_id=case_ref.dataset_id,

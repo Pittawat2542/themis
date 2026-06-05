@@ -22,13 +22,15 @@ goal: Document config model fields, defaults, and identity/persistence implicati
 | Importable factory path such as `package.module:factory` | No | Reference your own component factory from config | Yes | Best when constructor logic belongs in Python |
 | Importable class path such as `package.module:Class` | No | Reference a component type directly from config | Yes | Themis instantiates the class without constructor arguments |
 
-## `GenerationConfig`
+## `SessionConfig`
 
 | Field | Required | Purpose | Affects run_id | Notes |
 | --- | --- | --- | --- | --- |
-| `generator` | Yes | Chooses the candidate producer | Yes | In config, use a builtin id or import path; in Python, you may pass a live object |
-| `candidate_policy` | No | Controls generation fan-out such as `num_samples` | Yes | Defaults to `{}` and is part of logical experiment identity |
-| `prompt_spec` | No | Carries prompt instructions, prefixes, suffixes, and generic prompt blocks | Yes | Prompt changes invalidate generation-stage cache reuse as expected |
+| `generator` | Yes | Chooses the session candidate producer | Yes | In config, use a builtin id or import path; in Python, pass an object with `run_session(...)` |
+| `candidate_policy` | No | Controls candidate fan-out such as `num_samples` | Yes | Defaults to `{}` and is part of logical experiment identity |
+| `prompt_spec` | No | Carries prompt instructions, prefixes, suffixes, and generic prompt blocks | Yes | Prompt changes invalidate session-stage cache reuse as expected |
+| `max_turns` | No | Sets the maximum session turns exposed through `SessionContext` | Yes | Defaults to `1`; single-shot runs are one-turn sessions |
+| `termination` | No | Carries session termination settings for custom generators | Yes | Themis records this in run identity and passes it to session generators |
 | `PromptSpec.blocks` | No | Stores arbitrary structured prompt material | Yes | Themis does not assign example-specific semantics to block contents |
 | `reducer` | No | Chooses how multiple candidates collapse after fan-out | Yes | Pair with selectors or reducers when `num_samples` is greater than one |
 

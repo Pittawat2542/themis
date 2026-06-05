@@ -11,8 +11,10 @@ from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
     RunEvent,
+    SessionCompletedEvent,
+    StreamRecordedEvent,
 )
-from themis.core.models import GenerationResult, MetricResult, ScoreError
+from themis.core.models import MetricResult, ScoreError, SessionResult
 from themis.core.read_models import (
     BenchmarkResult,
     BenchmarkScoreRow,
@@ -23,6 +25,7 @@ from themis.core.read_models import (
     GenerationAuditRecord,
     GenerationTraceRecord,
     MetricAuditRecord,
+    StreamTraceRecord,
     TelemetryBreakdown,
     TelemetrySummary,
     TimelineEntry,
@@ -244,7 +247,7 @@ def build_trace_view(snapshot: RunSnapshot, events: list[RunEvent]) -> TraceView
     return view
 
 
-def _generation_telemetry(result: GenerationResult) -> TelemetryBreakdown:
+def _generation_telemetry(result: SessionResult) -> TelemetryBreakdown:
     artifacts = result.artifacts or {}
     request_ids = [
         str(value)
@@ -735,9 +738,13 @@ def _apply_event_to_trace_view(
     generation_traces = list(view.generation_traces)
     conversation_traces = list(view.conversation_traces)
     evaluation_traces = list(view.evaluation_traces)
+    stream_traces = list(view.stream_traces)
 
-    if isinstance(event, GenerationCompletedEvent) and event.result is not None:
-        result = GenerationResult.model_validate(event.result)
+    if (
+        isinstance(event, (SessionCompletedEvent, GenerationCompletedEvent))
+        and event.result is not None
+    ):
+        result = SessionResult.model_validate(event.result)
         if result.trace:
             generation_traces.append(
                 GenerationTraceRecord(
@@ -763,6 +770,44 @@ def _apply_event_to_trace_view(
                     ],
                 )
             )
+        for turn in result.turns:
+            if turn.trace:
+                generation_traces.append(
+                    GenerationTraceRecord(
+                        case_id=event.case_id,
+                        dataset_id=dataset_id,
+                        case_key=case_key,
+                        candidate_id=event.candidate_id,
+                        trace_id=f"{event.candidate_id}:turn:{turn.turn_index}",
+                        steps=[step.model_dump(mode="json") for step in turn.trace],
+                    )
+                )
+            messages = [*turn.input_messages, *turn.output_messages]
+            if messages:
+                conversation_traces.append(
+                    ConversationTraceRecord(
+                        case_id=event.case_id,
+                        dataset_id=dataset_id,
+                        case_key=case_key,
+                        candidate_id=event.candidate_id,
+                        trace_id=f"{event.candidate_id}:turn:{turn.turn_index}:conversation",
+                        messages=[
+                            message.model_dump(mode="json") for message in messages
+                        ],
+                    )
+                )
+    elif isinstance(event, StreamRecordedEvent):
+        stream_traces.append(
+            StreamTraceRecord(
+                case_id=event.case_id,
+                dataset_id=dataset_id,
+                case_key=case_key,
+                candidate_id=event.candidate_id,
+                metric_id=event.metric_id,
+                source_stage=event.source_stage,
+                event=event.stream_event,
+            )
+        )
     elif isinstance(event, EvaluationCompletedEvent) and event.execution is not None:
         evaluation_traces.append(
             EvaluationTraceRecord(
@@ -780,6 +825,7 @@ def _apply_event_to_trace_view(
             "generation_traces": generation_traces,
             "conversation_traces": conversation_traces,
             "evaluation_traces": evaluation_traces,
+            "stream_traces": stream_traces,
         }
     )
 

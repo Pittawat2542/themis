@@ -2,7 +2,7 @@
 title: Case lifecycle
 diataxis: explanation
 audience: users understanding end-to-end runtime behavior
-goal: Explain how one dataset case moves through generation, reduction, parsing, scoring, and persistence.
+goal: Explain how one dataset case moves through session execution, reduction, parsing, scoring, and persistence.
 ---
 
 # Case lifecycle
@@ -13,13 +13,13 @@ When it matters: whenever you need to understand where data changes shape or whe
 
 What you provide: a case inside a dataset, generation config, evaluation config, and optional seeds.
 
-What Themis provides: planning, candidate fan-out, optional reduction, optional parsing, scoring, persistence, and projection refresh.
+What Themis provides: planning, session candidate fan-out, optional reduction, optional parsing, scoring, persistence, and projection refresh.
 
 Use this lifecycle map when you need to localize where one case changed shape or failed.
 
 ```mermaid
 flowchart LR
-    A["Dataset case"] --> B["Generate candidate set"]
+    A["Dataset case"] --> B["Run session candidate set"]
     B --> C["Reduce candidate set"]
     C --> D["Parse reduced output"]
     D --> E["Emit metric result or run evaluation workflow"]

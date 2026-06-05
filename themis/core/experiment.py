@@ -25,8 +25,8 @@ from themis.core.base import JSONValue
 from themis.core.components import ComponentRef, component_ref_from_value
 from themis.core.config import (
     EvaluationConfig,
-    GenerationConfig,
     RuntimeConfig,
+    SessionConfig,
     StorageConfig,
 )
 from themis.core.config_loading import ExperimentConfigMetadata
@@ -94,9 +94,10 @@ class Experiment(FrozenModel):
     and provides sync and async helpers for running or rejudging that snapshot.
     """
 
-    generation: GenerationConfig
+    generation: SessionConfig
     evaluation: EvaluationConfig
     storage: StorageConfig
+    session: SessionConfig | None = Field(default=None, exclude=True)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     dataset_sources: Sequence[DatasetSourceSpec | Dataset] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
@@ -112,10 +113,14 @@ class Experiment(FrozenModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _normalize_dataset_sources(cls, payload):
+    def _normalize_experiment_payload(cls, payload):
         if not isinstance(payload, dict):
             return payload
         normalized = dict(payload)
+        if "generation" not in normalized and "session" in normalized:
+            normalized["generation"] = normalized["session"]
+        if "session" not in normalized and "generation" in normalized:
+            normalized["session"] = normalized["generation"]
         sources = normalized.get("dataset_sources")
         if not isinstance(sources, list):
             return normalized
@@ -198,7 +203,11 @@ class Experiment(FrozenModel):
             parser_refs=component_refs.parsers,
             metric_refs=component_refs.metrics,
             judge_model_refs=component_refs.judge_models,
-            candidate_policy=self.generation.candidate_policy,
+            candidate_policy={
+                **self.generation.candidate_policy,
+                "max_turns": self.generation.max_turns,
+                "termination": self.generation.termination,
+            },
             generation_prompt_spec=self.generation.prompt_spec,
             evaluation_prompt_spec=self.evaluation.prompt_spec,
             judge_config=self.evaluation.judge_config,

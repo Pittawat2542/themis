@@ -47,16 +47,49 @@ class TraceStep(HashableModel):
     timestamp: datetime | None = None
 
 
-class GenerationResult(HashableModel):
-    """The candidate artifact returned by a generator call."""
+class StreamEvent(HashableModel):
+    """One persisted streaming event emitted during session or judge execution."""
+
+    event_id: str
+    source_stage: str
+    event_type: str
+    payload: JSONValue
+    timestamp: datetime | None = None
+    offset_ms: float | None = None
+    duration_ms: float | None = None
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class SessionTurn(HashableModel):
+    """One turn in a session-native candidate execution."""
+
+    turn_index: int
+    input_messages: list[Message] = Field(default_factory=list)
+    output_messages: list[Message] = Field(default_factory=list)
+    artifacts: dict[str, JSONValue] = Field(default_factory=dict)
+    trace: list[TraceStep] = Field(default_factory=list)
+    latency_ms: float | None = None
+    metadata: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class SessionResult(HashableModel):
+    """The candidate artifact returned by a session generator."""
 
     candidate_id: str
     final_output: JSONValue
+    turns: list[SessionTurn] = Field(default_factory=list)
+    stream_events: list[StreamEvent] = Field(default_factory=list)
+    environment_state: dict[str, JSONValue] = Field(default_factory=dict)
+    termination_reason: str | None = None
     trace: list[TraceStep] | None = None
     conversation: list[Message] | None = None
     artifacts: dict[str, JSONValue] | None = None
     token_usage: dict[str, int] | None = None
     latency_ms: float | None = None
+
+
+class GenerationResult(SessionResult):
+    """Legacy one-shot candidate artifact retained as a session result subtype."""
 
 
 class ParsedOutput(HashableModel):

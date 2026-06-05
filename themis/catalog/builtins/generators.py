@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, GenerationResult, Message
+from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.models import Case, GenerationResult, Message, SessionResult, SessionTurn
 from themis.core.workflows import JudgeResponse
 
 
@@ -14,7 +14,7 @@ class DemoGenerator:
     def fingerprint(self) -> str:
         return "builtin-demo-generator-fingerprint"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
         answer = (
             case.expected_output if case.expected_output is not None else case.input
         )
@@ -33,12 +33,26 @@ class DemoGenerator:
             )
         )
         conversation.append(Message(role="assistant", content=answer))
-        return GenerationResult(
+        return SessionResult(
             candidate_id=f"{case.case_id}-candidate-{candidate_suffix}",
             final_output=answer,
+            turns=[
+                SessionTurn(
+                    turn_index=0,
+                    input_messages=conversation[:-1],
+                    output_messages=conversation[-1:],
+                    latency_ms=1.0,
+                )
+            ],
             conversation=conversation,
+            termination_reason="completed",
             token_usage={"prompt_tokens": 1, "completion_tokens": 1},
             latency_ms=1.0,
+        )
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        return GenerationResult.model_validate(
+            (await self.run_session(case, ctx)).model_dump(mode="json")
         )
 
 

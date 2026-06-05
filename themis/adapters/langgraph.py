@@ -7,8 +7,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from themis.adapters._utils import normalize_json_value, stable_fingerprint
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, GenerationResult, TraceStep
+from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.models import Case, GenerationResult, SessionResult, SessionTurn, TraceStep
 
 
 class LangGraphGenerator:
@@ -43,7 +43,7 @@ class LangGraphGenerator:
             }
         )
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
         payload = (
             self.input_builder(case) if self.input_builder is not None else case.input
         )
@@ -56,11 +56,18 @@ class LangGraphGenerator:
                     "LangGraph adapter expected mapping output when output_key is provided."
                 )
             final_output = output[self.output_key]
-        return GenerationResult(
+        return SessionResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
             final_output=normalize_json_value(final_output),
+            turns=[SessionTurn(turn_index=0, trace=trace)],
             trace=trace or None,
+            termination_reason="completed",
             artifacts={"graph_id": self.graph_id},
+        )
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        return GenerationResult.model_validate(
+            (await self.run_session(case, ctx)).model_dump(mode="json")
         )
 
     async def _invoke(self, payload: object) -> object:

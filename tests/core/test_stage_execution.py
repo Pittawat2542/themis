@@ -3,9 +3,11 @@ from __future__ import annotations
 from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
+    SessionConfig,
     RuntimeConfig,
     StorageConfig,
 )
+from themis.core.events import SessionCompletedEvent, StreamRecordedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import (
     Case,
@@ -14,6 +16,10 @@ from themis.core.models import (
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
+    Message,
+    SessionResult,
+    SessionTurn,
+    StreamEvent,
 )
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.stores.sqlite import SqliteRunStore
@@ -156,6 +162,71 @@ class AlternateMetric:
             metric_id=self.component_id,
             value=float(parsed.value == case.expected_output),
         )
+
+
+class StreamingSessionGenerator:
+    component_id = "generator/session-streaming"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "session-streaming"
+
+    async def run_session(self, case: Case, ctx) -> SessionResult:
+        return SessionResult(
+            candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
+            final_output=case.expected_output,
+            turns=[
+                SessionTurn(
+                    turn_index=0,
+                    input_messages=[Message(role="user", content=case.input)],
+                    output_messages=[
+                        Message(role="assistant", content=case.expected_output)
+                    ],
+                )
+            ],
+            stream_events=[
+                StreamEvent(
+                    event_id="event-1",
+                    source_stage="session",
+                    event_type="token",
+                    payload={"text": "4"},
+                )
+            ],
+            termination_reason="completed",
+        )
+
+
+def test_session_config_runs_session_generator_and_persists_stream_events() -> None:
+    store = InMemoryRunStore()
+    session_config = SessionConfig(generator=StreamingSessionGenerator())
+    experiment = Experiment(
+        generation=session_config,
+        session=session_config,
+        evaluation=EvaluationConfig(metrics=[ExactMetric()], parsers=[]),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            Dataset(
+                dataset_id="dataset-1",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
+            )
+        ],
+        seeds=[7],
+    )
+
+    result = experiment.run(store=store)
+    stored = store.resume(result.run_id)
+
+    assert result.cases[0].generated_candidates[0].turns[0].turn_index == 0
+    assert result.cases[0].generated_candidates[0].termination_reason == "completed"
+    assert stored is not None
+    assert any(isinstance(event, SessionCompletedEvent) for event in stored.events)
+    assert any(isinstance(event, StreamRecordedEvent) for event in stored.events)
 
 
 def _cached_experiment(

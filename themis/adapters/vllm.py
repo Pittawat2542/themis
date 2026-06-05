@@ -11,8 +11,8 @@ from themis.adapters._utils import (
     extract_token_usage,
     stable_fingerprint,
 )
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, GenerationResult
+from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.models import Case, GenerationResult, Message, SessionResult, SessionTurn
 
 
 class _ResponsesCreateAPI(Protocol):
@@ -70,7 +70,7 @@ class VLLMGenerator:
             }
         )
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
         client = self._client or self._build_client()
         request_input = (
             self.input_builder(case) if self.input_builder is not None else case.input
@@ -103,11 +103,24 @@ class VLLMGenerator:
         if rate_limit is not None:
             artifacts["rate_limit"] = rate_limit
 
-        return GenerationResult(
+        return SessionResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
             final_output=content,
+            turns=[
+                SessionTurn(
+                    turn_index=0,
+                    input_messages=[Message(role="user", content=request_input)],
+                    output_messages=[Message(role="assistant", content=content)],
+                )
+            ],
+            termination_reason="completed",
             token_usage=usage,
             artifacts=artifacts,
+        )
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        return GenerationResult.model_validate(
+            (await self.run_session(case, ctx)).model_dump(mode="json")
         )
 
     def _build_client(self) -> _VLLMClient:

@@ -18,7 +18,12 @@ from themis.core.models import MetricResult, TraceStep, WorkflowTrace
 from themis.core.planner import Planner
 from themis.core.protocols import EvaluationWorkflow, JudgeModel
 from themis.core.store import RunStore
-from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
+from themis.core.subjects import (
+    CandidateSetSubject,
+    ConversationSubject,
+    SessionSubject,
+    TraceSubject,
+)
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
@@ -70,7 +75,10 @@ class DefaultWorkflowRunner:
     async def run_evaluation(
         self,
         workflow: EvaluationWorkflow,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         metric_id: str,
         ctx: EvalScoreContext,
     ) -> EvaluationExecution:
@@ -461,10 +469,15 @@ class DefaultWorkflowRunner:
 
     def _subject_kind(
         self,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
     ) -> str:
         if isinstance(subject, CandidateSetSubject):
             return "candidate_set"
         if isinstance(subject, TraceSubject):
             return "trace"
+        if isinstance(subject, SessionSubject):
+            return "session"
         return "conversation"

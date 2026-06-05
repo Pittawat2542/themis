@@ -55,6 +55,50 @@ class CaseRunEvent(RunEvent):
     case_key: str | None = None
 
 
+class SessionStartedEvent(CaseRunEvent):
+    """Event emitted when a session candidate starts for a case."""
+
+    event_type: Literal["session_started"] = "session_started"
+    candidate_id: str
+    candidate_index: int | None = None
+    seed: int | None = None
+    provider_key: str | None = None
+
+
+class StreamRecordedEvent(CaseRunEvent):
+    """Event emitted for one persisted streaming artifact."""
+
+    event_type: Literal["stream_recorded"] = "stream_recorded"
+    candidate_id: str | None = None
+    metric_id: str | None = None
+    source_stage: str
+    stream_event: dict[str, JSONValue]
+
+
+class SessionCompletedEvent(CaseRunEvent):
+    """Event emitted when a session candidate completes for a case."""
+
+    event_type: Literal["session_completed"] = "session_completed"
+    candidate_id: str
+    candidate_index: int | None = None
+    seed: int | None = None
+    provider_key: str | None = None
+    result: dict[str, JSONValue] | None = None
+    result_blob_ref: str | None = None
+    cache_hit: bool = False
+    source_run_id: str | None = None
+
+
+class SessionFailedEvent(CaseRunEvent):
+    """Event emitted when a session candidate fails for a case."""
+
+    event_type: Literal["session_failed"] = "session_failed"
+    candidate_id: str
+    candidate_index: int | None = None
+    error_message: str
+    retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
+
+
 class GenerationCompletedEvent(CaseRunEvent):
     """Event emitted when candidate generation finishes for a case."""
 
@@ -206,6 +250,10 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
     "run_started": RunStartedEvent,
     "run_completed": RunCompletedEvent,
     "run_failed": RunFailedEvent,
+    "session_started": SessionStartedEvent,
+    "stream_recorded": StreamRecordedEvent,
+    "session_completed": SessionCompletedEvent,
+    "session_failed": SessionFailedEvent,
     "generation_completed": GenerationCompletedEvent,
     "generation_failed": GenerationFailedEvent,
     "selection_completed": SelectionCompletedEvent,

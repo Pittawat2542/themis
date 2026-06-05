@@ -9,11 +9,11 @@ from pydantic import Field
 
 from themis.core.base import FrozenModel, JSONValue
 from themis.core.models import (
-    GenerationResult,
     MetricResult,
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
+    SessionResult,
 )
 from themis.core.workflows import EvaluationExecution
 
@@ -105,6 +105,18 @@ class EvaluationTraceRecord(FrozenModel):
     execution: EvaluationExecution
 
 
+class StreamTraceRecord(FrozenModel):
+    """One recorded streaming event in the trace projection."""
+
+    case_id: str
+    dataset_id: str | None = None
+    case_key: str | None = None
+    candidate_id: str | None = None
+    metric_id: str | None = None
+    source_stage: str
+    event: dict[str, JSONValue]
+
+
 class TraceView(FrozenModel):
     """Trace-oriented projection for a run."""
 
@@ -112,6 +124,7 @@ class TraceView(FrozenModel):
     generation_traces: list[GenerationTraceRecord] = Field(default_factory=list)
     conversation_traces: list[ConversationTraceRecord] = Field(default_factory=list)
     evaluation_traces: list[EvaluationTraceRecord] = Field(default_factory=list)
+    stream_traces: list[StreamTraceRecord] = Field(default_factory=list)
 
 
 class TelemetryBreakdown(FrozenModel):
@@ -129,7 +142,7 @@ class GenerationAuditRecord(FrozenModel):
 
     candidate_id: str
     candidate_index: int | None = None
-    result: GenerationResult
+    result: SessionResult
     telemetry: TelemetryBreakdown = Field(default_factory=TelemetryBreakdown)
 
 

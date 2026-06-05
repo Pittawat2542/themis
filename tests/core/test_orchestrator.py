@@ -23,12 +23,13 @@ from themis.core.config import RuntimeConfig
 from themis.core.contexts import EvalScoreContext, GenerateContext, ScoreContext
 from themis.core.events import (
     EvaluationCompletedEvent,
-    GenerationCompletedEvent,
     ParseCompletedEvent,
     ReductionCompletedEvent,
     RunCompletedEvent,
     RunStartedEvent,
     ScoreCompletedEvent,
+    SessionCompletedEvent,
+    SessionStartedEvent,
     StepCompletedEvent,
     StepStartedEvent,
 )
@@ -42,6 +43,7 @@ from themis.core.models import (
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
+    SessionResult,
     TraceStep,
 )
 from themis.core.orchestrator import Orchestrator, _retry_delay_seconds
@@ -521,7 +523,7 @@ class AwaitedReducer:
     def fingerprint(self) -> str:
         return "reducer-awaited"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx) -> ReducedCandidate:
+    async def reduce(self, candidates: list[SessionResult], ctx) -> ReducedCandidate:
         await asyncio.sleep(0)
         self.awaited = True
         return ReducedCandidate(
@@ -543,8 +545,8 @@ class SlowSelector:
         return "selector-slow"
 
     async def select(
-        self, candidates: list[GenerationResult], ctx
-    ) -> list[GenerationResult]:
+        self, candidates: list[SessionResult], ctx
+    ) -> list[SessionResult]:
         del ctx
         self.active += 1
         self.max_active = max(self.max_active, self.active)
@@ -566,7 +568,7 @@ class SlowReducer:
     def fingerprint(self) -> str:
         return "reducer-slow"
 
-    async def reduce(self, candidates: list[GenerationResult], ctx) -> ReducedCandidate:
+    async def reduce(self, candidates: list[SessionResult], ctx) -> ReducedCandidate:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
@@ -778,8 +780,10 @@ async def test_orchestrator_writes_stage_events_and_dispatches_hooks() -> None:
     assert result.status is RunStatus.COMPLETED
     assert [type(event) for event in events] == [
         RunStartedEvent,
-        GenerationCompletedEvent,
-        GenerationCompletedEvent,
+        SessionStartedEvent,
+        SessionCompletedEvent,
+        SessionStartedEvent,
+        SessionCompletedEvent,
         ReductionCompletedEvent,
         ParseCompletedEvent,
         ScoreCompletedEvent,
@@ -788,9 +792,11 @@ async def test_orchestrator_writes_stage_events_and_dispatches_hooks() -> None:
     assert subscriber.calls == [
         "on_event",
         "before_generate",
+        "on_event",
         "after_generate",
         "on_event",
         "before_generate",
+        "on_event",
         "after_generate",
         "on_event",
         "before_reduce",

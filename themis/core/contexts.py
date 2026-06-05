@@ -12,8 +12,8 @@ from themis.core.models import Case, ParsedOutput
 from themis.core.prompts import PromptSpec
 
 
-class GenerateContext(HashableModel):
-    """Context passed to generators for one case execution."""
+class SessionContext(HashableModel):
+    """Context passed to session generators for one case execution."""
 
     run_id: str
     case_id: str
@@ -21,7 +21,13 @@ class GenerateContext(HashableModel):
     case_key: str | None = None
     seed: int | None = None
     prompt_spec: PromptSpec | None = None
+    max_turns: int = 1
+    termination: dict[str, JSONValue] = Field(default_factory=dict)
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class GenerateContext(SessionContext):
+    """Legacy name for a one-turn session generator context."""
 
 
 class SelectContext(HashableModel):

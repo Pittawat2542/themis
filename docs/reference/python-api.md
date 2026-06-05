@@ -31,6 +31,7 @@ This page is the generated entry point into the public Python API. Use the small
 | `RunStatus` | Enum-like status model | You want run lifecycle state values | Useful in automation and inspection |
 | `RunStore` | Storage protocol | You are typing against or implementing custom stores | Abstract interface rather than a concrete backend |
 | `RuntimeConfig` | Config model | You want runtime tuning without changing logical identity | Covers concurrency, retries, and deferred execution paths |
+| `SessionConfig` | Config model | You want to configure session-native candidate execution | Carries generator, candidate policy, prompt, max-turn, termination, selector, and reducer settings |
 | `SqliteRunStore` | Store implementation | You want the default persistent local store | Good default for real runs |
 | `StatsEngine` | Analysis helper | You want statistical comparison utilities | Used in comparison and reporting flows |
 | `evaluate` | Convenience function | You want the shortest synchronous Python path to a run | Best for simple scripts; call only when no event loop is already running |

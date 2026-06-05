@@ -72,7 +72,7 @@ TABLE_REQUIRED_SECTIONS = (
     ),
     (
         "reference/config-schema.md",
-        "`GenerationConfig`",
+        "`SessionConfig`",
         ("Field", "Required", "Purpose", "Affects run_id", "Notes"),
     ),
     (

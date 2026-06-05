@@ -11,8 +11,8 @@ from themis.adapters._utils import (
     extract_token_usage,
     stable_fingerprint,
 )
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, GenerationResult, Message
+from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.models import Case, GenerationResult, Message, SessionResult, SessionTurn
 
 
 class _ResponsesCreateAPI(Protocol):
@@ -60,7 +60,7 @@ class OpenAIGenerator:
             }
         )
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
         client = self._client or self._build_client()
         prompt_spec = ctx.prompt_spec
         request_input = (
@@ -98,12 +98,25 @@ class OpenAIGenerator:
         if rate_limit is not None:
             artifacts["rate_limit"] = rate_limit
 
-        return GenerationResult(
+        return SessionResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
             final_output=final_output,
+            turns=[
+                SessionTurn(
+                    turn_index=0,
+                    input_messages=conversation[:-1],
+                    output_messages=conversation[-1:],
+                )
+            ],
             conversation=conversation,
+            termination_reason="completed",
             token_usage=extract_token_usage(getattr(response, "usage", None)),
             artifacts=artifacts,
+        )
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        return GenerationResult.model_validate(
+            (await self.run_session(case, ctx)).model_dump(mode="json")
         )
 
     def _build_client(self) -> _OpenAIResponsesClient:

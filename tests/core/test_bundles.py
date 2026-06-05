@@ -22,6 +22,7 @@ from themis.core.events import (
     ParseCompletedEvent,
     ReductionCompletedEvent,
     ScoreCompletedEvent,
+    SessionCompletedEvent,
 )
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
@@ -126,8 +127,8 @@ def test_import_generation_bundle_round_trips_generation_events() -> None:
 
     assert resumed is not None
     assert resumed.snapshot == snapshot
-    assert [event.event_type for event in resumed.events] == ["generation_completed"]
-    assert isinstance(resumed.events[0], GenerationCompletedEvent)
+    assert [event.event_type for event in resumed.events] == ["session_completed"]
+    assert isinstance(resumed.events[0], SessionCompletedEvent)
     assert resumed.events[0].result_blob_ref is not None
 
 

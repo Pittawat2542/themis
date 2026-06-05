@@ -17,6 +17,7 @@ from themis.core.protocols import (
     Parser,
     PureMetric,
     SelectionMetric,
+    SessionGenerator,
     TraceMetric,
 )
 
@@ -28,7 +29,7 @@ class TargetSpec(HashableModel):
     kwargs: dict[str, JSONValue] = Field(default_factory=dict)
 
 
-GeneratorComponent: TypeAlias = Generator | TargetSpec | str
+GeneratorComponent: TypeAlias = SessionGenerator | Generator | TargetSpec | str
 SelectorComponent: TypeAlias = CandidateSelector | TargetSpec | str
 ReducerComponent: TypeAlias = CandidateReducer | TargetSpec | str
 ParserComponent: TypeAlias = Parser | TargetSpec | str
@@ -45,14 +46,20 @@ class ParserView(HashableModel):
     parser: ParserComponent
 
 
-class GenerationConfig(HashableModel):
-    """Generation-stage configuration for a run."""
+class SessionConfig(HashableModel):
+    """Session-stage configuration for a run."""
 
     generator: GeneratorComponent
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
     prompt_spec: PromptSpec | None = None
+    max_turns: int = 1
+    termination: dict[str, JSONValue] = Field(default_factory=dict)
     selector: SelectorComponent | None = None
     reducer: ReducerComponent | None = None
+
+
+class GenerationConfig(SessionConfig):
+    """Legacy name for session-stage configuration."""
 
 
 class EvaluationConfig(HashableModel):

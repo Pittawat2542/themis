@@ -7,11 +7,11 @@ from collections.abc import Sequence
 from pydantic import Field
 
 from themis.core.base import HashableModel
-from themis.core.models import ConversationTrace, GenerationResult, WorkflowTrace
+from themis.core.models import ConversationTrace, SessionResult, WorkflowTrace
 
 
 class CandidateSetSubject(HashableModel):
-    candidates: list[GenerationResult] = Field(default_factory=list, min_length=1)
+    candidates: list[SessionResult] = Field(default_factory=list, min_length=1)
 
     @property
     def size(self) -> int:
@@ -26,6 +26,10 @@ class TraceSubject(HashableModel):
     trace: WorkflowTrace
 
 
+class SessionSubject(HashableModel):
+    session: SessionResult
+
+
 def validate_candidate_set_for_llm_metric(subject: CandidateSetSubject) -> None:
     if subject.size != 1:
         raise ValueError("LLM metrics require exactly one candidate.")
@@ -37,7 +41,7 @@ def validate_candidate_set_for_selection_metric(subject: CandidateSetSubject) ->
 
 
 def candidate_set_subject_for_llm_metric(
-    candidates: Sequence[GenerationResult],
+    candidates: Sequence[SessionResult],
 ) -> CandidateSetSubject:
     subject = CandidateSetSubject(candidates=list(candidates))
     validate_candidate_set_for_llm_metric(subject)
@@ -45,7 +49,7 @@ def candidate_set_subject_for_llm_metric(
 
 
 def candidate_set_subject_for_selection_metric(
-    candidates: Sequence[GenerationResult],
+    candidates: Sequence[SessionResult],
 ) -> CandidateSetSubject:
     subject = CandidateSetSubject(candidates=list(candidates))
     validate_candidate_set_for_selection_metric(subject)

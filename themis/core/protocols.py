@@ -11,6 +11,7 @@ from themis.core.contexts import (
     ReduceContext,
     ScoreContext,
     SelectContext,
+    SessionContext,
 )
 from themis.core.events import RunEvent
 from themis.core.models import (
@@ -20,8 +21,14 @@ from themis.core.models import (
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
+    SessionResult,
 )
-from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
+from themis.core.subjects import (
+    CandidateSetSubject,
+    ConversationSubject,
+    SessionSubject,
+    TraceSubject,
+)
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
@@ -33,8 +40,20 @@ from themis.core.workflows import (
 
 
 @runtime_checkable
+class SessionGenerator(Protocol):
+    """Protocol for session-native generation components."""
+
+    component_id: str
+    version: str
+
+    def fingerprint(self) -> str: ...
+
+    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult: ...
+
+
+@runtime_checkable
 class Generator(Protocol):
-    """Protocol for generation components that produce candidate outputs."""
+    """Legacy protocol for one-shot generation components."""
 
     component_id: str
     version: str
@@ -67,7 +86,7 @@ class CandidateReducer(Protocol):
 
     async def reduce(
         self,
-        candidates: list[GenerationResult],
+        candidates: list[SessionResult],
         ctx: ReduceContext,
     ) -> ReducedCandidate: ...
 
@@ -83,9 +102,9 @@ class CandidateSelector(Protocol):
 
     async def select(
         self,
-        candidates: list[GenerationResult],
+        candidates: list[SessionResult],
         ctx: SelectContext,
-    ) -> list[GenerationResult]: ...
+    ) -> list[SessionResult]: ...
 
 
 @runtime_checkable
@@ -102,7 +121,10 @@ class EvaluationWorkflow(Protocol):
     def render_prompt(
         self,
         call: JudgeCall,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         ctx: EvalScoreContext,
     ) -> RenderedJudgePrompt: ...
 
@@ -197,7 +219,7 @@ class TraceMetric(Protocol):
 
     def build_workflow(
         self,
-        subject: TraceSubject | ConversationSubject,
+        subject: TraceSubject | ConversationSubject | SessionSubject,
         ctx: EvalScoreContext,
     ) -> EvaluationWorkflow: ...
 
@@ -209,7 +231,10 @@ class WorkflowRunner(Protocol):
     async def run_evaluation(
         self,
         workflow: EvaluationWorkflow,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         metric_id: str,
         ctx: EvalScoreContext,
     ) -> EvaluationExecution: ...
@@ -226,9 +251,7 @@ class BeforeGenerate(Protocol):
 class AfterGenerate(Protocol):
     """Hook invoked after a generator returns a candidate."""
 
-    def after_generate(
-        self, result: GenerationResult, ctx: GenerateContext
-    ) -> None: ...
+    def after_generate(self, result: SessionResult, ctx: GenerateContext) -> None: ...
 
 
 @runtime_checkable
@@ -236,7 +259,7 @@ class BeforeReduce(Protocol):
     """Hook invoked before reduction starts."""
 
     def before_reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[SessionResult], ctx: ReduceContext
     ) -> None: ...
 
 
@@ -283,7 +306,10 @@ class BeforeJudge(Protocol):
 
     def before_judge(
         self,
-        subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+        subject: CandidateSetSubject
+        | TraceSubject
+        | ConversationSubject
+        | SessionSubject,
         ctx: EvalScoreContext,
     ) -> None: ...
 

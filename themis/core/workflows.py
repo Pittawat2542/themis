@@ -8,7 +8,12 @@ from pydantic import Field
 
 from themis.core.base import HashableModel, JSONValue
 from themis.core.models import ConversationTrace, MetricResult, WorkflowTrace
-from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
+from themis.core.subjects import (
+    CandidateSetSubject,
+    ConversationSubject,
+    SessionSubject,
+    TraceSubject,
+)
 
 if TYPE_CHECKING:
     from themis.core.contexts import EvalScoreContext
@@ -80,7 +85,7 @@ class EvaluationExecution(HashableModel):
 
 
 def build_prompt_template_context(
-    subject: CandidateSetSubject | TraceSubject | ConversationSubject,
+    subject: CandidateSetSubject | TraceSubject | ConversationSubject | SessionSubject,
     ctx: EvalScoreContext,
     call: JudgeCall | None = None,
 ) -> dict[str, JSONValue]:
@@ -105,6 +110,8 @@ def build_prompt_template_context(
         candidate_output = subject.trace.model_dump(mode="json")
     elif isinstance(subject, ConversationSubject):
         candidate_output = subject.conversation.model_dump(mode="json")
+    elif isinstance(subject, SessionSubject):
+        candidate_output = subject.session.model_dump(mode="json")
 
     return {
         "candidate_output": candidate_output,

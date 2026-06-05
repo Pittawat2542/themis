@@ -6,6 +6,7 @@ from themis.core.contexts import (
     ParseContext,
     ReduceContext,
     ScoreContext,
+    SessionContext,
 )
 from themis.core.events import RunEvent
 from themis.core.models import (
@@ -16,6 +17,8 @@ from themis.core.models import (
     ReducedCandidate,
     MetricResult,
     ScoreError,
+    SessionResult,
+    SessionTurn,
     TraceStep,
     WorkflowTrace,
 )
@@ -40,12 +43,18 @@ from themis.core.protocols import (
     Parser,
     PureMetric,
     SelectionMetric,
+    SessionGenerator,
     TraceMetric,
     TracingProvider,
     WorkflowRunner,
 )
 from themis.core.snapshot import ComponentRef
-from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
+from themis.core.subjects import (
+    CandidateSetSubject,
+    ConversationSubject,
+    SessionSubject,
+    TraceSubject,
+)
 from themis.core.workflows import (
     AggregationResult,
     EvaluationExecution,
@@ -107,6 +116,28 @@ class DummyGenerator:
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
         return GenerationResult(
             candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed}
+        )
+
+
+class DummySessionGenerator:
+    component_id = "builtin/demo_session"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "session-generator-fingerprint"
+
+    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
+        return SessionResult(
+            candidate_id=f"{case.case_id}-candidate",
+            final_output={"seed": ctx.seed, "turns": ctx.max_turns},
+            turns=[
+                SessionTurn(
+                    turn_index=0,
+                    output_messages=[],
+                    metadata={"case_id": case.case_id},
+                )
+            ],
+            termination_reason="completed",
         )
 
 
@@ -199,7 +230,7 @@ class DummyTraceMetric:
 
     def build_workflow(
         self,
-        subject: TraceSubject | ConversationSubject,
+        subject: TraceSubject | ConversationSubject | SessionSubject,
         ctx: EvalScoreContext,
     ) -> DummyWorkflow:
         del subject, ctx
@@ -314,6 +345,7 @@ def _score_context() -> EvalScoreContext:
 
 
 def test_protocol_dummy_implementations_satisfy_runtime_protocols() -> None:
+    assert isinstance(DummySessionGenerator(), SessionGenerator)
     assert isinstance(DummyGenerator(), Generator)
     assert isinstance(DummyParser(), Parser)
     assert isinstance(DummyReducer(), CandidateReducer)
@@ -407,6 +439,9 @@ def test_metric_protocols_accept_expected_subject_shapes() -> None:
             messages=[],
         )
     )
+    session = SessionSubject(
+        session=SessionResult(candidate_id="candidate-1", final_output="4")
+    )
     ctx = _score_context()
 
     assert llm_metric.build_workflow(single, ctx).component_id == "workflow/demo"
@@ -415,3 +450,4 @@ def test_metric_protocols_accept_expected_subject_shapes() -> None:
     assert (
         trace_metric.build_workflow(conversation, ctx).component_id == "workflow/demo"
     )
+    assert trace_metric.build_workflow(session, ctx).component_id == "workflow/demo"

@@ -90,7 +90,9 @@
   ],
   "identity": {
     "candidate_policy": {
-      "num_samples": 2
+      "max_turns": 1,
+      "num_samples": 2,
+      "termination": {}
     },
     "dataset_source_refs": [
       {
@@ -191,5 +193,5 @@
     },
     "themis_version": "4.0.2"
   },
-  "run_id": "1f370fe16fff9806408512d3018ae844e899a8e604413ccf4c3d314201509ecd"
+  "run_id": "9408bb33c48420764dc1ab8fcbe451309fe0cd87d7c085cb1b43427ee2685a47"
 }

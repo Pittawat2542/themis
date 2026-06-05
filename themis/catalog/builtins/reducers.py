@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 
 from themis.core.contexts import ReduceContext
-from themis.core.models import GenerationResult, ReducedCandidate
+from themis.core.models import ReducedCandidate, SessionResult
 
 
 class MajorityVoteReducer:
@@ -16,7 +16,7 @@ class MajorityVoteReducer:
         return "builtin-majority-vote-fingerprint"
 
     async def reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[SessionResult], ctx: ReduceContext
     ) -> ReducedCandidate:
         serialized_outputs = [
             _stable_output(candidate.final_output) for candidate in candidates

@@ -19,12 +19,11 @@ from themis.core.contexts import (
     ReduceContext,
     ScoreContext,
     SelectContext,
+    SessionContext,
 )
 from themis.core.events import (
     EvaluationCompletedEvent,
     EvaluationFailedEvent,
-    GenerationCompletedEvent,
-    GenerationFailedEvent,
     SelectionCompletedEvent,
     SelectionFailedEvent,
     ParseCompletedEvent,
@@ -36,15 +35,19 @@ from themis.core.events import (
     RunStartedEvent,
     ScoreCompletedEvent,
     ScoreFailedEvent,
+    SessionCompletedEvent,
+    SessionFailedEvent,
+    SessionStartedEvent,
+    StreamRecordedEvent,
 )
 from themis.core.models import (
     ConversationTrace,
     FailureCategory,
-    GenerationResult,
     MetricResult,
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
+    SessionResult,
     WorkflowTrace,
 )
 from themis.core.planner import Planner
@@ -78,6 +81,7 @@ from themis.core.store import RunStore
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import (
     ConversationSubject,
+    SessionSubject,
     TraceSubject,
     candidate_set_subject_for_llm_metric,
     candidate_set_subject_for_selection_metric,
@@ -958,29 +962,47 @@ class Orchestrator:
         snapshot: RunSnapshot,
         case,
         item: GenerationWorkItem,
-    ) -> tuple[int, GenerationResult | None, bool]:
-        generate_ctx = GenerateContext(
+    ) -> tuple[int, SessionResult | None, bool]:
+        termination = snapshot.identity.candidate_policy.get("termination")
+        max_turns = snapshot.identity.candidate_policy.get("max_turns", 1)
+        if not isinstance(max_turns, int):
+            max_turns = 1
+        session_ctx = SessionContext(
             run_id=snapshot.run_id,
             case_id=item.case_id,
             dataset_id=item.dataset_id,
             case_key=item.case_key,
             seed=item.seed,
             prompt_spec=snapshot.identity.generation_prompt_spec,
+            max_turns=max_turns,
+            termination=termination if isinstance(termination, dict) else {},
         )
         cache_key = self._generation_cache_key(snapshot, case, item)
         cached_generation = self._load_stage_cache("generate", cache_key)
         if isinstance(cached_generation, dict) and isinstance(
             cached_generation.get("result"), dict
         ):
-            generated = GenerationResult.model_validate(cached_generation["result"])
+            generated = SessionResult.model_validate(cached_generation["result"])
             blob_ref = await self._store_blob(
                 json.dumps(generated.model_dump(mode="json"), sort_keys=True).encode(
                     "utf-8"
                 ),
                 "application/json",
             )
+            for stream_event in generated.stream_events:
+                await self._persist_event(
+                    StreamRecordedEvent(
+                        run_id=snapshot.run_id,
+                        case_id=item.case_id,
+                        dataset_id=item.dataset_id,
+                        case_key=item.case_key,
+                        candidate_id=generated.candidate_id,
+                        source_stage=stream_event.source_stage,
+                        stream_event=stream_event.model_dump(mode="json"),
+                    )
+                )
             await self._persist_event(
-                GenerationCompletedEvent(
+                SessionCompletedEvent(
                     run_id=snapshot.run_id,
                     case_id=item.case_id,
                     dataset_id=item.dataset_id,
@@ -1025,28 +1047,52 @@ class Orchestrator:
                 if provider_token_limiter is not None:
                     await provider_token_limiter.acquire()
                 try:
-                    self._notify("before_generate", case, generate_ctx)
+                    self._notify("before_generate", case, session_ctx)
                     span = self.tracing_provider.start_span(
                         "generation", {"case_id": item.case_id}
                     )
                     try:
-                        generated = await self._generate_with_retries(
-                            case, generate_ctx
+                        await self._persist_event(
+                            SessionStartedEvent(
+                                run_id=snapshot.run_id,
+                                case_id=item.case_id,
+                                dataset_id=item.dataset_id,
+                                case_key=item.case_key,
+                                candidate_id=item.candidate_id,
+                                candidate_index=item.candidate_index,
+                                seed=item.seed,
+                                provider_key=provider_key,
+                            )
+                        )
+                        generated = await self._run_session_with_retries(
+                            case, session_ctx
                         )
                         if provider_token_limiter is not None:
                             await provider_token_limiter.acquire(
                                 _observed_token_cost(generated.token_usage) - 1
                             )
                         await self._update_rate_limit(provider_key, generated.artifacts)
-                        self._notify("after_generate", generated, generate_ctx)
+                        self._notify("after_generate", generated, session_ctx)
                         blob_ref = await self._store_blob(
                             json.dumps(
                                 generated.model_dump(mode="json"), sort_keys=True
                             ).encode("utf-8"),
                             "application/json",
                         )
+                        for stream_event in generated.stream_events:
+                            await self._persist_event(
+                                StreamRecordedEvent(
+                                    run_id=snapshot.run_id,
+                                    case_id=item.case_id,
+                                    dataset_id=item.dataset_id,
+                                    case_key=item.case_key,
+                                    candidate_id=generated.candidate_id,
+                                    source_stage=stream_event.source_stage,
+                                    stream_event=stream_event.model_dump(mode="json"),
+                                )
+                            )
                         await self._persist_event(
-                            GenerationCompletedEvent(
+                            SessionCompletedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
                                 dataset_id=item.dataset_id,
@@ -1073,7 +1119,7 @@ class Orchestrator:
                     except Exception as exc:
                         retry_history = getattr(exc, "retry_history", [])
                         await self._persist_event(
-                            GenerationFailedEvent(
+                            SessionFailedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
                                 dataset_id=item.dataset_id,
@@ -1092,9 +1138,9 @@ class Orchestrator:
 
     async def _select_candidates(
         self,
-        generated_candidates: list[GenerationResult],
+        generated_candidates: list[SessionResult],
         select_ctx: SelectContext,
-    ) -> list[GenerationResult]:
+    ) -> list[SessionResult]:
         if self.selector is None:
             return generated_candidates
         async with self._global_semaphore:
@@ -1103,7 +1149,7 @@ class Orchestrator:
 
     async def _reduce_candidates(
         self,
-        generated_candidates: list[GenerationResult],
+        generated_candidates: list[SessionResult],
         reduce_ctx: ReduceContext,
     ) -> ReducedCandidate:
         async with self._global_semaphore:
@@ -1163,11 +1209,11 @@ class Orchestrator:
         self,
         *,
         metric_kind: str,
-        generated_candidates: list[GenerationResult],
+        generated_candidates: list[SessionResult],
         reduced: ReducedCandidate,
     ):
         if metric_kind == "llm":
-            reduced_candidate = GenerationResult(
+            reduced_candidate = SessionResult(
                 candidate_id=reduced.candidate_id,
                 final_output=reduced.final_output,
             )
@@ -1201,8 +1247,10 @@ class Orchestrator:
                         messages=winner.conversation,
                     )
                 )
+            if winner.turns or winner.stream_events:
+                return SessionSubject(session=winner)
             raise WorkflowBuildError(
-                "Trace metrics require a trace or conversation on the winning candidate"
+                "Trace metrics require a trace, conversation, or session artifact on the winning candidate"
             )
         raise WorkflowBuildError(f"Unsupported metric kind: {metric_kind}")
 
@@ -1442,8 +1490,8 @@ class Orchestrator:
     def _selected_candidates_from_state(
         self,
         case_state: CaseExecutionState,
-        generated_candidates: list[GenerationResult],
-    ) -> list[GenerationResult]:
+        generated_candidates: list[SessionResult],
+    ) -> list[SessionResult]:
         if case_state.selected_candidate_ids is None:
             return generated_candidates
         selected_by_id = {
@@ -1455,18 +1503,31 @@ class Orchestrator:
             if candidate_id in selected_by_id
         ]
 
-    async def _generate_with_retries(
-        self, case, generate_ctx: GenerateContext
-    ) -> GenerationResult:
+    async def _run_session_with_retries(
+        self, case, session_ctx: SessionContext
+    ) -> SessionResult:
         retry_history: list[dict[str, JSONValue]] = []
         for attempt in range(self.runtime.generation_retry_attempts):
             try:
-                generated = await self.generator.generate(case, generate_ctx)
+                if hasattr(self.generator, "run_session"):
+                    generated = await self.generator.run_session(case, session_ctx)
+                else:
+                    legacy_ctx = GenerateContext.model_validate(
+                        session_ctx.model_dump(mode="json")
+                    )
+                    generated = await self.generator.generate(case, legacy_ctx)
+                session_result = SessionResult.model_validate(
+                    generated.model_dump(mode="json")
+                    if hasattr(generated, "model_dump")
+                    else generated
+                )
                 if retry_history:
-                    artifacts = dict(generated.artifacts or {})
+                    artifacts = dict(session_result.artifacts or {})
                     artifacts["retry_history"] = cast(JSONValue, retry_history)
-                    generated = generated.model_copy(update={"artifacts": artifacts})
-                return generated
+                    session_result = session_result.model_copy(
+                        update={"artifacts": artifacts}
+                    )
+                return session_result
             except Exception as exc:
                 retry_classification = _classify_retryable_error(exc)
                 if attempt + 1 == self.runtime.generation_retry_attempts or (
@@ -1646,7 +1707,7 @@ class Orchestrator:
         )
 
     def _reduction_cache_key(
-        self, snapshot: RunSnapshot, candidates: list[GenerationResult]
+        self, snapshot: RunSnapshot, candidates: list[SessionResult]
     ) -> str:
         return _stable_hash(
             {
