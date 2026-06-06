@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from queue import Empty, SimpleQueue
 from pathlib import Path
 
 from pydantic import Field
@@ -53,6 +54,30 @@ class InMemoryExecutionBackend(ExecutionBackend):
 
     def complete(self, run_id: str, result: dict[str, JSONValue]) -> None:
         self._claimed.pop(run_id, None)
+        self._completed[run_id] = dict(result)
+
+    def completed(self, run_id: str) -> dict[str, JSONValue] | None:
+        result = self._completed.get(run_id)
+        return None if result is None else dict(result)
+
+
+class QueueExecutionBackend(ExecutionBackend):
+    """Execution backend backed by a queue-compatible object."""
+
+    def __init__(self, queue: SimpleQueue[ExecutionRequest] | None = None) -> None:
+        self.queue = queue or SimpleQueue()
+        self._completed: dict[str, dict[str, JSONValue]] = {}
+
+    def submit(self, request: ExecutionRequest) -> None:
+        self.queue.put(request)
+
+    def claim_next(self) -> ExecutionRequest | None:
+        try:
+            return self.queue.get_nowait()
+        except Empty:
+            return None
+
+    def complete(self, run_id: str, result: dict[str, JSONValue]) -> None:
         self._completed[run_id] = dict(result)
 
     def completed(self, run_id: str) -> dict[str, JSONValue] | None:

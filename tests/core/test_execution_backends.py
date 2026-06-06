@@ -6,6 +6,7 @@ from themis.core.execution_backends import (
     ExecutionRequest,
     FilesystemExecutionBackend,
     InMemoryExecutionBackend,
+    QueueExecutionBackend,
 )
 
 
@@ -36,3 +37,20 @@ def test_filesystem_execution_backend_uses_queue_layout(tmp_path: Path) -> None:
 
     assert not (tmp_path / "claimed" / "run-1.json").exists()
     assert backend.completed("run-1") == {"status": "completed"}
+
+
+def test_queue_execution_backend_wraps_queue_protocol() -> None:
+    backend = QueueExecutionBackend()
+    first = ExecutionRequest(run_id="run-1", payload={"priority": "low"})
+    second = ExecutionRequest(run_id="run-2", payload={"priority": "high"})
+
+    backend.submit(first)
+    backend.submit(second)
+
+    assert backend.claim_next() == first
+    assert backend.claim_next() == second
+    assert backend.claim_next() is None
+
+    backend.complete("run-2", {"status": "completed"})
+
+    assert backend.completed("run-2") == {"status": "completed"}

@@ -50,6 +50,7 @@ from themis.core.execution_backends import (
     ExecutionRequest,
     FilesystemExecutionBackend,
     InMemoryExecutionBackend,
+    QueueExecutionBackend,
 )
 from themis.core.experiment import Experiment
 from themis.core.graph import (
@@ -244,6 +245,7 @@ __all__ = [
     "GraphRunResult",
     "HashableModel",
     "InMemoryExecutionBackend",
+    "QueueExecutionBackend",
     "JudgeModel",
     "JudgeCall",
     "JudgeResponse",

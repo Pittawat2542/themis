@@ -35,6 +35,7 @@ def test_root_package_exports_public_symbols() -> None:
         GraphRuntime,
         GraphRunResult,
         InMemoryExecutionBackend,
+        QueueExecutionBackend,
         StepInput,
         StepOutput,
         DatasetSourceSpec,
@@ -62,6 +63,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert GraphRuntime is not None
     assert GraphRunResult is not None
     assert InMemoryExecutionBackend is not None
+    assert QueueExecutionBackend is not None
     assert StepInput is not None
     assert StepOutput is not None
     assert DatasetSourceSpec is not None
