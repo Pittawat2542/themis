@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from typing import Literal, TypeGuard, cast
 
 from themis.core.base import JSONValue
-from themis.core.case_pipeline import CasePipeline
+from themis.core.case_pipeline import CasePipeline, CasePipelineContext
 from themis.core.config import RuntimeConfig
 from themis.core.contexts import (
     EvalScoreContext,
@@ -117,7 +117,8 @@ class Orchestrator:
         generator: Generator,
         selector: CandidateSelector | None = None,
         reducer: CandidateReducer | None = None,
-        parsers: list[tuple[str, Parser] | tuple[str, Parser, list[Parser]]] | None = None,
+        parsers: list[tuple[str, Parser] | tuple[str, Parser, list[Parser]]]
+        | None = None,
         parser: Parser | None = None,
         metrics: list[RuntimeMetric] | None = None,
         judge_models: list[JudgeModel] | None = None,
@@ -177,7 +178,38 @@ class Orchestrator:
             model_call_executor=self._execute_judge_model_call,
             persist_event=self._persist_event,
         )
-        self._case_pipeline = CasePipeline(self)
+        self._case_pipeline = CasePipeline(
+            CasePipelineContext(
+                selector=self.selector,
+                parsers=self.parsers,
+                metrics=self.metrics,
+                judge_models=self.judge_models,
+                force_workflow_metrics=self.force_workflow_metrics,
+                until_stage=self.until_stage,
+                workflow_runner=self.workflow_runner,
+                tracing_provider=self.tracing_provider,
+                global_semaphore=self._global_semaphore,
+                stage_semaphores=self._stage_semaphores,
+                replay_case_state=self._replay_case_state,
+                rerun_case_state=self._rerun_case_state,
+                selected_candidates_from_state=self._selected_candidates_from_state,
+                generate_candidate=self._generate_candidate,
+                select_candidates=self._select_candidates,
+                reduce_candidates=self._reduce_candidates,
+                parse_candidate=self._parse_candidate,
+                evaluation_context=self._evaluation_context,
+                evaluation_subject=self._evaluation_subject,
+                final_workflow_score=self._final_workflow_score,
+                persist_event=self._persist_event,
+                store_blob=self._store_blob,
+                notify=self._notify,
+                load_stage_cache=self._load_stage_cache,
+                store_stage_cache=self._store_stage_cache,
+                reduction_cache_key=self._reduction_cache_key,
+                parse_cache_key=self._parse_cache_key,
+                score_cache_key=self._score_cache_key,
+            )
+        )
 
     async def run(self, snapshot: RunSnapshot) -> RunResult:
         existing_state = self._load_execution_state(snapshot)

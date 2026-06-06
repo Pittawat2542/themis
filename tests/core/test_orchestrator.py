@@ -13,7 +13,7 @@ from themis.core.builtins import (
     resolve_parser_component,
     resolve_reducer_component,
 )
-from themis.core.case_pipeline import CasePipeline
+from themis.core.case_pipeline import CasePipeline, CasePipelineContext
 from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
@@ -741,11 +741,97 @@ async def test_orchestrator_private_run_case_delegates_to_case_pipeline(
     result, failed = await orchestrator._run_case(snapshot, items, existing_state)
 
     assert isinstance(captured["pipeline"], CasePipeline)
+    assert isinstance(captured["pipeline"].context, CasePipelineContext)
+    assert captured["pipeline"].context is not orchestrator
     assert captured["snapshot"] is snapshot
     assert captured["items"] is items
     assert captured["existing_state"] is existing_state
     assert result.case_key == items[0].case_key
     assert failed is False
+
+
+@pytest.mark.asyncio
+async def test_case_pipeline_runs_generation_with_minimal_context() -> None:
+    experiment = _experiment()
+    snapshot = experiment.compile()
+    items = [item async for item in Planner().iter_work_items(snapshot)]
+    generated_calls: list[str] = []
+
+    def unexpected(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("unexpected context call")
+
+    async def unexpected_async(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("unexpected context call")
+
+    async def generate_candidate(snapshot_arg, case_arg, item_arg):
+        assert snapshot_arg is snapshot
+        generated_calls.append(item_arg.candidate_id)
+        return (
+            item_arg.candidate_index,
+            SessionResult(
+                candidate_id=item_arg.candidate_id,
+                final_output=case_arg.expected_output,
+            ),
+            False,
+        )
+
+    async def persist_event(event) -> None:
+        del event
+
+    async def store_blob(blob: bytes, media_type: str) -> str:
+        del blob, media_type
+        return "sha256:unused"
+
+    class UnexpectedWorkflowRunner:
+        async def run_evaluation(self, *args, **kwargs):
+            del args, kwargs
+            raise AssertionError("unexpected context call")
+
+    context = CasePipelineContext(
+        selector=None,
+        parsers=[],
+        metrics=[],
+        judge_models=[],
+        force_workflow_metrics=set(),
+        until_stage="generate",
+        workflow_runner=UnexpectedWorkflowRunner(),
+        tracing_provider=NoOpTracingProvider(),
+        global_semaphore=asyncio.Semaphore(1),
+        stage_semaphores={
+            "parsing": asyncio.Semaphore(1),
+            "scoring": asyncio.Semaphore(1),
+        },
+        replay_case_state=lambda state: state,
+        rerun_case_state=lambda state, case, item: state,
+        selected_candidates_from_state=lambda state, candidates: candidates,
+        generate_candidate=generate_candidate,
+        select_candidates=unexpected_async,
+        reduce_candidates=unexpected_async,
+        parse_candidate=unexpected,
+        evaluation_context=unexpected,
+        evaluation_subject=unexpected,
+        final_workflow_score=unexpected,
+        persist_event=persist_event,
+        store_blob=store_blob,
+        notify=unexpected,
+        load_stage_cache=lambda stage_name, cache_key: None,
+        store_stage_cache=lambda stage_name, cache_key, payload: None,
+        reduction_cache_key=lambda snapshot_arg, candidates: "unused",
+        parse_cache_key=lambda snapshot_arg, reduced, parser_view: "unused",
+        score_cache_key=lambda snapshot_arg, case, parsed, metric: "unused",
+    )
+
+    result, failed = await CasePipeline(context).run_case(
+        snapshot, items, ExecutionState(run_id=snapshot.run_id)
+    )
+
+    assert failed is False
+    assert generated_calls == [item.candidate_id for item in items]
+    assert [candidate.candidate_id for candidate in result.generated_candidates] == (
+        generated_calls
+    )
 
 
 @pytest.mark.asyncio
