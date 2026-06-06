@@ -5,10 +5,8 @@ from __future__ import annotations
 from typing import Any, Protocol, cast
 
 from themis.adapters._utils import (
-    dump_response,
-    extract_headers,
-    extract_rate_limit,
-    extract_token_usage,
+    extract_provider_telemetry,
+    provider_artifacts,
     stable_fingerprint,
 )
 from themis.core.contexts import GenerateContext, SessionContext
@@ -85,24 +83,14 @@ class OpenAIGenerator:
             payload["instructions"] = instructions
 
         response = await client.responses.create(**payload)
-        raw_response = dump_response(response)
-        headers = extract_headers(response)
-        final_output = getattr(response, "output_text", raw_response)
+        telemetry = extract_provider_telemetry(response)
+        final_output = getattr(response, "output_text", telemetry.raw_response)
 
         conversation: list[Message] = []
         if instructions is not None:
             conversation.append(Message(role="system", content=instructions))
         conversation.append(Message(role="user", content=rendered_input))
         conversation.append(Message(role="assistant", content=final_output))
-
-        artifacts = {
-            "provider_request_id": getattr(response, "id", None),
-            "raw_response": raw_response,
-            "response_headers": headers or {},
-        }
-        rate_limit = extract_rate_limit(headers)
-        if rate_limit is not None:
-            artifacts["rate_limit"] = rate_limit
 
         return SessionResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
@@ -116,8 +104,8 @@ class OpenAIGenerator:
             ],
             conversation=conversation,
             termination_reason="completed",
-            token_usage=extract_token_usage(getattr(response, "usage", None)),
-            artifacts=artifacts,
+            token_usage=telemetry.token_usage,
+            artifacts=provider_artifacts(telemetry),
         )
 
     async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:

@@ -6,9 +6,9 @@ from typing import Any, Protocol, cast
 
 from themis.adapters._utils import (
     dump_response,
-    extract_headers,
-    extract_rate_limit,
+    extract_provider_telemetry,
     extract_token_usage,
+    provider_artifacts,
     stable_fingerprint,
 )
 from themis.core.contexts import GenerateContext, SessionContext
@@ -98,16 +98,9 @@ class VLLMGenerator:
             content = getattr(response, "output_text", raw_response)
             usage = extract_token_usage(getattr(response, "usage", None))
 
-        headers = extract_headers(response)
-        artifacts = {
-            "provider_request_id": getattr(response, "id", None),
-            "raw_response": raw_response,
-            "response_headers": headers or {},
-            "api_mode": self.api_mode,
-        }
-        rate_limit = extract_rate_limit(headers)
-        if rate_limit is not None:
-            artifacts["rate_limit"] = rate_limit
+        telemetry = extract_provider_telemetry(response)
+        artifacts = provider_artifacts(telemetry)
+        artifacts["api_mode"] = self.api_mode
 
         return SessionResult(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
@@ -120,7 +113,7 @@ class VLLMGenerator:
                 )
             ],
             termination_reason="completed",
-            token_usage=usage,
+            token_usage=usage or telemetry.token_usage,
             artifacts=artifacts,
         )
 
