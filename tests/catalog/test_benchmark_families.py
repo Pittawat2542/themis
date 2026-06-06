@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import cast
 
+import pytest
+
 from themis.catalog import load, run
 from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.core.base import JSONValue
@@ -113,6 +115,7 @@ def test_catalog_load_covers_all_benchmark_entries_from_catalog_md() -> None:
     assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
 
 
+@pytest.mark.slow
 def test_catalog_run_executes_variant_backed_benchmarks() -> None:
     rolebench_store = InMemoryRunStore()
     procbench_store = InMemoryRunStore()

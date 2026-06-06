@@ -6,6 +6,11 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = [pytest.mark.slow, pytest.mark.subprocess]
+
 
 def _run(
     args: list[str], *, cwd: Path, env: dict[str, str] | None = None

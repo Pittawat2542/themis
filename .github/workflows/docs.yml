@@ -47,7 +47,7 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Run docs verification tests
-        run: uv run pytest tests/test_docs_site.py tests/test_docs_inventory.py tests/test_docs_examples.py tests/test_readme_examples.py -q
+        run: uv run pytest tests/test_docs_site.py tests/test_docs_inventory.py tests/test_docs_examples.py tests/test_readme_examples.py -m "not external" -q
 
       - name: Build documentation
         run: uv run mkdocs build --strict

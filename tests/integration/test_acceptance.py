@@ -6,6 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = [pytest.mark.integration, pytest.mark.subprocess]
+
 
 def _run_cli(
     *args: str, env: dict[str, str] | None = None

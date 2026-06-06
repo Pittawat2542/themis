@@ -8,6 +8,7 @@ from themis.core.stores import InMemoryRunStore
 from tests.catalog_ids import catalog_benchmark_ids
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("benchmark_id", catalog_benchmark_ids())
 def test_catalog_run_executes_manifest_benchmark_end_to_end(
     benchmark_id: str,

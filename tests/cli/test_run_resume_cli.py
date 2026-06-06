@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
+
+import pytest
+
+from tests.cli.helpers import run_cli
+
+
+pytestmark = pytest.mark.slow
 
 
 def _write_config(path: Path, *, store_path: Path) -> None:
@@ -72,15 +77,6 @@ seeds: [7]
     )
 
 
-def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "themis.cli", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
 def test_run_resume_estimate_and_quickcheck_use_config_driven_experiments(
     tmp_path: Path,
 ) -> None:
@@ -88,23 +84,23 @@ def test_run_resume_estimate_and_quickcheck_use_config_driven_experiments(
     store_path = tmp_path / "run.sqlite3"
     _write_config(config_path, store_path=store_path)
 
-    estimate = _run_cli("estimate", "--config", str(config_path))
+    estimate = run_cli("estimate", "--config", str(config_path))
     assert estimate.returncode == 0, estimate.stderr
     estimate_payload = json.loads(estimate.stdout)
     assert estimate_payload["planned_generation_tasks"] == 1
 
-    run = _run_cli("run", "--config", str(config_path))
+    run = run_cli("run", "--config", str(config_path))
     assert run.returncode == 0, run.stderr
     run_payload = json.loads(run.stdout)
     assert run_payload["status"] == "completed"
 
-    resume = _run_cli("resume", "--config", str(config_path))
+    resume = run_cli("resume", "--config", str(config_path))
     assert resume.returncode == 0, resume.stderr
     resume_payload = json.loads(resume.stdout)
     assert resume_payload["run_id"] == run_payload["run_id"]
     assert resume_payload["status"] == "completed"
 
-    quickcheck = _run_cli("quickcheck", "--config", str(config_path))
+    quickcheck = run_cli("quickcheck", "--config", str(config_path))
     assert quickcheck.returncode == 0, quickcheck.stderr
     quickcheck_payload = json.loads(quickcheck.stdout)
     assert quickcheck_payload["run_id"] == run_payload["run_id"]
@@ -116,14 +112,14 @@ def test_run_supports_stage_limited_execution(tmp_path: Path) -> None:
     store_path = tmp_path / "run.sqlite3"
     _write_config(config_path, store_path=store_path)
 
-    run = _run_cli("run", "--config", str(config_path), "--until-stage", "generate")
+    run = run_cli("run", "--config", str(config_path), "--until-stage", "generate")
     assert run.returncode == 0, run.stderr
     run_payload = json.loads(run.stdout)
 
     assert run_payload["status"] == "completed"
     assert run_payload["completed_through_stage"] == "generate"
 
-    resume = _run_cli("resume", "--config", str(config_path))
+    resume = run_cli("resume", "--config", str(config_path))
     assert resume.returncode == 0, resume.stderr
     resume_payload = json.loads(resume.stdout)
     assert resume_payload["completed_through_stage"] == "generate"
@@ -134,28 +130,28 @@ def test_inspect_and_replay_commands_expose_persisted_state(tmp_path: Path) -> N
     store_path = tmp_path / "run.sqlite3"
     _write_config(config_path, store_path=store_path)
 
-    run = _run_cli("run", "--config", str(config_path))
+    run = run_cli("run", "--config", str(config_path))
     assert run.returncode == 0, run.stderr
     run_payload = json.loads(run.stdout)
 
-    inspect_snapshot = _run_cli("inspect", "snapshot", "--config", str(config_path))
+    inspect_snapshot = run_cli("inspect", "snapshot", "--config", str(config_path))
     assert inspect_snapshot.returncode == 0, inspect_snapshot.stderr
     snapshot_payload = json.loads(inspect_snapshot.stdout)
     assert snapshot_payload["run_id"] == run_payload["run_id"]
 
-    inspect_state = _run_cli("inspect", "state", "--config", str(config_path))
+    inspect_state = run_cli("inspect", "state", "--config", str(config_path))
     assert inspect_state.returncode == 0, inspect_state.stderr
     state_payload = json.loads(inspect_state.stdout)
     assert state_payload["run_id"] == run_payload["run_id"]
     assert state_payload["status"] == "completed"
 
-    replay = _run_cli("replay", "--config", str(config_path), "--stage", "score")
+    replay = run_cli("replay", "--config", str(config_path), "--stage", "score")
     assert replay.returncode == 0, replay.stderr
     replay_payload = json.loads(replay.stdout)
     assert replay_payload["run_id"] == run_payload["run_id"]
     assert replay_payload["status"] == "completed"
 
-    rerun = _run_cli(
+    rerun = run_cli(
         "rerun",
         "--config",
         str(config_path),
@@ -177,10 +173,10 @@ def test_inspect_evaluation_returns_workflow_execution(tmp_path: Path) -> None:
     store_path = tmp_path / "run.sqlite3"
     _write_judge_config(config_path, store_path=store_path)
 
-    run = _run_cli("run", "--config", str(config_path))
+    run = run_cli("run", "--config", str(config_path))
     assert run.returncode == 0, run.stderr
 
-    inspect_evaluation = _run_cli(
+    inspect_evaluation = run_cli(
         "inspect",
         "evaluation",
         "--config",

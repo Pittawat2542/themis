@@ -30,8 +30,9 @@ Run these before opening a PR:
 ```bash
 uv run --extra dev ruff check themis tests examples scripts
 uv run --extra dev mypy themis tests
-uv run --extra dev pytest -q
-uv run --extra dev pytest tests/test_docs_site.py tests/test_docs_examples.py tests/test_docs_inventory.py -q
+uv run --extra dev pytest
+uv run --extra dev pytest -m "not external"
+uv run --extra dev pytest tests/test_docs_site.py tests/test_docs_examples.py tests/test_docs_inventory.py -m "not external" -q
 uv run --extra docs mkdocs build --strict
 ```
 
@@ -51,6 +52,7 @@ uv run --extra dev python scripts/ci/check_built_package.py
 
 ## Tests and fixtures
 
+- `uv run pytest` runs the fast deterministic suite by default. Use `uv run pytest -m "not external"` before releases or broad refactors.
 - Reuse existing fake providers and deterministic builtin components whenever possible.
 - Add focused tests for new public behavior, then expand integration coverage only where it adds confidence.
 - Keep store-backed tests explicit about which backend behavior they are exercising.

@@ -31,6 +31,9 @@ from themis.core.workflows import (
 )
 
 
+pytestmark = pytest.mark.integration
+
+
 class FailingGenerator:
     component_id = "generator/failing"
     version = "1.0"

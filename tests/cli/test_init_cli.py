@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
+
+from tests.cli.helpers import run_cli
 
 
 def test_init_scaffolds_minimal_project(tmp_path: Path) -> None:
     project_root = tmp_path / "demo-project"
 
-    result = subprocess.run(
-        [sys.executable, "-m", "themis.cli", "init", "--path", str(project_root)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = run_cli("init", "--path", str(project_root))
 
     assert result.returncode == 0, result.stderr
     assert (project_root / "experiment.yaml").is_file()

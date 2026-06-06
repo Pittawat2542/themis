@@ -87,8 +87,15 @@ datasets = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q -m 'not slow and not integration and not subprocess and not perf and not external'"
 pythonpath = ["."]
+markers = [
+    "slow: opt-in tests that are too expensive for the default local/PR loop",
+    "integration: broad workflow tests that exercise multiple subsystems",
+    "subprocess: tests that require a real process boundary",
+    "perf: performance profile or regression tests",
+    "external: tests that require external services or opt-in infrastructure",
+]
 
 [tool.ruff]
 target-version = "py312"

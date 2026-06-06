@@ -93,3 +93,15 @@ uv run mkdocs build --strict
 ## Contributing
 
 Contributor setup and release guidance live in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+Default local tests run the fast deterministic suite:
+
+```bash
+uv run pytest
+```
+
+Run the full non-external suite before release or broad refactors:
+
+```bash
+uv run pytest -m "not external"
+```

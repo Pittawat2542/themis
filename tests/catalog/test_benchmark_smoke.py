@@ -20,6 +20,7 @@ def test_benchmark_catalog_smoke_ids_cover_manifest_entries() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.slow
 @pytest.mark.parametrize("benchmark_id", BENCHMARK_IDS)
 async def test_benchmark_catalog_smoke_loads_experiment_and_invokes_generator(
     benchmark_id: str,

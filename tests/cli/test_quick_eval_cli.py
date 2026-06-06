@@ -3,8 +3,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 from typing import cast
 
@@ -14,21 +12,7 @@ from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.dataset_inputs import dataset_from_inline, dataset_from_jsonl
 from themis.core.experiment import Experiment
 from themis.core.models import Dataset
-
-
-def _run_cli(
-    *args: str, env: dict[str, str] | None = None
-) -> subprocess.CompletedProcess[str]:
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
-    return subprocess.run(
-        [sys.executable, "-m", "themis.cli", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=merged_env,
-    )
+from tests.cli.helpers import run_cli
 
 
 def _run_python_dataset(dataset: Dataset) -> tuple[str, dict[str, JSONValue]]:
@@ -59,7 +43,7 @@ def test_quick_eval_inline_matches_python_api() -> None:
     )
     python_run_id, benchmark = _run_python_dataset(dataset)
 
-    cli_result = _run_cli(
+    cli_result = run_cli(
         "quick-eval",
         "inline",
         "--input-json",
@@ -83,7 +67,7 @@ def test_quick_eval_file_matches_python_api(tmp_path: Path) -> None:
     dataset = dataset_from_jsonl(path)
     python_run_id, benchmark = _run_python_dataset(dataset)
 
-    cli_result = _run_cli("quick-eval", "file", "--path", str(path))
+    cli_result = run_cli("quick-eval", "file", "--path", str(path))
 
     assert cli_result.returncode == 0, cli_result.stderr
     payload = json.loads(cli_result.stdout)
@@ -95,7 +79,7 @@ def test_quick_eval_huggingface_reports_missing_dependency() -> None:
     if importlib.util.find_spec("datasets") is not None:
         return
 
-    cli_result = _run_cli(
+    cli_result = run_cli(
         "quick-eval",
         "huggingface",
         "--dataset",
@@ -126,7 +110,7 @@ def load_dataset(dataset_name, *, split):
 """.strip()
     )
 
-    cli_result = _run_cli(
+    cli_result = run_cli(
         "quick-eval",
         "huggingface",
         "--dataset",
@@ -172,7 +156,7 @@ def load_dataset(dataset_name, *args, split=None, revision=None, **kwargs):
 """.strip()
     )
 
-    cli_result = _run_cli(
+    cli_result = run_cli(
         "quick-eval",
         "benchmark",
         "--name",

@@ -15,10 +15,13 @@ from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.stores.postgres import PostgresRunStore, postgres_store
 
-pytestmark = pytest.mark.skipif(
-    not os.getenv("THEMIS_TEST_POSTGRES_ADMIN_URL"),
-    reason="THEMIS_TEST_POSTGRES_ADMIN_URL is required for Postgres integration tests",
-)
+pytestmark = [
+    pytest.mark.external,
+    pytest.mark.skipif(
+        not os.getenv("THEMIS_TEST_POSTGRES_ADMIN_URL"),
+        reason="THEMIS_TEST_POSTGRES_ADMIN_URL is required for Postgres integration tests",
+    ),
+]
 
 
 def _psycopg() -> Any:

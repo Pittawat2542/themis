@@ -3,6 +3,11 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = pytest.mark.slow
+
 
 EXAMPLES_ROOT = Path(__file__).resolve().parents[1] / "examples" / "docs"
 

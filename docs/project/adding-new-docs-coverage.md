@@ -19,6 +19,6 @@ Whenever you add a new public surface:
 Required local checks:
 
 ```bash
-uv run pytest tests/test_docs_site.py tests/test_docs_examples.py tests/test_docs_inventory.py -q
+uv run pytest tests/test_docs_site.py tests/test_docs_examples.py tests/test_docs_inventory.py -m "not external" -q
 uv run mkdocs build --strict
 ```

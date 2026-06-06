@@ -3,6 +3,11 @@ from __future__ import annotations
 import subprocess
 import sys
 
+import pytest
+
+
+pytestmark = pytest.mark.subprocess
+
 
 def test_cli_help_lists_command_groups() -> None:
     result = subprocess.run(

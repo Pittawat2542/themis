@@ -108,6 +108,8 @@ def test_projection_updates_reuse_existing_snapshot_payload(
     assert calls == 1
 
 
+@pytest.mark.perf
+@pytest.mark.subprocess
 def test_profile_script_emits_machine_readable_json() -> None:
     script = Path("scripts/ci/profile_load.py")
 

@@ -1,25 +1,20 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 from typing import cast
+
+import pytest
 
 from themis import Reporter, StatsEngine
 from themis.core.base import JSONValue
 from themis.core.experiment import Experiment
 from themis.core.read_models import BenchmarkResult
 from themis.core.stores.factory import create_run_store
+from tests.cli.helpers import run_cli
 
 
-def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "themis.cli", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+pytestmark = pytest.mark.slow
 
 
 def _write_config(
@@ -91,17 +86,17 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
         python_store.get_projection(python_result.run_id, "benchmark_result"),
     )
 
-    cli_run = _run_cli("run", "--config", str(config_path))
-    cli_quick_eval = _run_cli("quick-eval", "file", "--path", str(cases_path))
-    worker_submit = _run_cli(
+    cli_run = run_cli("run", "--config", str(config_path))
+    cli_quick_eval = run_cli("quick-eval", "file", "--path", str(cases_path))
+    worker_submit = run_cli(
         "submit", "--config", str(config_path), "--mode", "worker-pool"
     )
-    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root))
-    batch_submit = _run_cli("submit", "--config", str(config_path), "--mode", "batch")
+    worker_run = run_cli("worker", "run", "--queue-root", str(queue_root))
+    batch_submit = run_cli("submit", "--config", str(config_path), "--mode", "batch")
     batch_manifest = json.loads(batch_submit.stdout)["manifest_path"]
-    batch_run = _run_cli("batch", "run", "--request", batch_manifest)
-    quickcheck = _run_cli("quickcheck", "--config", str(config_path))
-    report = _run_cli("report", "--config", str(config_path), "--format", "json")
+    batch_run = run_cli("batch", "run", "--request", batch_manifest)
+    quickcheck = run_cli("quickcheck", "--config", str(config_path))
+    report = run_cli("report", "--config", str(config_path), "--format", "json")
 
     assert cli_run.returncode == 0, cli_run.stderr
     assert cli_quick_eval.returncode == 0, cli_quick_eval.stderr
@@ -164,7 +159,7 @@ def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
     baseline_experiment.run(store=store)
     candidate_experiment.run(store=store)
 
-    cli_compare = _run_cli(
+    cli_compare = run_cli(
         "compare",
         "--baseline-config",
         str(baseline_config),
