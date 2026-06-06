@@ -18,6 +18,7 @@ from themis.core.events import (
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.quickcheck import quickcheck
+from themis.core.registry import RegressionPolicy, RunRecord
 from themis.core.reporter import Reporter, snapshot_report
 from themis.core.stores.memory import InMemoryRunStore
 from tests.release import CURRENT_VERSION
@@ -367,6 +368,100 @@ def test_reporter_reliability_summarizes_confidence_calibration() -> None:
             "labels": {},
             "confidence": None,
             "metadata": {},
+        }
+    ]
+
+
+def test_reporter_builds_metric_trends_from_run_registry() -> None:
+    store, run_id = _store()
+    candidate_run_id = "candidate-run"
+    baseline = store.get_run_record(run_id)
+    assert baseline is not None
+    store._run_records[candidate_run_id] = RunRecord(
+        run_id=candidate_run_id,
+        status="completed",
+        dataset_source_ids=["dataset-1"],
+        dataset_fingerprints=["fingerprint-1"],
+        metric_ids=["builtin/exact_match"],
+        baseline_label="candidate",
+    )
+    store._projections[(candidate_run_id, "benchmark_result")] = {
+        "run_id": candidate_run_id,
+        "dataset_ids": ["dataset-1"],
+        "metric_ids": ["builtin/exact_match"],
+        "total_cases": 1,
+        "completed_cases": 1,
+        "failed_cases": 0,
+        "score_rows": [],
+        "metric_means": {"builtin/exact_match": 0.75},
+        "outcome_counts": {},
+        "error_counts": {},
+    }
+
+    trend = Reporter(store).trends(metric_id="builtin/exact_match")
+
+    assert [point.model_dump() for point in trend.points] == [
+        {
+            "run_id": run_id,
+            "metric_id": "builtin/exact_match",
+            "value": 1.0,
+            "baseline_label": None,
+            "created_at": baseline.created_at,
+        },
+        {
+            "run_id": candidate_run_id,
+            "metric_id": "builtin/exact_match",
+            "value": 0.75,
+            "baseline_label": "candidate",
+            "created_at": store._run_records[candidate_run_id].created_at,
+        },
+    ]
+
+
+def test_reporter_flags_threshold_regressions_against_baseline_label() -> None:
+    store, run_id = _store()
+    baseline = store.get_run_record(run_id)
+    assert baseline is not None
+    store.update_run_record(run_id, baseline_label="main")
+    candidate_run_id = "candidate-run"
+    store._run_records[candidate_run_id] = RunRecord(
+        run_id=candidate_run_id,
+        status="completed",
+        dataset_source_ids=["dataset-1"],
+        dataset_fingerprints=["fingerprint-1"],
+        metric_ids=["builtin/exact_match"],
+    )
+    store._projections[(candidate_run_id, "benchmark_result")] = {
+        "run_id": candidate_run_id,
+        "dataset_ids": ["dataset-1"],
+        "metric_ids": ["builtin/exact_match"],
+        "total_cases": 1,
+        "completed_cases": 1,
+        "failed_cases": 0,
+        "score_rows": [],
+        "metric_means": {"builtin/exact_match": 0.8},
+        "outcome_counts": {},
+        "error_counts": {},
+    }
+
+    summary = Reporter(store).regressions(
+        candidate_run_id,
+        RegressionPolicy(
+            baseline_label="main",
+            metric_thresholds={"builtin/exact_match": -0.1},
+        ),
+    )
+
+    assert [finding.model_dump() for finding in summary.findings] == [
+        {
+            "metric_id": "builtin/exact_match",
+            "baseline_run_id": run_id,
+            "candidate_run_id": candidate_run_id,
+            "baseline_value": 1.0,
+            "candidate_value": 0.8,
+            "delta": -0.2,
+            "threshold": -0.1,
+            "regressed": True,
         }
     ]
 

@@ -54,6 +54,13 @@ class RunQuery(FrozenModel):
     updated_before: datetime | None = None
 
 
+class RegressionPolicy(FrozenModel):
+    """Threshold policy for comparing one candidate run against a baseline."""
+
+    baseline_label: str
+    metric_thresholds: dict[str, float] = Field(default_factory=dict)
+
+
 def build_run_record(
     snapshot: RunSnapshot,
     *,

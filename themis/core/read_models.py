@@ -222,3 +222,41 @@ class ReliabilitySummary(FrozenModel):
 
     run_id: str
     metrics: list[MetricResult] = Field(default_factory=list)
+
+
+class TrendPoint(FrozenModel):
+    """One metric value for one persisted run in a trend view."""
+
+    run_id: str
+    metric_id: str
+    value: float
+    baseline_label: str | None = None
+    created_at: datetime
+
+
+class TrendView(FrozenModel):
+    """Metric trend over persisted run records."""
+
+    metric_id: str
+    points: list[TrendPoint] = Field(default_factory=list)
+
+
+class RegressionFinding(FrozenModel):
+    """One threshold comparison between a baseline and candidate metric."""
+
+    metric_id: str
+    baseline_run_id: str
+    candidate_run_id: str
+    baseline_value: float
+    candidate_value: float
+    delta: float
+    threshold: float
+    regressed: bool
+
+
+class RegressionSummary(FrozenModel):
+    """Threshold regression findings for one candidate run."""
+
+    candidate_run_id: str
+    baseline_label: str
+    findings: list[RegressionFinding] = Field(default_factory=list)

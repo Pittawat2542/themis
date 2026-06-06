@@ -15,8 +15,13 @@ from themis.core.read_models import (
     BenchmarkResult,
     FailureSlice,
     FailureSliceSummary,
+    RegressionFinding,
+    RegressionSummary,
     ReliabilitySummary,
+    TrendPoint,
+    TrendView,
 )
+from themis.core.registry import RegressionPolicy, RunQuery
 from themis.core.reliability import calibration_error
 from themis.core.snapshot import RunSnapshot
 from themis.core.stats import StatsEngine, StatsSummary
@@ -274,6 +279,73 @@ class Reporter:
             ],
         )
 
+    def trends(self, *, metric_id: str) -> TrendView:
+        """Return metric means across stored runs ordered by registry creation time."""
+
+        points: list[TrendPoint] = []
+        for record in self.store.query_runs(RunQuery(metric_id=metric_id)):
+            projection = self.store.get_projection(record.run_id, "benchmark_result")
+            if not isinstance(projection, dict):
+                continue
+            metric_means = projection.get("metric_means", {})
+            if not isinstance(metric_means, dict):
+                continue
+            value = metric_means.get(metric_id)
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                continue
+            points.append(
+                TrendPoint(
+                    run_id=record.run_id,
+                    metric_id=metric_id,
+                    value=float(value),
+                    baseline_label=record.baseline_label,
+                    created_at=record.created_at,
+                )
+            )
+        return TrendView(metric_id=metric_id, points=points)
+
+    def regressions(
+        self, candidate_run_id: str, policy: RegressionPolicy
+    ) -> RegressionSummary:
+        """Compare a candidate run against the run pinned by a baseline label."""
+
+        baseline_records = self.store.query_runs(
+            RunQuery(baseline_label=policy.baseline_label)
+        )
+        if not baseline_records:
+            raise ValueError(f"Unknown baseline label: {policy.baseline_label}")
+        baseline_record = baseline_records[-1]
+        baseline_means = _metric_means(
+            self._projection(baseline_record.run_id, "benchmark_result")
+        )
+        candidate_means = _metric_means(
+            self._projection(candidate_run_id, "benchmark_result")
+        )
+        findings: list[RegressionFinding] = []
+        for metric_id, threshold in sorted(policy.metric_thresholds.items()):
+            baseline_value = baseline_means.get(metric_id)
+            candidate_value = candidate_means.get(metric_id)
+            if baseline_value is None or candidate_value is None:
+                continue
+            delta = round(candidate_value - baseline_value, 12)
+            findings.append(
+                RegressionFinding(
+                    metric_id=metric_id,
+                    baseline_run_id=baseline_record.run_id,
+                    candidate_run_id=candidate_run_id,
+                    baseline_value=baseline_value,
+                    candidate_value=candidate_value,
+                    delta=delta,
+                    threshold=threshold,
+                    regressed=delta < threshold,
+                )
+            )
+        return RegressionSummary(
+            candidate_run_id=candidate_run_id,
+            baseline_label=policy.baseline_label,
+            findings=findings,
+        )
+
     def _projection(self, run_id: str, projection_name: str) -> dict[str, JSONValue]:
         """Load a named stored projection and validate its JSON object shape."""
 
@@ -347,3 +419,14 @@ def _add_failure_slice(
     if not isinstance(value, (str, int, float, bool)):
         return
     grouped.setdefault((dimension, str(value)), set()).add(case_key)
+
+
+def _metric_means(projection: dict[str, JSONValue]) -> dict[str, float]:
+    value = projection.get("metric_means", {})
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(metric_id): float(metric_value)
+        for metric_id, metric_value in value.items()
+        if isinstance(metric_value, (int, float)) and not isinstance(metric_value, bool)
+    }
