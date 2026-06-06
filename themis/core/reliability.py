@@ -55,7 +55,7 @@ def calibration_error(metric_id: str, results: Iterable[MetricResult]) -> Metric
     return MetricResult(
         metric_id=metric_id,
         result_type="calibration",
-        value=sum(gaps) / len(gaps),
+        value=round(sum(gaps) / len(gaps), 12),
         dimensions={"sample_count": float(len(gaps))},
     )
 

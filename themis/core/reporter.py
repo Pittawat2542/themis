@@ -10,7 +10,14 @@ from typing import cast
 
 from themis.core.base import JSONValue
 from themis.core.inspection import get_execution_state, get_run_snapshot
-from themis.core.read_models import BenchmarkResult
+from themis.core.models import MetricResult
+from themis.core.read_models import (
+    BenchmarkResult,
+    FailureSlice,
+    FailureSliceSummary,
+    ReliabilitySummary,
+)
+from themis.core.reliability import calibration_error
 from themis.core.snapshot import RunSnapshot
 from themis.core.stats import StatsEngine, StatsSummary
 from themis.core.store import RunStore
@@ -195,6 +202,78 @@ class Reporter:
             for row in score_rows
         ]
 
+    def failure_slices(self, run_id: str) -> FailureSliceSummary:
+        """Return deterministic failure slices grouped from benchmark error rows."""
+
+        grouped: dict[tuple[str, str], set[str]] = {}
+        for row in self.score_rows(run_id):
+            if row["outcome"] != "error":
+                continue
+            case_key = _case_key_for_row(row)
+            _add_failure_slice(
+                grouped,
+                dimension="category",
+                value=row.get("failure_category"),
+                case_key=case_key,
+            )
+            _add_failure_slice(
+                grouped,
+                dimension="dataset",
+                value=row.get("dataset_id"),
+                case_key=case_key,
+            )
+            _add_failure_slice(
+                grouped,
+                dimension="metric",
+                value=row.get("metric_id"),
+                case_key=case_key,
+            )
+            metadata = row.get("metadata", {})
+            if isinstance(metadata, dict):
+                for key, value in metadata.items():
+                    _add_failure_slice(
+                        grouped,
+                        dimension=f"metadata.{key}",
+                        value=value,
+                        case_key=case_key,
+                    )
+
+        slices = [
+            FailureSlice(
+                dimension=dimension,
+                value=value,
+                count=len(case_keys),
+                case_keys=sorted(case_keys),
+            )
+            for (dimension, value), case_keys in sorted(grouped.items())
+        ]
+        return FailureSliceSummary(run_id=run_id, slices=slices)
+
+    def reliability(self, run_id: str) -> ReliabilitySummary:
+        """Return calibration-style reliability summaries for scored rows."""
+
+        metric_rows: dict[str, list[MetricResult]] = {}
+        for row in self.score_rows(run_id):
+            if row["outcome"] == "error":
+                continue
+            if row.get("value") is None or row.get("confidence") is None:
+                continue
+            metric_id = str(row["metric_id"])
+            metric_rows.setdefault(metric_id, []).append(
+                MetricResult(
+                    metric_id=metric_id,
+                    value=cast(float, row["value"]),
+                    confidence=cast(float, row["confidence"]),
+                )
+            )
+        return ReliabilitySummary(
+            run_id=run_id,
+            metrics=[
+                calibration_error(metric_id, results)
+                for metric_id, results in sorted(metric_rows.items())
+            ],
+        )
+
     def _projection(self, run_id: str, projection_name: str) -> dict[str, JSONValue]:
         """Load a named stored projection and validate its JSON object shape."""
 
@@ -243,3 +322,28 @@ def _require_rows(value: JSONValue | None, *, name: str) -> list[dict[str, JSONV
     if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
         raise ValueError(f"Expected row list for {name}")
     return cast(list[dict[str, JSONValue]], value)
+
+
+def _case_key_for_row(row: dict[str, JSONValue]) -> str:
+    case_key = row.get("case_key")
+    if isinstance(case_key, str) and case_key:
+        return case_key
+    dataset_id = row.get("dataset_id")
+    case_id = row["case_id"]
+    if isinstance(dataset_id, str) and dataset_id:
+        return f"{len(dataset_id)}:{dataset_id}:{case_id}"
+    return str(case_id)
+
+
+def _add_failure_slice(
+    grouped: dict[tuple[str, str], set[str]],
+    *,
+    dimension: str,
+    value: JSONValue | None,
+    case_key: str,
+) -> None:
+    if value is None:
+        return
+    if not isinstance(value, (str, int, float, bool)):
+        return
+    grouped.setdefault((dimension, str(value)), set()).add(case_key)

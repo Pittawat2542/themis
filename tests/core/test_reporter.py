@@ -232,6 +232,145 @@ def test_reporter_markdown_includes_failure_section_only_for_error_rows() -> Non
     )
 
 
+def test_reporter_builds_failure_slices_from_error_rows() -> None:
+    store, run_id = _store()
+    store._projections[(run_id, "benchmark_result")] = {
+        "run_id": run_id,
+        "dataset_ids": ["dataset-1"],
+        "metric_ids": ["builtin/exact_match", "builtin/f1"],
+        "total_cases": 2,
+        "completed_cases": 0,
+        "failed_cases": 2,
+        "score_rows": [
+            {
+                "case_id": "case-1",
+                "dataset_id": "dataset-1",
+                "case_key": "9:dataset-1:case-1",
+                "metric_id": "builtin/exact_match",
+                "outcome": "error",
+                "value": None,
+                "candidate_id": "case-1-reduced",
+                "failure_category": "parse_failure",
+                "error_message": "bad parse",
+                "metadata": {"slice": "math"},
+            },
+            {
+                "case_id": "case-2",
+                "dataset_id": "dataset-1",
+                "case_key": "9:dataset-1:case-2",
+                "metric_id": "builtin/f1",
+                "outcome": "error",
+                "value": None,
+                "candidate_id": "case-2-reduced",
+                "failure_category": "provider_failure",
+                "error_message": "timeout",
+                "metadata": {"slice": "math"},
+            },
+        ],
+        "metric_means": {},
+        "outcome_counts": {
+            "builtin/exact_match": {"error": 1},
+            "builtin/f1": {"error": 1},
+        },
+        "error_counts": {
+            "builtin/exact_match": {"parse_failure": 1},
+            "builtin/f1": {"provider_failure": 1},
+        },
+    }
+
+    slices = Reporter(store).failure_slices(run_id)
+
+    assert [item.model_dump() for item in slices.slices] == [
+        {
+            "dimension": "category",
+            "value": "parse_failure",
+            "count": 1,
+            "case_keys": ["9:dataset-1:case-1"],
+        },
+        {
+            "dimension": "category",
+            "value": "provider_failure",
+            "count": 1,
+            "case_keys": ["9:dataset-1:case-2"],
+        },
+        {
+            "dimension": "dataset",
+            "value": "dataset-1",
+            "count": 2,
+            "case_keys": ["9:dataset-1:case-1", "9:dataset-1:case-2"],
+        },
+        {
+            "dimension": "metadata.slice",
+            "value": "math",
+            "count": 2,
+            "case_keys": ["9:dataset-1:case-1", "9:dataset-1:case-2"],
+        },
+        {
+            "dimension": "metric",
+            "value": "builtin/exact_match",
+            "count": 1,
+            "case_keys": ["9:dataset-1:case-1"],
+        },
+        {
+            "dimension": "metric",
+            "value": "builtin/f1",
+            "count": 1,
+            "case_keys": ["9:dataset-1:case-2"],
+        },
+    ]
+
+
+def test_reporter_reliability_summarizes_confidence_calibration() -> None:
+    store, run_id = _store()
+    store._projections[(run_id, "benchmark_result")] = {
+        "run_id": run_id,
+        "dataset_ids": ["dataset-1"],
+        "metric_ids": ["metric/confidence"],
+        "total_cases": 2,
+        "completed_cases": 2,
+        "failed_cases": 0,
+        "score_rows": [
+            {
+                "case_id": "case-1",
+                "dataset_id": "dataset-1",
+                "case_key": "9:dataset-1:case-1",
+                "metric_id": "metric/confidence",
+                "outcome": "correct",
+                "value": 1.0,
+                "confidence": 0.8,
+                "candidate_id": "case-1-reduced",
+            },
+            {
+                "case_id": "case-2",
+                "dataset_id": "dataset-1",
+                "case_key": "9:dataset-1:case-2",
+                "metric_id": "metric/confidence",
+                "outcome": "incorrect",
+                "value": 0.0,
+                "confidence": 0.3,
+                "candidate_id": "case-2-reduced",
+            },
+        ],
+        "metric_means": {"metric/confidence": 0.5},
+        "outcome_counts": {"metric/confidence": {"correct": 1, "incorrect": 1}},
+        "error_counts": {},
+    }
+
+    summary = Reporter(store).reliability(run_id)
+
+    assert [metric.model_dump() for metric in summary.metrics] == [
+        {
+            "metric_id": "metric/confidence",
+            "result_type": "calibration",
+            "value": 0.25,
+            "dimensions": {"sample_count": 2.0},
+            "labels": {},
+            "confidence": None,
+            "metadata": {},
+        }
+    ]
+
+
 def test_snapshot_report_includes_identity_and_provenance() -> None:
     snapshot = _snapshot()
 

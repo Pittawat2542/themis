@@ -199,3 +199,26 @@ class TelemetrySummary(FrozenModel):
     request_ids: list[str] = Field(default_factory=list)
     retry_count: int = 0
     estimated_cost: float = 0.0
+
+
+class FailureSlice(FrozenModel):
+    """One grouped failure slice in a benchmark result."""
+
+    dimension: str
+    value: str
+    count: int
+    case_keys: list[str] = Field(default_factory=list)
+
+
+class FailureSliceSummary(FrozenModel):
+    """Failure slices for a persisted run."""
+
+    run_id: str
+    slices: list[FailureSlice] = Field(default_factory=list)
+
+
+class ReliabilitySummary(FrozenModel):
+    """Reliability metrics derived from scored benchmark rows."""
+
+    run_id: str
+    metrics: list[MetricResult] = Field(default_factory=list)
