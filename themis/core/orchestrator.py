@@ -95,6 +95,20 @@ def _is_pure_metric(metric: RuntimeMetric) -> TypeGuard[PureMetric]:
     return isinstance(metric, PureMetric)
 
 
+def _normalize_parser_views(
+    parsers: list[tuple[str, Parser] | tuple[str, Parser, list[Parser]]],
+) -> list[tuple[str, Parser, list[Parser]]]:
+    normalized: list[tuple[str, Parser, list[Parser]]] = []
+    for parser_view in parsers:
+        if len(parser_view) == 2:
+            view_id, parser = parser_view
+            normalized.append((view_id, parser, []))
+            continue
+        view_id, parser, fallbacks = parser_view
+        normalized.append((view_id, parser, list(fallbacks)))
+    return normalized
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -103,7 +117,7 @@ class Orchestrator:
         generator: Generator,
         selector: CandidateSelector | None = None,
         reducer: CandidateReducer | None = None,
-        parsers: list[tuple[str, Parser]] | None = None,
+        parsers: list[tuple[str, Parser] | tuple[str, Parser, list[Parser]]] | None = None,
         parser: Parser | None = None,
         metrics: list[RuntimeMetric] | None = None,
         judge_models: list[JudgeModel] | None = None,
@@ -128,7 +142,9 @@ class Orchestrator:
         self.generator = generator
         self.selector = selector
         self.reducer = reducer
-        self.parsers = list(parsers or ([("default", parser)] if parser else []))
+        self.parsers = _normalize_parser_views(
+            parsers or ([("default", parser)] if parser else [])
+        )
         self.metrics = list(metrics or [])
         self.judge_models = list(judge_models or [])
         self.force_workflow_metrics = set(force_workflow_metrics or set())
@@ -981,9 +997,9 @@ class Orchestrator:
     def _parse_cache_key(
         self, snapshot: RunSnapshot, reduced: ReducedCandidate, parser_view: str
     ) -> str:
-        parser_ref = next(
+        parser_view_ref = next(
             (
-                view_ref.parser
+                view_ref
                 for view_ref in snapshot.component_refs.parsers
                 if view_ref.id == parser_view
             ),
@@ -994,9 +1010,15 @@ class Orchestrator:
                 "stage": "parse",
                 "parser_view": parser_view,
                 "reduced_hash": reduced.compute_hash(),
-                "parser_ref": parser_ref.model_dump(mode="json")
-                if parser_ref is not None
+                "parser_ref": parser_view_ref.parser.model_dump(mode="json")
+                if parser_view_ref is not None
                 else None,
+                "fallback_refs": [
+                    fallback.model_dump(mode="json")
+                    for fallback in parser_view_ref.fallbacks
+                ]
+                if parser_view_ref is not None
+                else [],
             }
         )
 

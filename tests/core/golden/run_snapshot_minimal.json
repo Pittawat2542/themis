@@ -15,6 +15,7 @@
     ],
     "parsers": [
       {
+        "fallbacks": [],
         "id": "default",
         "parser": {
           "component_id": "builtin/json_identity",
@@ -127,6 +128,7 @@
     ],
     "parser_refs": [
       {
+        "fallbacks": [],
         "id": "default",
         "parser": {
           "component_id": "builtin/json_identity",
@@ -193,5 +195,5 @@
     },
     "themis_version": "4.0.2"
   },
-  "run_id": "9408bb33c48420764dc1ab8fcbe451309fe0cd87d7c085cb1b43427ee2685a47"
+  "run_id": "61803877a8936e3f24a9ec3f7c57f82bc17fa40851174a3c07c7b287924d2f36"
 }

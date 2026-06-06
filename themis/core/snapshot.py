@@ -77,6 +77,7 @@ class ParserViewRef(FrozenModel):
 
     id: str
     parser: ComponentRef
+    fallbacks: list[ComponentRef] = Field(default_factory=list)
 
 
 class ComponentRefs(FrozenModel):

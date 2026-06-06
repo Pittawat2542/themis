@@ -171,6 +171,10 @@ class Experiment(FrozenModel):
                 ParserViewRef(
                     id=view.id,
                     parser=component_ref_from_value(view.parser),
+                    fallbacks=[
+                        component_ref_from_value(fallback)
+                        for fallback in view.fallbacks
+                    ],
                 )
                 for view in self.evaluation.parser_views
             ],
@@ -311,10 +315,7 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parsers=[
-                (view.id, resolve_parser_component(view.parser))
-                for view in self.evaluation.parser_views
-            ],
+            parsers=self._resolved_parser_views(),
             metrics=[
                 resolve_metric_component(metric) for metric in self.evaluation.metrics
             ],
@@ -375,10 +376,7 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parsers=[
-                (view.id, resolve_parser_component(view.parser))
-                for view in self.evaluation.parser_views
-            ],
+            parsers=self._resolved_parser_views(),
             metrics=[
                 resolve_metric_component(metric) for metric in self.evaluation.metrics
             ],
@@ -461,10 +459,7 @@ class Experiment(FrozenModel):
             reducer=resolve_reducer_component(self.generation.reducer)
             if self.generation.reducer is not None
             else None,
-            parsers=[
-                (view.id, resolve_parser_component(view.parser))
-                for view in self.evaluation.parser_views
-            ],
+            parsers=self._resolved_parser_views(),
             metrics=[
                 resolve_metric_component(metric) for metric in self.evaluation.metrics
             ],
@@ -674,6 +669,12 @@ class Experiment(FrozenModel):
                     parser=component_ref_from_value(
                         resolve_parser_component(view.parser)
                     ),
+                    fallbacks=[
+                        component_ref_from_value(
+                            resolve_parser_component(fallback)
+                        )
+                        for fallback in view.fallbacks
+                    ],
                 )
                 for view in self.evaluation.parser_views
             ],
@@ -686,6 +687,16 @@ class Experiment(FrozenModel):
                 for judge_model in self.evaluation.judge_models
             ],
         )
+
+    def _resolved_parser_views(self):
+        return [
+            (
+                view.id,
+                resolve_parser_component(view.parser),
+                [resolve_parser_component(fallback) for fallback in view.fallbacks],
+            )
+            for view in self.evaluation.parser_views
+        ]
 
     def _validate_component_refs(
         self, snapshot: RunSnapshot, resolved: ComponentRefs

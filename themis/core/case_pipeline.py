@@ -269,10 +269,10 @@ class CasePipeline:
                 had_failure,
             )
 
-        parser_views = list(o.parsers) if o.parsers else [("default", None)]
+        parser_views = list(o.parsers) if o.parsers else [("default", None, [])]
         parsed_views = dict(prior_case_state.parsed_views)
         parse_errors = dict(prior_case_state.parse_errors)
-        for parser_view, parser in parser_views:
+        for parser_view, parser, fallback_parsers in parser_views:
             if parser_view in parsed_views:
                 continue
             cached_parse = o._load_stage_cache(
@@ -307,46 +307,56 @@ class CasePipeline:
                 candidate_id=reduced.candidate_id,
                 parser_view=parser_view,
             )
-            o._notify("before_parse", reduced, parse_ctx)
+            candidate_parsers = [parser, *fallback_parsers]
+            attempt_errors: list[str] = []
             span = o.tracing_provider.start_span(
                 "parse", {"case_id": case.case_id, "parser_view": parser_view}
             )
-            try:
-                async with o._global_semaphore:
-                    async with o._stage_semaphores["parsing"]:
-                        parsed = await asyncio.to_thread(
-                            o._parse_candidate, reduced, parse_ctx, parser
+            for parser_candidate in candidate_parsers:
+                o._notify("before_parse", reduced, parse_ctx)
+                try:
+                    async with o._global_semaphore:
+                        async with o._stage_semaphores["parsing"]:
+                            parsed = await asyncio.to_thread(
+                                o._parse_candidate,
+                                reduced,
+                                parse_ctx,
+                                parser_candidate,
+                            )
+                    parsed_views[parser_view] = parsed
+                    parse_errors.pop(parser_view, None)
+                    o._notify("after_parse", parsed, parse_ctx)
+                    await o._persist_event(
+                        ParseCompletedEvent(
+                            run_id=snapshot.run_id,
+                            **case_event_kwargs,
+                            candidate_id=reduced.candidate_id,
+                            parser_id=parser_view,
+                            result=parsed.model_dump(mode="json"),
                         )
-                parsed_views[parser_view] = parsed
-                parse_errors.pop(parser_view, None)
-                o._notify("after_parse", parsed, parse_ctx)
-                await o._persist_event(
-                    ParseCompletedEvent(
-                        run_id=snapshot.run_id,
-                        **case_event_kwargs,
-                        candidate_id=reduced.candidate_id,
-                        parser_id=parser_view,
-                        result=parsed.model_dump(mode="json"),
                     )
-                )
-                o._store_stage_cache(
-                    "parse",
-                    o._parse_cache_key(snapshot, reduced, parser_view),
-                    {
-                        "source_run_id": snapshot.run_id,
-                        "result": parsed.model_dump(mode="json"),
-                    },
-                )
-                o.tracing_provider.end_span(span, "ok")
-            except Exception as exc:
-                parse_errors[parser_view] = str(exc)
+                    o._store_stage_cache(
+                        "parse",
+                        o._parse_cache_key(snapshot, reduced, parser_view),
+                        {
+                            "source_run_id": snapshot.run_id,
+                            "result": parsed.model_dump(mode="json"),
+                        },
+                    )
+                    o.tracing_provider.end_span(span, "ok")
+                    break
+                except Exception as exc:
+                    attempt_errors.append(str(exc))
+            else:
+                error_message = "; ".join(attempt_errors)
+                parse_errors[parser_view] = error_message
                 await o._persist_event(
                     ParseFailedEvent(
                         run_id=snapshot.run_id,
                         **case_event_kwargs,
                         candidate_id=reduced.candidate_id,
                         parser_id=parser_view,
-                        error_message=str(exc),
+                        error_message=error_message,
                     )
                 )
                 o.tracing_provider.end_span(span, "error")
