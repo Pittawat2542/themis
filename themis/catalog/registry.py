@@ -1,10 +1,11 @@
-"""Manifest-backed registry for builtin components and benchmarks."""
+"""Unified registry for builtin and plugin-provided components."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
-from functools import lru_cache
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
@@ -22,10 +23,46 @@ class ComponentSpec:
 
 _MANIFEST_ROOT = Path(__file__).with_name("manifests")
 _COMPONENT_MANIFEST = _MANIFEST_ROOT / "components.toml"
+_COMPONENT_ENTRY_POINT_GROUP = "themis.components"
+_REGISTERED_COMPONENT_SPECS: dict[str, ComponentSpec] = {}
 
 
-@lru_cache(maxsize=1)
 def component_specs() -> dict[str, ComponentSpec]:
+    """Return every known component from builtins, entry points, and registrations."""
+
+    return _merge_specs(
+        _manifest_component_specs(),
+        discover_plugins(),
+        _REGISTERED_COMPONENT_SPECS,
+    )
+
+
+def discover_plugins(
+    *, group: str = _COMPONENT_ENTRY_POINT_GROUP
+) -> dict[str, ComponentSpec]:
+    """Discover installed Python entry-point components."""
+
+    entry_points = importlib_metadata.entry_points()
+    selected = entry_points.select(group=group)
+
+    specs: dict[str, ComponentSpec] = {}
+    for entry_point in selected:
+        spec = _coerce_component_spec(entry_point.load())
+        _add_unique_spec(specs, spec)
+    return specs
+
+
+def register_component(spec: ComponentSpec | Mapping[str, object]) -> ComponentSpec:
+    """Register a component for the current process."""
+
+    normalized = _coerce_component_spec(spec)
+    if normalized.component_id in component_specs():
+        raise ValueError(f"Duplicate component id: {normalized.component_id}")
+    _REGISTERED_COMPONENT_SPECS[normalized.component_id] = normalized
+    return normalized
+
+
+def _manifest_component_specs() -> dict[str, ComponentSpec]:
     payload = load_toml(_COMPONENT_MANIFEST)
     specs: dict[str, ComponentSpec] = {}
     for component_id, entry in payload.get("components", {}).items():
@@ -67,9 +104,16 @@ def get_component_spec(component_id: str, *, kind: str | None = None) -> Compone
 
 
 def builtin_component_refs() -> dict[str, Any]:
-    from themis.core.components import BUILTIN_COMPONENT_REFS
+    from themis.core.components import ComponentRef
 
-    return BUILTIN_COMPONENT_REFS
+    return {
+        component_id: ComponentRef(
+            component_id=component_id,
+            version=spec.version,
+            fingerprint=spec.fingerprint,
+        )
+        for component_id, spec in component_specs().items()
+    }
 
 
 def load(name: str) -> object:
@@ -81,5 +125,48 @@ def _unknown_component_message(component_id: str) -> str:
         component_id, component_specs().keys(), n=3, cutoff=0.5
     )
     if suggestions:
-        return f"Unknown builtin component: {component_id}. Did you mean: {', '.join(suggestions)}?"
-    return f"Unknown builtin component: {component_id}"
+        return f"Unknown component: {component_id}. Did you mean: {', '.join(suggestions)}?"
+    return f"Unknown component: {component_id}"
+
+
+def _coerce_component_spec(value: ComponentSpec | Mapping[str, object]) -> ComponentSpec:
+    if isinstance(value, ComponentSpec):
+        return value
+    if isinstance(value, Mapping):
+        required_fields = {
+            "component_id",
+            "kind",
+            "target",
+            "version",
+            "fingerprint",
+        }
+        missing = sorted(required_fields.difference(value))
+        if missing:
+            raise ValueError(
+                "Component spec mapping is missing required fields: "
+                + ", ".join(missing)
+            )
+        return ComponentSpec(
+            component_id=str(value["component_id"]),
+            kind=str(value["kind"]),
+            target=str(value["target"]),
+            version=str(value["version"]),
+            fingerprint=str(value["fingerprint"]),
+        )
+    raise TypeError(
+        "Component entry points must return ComponentSpec or a component spec mapping"
+    )
+
+
+def _merge_specs(*spec_groups: Mapping[str, ComponentSpec]) -> dict[str, ComponentSpec]:
+    merged: dict[str, ComponentSpec] = {}
+    for specs in spec_groups:
+        for spec in specs.values():
+            _add_unique_spec(merged, spec)
+    return merged
+
+
+def _add_unique_spec(specs: dict[str, ComponentSpec], spec: ComponentSpec) -> None:
+    if spec.component_id in specs:
+        raise ValueError(f"Duplicate component id: {spec.component_id}")
+    specs[spec.component_id] = spec

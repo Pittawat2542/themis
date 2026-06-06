@@ -1,4 +1,4 @@
-"""Component reference models and manifest-backed builtin registry."""
+"""Component reference models and registry lookups."""
 
 from __future__ import annotations
 
@@ -36,11 +36,16 @@ def component_ref_from_value(value: Any) -> ComponentRef:
         return component_ref_from_value(resolved)
     if isinstance(value, str):
         try:
-            return BUILTIN_COMPONENT_REFS[value]
+            spec = component_specs()[value]
         except KeyError as exc:
             from themis.catalog.registry import _unknown_component_message
 
             raise ValueError(_unknown_component_message(value)) from exc
+        return ComponentRef(
+            component_id=value,
+            version=spec.version,
+            fingerprint=spec.fingerprint,
+        )
 
     try:
         component_id = getattr(value, "component_id")
