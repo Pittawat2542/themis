@@ -27,56 +27,75 @@ from tests.release import CURRENT_VERSION
 
 def test_root_package_exports_public_symbols() -> None:
     from themis import (
-        Experiment,
+        EvaluationGraph,
+        EvaluationStep,
+        ExecutionBackend,
+        ExecutionRequest,
+        FilesystemExecutionBackend,
+        GraphRuntime,
+        GraphRunResult,
+        InMemoryExecutionBackend,
+        StepInput,
+        StepOutput,
         DatasetSourceSpec,
         Reporter,
         RunLineage,
         RunQuery,
         RunRecord,
-        RunResult,
         RunSnapshot,
         RunStatus,
         RuntimeConfig,
         StatsEngine,
-        evaluate_async,
-        export_evaluation_bundle,
-        export_generation_bundle,
         get_case_audit,
         get_run_snapshot,
         get_telemetry_summary,
         get_evaluation_execution,
         get_execution_state,
-        import_evaluation_bundle,
-        import_generation_bundle,
-        quickcheck,
-        snapshot_report,
         sqlite_store,
     )
 
-    assert Experiment is not None
+    assert EvaluationGraph is not None
+    assert EvaluationStep is not None
+    assert ExecutionBackend is not None
+    assert ExecutionRequest is not None
+    assert FilesystemExecutionBackend is not None
+    assert GraphRuntime is not None
+    assert GraphRunResult is not None
+    assert InMemoryExecutionBackend is not None
+    assert StepInput is not None
+    assert StepOutput is not None
     assert DatasetSourceSpec is not None
     assert Reporter is not None
     assert RunLineage is not None
     assert RunQuery is not None
     assert RunRecord is not None
-    assert RunResult is not None
     assert RunSnapshot is not None
     assert RunStatus is not None
     assert RuntimeConfig is not None
     assert StatsEngine is not None
-    assert evaluate_async is not None
-    assert export_evaluation_bundle is not None
-    assert export_generation_bundle is not None
-    assert import_evaluation_bundle is not None
-    assert import_generation_bundle is not None
     assert get_case_audit is not None
     assert get_run_snapshot is not None
     assert get_telemetry_summary is not None
     assert get_execution_state is not None
     assert get_evaluation_execution is not None
-    assert quickcheck is not None
-    assert snapshot_report is not None
     assert sqlite_store is not None
+
+
+def test_root_package_does_not_export_legacy_convenience_surface() -> None:
+    import themis
+
+    for name in (
+        "evaluate",
+        "evaluate_async",
+        "quickcheck",
+        "snapshot_report",
+        "export_generation_bundle",
+        "export_evaluation_bundle",
+        "import_generation_bundle",
+        "import_evaluation_bundle",
+    ):
+        assert name not in themis.__all__
+        assert not hasattr(themis, name)
 
 
 def test_public_surface_compiles_and_persists_runs(tmp_path) -> None:

@@ -1,18 +1,6 @@
 """Core namespace for Themis."""
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
-from themis.core.bundles import (
-    export_evaluation_bundle,
-    export_generation_bundle,
-    export_parse_bundle,
-    export_reduction_bundle,
-    export_score_bundle,
-    import_evaluation_bundle,
-    import_generation_bundle,
-    import_parse_bundle,
-    import_reduction_bundle,
-    import_score_bundle,
-)
 from themis.core.builtins import resolve_judge_model_component
 from themis.core.builtins import resolve_selector_component
 from themis.core.config import (
@@ -57,8 +45,21 @@ from themis.core.events import (
     StreamRecordedEvent,
     event_from_dict,
 )
-from themis.core.evaluate import evaluate, evaluate_async
+from themis.core.execution_backends import (
+    ExecutionBackend,
+    ExecutionRequest,
+    FilesystemExecutionBackend,
+    InMemoryExecutionBackend,
+)
 from themis.core.experiment import Experiment
+from themis.core.graph import (
+    EvaluationGraph,
+    EvaluationStep,
+    GraphRuntime,
+    GraphRunResult,
+    StepInput,
+    StepOutput,
+)
 from themis.core.inspection import (
     get_case_audit,
     get_evaluation_execution,
@@ -70,7 +71,6 @@ from themis.core.inspection import (
     resolve_run_id,
     resolve_run_record,
 )
-from themis.core.quickcheck import quickcheck
 from themis.core.read_models import (
     BenchmarkResult,
     CaseAuditRecord,
@@ -82,7 +82,7 @@ from themis.core.read_models import (
     TraceView,
 )
 from themis.core.registry import RunLineage, RunQuery, RunRecord
-from themis.core.reporter import Reporter, snapshot_report
+from themis.core.reporter import Reporter
 from themis.core.models import (
     Case,
     ConversationTrace,
@@ -216,10 +216,13 @@ __all__ = [
     "EvaluationCompletedEvent",
     "EvaluationFailedEvent",
     "EvaluationConfig",
+    "EvaluationGraph",
+    "EvaluationStep",
     "EvaluationWorkflow",
-    "evaluate",
-    "evaluate_async",
     "Experiment",
+    "ExecutionBackend",
+    "ExecutionRequest",
+    "FilesystemExecutionBackend",
     "FrozenModel",
     "Generator",
     "GenerateContext",
@@ -228,7 +231,10 @@ __all__ = [
     "GenerationConfig",
     "GenerationResult",
     "GenerationWorkItem",
+    "GraphRuntime",
+    "GraphRunResult",
     "HashableModel",
+    "InMemoryExecutionBackend",
     "JudgeModel",
     "JudgeCall",
     "JudgeResponse",
@@ -278,17 +284,11 @@ __all__ = [
     "MetricAuditRecord",
     "TelemetryBreakdown",
     "TelemetrySummary",
-    "snapshot_report",
     "CaseResult",
     "EvaluationBundle",
     "EvaluationBundleRecord",
     "ExecutionState",
     "ExecutionCheckpoint",
-    "export_evaluation_bundle",
-    "export_generation_bundle",
-    "export_parse_bundle",
-    "export_reduction_bundle",
-    "export_score_bundle",
     "GenerationBundle",
     "GenerationBundleRecord",
     "get_case_audit",
@@ -302,7 +302,6 @@ __all__ = [
     "RerunPlan",
     "RerunSelector",
     "query_run_records",
-    "quickcheck",
     "Reporter",
     "RunEstimate",
     "MetricResult",
@@ -320,6 +319,8 @@ __all__ = [
     "SessionSubject",
     "SessionTurn",
     "SqliteRunStore",
+    "StepInput",
+    "StepOutput",
     "StepCompletedEvent",
     "StepFailedEvent",
     "StepStartedEvent",
@@ -342,11 +343,6 @@ __all__ = [
     "candidate_set_subject_for_selection_metric",
     "event_from_dict",
     "InMemoryRunStore",
-    "import_evaluation_bundle",
-    "import_generation_bundle",
-    "import_parse_bundle",
-    "import_reduction_bundle",
-    "import_score_bundle",
     "ParseBundle",
     "ParseBundleRecord",
     "resolve_run_id",
