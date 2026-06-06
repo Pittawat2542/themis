@@ -13,7 +13,7 @@ You will define generation, evaluation, storage, and seeds explicitly, compile t
 
 ## Prerequisites
 
-- comfort with the first `evaluate(...)` tutorial
+- comfort with the first local experiment tutorial
 - base Themis install
 
 ## Steps

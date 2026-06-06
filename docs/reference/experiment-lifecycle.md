@@ -11,8 +11,6 @@ goal: Document the primary experiment authoring and execution APIs.
 
 | Name | Kind | Use when | Key constraints / notes |
 | --- | --- | --- | --- |
-| `evaluate(model=..., data=..., metric=..., ...)` | Layer 1 convenience API | You want the smallest synchronous Python entry point for a straightforward run | Best for short scripts; use only outside a running event loop |
-| `evaluate_async(model=..., data=..., metric=..., ...)` | Layer 1 convenience API | You want the smallest async Python entry point for a straightforward run | Preferred in notebooks and async applications |
 | `Experiment.from_config(...)` | Config loader | You want config-backed experiments instead of inline Python-only authoring | Resolves config and components before execution |
 | `Experiment.compile()` | Snapshot builder | You want a `RunSnapshot` before deciding whether to execute | Freezes identity and provenance but does not run work |
 | `Experiment.run()` / `run_async()` | Executor | You want to execute a compiled experiment | Use the async form when an event loop is already running |

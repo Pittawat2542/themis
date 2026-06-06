@@ -25,7 +25,7 @@ flowchart TD
 
 Once you know the quadrant, the links below should get you to the right page without translating concepts yourself.
 
-- Run the smallest possible evaluation: [First `evaluate(...)`](../tutorials/first-evaluate.md)
+- Run the smallest possible local evaluation: [First local experiment](../tutorials/first-evaluate.md)
 - Decide whether to use Python or config and CLI: [Run from Python vs config and CLI](../how-to/run-from-python-vs-config-and-cli.md)
 - Configure a provider-backed generator: [Configure generators](../how-to/configure-generators.md)
 - Author custom components: [Author custom components](../how-to/author-custom-components.md)

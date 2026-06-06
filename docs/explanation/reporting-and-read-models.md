@@ -9,7 +9,7 @@ goal: Explain how projection-backed reporting is derived from stored events.
 
 What it is: the read-side model that turns stored events into benchmark summaries, raw score rows, timelines, and trace views.
 
-When it matters: whenever you use `Reporter`, `quickcheck`, or comparison/statistics helpers instead of inspecting raw events directly.
+When it matters: whenever you use `Reporter` or comparison/statistics helpers instead of inspecting raw events directly.
 
 What you provide: a stored run and any format-specific export choice.
 
@@ -20,7 +20,7 @@ Use this flow when you need to understand how a stored run becomes a report inst
 ```mermaid
 flowchart LR
     A["Stored run events"] --> B["Read-model projections"]
-    B --> C["Reporter / quickcheck"]
+    B --> C["Reporter"]
     B --> D["compare / statistics"]
     C --> E["JSON projections / summary tables"]
     D --> F["Benchmark comparisons and summaries"]

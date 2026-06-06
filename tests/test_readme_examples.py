@@ -4,10 +4,12 @@ from themis import (
     InMemoryRunStore,
     RunStatus,
     RuntimeConfig,
-    export_evaluation_bundle,
-    export_generation_bundle,
     get_evaluation_execution,
     get_execution_state,
+)
+from themis.core.bundles import (
+    export_evaluation_bundle,
+    export_generation_bundle,
     import_evaluation_bundle,
     import_generation_bundle,
 )

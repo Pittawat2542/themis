@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from themis.catalog.registry import ComponentSpec
 from themis.core.base import JSONValue
 from themis.core.config import (
     EvaluationConfig,
@@ -29,7 +30,7 @@ from themis.core.models import (
     MetricResult,
     SessionResult,
 )
-from themis.core.snapshot import BUILTIN_COMPONENT_REFS, ComponentRef
+from themis.core.snapshot import BUILTIN_COMPONENT_REFS
 from tests.release import CURRENT_VERSION
 
 
@@ -343,14 +344,17 @@ def test_unknown_builtin_component_strings_fail_fast() -> None:
         ],
     )
 
-    with pytest.raises(ValueError, match="Unknown builtin component"):
+    with pytest.raises(ValueError, match="Unknown component"):
         experiment.compile()
 
 
 def test_builtin_registry_changes_alter_component_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original = BUILTIN_COMPONENT_REFS["builtin/demo_generator"]
+    import themis.catalog.registry as registry
+
+    original = registry.component_specs()["builtin/demo_generator"]
+    original_manifest_specs = registry._manifest_component_specs
     first = Experiment(
         generation=GenerationConfig(generator="builtin/demo_generator"),
         evaluation=EvaluationConfig(metrics=["builtin/exact_match"]),
@@ -363,15 +367,18 @@ def test_builtin_registry_changes_alter_component_identity(
         ],
     ).compile()
 
-    monkeypatch.setitem(
-        BUILTIN_COMPONENT_REFS,
-        "builtin/demo_generator",
-        ComponentRef(
+    def patched_manifest_specs() -> dict[str, ComponentSpec]:
+        specs = original_manifest_specs()
+        specs["builtin/demo_generator"] = ComponentSpec(
             component_id=original.component_id,
+            kind=original.kind,
+            target=original.target,
             version="2.0",
             fingerprint="generator-demo-fingerprint-v2",
-        ),
-    )
+        )
+        return specs
+
+    monkeypatch.setattr(registry, "_manifest_component_specs", patched_manifest_specs)
 
     second = Experiment(
         generation=GenerationConfig(generator="builtin/demo_generator"),

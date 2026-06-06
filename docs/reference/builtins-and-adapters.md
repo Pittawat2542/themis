@@ -30,6 +30,9 @@ The catalog now exposes reusable shipped components directly through
 | `builtin/rouge1` | Metric | Unigram overlap should score summaries or free-text answers | Reports precision, recall, and F1 dimensions |
 | `builtin/rouge2` | Metric | Bigram overlap should reward local phrase similarity | Reports precision, recall, and F1 dimensions |
 | `builtin/rouge_l` | Metric | Longest-common-subsequence overlap should reward in-order coverage | Reports precision, recall, and F1 dimensions |
+| `builtin/semantic_similarity` | Metric | Token-cosine similarity is a better fit than exact or n-gram overlap | Dependency-free semantic baseline for text comparisons |
+| `builtin/confidence_calibration` | Metric | Parsed outputs include confidence and need calibration error scoring | Emits a calibration result type |
+| `builtin/label_agreement` | Metric | Multiple categorical labels should collapse to a majority-share agreement score | Emits an agreement result type |
 | `builtin/choice_accuracy` | Metric | Parsed option labels should score as correct or incorrect | Expects parser output compatible with multiple choice |
 | `builtin/math_equivalence` | Metric | Equivalent math expressions or normalized answers should count as correct | Best for math families such as AIME or HMMT |
 | `builtin/procbench_final_accuracy` | Metric | You want deterministic final-answer checking for procedure-style tasks | Only use when the recipe is not already judge-backed |
@@ -43,6 +46,10 @@ The catalog now exposes reusable shipped components directly through
 | `builtin/ranking_judge` | Workflow metric | Generated candidates should be ranked best-to-worst | Emits ranking metadata and a winner label |
 | `builtin/panel_of_judges` | Workflow metric | Multiple judges should score the same output and aggregate | Higher cost than a single-judge rubric |
 | `builtin/majority_vote_judge` | Workflow metric | Several judge votes should collapse to a majority decision | Useful when categorical consensus matters more than scalar averaging |
+| `builtin/lowercase_transform` | Transform | Robustness checks need deterministic lowercase normalization | Applies recursively to JSON-compatible values |
+| `builtin/default_baseline_pack` | Baseline pack | You want a small deterministic starter baseline component set | Includes demo generation, JSON parsing, and basic pure metrics |
+| `builtin/parser_ablation_template` | Ablation template | Parser behavior should be varied in ablation runs | Produces disabled and fallback-only variant labels |
+| `builtin/token_budget_sweep` | Budget sweep | You want standard small, medium, and large token-budget settings | Defaults to 128, 512, and 2048 tokens |
 
 ## Adapter families
 
@@ -51,6 +58,12 @@ The catalog now exposes reusable shipped components directly through
 | OpenAI Responses API | Provider adapter | Themis should own evaluation and storage, while an OpenAI-compatible endpoint handles generation | Install the `openai` extra or inject a compatible client |
 | vLLM OpenAI-compatible APIs | Provider adapter | You run a local or self-hosted OpenAI-compatible model endpoint | Install the `vllm` extra on Linux or inject a compatible client |
 | LangGraph graphs | Graph adapter | A LangGraph workflow already exists and should act as the generator | Pass a graph with `invoke()` or `ainvoke()`; trace capture improves when `astream_events()` exists |
+| Anthropic | Provider and judge-model adapter | Claude generation or judging should feed Themis telemetry | Inject an SDK-compatible client |
+| Bedrock | Provider and judge-model adapter | AWS Bedrock converse responses should feed Themis telemetry | Inject a Bedrock runtime client |
+| Gemini | Provider and judge-model adapter | Gemini generation or judging should feed Themis telemetry | Inject a Google Gen AI-compatible client |
+| Azure OpenAI | Provider and judge-model adapter | Azure-hosted OpenAI-compatible models should feed Themis telemetry | Inject an Azure OpenAI-compatible client |
+| Ollama | Provider and judge-model adapter | Local Ollama models should feed Themis telemetry | Inject an Ollama-compatible client |
+| LiteLLM | Provider and judge-model adapter | LiteLLM-routed providers should feed Themis telemetry | Inject the LiteLLM module or compatible client |
 
 Use builtin ids for deterministic examples, smoke tests, common scoring patterns,
 and benchmark-family reuse. Use adapters when generation should be delegated to

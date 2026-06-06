@@ -7,7 +7,7 @@ goal: Explain why Themis has layered entry points instead of one giant interface
 
 # API layer model
 
-What it is: the layered user-facing surface that starts with `evaluate(model=..., data=..., metric=..., ...)`, centers on `Experiment(...)`, and expands to custom protocols.
+What it is: the layered user-facing surface centered on `Experiment(...)`, with config/CLI workflows and custom protocols feeding the same compiled runtime model.
 
 When it matters: whenever you are choosing an entry point or documenting a workflow for another user.
 
@@ -19,11 +19,10 @@ This diagram shows the layers as progressively more explicit authoring surfaces 
 
 ```mermaid
 flowchart TD
-    A["evaluate(model=..., data=..., metric=..., ...)"] --> D["Experiment(...)"]
+    A["Python-authored Experiment(...)"] --> D["RunSnapshot"]
     B["Config + CLI"] --> D
     C["Custom protocols"] --> D
-    D --> E["RunSnapshot"]
-    E --> F["Execution, persistence, inspection"]
+    D --> F["Execution, persistence, inspection"]
 ```
 
 The important point is that the user-facing surfaces differ, but the compiled artifact and execution model do not.

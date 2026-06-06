@@ -1,15 +1,15 @@
 ---
-title: First evaluate()
+title: First local experiment
 diataxis: tutorial
 audience: new Themis users
-goal: Teach the smallest end-to-end Themis evaluation using the Layer 1 Python API.
+goal: Teach the smallest end-to-end Themis evaluation using the explicit Python API.
 ---
 
-# First `evaluate(...)`
+# First Local Experiment
 
 ## What you will build
 
-You will run a single deterministic evaluation from Python using builtin generation, parsing, and scoring components.
+You will run a single deterministic `Experiment(...)` from Python using builtin generation, parsing, and scoring components.
 
 ## Prerequisites
 
@@ -38,5 +38,5 @@ You will run a single deterministic evaluation from Python using builtin generat
 
 ## Next steps
 
-- [First `Experiment(...)`](first-experiment.md)
+- [First persisted run](first-persisted-run.md)
 - [Choose your API layer](../start-here/choose-your-api-layer.md)

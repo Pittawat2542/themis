@@ -492,7 +492,7 @@ class Experiment(FrozenModel):
         """Run the compiled snapshot synchronously."""
 
         _raise_if_running_loop(
-            "Experiment.run() cannot be called from a running event loop. Use await Experiment.run_async() or themis.evaluate_async()."
+            "Experiment.run() cannot be called from a running event loop. Use await Experiment.run_async()."
         )
         return asyncio.run(
             self.run_async(

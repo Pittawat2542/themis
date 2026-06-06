@@ -3,6 +3,8 @@ from __future__ import annotations
 from themis import (
     Experiment,
     InMemoryRunStore,
+)
+from themis.core.bundles import (
     export_evaluation_bundle,
     export_generation_bundle,
     import_evaluation_bundle,

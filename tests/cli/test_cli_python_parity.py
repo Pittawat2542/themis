@@ -6,10 +6,8 @@ import sys
 from pathlib import Path
 from typing import cast
 
-from themis import Reporter, StatsEngine, evaluate
+from themis import Reporter, StatsEngine
 from themis.core.base import JSONValue
-from themis.core.config import StorageConfig
-from themis.core.dataset_inputs import dataset_from_jsonl
 from themis.core.experiment import Experiment
 from themis.core.read_models import BenchmarkResult
 from themis.core.stores.factory import create_run_store
@@ -93,14 +91,6 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
         python_store.get_projection(python_result.run_id, "benchmark_result"),
     )
 
-    evaluate_result = evaluate(
-        model="builtin/demo_generator",
-        data=[dataset_from_jsonl(cases_path, dataset_id="cases")],
-        metric="builtin/exact_match",
-        parser="builtin/json_identity",
-        storage=StorageConfig(target="memory"),
-    )
-
     cli_run = _run_cli("run", "--config", str(config_path))
     cli_quick_eval = _run_cli("quick-eval", "file", "--path", str(cases_path))
     worker_submit = _run_cli(
@@ -129,7 +119,6 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
     quickcheck_payload = json.loads(quickcheck.stdout)
     report_payload = json.loads(report.stdout)
 
-    assert python_result.run_id == evaluate_result.run_id
     assert (
         python_result.run_id
         == cli_run_payload["run_id"]

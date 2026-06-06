@@ -14,6 +14,6 @@ Recommended order:
 1. [Installation](installation.md)
 2. [Choose your API layer](choose-your-api-layer.md)
 3. [Choose your storage backend](choose-your-storage-backend.md)
-4. [First `evaluate(...)`](../tutorials/first-evaluate.md)
+4. [First local experiment](../tutorials/first-evaluate.md)
 
 If you already know what you want to do, use [Route by goal](route-by-goal.md). If something already went wrong, jump to [Troubleshooting](troubleshooting.md).

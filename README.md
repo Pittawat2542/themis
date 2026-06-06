@@ -23,12 +23,21 @@ Optional extras:
 ## Quick Start
 
 ```python
-from themis import evaluate
+from themis import Experiment
+from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 
-result = evaluate(
-    model="builtin/demo_generator",
-    data=[
+experiment = Experiment(
+    generation=GenerationConfig(
+        generator="builtin/demo_generator",
+        reducer="builtin/majority_vote",
+    ),
+    evaluation=EvaluationConfig(
+        metrics=["builtin/exact_match"],
+        parsers=["builtin/json_identity"],
+    ),
+    storage=StorageConfig(target="memory"),
+    dataset_sources=[
         Dataset(
             dataset_id="sample",
             cases=[
@@ -40,9 +49,8 @@ result = evaluate(
             ],
         )
     ],
-    metric="builtin/exact_match",
-    parser="builtin/json_identity",
 )
+result = experiment.run()
 
 print(result.run_id, result.status.value)
 ```
@@ -52,7 +60,6 @@ print(result.run_id, result.status.value)
 Themis is designed to be extended. You can plug in custom generators, parsers, reducers, metrics, judge models, and store backends through the Python API or config-driven workflows.
 
 - Start with [`Experiment(...)`](docs/tutorials/first-experiment.md) when you want a reusable compiled evaluation definition.
-- Start with [`evaluate(...)`](docs/tutorials/first-evaluate.md) when you want the shortest path from inline data to a completed run.
 - Use [`docs/how-to/author-custom-components.md`](docs/how-to/author-custom-components.md) for custom component authoring.
 
 ## CLI

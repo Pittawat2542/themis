@@ -7,9 +7,9 @@ goal: Answer common questions and repeated confusion points quickly.
 
 # FAQ
 
-## Should I start with `evaluate(...)` or `Experiment(...)`?
+## Should I start with `Experiment(...)` or config/CLI?
 
-Start with `evaluate(model=..., data=..., metric=..., ...)` for the smallest possible script. Move to `Experiment(...)` when you need `compile()`, `replay()`, config loading, or a reusable experiment definition.
+Start with `Experiment(...)` for Python-authored runs and local debugging. Use config and CLI when you need checked-in experiment definitions, shell automation, worker-pool submission, or batch execution.
 
 ## What changes a `run_id`?
 
