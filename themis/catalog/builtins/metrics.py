@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import math
 from collections import Counter
 from collections.abc import Sequence
 from typing import Any
@@ -247,10 +248,116 @@ class RougeLMetric:
         )
 
 
+class SemanticSimilarityMetric:
+    component_id = "builtin/semantic_similarity"
+    version = "1.0"
+    metric_family = "pure"
+
+    def fingerprint(self) -> str:
+        return "builtin-semantic-similarity-fingerprint"
+
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
+        del ctx
+        predicted = Counter(_tokenize(parsed.value))
+        expected = Counter(_tokenize(case.expected_output))
+        if not predicted and not expected:
+            value = 1.0
+        elif not predicted or not expected:
+            value = 0.0
+        else:
+            overlap = sum((predicted & expected).values())
+            denominator = math.sqrt(sum(predicted.values()) * sum(expected.values()))
+            value = 0.0 if denominator == 0.0 else overlap / denominator
+        return MetricResult(
+            metric_id=self.component_id,
+            value=round(value, 12),
+            dimensions={
+                "overlap": float(sum((predicted & expected).values())),
+                "predicted_terms": float(sum(predicted.values())),
+                "expected_terms": float(sum(expected.values())),
+            },
+            metadata={"method": "token_cosine"},
+        )
+
+
+class ConfidenceCalibrationMetric:
+    component_id = "builtin/confidence_calibration"
+    version = "1.0"
+    metric_family = "pure"
+
+    def fingerprint(self) -> str:
+        return "builtin-confidence-calibration-fingerprint"
+
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
+        del ctx
+        if parsed.confidence is None:
+            return MetricResult(
+                metric_id=self.component_id,
+                result_type="calibration",
+                value=None,
+                dimensions={"sample_count": 0.0},
+            )
+        correctness = float(parsed.value == case.expected_output)
+        gap = abs(float(parsed.confidence) - correctness)
+        return MetricResult(
+            metric_id=self.component_id,
+            result_type="calibration",
+            value=round(gap, 12),
+            dimensions={"confidence": float(parsed.confidence), "correctness": correctness},
+        )
+
+
+class LabelAgreementMetric:
+    component_id = "builtin/label_agreement"
+    version = "1.0"
+    metric_family = "pure"
+
+    def fingerprint(self) -> str:
+        return "builtin-label-agreement-fingerprint"
+
+    def score(
+        self, parsed: ParsedOutput, case: Case, ctx: ScoreContext
+    ) -> MetricResult:
+        del case, ctx
+        labels = [str(label) for label in _as_sequence(parsed.value)]
+        if not labels:
+            return MetricResult(
+                metric_id=self.component_id,
+                result_type="agreement",
+                value=None,
+                dimensions={"judge_count": 0.0, "distinct_labels": 0.0},
+            )
+        counts = Counter(labels)
+        majority_label, majority_count = counts.most_common(1)[0]
+        return MetricResult(
+            metric_id=self.component_id,
+            result_type="agreement",
+            value=majority_count / len(labels),
+            dimensions={
+                "judge_count": float(len(labels)),
+                "distinct_labels": float(len(counts)),
+            },
+            labels={"majority_label": majority_label},
+            metadata={"label_counts": dict(counts)},
+        )
+
+
 def _tokenize(value: object) -> list[str]:
     if value is None:
         return []
     return str(value).lower().split()
+
+
+def _as_sequence(value: object) -> list[object]:
+    if isinstance(value, list | tuple):
+        return list(value)
+    if value is None:
+        return []
+    return [value]
 
 
 def _ngrams(tokens: Sequence[str], size: int) -> list[tuple[str, ...]]:

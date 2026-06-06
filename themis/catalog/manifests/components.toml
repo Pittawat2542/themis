@@ -112,6 +112,24 @@ target = "themis.catalog.builtins.metrics:RougeLMetric"
 version = "1.0"
 fingerprint = "builtin-rouge-l-fingerprint"
 
+[components."builtin/semantic_similarity"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:SemanticSimilarityMetric"
+version = "1.0"
+fingerprint = "builtin-semantic-similarity-fingerprint"
+
+[components."builtin/confidence_calibration"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:ConfidenceCalibrationMetric"
+version = "1.0"
+fingerprint = "builtin-confidence-calibration-fingerprint"
+
+[components."builtin/label_agreement"]
+kind = "metric"
+target = "themis.catalog.builtins.metrics:LabelAgreementMetric"
+version = "1.0"
+fingerprint = "builtin-label-agreement-fingerprint"
+
 [components."builtin/codeforces_pass_rate"]
 kind = "metric"
 target = "themis.catalog.builtins.code_execution:CodeforcesExecutionMetric"
@@ -171,3 +189,27 @@ kind = "metric"
 target = "themis.catalog.builtins.workflows:MajorityVoteJudgeMetric"
 version = "1.0"
 fingerprint = "builtin-majority-vote-judge-fingerprint"
+
+[components."builtin/lowercase_transform"]
+kind = "transform"
+target = "themis.catalog.builtins.kits:LowercaseTransform"
+version = "1.0"
+fingerprint = "builtin-lowercase-transform-fingerprint"
+
+[components."builtin/default_baseline_pack"]
+kind = "baseline_pack"
+target = "themis.catalog.builtins.kits:DefaultBaselinePack"
+version = "1.0"
+fingerprint = "builtin-default-baseline-pack-fingerprint"
+
+[components."builtin/parser_ablation_template"]
+kind = "ablation_template"
+target = "themis.catalog.builtins.kits:ParserAblationTemplate"
+version = "1.0"
+fingerprint = "builtin-parser-ablation-template-fingerprint"
+
+[components."builtin/token_budget_sweep"]
+kind = "budget_sweep"
+target = "themis.catalog.builtins.kits:TokenBudgetSweep"
+version = "1.0"
+fingerprint = "builtin-token-budget-sweep-fingerprint"
