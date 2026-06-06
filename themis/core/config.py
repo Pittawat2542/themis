@@ -44,6 +44,7 @@ class ParserView(HashableModel):
 
     id: str
     parser: ParserComponent
+    fallbacks: list[ParserComponent] = Field(default_factory=list)
 
 
 class SessionConfig(HashableModel):

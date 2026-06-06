@@ -95,12 +95,12 @@ class StatsEngine:
         """Return a typed paired comparison between two benchmark results."""
 
         baseline_rows = {
-            (row.case_id, row.metric_id): float(row.value)
+            (_comparison_case_key(row), row.metric_id): float(row.value)
             for row in baseline.score_rows
             if row.value is not None and row.outcome != "error"
         }
         candidate_rows = {
-            (row.case_id, row.metric_id): float(row.value)
+            (_comparison_case_key(row), row.metric_id): float(row.value)
             for row in candidate.score_rows
             if row.value is not None and row.outcome != "error"
         }
@@ -137,6 +137,17 @@ class StatsEngine:
 
 def _rounded(value: float) -> float:
     return round(value, 10)
+
+
+def _comparison_case_key(row: object) -> str:
+    case_key = getattr(row, "case_key", None)
+    if isinstance(case_key, str) and case_key:
+        return case_key
+    dataset_id = getattr(row, "dataset_id", None)
+    case_id = getattr(row, "case_id")
+    if isinstance(dataset_id, str) and dataset_id:
+        return f"{len(dataset_id)}:{dataset_id}:{case_id}"
+    return str(case_id)
 
 
 def _bootstrap_mean_ci(

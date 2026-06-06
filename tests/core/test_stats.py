@@ -78,24 +78,41 @@ def test_stats_engine_summarizes_rows_by_metric() -> None:
     ]
 
 
-def test_stats_engine_compare_aligns_rows_by_case_and_metric() -> None:
+def test_stats_engine_compare_aligns_rows_by_canonical_case_key_and_metric() -> None:
     baseline = _benchmark_result(
         "baseline",
         [
             BenchmarkScoreRow(
                 case_id="case-1",
+                dataset_id="dataset-1",
+                case_key="15:dataset-1:case-1",
                 metric_id="accuracy",
                 value=0.0,
                 candidate_id="candidate-a",
             ),
             BenchmarkScoreRow(
                 case_id="case-2",
+                dataset_id="dataset-1",
+                case_key="15:dataset-1:case-2",
                 metric_id="accuracy",
                 value=0.5,
                 candidate_id="candidate-b",
             ),
             BenchmarkScoreRow(
-                case_id="case-1", metric_id="f1", value=0.2, candidate_id="candidate-a"
+                case_id="case-1",
+                dataset_id="dataset-1",
+                case_key="15:dataset-1:case-1",
+                metric_id="f1",
+                value=0.2,
+                candidate_id="candidate-a",
+            ),
+            BenchmarkScoreRow(
+                case_id="case-1",
+                dataset_id="dataset-2",
+                case_key="15:dataset-2:case-1",
+                metric_id="accuracy",
+                value=1.0,
+                candidate_id="candidate-c",
             ),
         ],
     )
@@ -104,21 +121,43 @@ def test_stats_engine_compare_aligns_rows_by_case_and_metric() -> None:
         [
             BenchmarkScoreRow(
                 case_id="case-1",
+                dataset_id="dataset-1",
+                case_key="15:dataset-1:case-1",
                 metric_id="accuracy",
                 value=1.0,
                 candidate_id="candidate-a",
             ),
             BenchmarkScoreRow(
                 case_id="case-2",
+                dataset_id="dataset-1",
+                case_key="15:dataset-1:case-2",
                 metric_id="accuracy",
                 value=0.5,
                 candidate_id="candidate-b",
             ),
             BenchmarkScoreRow(
-                case_id="case-1", metric_id="f1", value=0.6, candidate_id="candidate-a"
+                case_id="case-1",
+                dataset_id="dataset-1",
+                case_key="15:dataset-1:case-1",
+                metric_id="f1",
+                value=0.6,
+                candidate_id="candidate-a",
             ),
             BenchmarkScoreRow(
-                case_id="case-2", metric_id="f1", value=0.9, candidate_id="candidate-b"
+                case_id="case-2",
+                dataset_id="dataset-1",
+                case_key="15:dataset-1:case-2",
+                metric_id="f1",
+                value=0.9,
+                candidate_id="candidate-b",
+            ),
+            BenchmarkScoreRow(
+                case_id="case-1",
+                dataset_id="dataset-2",
+                case_key="15:dataset-2:case-1",
+                metric_id="accuracy",
+                value=0.0,
+                candidate_id="candidate-c",
             ),
         ],
     )
@@ -131,15 +170,15 @@ def test_stats_engine_compare_aligns_rows_by_case_and_metric() -> None:
     assert [metric.model_dump() for metric in comparison.metrics] == [
         {
             "metric_id": "accuracy",
-            "pairs": 2,
+            "pairs": 3,
             "wins": 1,
-            "losses": 0,
+            "losses": 1,
             "ties": 1,
-            "mean_delta": 0.5,
-            "ci_lower": 0.0,
+            "mean_delta": 0.0,
+            "ci_lower": -1.0,
             "ci_upper": 1.0,
             "p_value": 1.0,
-            "effect_size": 0.7071067812,
+            "effect_size": 0.0,
         },
         {
             "metric_id": "f1",
