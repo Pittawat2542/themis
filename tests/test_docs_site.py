@@ -135,6 +135,7 @@ def test_docs_tree_contains_required_diataxis_entrypoints() -> None:
         DOCS_ROOT / "project" / "example-authoring.md",
         DOCS_ROOT / "project" / "adding-new-docs-coverage.md",
         DOCS_ROOT / "project" / "release-and-versioning.md",
+        REPO_ROOT / "CONTEXT.md",
         REPO_ROOT / "CONTRIBUTING.md",
     )
 

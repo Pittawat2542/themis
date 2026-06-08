@@ -12,11 +12,11 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 | Command | What it does | When to use it | Key inputs / constraints |
 | --- | --- | --- | --- |
 | `quick-eval` | Runs inline examples, files, Hugging Face datasets, or catalog benchmarks with minimal setup | You want the shortest path to an evaluation run | Trades flexibility for convenience |
-| `run` | Compiles and executes a config-backed experiment | You want the main config-driven runtime path | Accepts `--config` and optional `--until-stage` |
+| `run` | Compiles and executes a config automation surface | You want the main shell-driven runtime path | Accepts `--config` and optional `--until-stage` |
 | `replay` | Re-runs downstream stages from stored upstream artifacts | You want to regenerate reduction, parse, score, or judge results without fresh generation | Requires persisted upstream artifacts |
 | `rerun` | Re-runs a targeted subset of a stored run | You want to retry failed cases, specific cases, metadata slices, or selected metrics | Requires persisted state for the compiled `run_id` |
 | `submit` | Writes deferred-execution manifests | You want worker-pool or batch execution instead of immediate in-process execution | Requires `--mode worker-pool` or `--mode batch` |
-| `resume` | Reopens a stored run and continues according to runtime policy | You want to continue interrupted or partially completed persistent work | Depends on a persistent store |
+| `resume` | Reopens a stored run and prints status/progress JSON | You want to inspect whether persistent work is complete or pending | Depends on a persistent store; use `run` with `existing_run_policy=auto` to continue work |
 | `estimate` | Prints planner and token-estimate output for a compiled snapshot | You want execution counts and token assumptions before running | Estimates are informational, not pricing |
 | `report` | Exports summary-first reports in multiple formats | You want shareable output from a stored run | Requires a stored run and a format choice |
 | `inspect` | Reads snapshots, state, or evaluation executions from the store | You want to diagnose or inspect persisted artifacts | Uses subcommands for each payload type |
@@ -31,10 +31,10 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 
 | Command | What it does | When to use it | Key inputs / constraints |
 | --- | --- | --- | --- |
-| `run --config ... [--until-stage ...]` | Executes the experiment and prints JSON with `run_id`, `status`, `completed_through_stage`, and `metric_means` | You want the main config-driven execution path | `--until-stage` stops intentionally at a stage boundary |
+| `run --config ... [--until-stage ...]` | Executes the experiment and prints JSON with `run_id`, `status`, `completed_through_stage`, and `metric_means` | You want the main config-driven execution path | With `existing_run_policy=auto`, incomplete stored runs continue and completed stage-compatible runs are reused |
 | `replay --config ... --stage reduce|parse|score|judge` | Re-runs downstream stages from stored upstream artifacts | You want fresh downstream scoring without new generation | Requires stored upstream artifacts |
 | `rerun --config ... --stage generate|reduce|parse|score|judge` | Re-runs matching cases from the requested stage onward | You want targeted recovery instead of a full replay | Filter with `--failed-only`, `--case-id`, `--case-key`, `--metadata key=value`, and `--metric-id` |
-| `resume --config ...` | Reopens the compiled `run_id` and continues if the store shows pending work | You want to continue interrupted persistent work | Depends on a persistent store |
+| `resume --config ...` | Reopens the compiled `run_id` and prints stored status, completed stage, total cases, and completed cases | You want to inspect stored progress before deciding whether to run more work | This command does not execute stages |
 | `estimate --config ...` | Prints planner output, task counts, token estimates, and estimate assumptions | You want pre-run sizing and cost-model inputs | No pricing is applied by Themis |
 | `quickcheck --config ...` | Prints a compact status summary for a stored run | You want a quick operational check | Less detail than `report` or `inspect` |
 | `report --config ... --format ...` | Exports JSON projections or Markdown, CSV, and LaTeX metric summaries | You want a shareable report from stored state | Requires a supported `--format` |
@@ -49,7 +49,7 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 | Command | What it does | When to use it | Key inputs / constraints |
 | --- | --- | --- | --- |
 | `quick-eval inline` | Runs a small inline dataset or prompt set | You want the shortest shell-driven smoke test | Best for local examples |
-| `quick-eval file` | Loads input data from a file for a quick evaluation run | You want a lightweight file-backed run | Less structured than a full config-driven experiment |
+| `quick-eval file` | Loads input data from a file for a quick evaluation run | You want a lightweight file-backed run | Less structured than a reviewed Python `Experiment(...)` |
 | `quick-eval huggingface` | Loads a dataset from Hugging Face for quick evaluation | You want a short path to remote dataset-backed evaluation | Requires the `datasets` extra |
 | `quick-eval benchmark` | Runs a shipped named benchmark recipe | You want catalog convenience from the shell | Requires benchmark-specific extras such as dataset access or code execution backends |
 | `inspect snapshot` | Prints the stored compiled snapshot | You want identity and provenance details for a run | Requires a stored run |

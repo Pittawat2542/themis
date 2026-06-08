@@ -19,7 +19,7 @@ Use reference docs when you already know what concept you need and want precise 
 | [Stores and inspection](stores-and-inspection.md) | Reference page | You want persistence, reporting, bundle, or inspection helpers | Best for resume, reporting, and export workflows |
 | [Adapters](adapters.md) | Reference page | You want provider-backed generator adapter details | Covers OpenAI, vLLM, and LangGraph adapters |
 | [CLI](cli.md) | Reference page | You want commands, inputs, and output shapes | Best for shell-driven workflows |
-| [Config schema](config-schema.md) | Reference page | You want config field behavior and identity implications | Best for config-driven experiments |
+| [Config schema](config-schema.md) | Reference page | You want config field behavior and identity implications | Best for config automation surfaces |
 | [Protocols](protocols.md) | Reference page | You want extension contract details | Best for custom components and instrumentation |
 | [Data models](data-models.md) | Reference page | You want runtime or projection model details | Best for inspection and downstream tooling |
 | [Builtins and adapters](builtins-and-adapters.md) | Reference page | You want builtin component ids and adapter-family guidance | Best for choosing shipped components |

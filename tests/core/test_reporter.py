@@ -19,7 +19,9 @@ from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.quickcheck import quickcheck
 from themis.core.registry import RegressionPolicy, RunRecord
+from themis.core import reporter as reporter_module
 from themis.core.reporter import Reporter, snapshot_report
+from themis.core.store import RunStore
 from themis.core.stores.memory import InMemoryRunStore
 from tests.release import CURRENT_VERSION
 
@@ -161,6 +163,61 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
             "metadata": {"matched": True},
         }
     ]
+
+
+def test_default_reporter_is_registered_and_resolved() -> None:
+    store, run_id = _store()
+
+    assert "default" in reporter_module.available_reporters()
+    reporter = reporter_module.create_reporter("default", store)
+
+    assert isinstance(reporter, Reporter)
+    assert reporter.summary(run_id).run_id == run_id
+
+
+def test_custom_reporter_can_be_registered_and_resolved() -> None:
+    class MinimalReporter:
+        def __init__(self, store: RunStore) -> None:
+            self.store = store
+
+        def export_json(self, run_id: str) -> str:
+            return json.dumps(
+                {"run_id": run_id, "events": self.store.count_events(run_id)}
+            )
+
+    store, run_id = _store()
+
+    def build_minimal_reporter(store: RunStore) -> MinimalReporter:
+        return MinimalReporter(store)
+
+    reporter_module.register_reporter("test/minimal", build_minimal_reporter)
+
+    reporter = reporter_module.create_reporter("test/minimal", store)
+
+    assert json.loads(reporter.export_json(run_id)) == {
+        "run_id": run_id,
+        "events": 6,
+    }
+
+
+def test_reporter_selection_does_not_affect_run_identity() -> None:
+    first = _snapshot()
+
+    class IdentityReporter:
+        def __init__(self, store: RunStore) -> None:
+            self.store = store
+
+        def export_json(self, run_id: str) -> str:
+            return json.dumps({"run_id": run_id})
+
+    def build_identity_reporter(store: RunStore) -> IdentityReporter:
+        return IdentityReporter(store)
+
+    reporter_module.register_reporter("test/identity", build_identity_reporter)
+    second = _snapshot()
+
+    assert reporter_module.create_reporter("test/identity", InMemoryRunStore())
+    assert first.run_id == second.run_id
 
 
 def test_reporter_escapes_latex_special_characters() -> None:

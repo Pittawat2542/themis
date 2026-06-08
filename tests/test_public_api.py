@@ -40,6 +40,7 @@ def test_root_package_exports_public_symbols() -> None:
         StepOutput,
         DatasetSourceSpec,
         Reporter,
+        ReporterProtocol,
         RunLineage,
         RunQuery,
         RunRecord,
@@ -47,12 +48,15 @@ def test_root_package_exports_public_symbols() -> None:
         RunStatus,
         RuntimeConfig,
         StatsEngine,
+        available_reporters,
+        create_reporter,
         get_case_audit,
         get_run_snapshot,
         get_telemetry_summary,
         get_evaluation_execution,
         get_execution_state,
         sqlite_store,
+        register_reporter,
     )
 
     assert EvaluationGraph is not None
@@ -68,6 +72,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert StepOutput is not None
     assert DatasetSourceSpec is not None
     assert Reporter is not None
+    assert ReporterProtocol is not None
     assert RunLineage is not None
     assert RunQuery is not None
     assert RunRecord is not None
@@ -75,12 +80,15 @@ def test_root_package_exports_public_symbols() -> None:
     assert RunStatus is not None
     assert RuntimeConfig is not None
     assert StatsEngine is not None
+    assert available_reporters is not None
+    assert create_reporter is not None
     assert get_case_audit is not None
     assert get_run_snapshot is not None
     assert get_telemetry_summary is not None
     assert get_execution_state is not None
     assert get_evaluation_execution is not None
     assert sqlite_store is not None
+    assert register_reporter is not None
 
 
 def test_root_package_does_not_export_legacy_convenience_surface() -> None:

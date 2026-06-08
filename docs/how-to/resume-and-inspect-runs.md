@@ -7,7 +7,7 @@ goal: Show how to reopen persisted runs and inspect execution state safely.
 
 # Resume and inspect runs
 
-Goal: continue interrupted work and inspect stored snapshots, execution state, and evaluation artifacts.
+Goal: inspect stored snapshots, execution state, and evaluation artifacts before deciding whether to continue work.
 
 When to use this:
 
@@ -22,7 +22,7 @@ flowchart TD
     A["Persistent store"] --> B["Reopen compiled run_id"]
     B --> C["Inspect execution state"]
     C --> D{"Work still pending?"}
-    D -->|Yes| E["Resume or continue run"]
+    D -->|Yes| E["Run again with auto policy"]
     D -->|No| F["Report or inspect artifacts"]
 ```
 
@@ -31,7 +31,7 @@ The safe order is reopen, inspect, and only then decide whether to continue exec
 1. Use a persistent store, typically SQLite.
 2. Reopen the run by the same compiled `run_id`.
 3. Inspect execution state before rerunning anything.
-4. Decide whether you want to continue the same run, stop at a stage boundary, or replay only a downstream stage.
+4. Decide whether you want to continue the same run with `Experiment.run(...)` / `themis run`, stop at a stage boundary, or replay only a downstream stage.
 5. Use the CLI or Python helpers to examine progress and failures.
 
 Checkpointed resume:
@@ -73,6 +73,7 @@ Imported artifacts are persisted through normal events, so `resume`, `report`, c
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
 | Quick state summary | You need a fast operational check before digging deeper | Less detail than snapshot, state, or report views | `themis quickcheck` |
+| CLI status reopen | You need stored status and completion counts for the compiled `run_id` | Does not execute pending stages | `themis resume --config ...` |
 | Stored snapshot inspection | You want identity and provenance details for the run | Does not show per-stage execution progress by itself | `get_run_snapshot(...)`, `themis inspect snapshot` |
 | Explicit persisted state inspection | You need stage completion, counts, and failure state | Lower-level than a report | `get_execution_state(...)`, `themis inspect state` |
 | Workflow execution inspection | You need judge prompts, responses, or workflow artifacts for one case | Only applies to workflow-backed metrics | `get_evaluation_execution(...)`, `themis inspect evaluation` |

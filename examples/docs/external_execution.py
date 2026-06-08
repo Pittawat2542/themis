@@ -3,13 +3,36 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from themis.core.contexts import GenerateContext
 from themis.core.submission import run_worker_once, submit_experiment
 from themis.core.experiment import Experiment
+from themis.core.models import Case, GenerationResult
+
+
+class ExternalExecutionGenerator:
+    component_id = "generator/external-execution"
+    version = "1.0"
+
+    def fingerprint(self) -> str:
+        return "external-execution-generator"
+
+    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        del ctx
+        return GenerationResult(
+            candidate_id=f"{case.case_id}-candidate",
+            final_output=case.expected_output,
+        )
+
+
+def build_generator() -> ExternalExecutionGenerator:
+    """Return the reviewed Python generator used by the automation config."""
+
+    return ExternalExecutionGenerator()
 
 
 CONFIG_TEMPLATE = """
 generation:
-  generator: builtin/demo_generator
+  generator: examples.docs.external_execution:build_generator
   candidate_policy:
     num_samples: 1
   reducer: builtin/majority_vote

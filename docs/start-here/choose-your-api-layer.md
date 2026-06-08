@@ -7,9 +7,9 @@ goal: Help readers choose between Experiment, config/CLI, and custom extension p
 
 # Choose your API layer
 
-Use `Experiment(...)` when you want an explicit compiled object, access to `compile()`, `run()`, `replay()`, config-file loading, or long-lived experiment definitions. This is the primary surface for most serious work.
+Use `Experiment(...)` from reviewed Python modules when you want an explicit compiled object, access to `compile()`, `run()`, `replay()`, config-file loading, or long-lived experiment definitions. This is the canonical surface for serious experiment meaning.
 
-Use config and CLI commands when you want checked-in experiment definitions, shell-friendly automation, or deferred worker and batch execution.
+Use config and CLI commands when you want shell-friendly automation, environment-specific overrides, or deferred worker and batch execution around config-loadable Python definitions and components.
 
 Use custom extension protocols when builtin generators, parsers, reducers, or metrics are not sufficient and you need to plug your own behavior into the runtime.
 
@@ -18,7 +18,7 @@ Use this chooser when you need the smallest surface that still exposes the behav
 ```mermaid
 flowchart TD
     A["Start with your workflow need"]
-    A --> B{"Need checked-in config or shell automation?"}
+    A --> B{"Need shell automation or worker submission?"}
     B -->|Yes| C["Config + CLI"]
     B -->|No| D{"Need custom runtime behavior?"}
     D -->|No| E["Experiment(...)"]
@@ -31,8 +31,8 @@ All three paths still converge on the same runtime model, so this choice is abou
 
 | Option | Best for | Persistence / runtime behavior | Caveats |
 | --- | --- | --- | --- |
-| `Experiment(...)` | Reusable Python-authored runs and local debugging | Exposes compile, replay, config loading, and store control | More explicit structure than the removed one-call helper |
-| Config + CLI | Checked-in experiment specs and automation | Shell-friendly execution through `themis run`, `submit`, `worker`, and `batch` | Component references must be importable or builtin ids |
+| `Experiment(...)` | Reusable Python-authored experiment definitions and local debugging | Exposes compile, replay, config loading, and store control | Canonical surface for serious experiment meaning |
+| Config + CLI | Automation, overrides, worker submission, and batch execution | Shell-friendly execution through `themis run`, `submit`, `worker`, and `batch` | Automation surface only; component references must be importable or builtin ids |
 | Extension protocols | Custom runtime behavior when builtins are not enough | Still plugs into the same Themis runtime once implemented | Requires custom code and protocol knowledge |
 
 Next:

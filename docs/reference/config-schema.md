@@ -11,8 +11,8 @@ goal: Document config model fields, defaults, and identity/persistence implicati
 
 | Field | Required | Purpose | Affects run_id | Notes |
 | --- | --- | --- | --- | --- |
-| Config file format | Yes | `Experiment.from_config(...)` loads `YAML` (`.yaml` / `.yml`) and `TOML` (`.toml`) | Yes, after normalization into the compiled snapshot | Choose the format that best fits your repo conventions |
-| Config values | Yes | Carry strings and JSON-like values for components, prompts, storage, and runtime settings | Yes for identity-bearing fields; no for pure runtime tuning fields | Live Python objects belong only in direct Python authoring |
+| Config file format | Yes | `Experiment.from_config(...)` loads `YAML` (`.yaml` / `.yml`) and `TOML` (`.toml`) automation surfaces | Depends on the fields in the file | Use config for transport, overrides, and config-loadable execution targets around reviewed Python definitions |
+| Config values | Yes | Carry strings and JSON-like values for components, prompts, storage, and runtime settings | Yes for identity-bearing fields; no for storage or runtime tuning fields | Live Python objects belong only in direct Python authoring |
 
 ## Component target syntax
 
@@ -49,9 +49,10 @@ goal: Document config model fields, defaults, and identity/persistence implicati
 
 | Field | Required | Purpose | Affects run_id | Notes |
 | --- | --- | --- | --- | --- |
-| `store` | Yes | Selects the backend such as `memory`, `sqlite`, `jsonl`, `mongodb`, or `postgres` | Yes | Choose based on persistence and operational needs |
-| `parameters` | No | Supplies backend-specific settings | No | Stored as provenance rather than logical run identity |
-| Relative `parameters.path`, `parameters.root`, and `parameters.blob_root` | No | Resolves storage paths from the config file directory | No | Keeps checked-in configs portable across environments |
+| `target` | No | Selects the backend such as `memory`, `sqlite`, `jsonl`, `mongodb`, or `postgres` | No | Stored as provenance; choose based on persistence and operational needs |
+| `kwargs` | No | Supplies backend-specific settings | No | Stored as provenance rather than logical run identity |
+| Relative `kwargs.path`, `kwargs.root`, and `kwargs.blob_root` | No | Resolves storage paths from the config file directory | No | Keeps checked-in configs portable across environments |
+| `store` and `parameters` | No | Compatibility aliases for `target` and `kwargs` | No | Normalized by config loading before validation |
 
 ## `RuntimeConfig`
 

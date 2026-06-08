@@ -90,7 +90,13 @@ from themis.core.read_models import (
     TraceView,
 )
 from themis.core.registry import RegressionPolicy, RunLineage, RunQuery, RunRecord
-from themis.core.reporter import Reporter
+from themis.core.reporter import (
+    Reporter,
+    ReporterProtocol,
+    available_reporters,
+    create_reporter,
+    register_reporter,
+)
 from themis.core.models import (
     Case,
     ConversationTrace,
@@ -314,6 +320,10 @@ __all__ = [
     "RerunSelector",
     "query_run_records",
     "Reporter",
+    "ReporterProtocol",
+    "available_reporters",
+    "create_reporter",
+    "register_reporter",
     "RegressionFinding",
     "RegressionPolicy",
     "RegressionSummary",

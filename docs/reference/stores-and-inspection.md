@@ -23,7 +23,8 @@ goal: Document persistence helpers, reporting/export APIs, and inspection helper
 | `get_run_snapshot(store, run_id)` | Inspection helper | You want identity and provenance details for a stored run | Reads the compiled snapshot only |
 | `get_execution_state(store, run_id)` | Inspection helper | You want stage progress, counts, and failure state | Best for resume decisions |
 | `get_evaluation_execution(store, run_id, case_id, metric_id)` | Inspection helper | You want workflow-backed evaluation details for one case and metric | Applies to judge-backed metrics |
-| `Reporter` | Reporting API | You want typed summaries or JSON, Markdown, CSV, and LaTeX output from stored runs | Summary exports work from persisted projections; raw rows are available through `score_rows(...)` |
+| `Reporter` | Default reporting API | You want typed summaries or JSON, Markdown, CSV, and LaTeX output from stored runs | Summary exports work from persisted projections; raw rows are available through `score_rows(...)` |
+| `ReporterProtocol`, `register_reporter(...)`, `create_reporter(...)`, `available_reporters(...)` | Reporter boundary | You want a custom read-side export or reporting implementation over stored evidence | Reporter choice is not identity-bearing |
 | Generation and evaluation bundle export/import helpers | Artifact portability helpers | You want portable generation or evaluation artifacts | Also exposed in the CLI for common handoff paths |
 | Reduction, parse, and score bundle export/import helpers | Python-only artifact helpers | You want intermediate-stage handoff beyond the CLI boundary | Currently Python-only |
 

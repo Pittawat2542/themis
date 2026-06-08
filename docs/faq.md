@@ -9,7 +9,7 @@ goal: Answer common questions and repeated confusion points quickly.
 
 ## Should I start with `Experiment(...)` or config/CLI?
 
-Start with `Experiment(...)` for Python-authored runs and local debugging. Use config and CLI when you need checked-in experiment definitions, shell automation, worker-pool submission, or batch execution.
+Start with `Experiment(...)` in reviewed Python modules for canonical experiment definitions and local debugging. Use config and CLI when you need automation, environment-specific overrides, worker-pool submission, or batch execution.
 
 ## What changes a `run_id`?
 
@@ -29,7 +29,7 @@ The runtime persists generation results, evaluation executions, snapshots, execu
 
 ## What is the difference between resume and replay?
 
-Resume continues unfinished work for the same run. Replay re-runs downstream stages from stored upstream artifacts without regenerating candidates. `rejudge()` is the workflow-metric specialization of `replay(stage="judge")`.
+The `themis resume` command reopens the stored run and prints status/progress. Continuing unfinished work happens when you run the same compiled `run_id` again with `existing_run_policy="auto"`. Replay re-runs downstream stages from stored upstream artifacts without regenerating candidates. `rejudge()` is the workflow-metric specialization of `replay(stage="judge")`.
 
 ## What is intentionally not supported yet?
 

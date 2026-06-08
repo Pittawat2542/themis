@@ -13,12 +13,12 @@ You will submit an experiment through the worker-pool flow, create a manifest, a
 
 ## Prerequisites
 
-- familiarity with config-driven experiments
+- familiarity with config automation surfaces
 - writable local filesystem
 
 ## Steps
 
-1. Create a small config-backed experiment.
+1. Create a small reviewed Python generator and a config automation surface that references it.
 2. Submit it into the worker-pool queue.
 3. Run a worker cycle and inspect the resulting run status.
 

@@ -57,7 +57,7 @@ print(result.run_id, result.status.value)
 
 ## Custom Extensions
 
-Themis is designed to be extended. You can plug in custom generators, parsers, reducers, metrics, judge models, and store backends through the Python API or config-driven workflows.
+Themis is designed to be extended. You can plug in custom generators, parsers, reducers, metrics, judge models, and store backends through the Python API or config automation workflows.
 
 - Start with [`Experiment(...)`](docs/tutorials/first-experiment.md) when you want a reusable compiled evaluation definition.
 - Use [`docs/how-to/author-custom-components.md`](docs/how-to/author-custom-components.md) for custom component authoring.

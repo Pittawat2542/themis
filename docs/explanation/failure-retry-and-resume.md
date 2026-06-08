@@ -35,7 +35,7 @@ Important distinctions:
 - retry history explains transient recovery inside one stage execution
 - `existing_run_policy` explains what happens when you submit the same compiled `run_id` again
 - `completed_through_stage` explains whether a run intentionally stopped at `generate`, `reduce`, `parse`, `score`, or `judge`
-- resume continues unfinished persisted work
+- `themis resume` reopens stored status; `run()` with `existing_run_policy="auto"` continues unfinished persisted work
 - replay re-runs downstream stages from stored upstream artifacts
 - rerun targets failed cases, case slices, or metric subsets while preserving the compiled run identity
 

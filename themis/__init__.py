@@ -22,6 +22,7 @@ from themis.core import (
     PromptSpec,
     QueueExecutionBackend,
     Reporter,
+    ReporterProtocol,
     RegressionFinding,
     RegressionPolicy,
     RegressionSummary,
@@ -43,6 +44,8 @@ from themis.core import (
     StatsEngine,
     TrendPoint,
     TrendView,
+    available_reporters,
+    create_reporter,
     get_case_audit,
     get_evaluation_execution,
     get_execution_state,
@@ -52,6 +55,7 @@ from themis.core import (
     sqlite_store,
     StepInput,
     StepOutput,
+    register_reporter,
 )
 
 
@@ -88,6 +92,7 @@ __all__ = [
     "PromptSpec",
     "QueueExecutionBackend",
     "Reporter",
+    "ReporterProtocol",
     "RuntimeConfig",
     "SessionConfig",
     "RunEstimate",
@@ -110,6 +115,8 @@ __all__ = [
     "StatsEngine",
     "TrendPoint",
     "TrendView",
+    "available_reporters",
+    "create_reporter",
     "get_case_audit",
     "get_evaluation_execution",
     "get_execution_state",
@@ -119,4 +126,5 @@ __all__ = [
     "sqlite_store",
     "StepInput",
     "StepOutput",
+    "register_reporter",
 ]

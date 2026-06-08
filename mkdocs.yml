@@ -134,3 +134,5 @@ nav:
       - Example authoring: project/example-authoring.md
       - Adding docs coverage: project/adding-new-docs-coverage.md
       - Release and versioning: project/release-and-versioning.md
+      - Decisions:
+          - Python executable definitions are canonical: adr/0001-python-executable-definitions-are-canonical.md

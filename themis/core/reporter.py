@@ -6,7 +6,8 @@ import csv
 import json
 from io import StringIO
 
-from typing import cast
+from collections.abc import Callable
+from typing import Protocol, cast, runtime_checkable
 
 from themis.core.base import JSONValue
 from themis.core.inspection import get_execution_state, get_run_snapshot
@@ -26,6 +27,16 @@ from themis.core.reliability import calibration_error
 from themis.core.snapshot import RunSnapshot
 from themis.core.stats import StatsEngine, StatsSummary
 from themis.core.store import RunStore
+
+
+@runtime_checkable
+class ReporterProtocol(Protocol):
+    """Protocol for replaceable reporters over persisted run evidence."""
+
+    def export_json(self, run_id: str) -> str: ...
+
+
+ReporterBuilder = Callable[[RunStore], ReporterProtocol]
 
 
 def snapshot_report(
@@ -355,6 +366,33 @@ class Reporter:
                 f"Projection not found: {projection_name} for run_id={run_id}"
             )
         return projection
+
+
+_REPORTER_BUILDERS: dict[str, ReporterBuilder] = {
+    "default": Reporter,
+}
+
+
+def register_reporter(name: str, builder: ReporterBuilder) -> None:
+    """Register a reporter builder for `create_reporter`."""
+
+    _REPORTER_BUILDERS[name] = builder
+
+
+def available_reporters() -> list[str]:
+    """Return the registered reporter names."""
+
+    return sorted(_REPORTER_BUILDERS)
+
+
+def create_reporter(name: str, store: RunStore) -> ReporterProtocol:
+    """Instantiate a reporter by registered name."""
+
+    try:
+        builder = _REPORTER_BUILDERS[name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported reporter: {name}") from exc
+    return builder(store)
 
 
 _LATEX_ESCAPES = {

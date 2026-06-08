@@ -44,7 +44,14 @@ from themis.core.protocols import (
     TracingProvider,
     WorkflowRunner,
 )
-from themis.core.reporter import Reporter, snapshot_report
+from themis.core.reporter import (
+    Reporter,
+    ReporterProtocol,
+    available_reporters,
+    create_reporter,
+    register_reporter,
+    snapshot_report,
+)
 from themis.core.stores.base import ProjectionRefreshingStore
 from themis.core.stores.factory import (
     available_store_backends,
@@ -97,6 +104,10 @@ def test_reporting_surface_is_documented_and_typed() -> None:
     _assert_docstring(snapshot_report)
     _assert_annotations(snapshot_report)
     _assert_docstring(Reporter)
+    _assert_docstring(ReporterProtocol)
+    for symbol in (register_reporter, available_reporters, create_reporter):
+        _assert_docstring(symbol)
+        _assert_annotations(symbol)
     for method_name in (
         "summary",
         "score_rows",
