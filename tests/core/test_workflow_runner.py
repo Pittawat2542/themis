@@ -5,7 +5,12 @@ import pytest
 from themis.core.builtins import resolve_judge_model_component
 from themis.core.components import component_ref_from_value
 from themis.core.contexts import EvalScoreContext
-from themis.core.events import StepCompletedEvent, StepStartedEvent
+from themis.core.events import (
+    ProviderCallCompletedEvent,
+    ProviderCallStartedEvent,
+    StepCompletedEvent,
+    StepStartedEvent,
+)
 from themis.core.models import Case, ParsedOutput, MetricResult, SessionResult
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import (
@@ -236,6 +241,8 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
         StepStartedEvent,
         StepCompletedEvent,
         StepStartedEvent,
+        ProviderCallStartedEvent,
+        ProviderCallCompletedEvent,
         StepCompletedEvent,
         StepStartedEvent,
         StepCompletedEvent,

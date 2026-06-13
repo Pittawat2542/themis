@@ -42,6 +42,10 @@ def test_root_package_exports_public_symbols() -> None:
         GraphRunResult,
         InMemoryExecutionBackend,
         LocalSubprocessExecutionBackend,
+        ProviderCallCompletedEvent,
+        ProviderCallFailedEvent,
+        ProviderCallStartedEvent,
+        ProviderTelemetry,
         QueueExecutionBackend,
         StepInput,
         StepOutput,
@@ -54,6 +58,7 @@ def test_root_package_exports_public_symbols() -> None:
         RunSnapshot,
         RunStatus,
         RuntimeConfig,
+        StageTelemetry,
         StatsEngine,
         available_reporters,
         create_reporter,
@@ -84,6 +89,10 @@ def test_root_package_exports_public_symbols() -> None:
     assert GraphRunResult is not None
     assert InMemoryExecutionBackend is not None
     assert LocalSubprocessExecutionBackend is not None
+    assert ProviderCallCompletedEvent is not None
+    assert ProviderCallFailedEvent is not None
+    assert ProviderCallStartedEvent is not None
+    assert ProviderTelemetry is not None
     assert QueueExecutionBackend is not None
     assert StepInput is not None
     assert StepOutput is not None
@@ -96,6 +105,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert RunSnapshot is not None
     assert RunStatus is not None
     assert RuntimeConfig is not None
+    assert StageTelemetry is not None
     assert StatsEngine is not None
     assert available_reporters is not None
     assert create_reporter is not None

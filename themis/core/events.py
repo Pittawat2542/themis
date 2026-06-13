@@ -196,6 +196,50 @@ class EvaluationFailedEvent(CaseRunEvent):
     error_message: str
 
 
+class ProviderCallStartedEvent(CaseRunEvent):
+    """Event emitted before an external provider call starts."""
+
+    event_type: Literal["provider_call_started"] = "provider_call_started"
+    stage: Literal["generation", "judge"]
+    provider_id: str
+    model_id: str
+    provider_key: str | None = None
+    candidate_id: str | None = None
+    metric_id: str | None = None
+    call_id: str | None = None
+
+
+class ProviderCallCompletedEvent(CaseRunEvent):
+    """Event emitted after an external provider call succeeds."""
+
+    event_type: Literal["provider_call_completed"] = "provider_call_completed"
+    stage: Literal["generation", "judge"]
+    provider_id: str
+    model_id: str
+    provider_key: str | None = None
+    candidate_id: str | None = None
+    metric_id: str | None = None
+    call_id: str | None = None
+    telemetry: dict[str, JSONValue] = Field(default_factory=dict)
+
+
+class ProviderCallFailedEvent(CaseRunEvent):
+    """Event emitted after an external provider call fails."""
+
+    event_type: Literal["provider_call_failed"] = "provider_call_failed"
+    stage: Literal["generation", "judge"]
+    provider_id: str
+    model_id: str
+    provider_key: str | None = None
+    candidate_id: str | None = None
+    metric_id: str | None = None
+    call_id: str | None = None
+    error_message: str
+    failure_category: str = "provider_failure"
+    retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
+    telemetry: dict[str, JSONValue] = Field(default_factory=dict)
+
+
 class ScoreCompletedEvent(CaseRunEvent):
     """Event emitted when a pure metric succeeds."""
 
@@ -264,6 +308,9 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
     "parse_failed": ParseFailedEvent,
     "evaluation_completed": EvaluationCompletedEvent,
     "evaluation_failed": EvaluationFailedEvent,
+    "provider_call_started": ProviderCallStartedEvent,
+    "provider_call_completed": ProviderCallCompletedEvent,
+    "provider_call_failed": ProviderCallFailedEvent,
     "score_completed": ScoreCompletedEvent,
     "score_failed": ScoreFailedEvent,
     "step_started": StepStartedEvent,

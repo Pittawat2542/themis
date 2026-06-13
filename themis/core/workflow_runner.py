@@ -9,6 +9,9 @@ from collections.abc import Awaitable, Callable, Iterable
 from themis.core.contexts import EvalScoreContext
 from themis.core.base import JSONValue
 from themis.core.events import (
+    ProviderCallCompletedEvent,
+    ProviderCallFailedEvent,
+    ProviderCallStartedEvent,
     RunEvent,
     StepCompletedEvent,
     StepFailedEvent,
@@ -276,8 +279,23 @@ class DefaultWorkflowRunner:
                 step_type="model_call",
             )
         )
+        judge_model: JudgeModel | None = None
         try:
             judge_model = self.judge_models[call.judge_model_id]
+            await self._persist_event(
+                ProviderCallStartedEvent(
+                    run_id=ctx.run_id,
+                    case_id=ctx.case.case_id,
+                    dataset_id=ctx.dataset_id,
+                    case_key=ctx.case_key,
+                    stage="judge",
+                    provider_id=_provider_id(judge_model),
+                    model_id=_provider_model_id(judge_model),
+                    provider_key=getattr(judge_model, "provider_key", None),
+                    metric_id=metric_id,
+                    call_id=call.call_id,
+                )
+            )
             if self.model_call_executor is None:
                 response = await judge_model.judge(
                     prompt.content, seed=call.effective_seed
@@ -288,6 +306,21 @@ class DefaultWorkflowRunner:
                 )
             response = response.model_copy(
                 update={"effective_seed": call.effective_seed}
+            )
+            await self._persist_event(
+                ProviderCallCompletedEvent(
+                    run_id=ctx.run_id,
+                    case_id=ctx.case.case_id,
+                    dataset_id=ctx.dataset_id,
+                    case_key=ctx.case_key,
+                    stage="judge",
+                    provider_id=_provider_id(judge_model),
+                    model_id=_provider_model_id(judge_model),
+                    provider_key=getattr(judge_model, "provider_key", None),
+                    metric_id=metric_id,
+                    call_id=call.call_id,
+                    telemetry=_judge_provider_telemetry(judge_model, response),
+                )
             )
             trace_steps.append(
                 TraceStep(
@@ -315,6 +348,29 @@ class DefaultWorkflowRunner:
             )
         except Exception as exc:
             retry_history = list(getattr(exc, "retry_history", []))
+            await self._persist_event(
+                ProviderCallFailedEvent(
+                    run_id=ctx.run_id,
+                    case_id=ctx.case.case_id,
+                    dataset_id=ctx.dataset_id,
+                    case_key=ctx.case_key,
+                    stage="judge",
+                    provider_id=_provider_id(judge_model)
+                    if judge_model is not None
+                    else call.judge_model_id,
+                    model_id=_provider_model_id(judge_model)
+                    if judge_model is not None
+                    else call.judge_model_id,
+                    provider_key=getattr(judge_model, "provider_key", None)
+                    if judge_model is not None
+                    else None,
+                    metric_id=metric_id,
+                    call_id=call.call_id,
+                    error_message=str(exc),
+                    failure_category=_provider_failure_category(exc),
+                    retry_history=retry_history,
+                )
+            )
             await self._persist_event(
                 StepFailedEvent(
                     run_id=ctx.run_id,
@@ -481,3 +537,45 @@ class DefaultWorkflowRunner:
         if isinstance(subject, SessionSubject):
             return "session"
         return "conversation"
+
+
+def _provider_id(component: object) -> str:
+    return str(
+        getattr(
+            component,
+            "provider",
+            getattr(component, "component_id", component.__class__.__name__),
+        )
+    )
+
+
+def _provider_model_id(component: object) -> str:
+    return str(
+        getattr(
+            component,
+            "model_id",
+            getattr(component, "component_id", component.__class__.__name__),
+        )
+    )
+
+
+def _judge_provider_telemetry(
+    component: object, response: JudgeResponse
+) -> dict[str, JSONValue]:
+    return {
+        "provider_id": _provider_id(component),
+        "model_id": _provider_model_id(component),
+        "latency_ms": float(response.latency_ms or 0.0),
+        "retry_count": len(response.retry_history),
+        "token_usage": dict(response.token_usage),
+        "request_id": response.provider_request_id,
+    }
+
+
+def _provider_failure_category(exc: Exception) -> str:
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 429:
+        return "rate_limit"
+    if isinstance(status_code, int) and 500 <= status_code < 600:
+        return "provider_unavailable"
+    return "provider_failure"

@@ -8,6 +8,8 @@ from themis.core.events import (
     GenerationFailedEvent,
     ParseCompletedEvent,
     ParseFailedEvent,
+    ProviderCallCompletedEvent,
+    ProviderCallFailedEvent,
     ReductionCompletedEvent,
     RunCompletedEvent,
     RunStartedEvent,
@@ -243,6 +245,23 @@ def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures()
                 },
             },
         ),
+        ProviderCallCompletedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            candidate_id="candidate-1",
+            stage="generation",
+            provider_id="demo",
+            model_id="demo-generator",
+            provider_key="demo:demo-generator",
+            telemetry={
+                "provider_id": "demo",
+                "model_id": "demo-generator",
+                "latency_ms": 3.0,
+                "token_usage": {"prompt_tokens": 2, "completion_tokens": 1},
+            },
+        ),
         ReductionCompletedEvent(
             run_id=snapshot.run_id,
             case_id="case-1",
@@ -305,6 +324,19 @@ def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures()
             metric_id="metric/trace",
             error_message="judge unavailable",
         ),
+        ProviderCallFailedEvent(
+            run_id=snapshot.run_id,
+            case_id="case-1",
+            dataset_id="dataset-1",
+            case_key="9:dataset-1:case-1",
+            metric_id="metric/trace",
+            stage="judge",
+            provider_id="demo",
+            model_id="demo-judge",
+            provider_key="demo:demo-judge",
+            error_message="rate limited",
+            failure_category="rate_limit",
+        ),
         ScoreCompletedEvent(
             run_id=snapshot.run_id,
             case_id="case-1",
@@ -338,6 +370,11 @@ def test_case_audit_and_telemetry_summary_include_pipeline_inputs_and_failures()
     )
     assert telemetry.generation_tokens == {"prompt_tokens": 10, "completion_tokens": 2}
     assert telemetry.judge_tokens == {"prompt_tokens": 3, "completion_tokens": 1}
+    assert telemetry.provider_call_count == 1
+    assert telemetry.provider_failure_count == 1
+    assert telemetry.provider_calls_by_stage == {"generation": 1}
+    assert telemetry.provider_calls_by_provider == {"demo": 1}
+    assert telemetry.failure_categories == {"rate_limit": 1}
 
 
 def test_build_benchmark_result_marks_incorrect_scores_separately_from_errors() -> None:

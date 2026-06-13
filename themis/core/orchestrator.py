@@ -20,6 +20,9 @@ from themis.core.contexts import (
     SessionContext,
 )
 from themis.core.events import (
+    ProviderCallCompletedEvent,
+    ProviderCallFailedEvent,
+    ProviderCallStartedEvent,
     RunCompletedEvent,
     RunFailedEvent,
     RunStartedEvent,
@@ -420,6 +423,19 @@ class Orchestrator:
                                 provider_key=provider_key,
                             )
                         )
+                        await self._persist_event(
+                            ProviderCallStartedEvent(
+                                run_id=snapshot.run_id,
+                                case_id=item.case_id,
+                                dataset_id=item.dataset_id,
+                                case_key=item.case_key,
+                                candidate_id=item.candidate_id,
+                                stage="generation",
+                                provider_id=_provider_id(self.generator),
+                                model_id=_provider_model_id(self.generator),
+                                provider_key=provider_key,
+                            )
+                        )
                         generated = await self._run_session_with_retries(
                             case, session_ctx
                         )
@@ -428,6 +444,22 @@ class Orchestrator:
                                 _observed_token_cost(generated.token_usage) - 1
                             )
                         await self._update_rate_limit(provider_key, generated.artifacts)
+                        await self._persist_event(
+                            ProviderCallCompletedEvent(
+                                run_id=snapshot.run_id,
+                                case_id=item.case_id,
+                                dataset_id=item.dataset_id,
+                                case_key=item.case_key,
+                                candidate_id=generated.candidate_id,
+                                stage="generation",
+                                provider_id=_provider_id(self.generator),
+                                model_id=_provider_model_id(self.generator),
+                                provider_key=provider_key,
+                                telemetry=_session_provider_telemetry(
+                                    self.generator, generated
+                                ),
+                            )
+                        )
                         self._notify("after_generate", generated, session_ctx)
                         blob_ref = await self._store_blob(
                             json.dumps(
@@ -474,6 +506,22 @@ class Orchestrator:
                         return item.candidate_index, generated, False
                     except Exception as exc:
                         retry_history = getattr(exc, "retry_history", [])
+                        await self._persist_event(
+                            ProviderCallFailedEvent(
+                                run_id=snapshot.run_id,
+                                case_id=item.case_id,
+                                dataset_id=item.dataset_id,
+                                case_key=item.case_key,
+                                candidate_id=item.candidate_id,
+                                stage="generation",
+                                provider_id=_provider_id(self.generator),
+                                model_id=_provider_model_id(self.generator),
+                                provider_key=provider_key,
+                                error_message=str(exc),
+                                failure_category=_provider_failure_category(exc),
+                                retry_history=retry_history,
+                            )
+                        )
                         await self._persist_event(
                             SessionFailedEvent(
                                 run_id=snapshot.run_id,
@@ -1122,3 +1170,48 @@ class Orchestrator:
         if store_retry_attempts is not None:
             updates["store_retry_attempts"] = max(1, store_retry_attempts)
         return base.model_copy(update=updates)
+
+
+def _provider_id(component: object) -> str:
+    return str(
+        getattr(
+            component,
+            "provider",
+            getattr(component, "component_id", component.__class__.__name__),
+        )
+    )
+
+
+def _provider_model_id(component: object) -> str:
+    return str(
+        getattr(
+            component,
+            "model_id",
+            getattr(component, "component_id", component.__class__.__name__),
+        )
+    )
+
+
+def _session_provider_telemetry(
+    component: object, result: SessionResult
+) -> dict[str, JSONValue]:
+    artifacts = result.artifacts or {}
+    retry_history = artifacts.get("retry_history", [])
+    request_id = artifacts.get("provider_request_id") or artifacts.get("request_id")
+    return {
+        "provider_id": _provider_id(component),
+        "model_id": _provider_model_id(component),
+        "latency_ms": float(result.latency_ms or 0.0),
+        "retry_count": len(retry_history) if isinstance(retry_history, list) else 0,
+        "token_usage": dict(result.token_usage or {}),
+        "request_id": str(request_id) if request_id is not None else None,
+    }
+
+
+def _provider_failure_category(exc: Exception) -> str:
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 429:
+        return "rate_limit"
+    if isinstance(status_code, int) and 500 <= status_code < 600:
+        return "provider_unavailable"
+    return "provider_failure"

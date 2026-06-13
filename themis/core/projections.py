@@ -10,6 +10,8 @@ from themis.core.case_refs import CaseRef, resolve_case_key
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
+    ProviderCallCompletedEvent,
+    ProviderCallFailedEvent,
     RunEvent,
     SessionCompletedEvent,
     StreamRecordedEvent,
@@ -415,9 +417,10 @@ def build_case_audit_view_from_state(
 def build_telemetry_summary(
     snapshot: RunSnapshot, events: list[RunEvent]
 ) -> TelemetrySummary:
-    return build_telemetry_summary_from_case_audit(
+    summary = build_telemetry_summary_from_case_audit(
         snapshot.run_id, build_case_audit_view(snapshot, events)
     )
+    return _with_provider_call_telemetry(summary, events)
 
 
 def build_telemetry_summary_from_case_audit(
@@ -456,6 +459,39 @@ def build_telemetry_summary_from_case_audit(
         request_ids=sorted(dict.fromkeys(request_ids)),
         retry_count=retry_count,
         estimated_cost=estimated_cost,
+    )
+
+
+def _with_provider_call_telemetry(
+    summary: TelemetrySummary, events: list[RunEvent]
+) -> TelemetrySummary:
+    provider_call_count = 0
+    provider_failure_count = 0
+    provider_calls_by_stage: dict[str, int] = {}
+    provider_calls_by_provider: dict[str, int] = {}
+    failure_categories: dict[str, int] = {}
+    for event in events:
+        if isinstance(event, ProviderCallCompletedEvent):
+            provider_call_count += 1
+            provider_calls_by_stage[event.stage] = (
+                provider_calls_by_stage.get(event.stage, 0) + 1
+            )
+            provider_calls_by_provider[event.provider_id] = (
+                provider_calls_by_provider.get(event.provider_id, 0) + 1
+            )
+        elif isinstance(event, ProviderCallFailedEvent):
+            provider_failure_count += 1
+            failure_categories[event.failure_category] = (
+                failure_categories.get(event.failure_category, 0) + 1
+            )
+    return summary.model_copy(
+        update={
+            "provider_call_count": provider_call_count,
+            "provider_failure_count": provider_failure_count,
+            "provider_calls_by_stage": provider_calls_by_stage,
+            "provider_calls_by_provider": provider_calls_by_provider,
+            "failure_categories": failure_categories,
+        }
     )
 
 
@@ -531,6 +567,16 @@ def apply_event_to_store_projection_payloads(
         _current_trace_view(snapshot, projections.get("trace_view")),
         event,
     )
+    case_audit_view = build_case_audit_view_from_state(snapshot, state)
+    telemetry_summary = build_telemetry_summary_from_case_audit(
+        snapshot.run_id,
+        case_audit_view,
+    )
+    telemetry_summary = _merge_provider_summary_fields(
+        telemetry_summary,
+        _current_telemetry_summary(snapshot, projections.get("telemetry_summary")),
+    )
+    telemetry_summary = _apply_provider_event_to_summary(telemetry_summary, event)
     return {
         "snapshot": snapshot_payload,
         "execution_state": state.model_dump(mode="json"),
@@ -538,14 +584,60 @@ def apply_event_to_store_projection_payloads(
         "benchmark_result": benchmark_result.model_dump(mode="json"),
         "timeline_view": timeline_view.model_dump(mode="json"),
         "trace_view": trace_view.model_dump(mode="json"),
-        "case_audit_view": build_case_audit_view_from_state(snapshot, state).model_dump(
-            mode="json"
-        ),
-        "telemetry_summary": build_telemetry_summary_from_case_audit(
-            snapshot.run_id,
-            build_case_audit_view_from_state(snapshot, state),
-        ).model_dump(mode="json"),
+        "case_audit_view": case_audit_view.model_dump(mode="json"),
+        "telemetry_summary": telemetry_summary.model_dump(mode="json"),
     }
+
+
+def _current_telemetry_summary(
+    snapshot: RunSnapshot, payload: JSONValue | None
+) -> TelemetrySummary:
+    if isinstance(payload, dict):
+        return TelemetrySummary.model_validate(payload)
+    return TelemetrySummary(run_id=snapshot.run_id)
+
+
+def _merge_provider_summary_fields(
+    summary: TelemetrySummary, existing: TelemetrySummary
+) -> TelemetrySummary:
+    return summary.model_copy(
+        update={
+            "provider_call_count": existing.provider_call_count,
+            "provider_failure_count": existing.provider_failure_count,
+            "provider_calls_by_stage": dict(existing.provider_calls_by_stage),
+            "provider_calls_by_provider": dict(existing.provider_calls_by_provider),
+            "failure_categories": dict(existing.failure_categories),
+        }
+    )
+
+
+def _apply_provider_event_to_summary(
+    summary: TelemetrySummary, event: RunEvent
+) -> TelemetrySummary:
+    if isinstance(event, ProviderCallCompletedEvent):
+        by_stage = dict(summary.provider_calls_by_stage)
+        by_provider = dict(summary.provider_calls_by_provider)
+        by_stage[event.stage] = by_stage.get(event.stage, 0) + 1
+        by_provider[event.provider_id] = by_provider.get(event.provider_id, 0) + 1
+        return summary.model_copy(
+            update={
+                "provider_call_count": summary.provider_call_count + 1,
+                "provider_calls_by_stage": by_stage,
+                "provider_calls_by_provider": by_provider,
+            }
+        )
+    if isinstance(event, ProviderCallFailedEvent):
+        failure_categories = dict(summary.failure_categories)
+        failure_categories[event.failure_category] = (
+            failure_categories.get(event.failure_category, 0) + 1
+        )
+        return summary.model_copy(
+            update={
+                "provider_failure_count": summary.provider_failure_count + 1,
+                "failure_categories": failure_categories,
+            }
+        )
+    return summary
 
 
 def _benchmark_row_for_metric(

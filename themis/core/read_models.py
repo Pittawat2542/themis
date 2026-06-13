@@ -199,6 +199,11 @@ class TelemetrySummary(FrozenModel):
     request_ids: list[str] = Field(default_factory=list)
     retry_count: int = 0
     estimated_cost: float = 0.0
+    provider_call_count: int = 0
+    provider_failure_count: int = 0
+    provider_calls_by_stage: dict[str, int] = Field(default_factory=dict)
+    provider_calls_by_provider: dict[str, int] = Field(default_factory=dict)
+    failure_categories: dict[str, int] = Field(default_factory=dict)
 
 
 class FailureSlice(FrozenModel):

@@ -5,9 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
 
 from themis.core.base import JSONValue
+from themis.core.models import ProviderTelemetry
 
 
 def stable_fingerprint(payload: dict[str, object]) -> str:
@@ -92,15 +92,6 @@ def extract_rate_limit(
         if isinstance(value, int):
             return {"requests_per_minute": value}
     return None
-
-
-@dataclass(frozen=True)
-class ProviderTelemetry:
-    request_id: str | None
-    token_usage: dict[str, int] | None
-    raw_response: dict[str, JSONValue]
-    headers: dict[str, JSONValue] | None
-    rate_limit: dict[str, JSONValue] | None
 
 
 def extract_provider_telemetry(response: object) -> ProviderTelemetry:

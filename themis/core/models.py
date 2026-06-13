@@ -60,6 +60,33 @@ class StreamEvent(HashableModel):
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
+class ProviderTelemetry(HashableModel):
+    """Provider-level metadata captured for a generation or judge call."""
+
+    provider_id: str | None = None
+    model_id: str | None = None
+    latency_ms: float = 0.0
+    retry_count: int = 0
+    token_usage: dict[str, int] | None = None
+    failure_category: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    request_id: str | None = None
+    raw_response: dict[str, JSONValue] = Field(default_factory=dict)
+    headers: dict[str, JSONValue] | None = None
+    rate_limit: dict[str, JSONValue] | None = None
+
+
+class StageTelemetry(HashableModel):
+    """Aggregated provider-call telemetry for one execution stage."""
+
+    stage: str
+    provider_call_count: int = 0
+    provider_failure_count: int = 0
+    latency_ms: float = 0.0
+    token_usage: dict[str, int] = Field(default_factory=dict)
+
+
 class SessionTurn(HashableModel):
     """One turn in a session-native candidate execution."""
 
