@@ -104,6 +104,41 @@ def test_humaneval_execution_metric_scores_candidate_against_reference_solution(
     assert score.value == 1.0
 
 
+def test_humaneval_execution_metric_uses_local_subprocess_by_default() -> None:
+    metric = HumanEvalExecutionMetric()
+    case_obj = benchmark_case(
+        expected_output={
+            "language": "python",
+            "execution_mode": "function",
+            "function_name": "add",
+            "official_tests": [{"input": "[2, 5]"}],
+            "reference_solution": "def add(a, b):\n    return a + b\n",
+            "solution": "def add(a, b):\n    return a + b\n",
+            "score_variant": "base",
+        }
+    )
+
+    score = metric.score(
+        ParsedOutput(value="def add(a, b):\n    return a + b", format="code"),
+        case_obj,
+        ScoreContext(
+            run_id="run-1",
+            case=case_obj,
+            parsed_views={
+                "default": ParsedOutput(
+                    value="def add(a, b):\n    return a + b",
+                    format="code",
+                )
+            },
+        ),
+    )
+
+    assert isinstance(score, MetricResult)
+    assert score.value == 1.0
+    assert score.metadata["execution_backend"] == "local_subprocess"
+    assert score.metadata["candidate_execution_statuses"] == ["ok"]
+
+
 def test_humaneval_execution_metric_caches_reference_solution_results() -> None:
     class _CountingExecutor:
         def __init__(self) -> None:

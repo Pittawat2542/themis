@@ -3,6 +3,14 @@
 from themis.core.base import FrozenModel, HashableModel, JSONValue
 from themis.core.builtins import resolve_judge_model_component
 from themis.core.builtins import resolve_selector_component
+from themis.core.code_execution import (
+    CodeExecutionLimits,
+    CodeExecutionRequest,
+    CodeExecutionResult,
+    CodeExecutionStatus,
+    DockerExecutionBackend,
+    LocalSubprocessExecutionBackend,
+)
 from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
@@ -214,6 +222,11 @@ from themis.core.workflows import (
 __all__ = [
     "Case",
     "DefaultWorkflowRunner",
+    "CodeExecutionLimits",
+    "CodeExecutionRequest",
+    "CodeExecutionResult",
+    "CodeExecutionStatus",
+    "DockerExecutionBackend",
     "BeforeGenerate",
     "AfterGenerate",
     "BeforeReduce",
@@ -388,6 +401,7 @@ __all__ = [
     "candidate_set_subject_for_selection_metric",
     "event_from_dict",
     "InMemoryRunStore",
+    "LocalSubprocessExecutionBackend",
     "ParseBundle",
     "ParseBundleRecord",
     "resolve_run_id",

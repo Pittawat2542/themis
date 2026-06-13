@@ -10,6 +10,12 @@ from typing import Protocol
 from urllib import request
 
 from themis.core.base import JSONValue
+from themis.core.code_execution import (
+    CodeExecutionLimits,
+    CodeExecutionRequest,
+    CodeExecutionResult,
+    LocalSubprocessExecutionBackend,
+)
 from themis.core.contexts import ScoreContext
 from themis.core.models import Case, ParsedOutput, MetricResult
 
@@ -27,6 +33,16 @@ class SandboxExecutionResult:
         return self.return_code == 0 and self.status == "ok"
 
 
+def _sandbox_result_from_core(result: CodeExecutionResult) -> SandboxExecutionResult:
+    return SandboxExecutionResult(
+        stdout=result.stdout,
+        stderr=result.stderr,
+        return_code=result.exit_code if result.exit_code is not None else -1,
+        status=result.status.value,
+        message=result.message,
+    )
+
+
 class SandboxExecutor(Protocol):
     def execute(
         self,
@@ -39,6 +55,39 @@ class SandboxExecutor(Protocol):
         timeout_seconds: float | None = None,
         memory_limit_mb: float | None = None,
     ) -> SandboxExecutionResult: ...
+
+
+class LocalSubprocessSandboxExecutor:
+    backend_id = "local_subprocess"
+
+    def __init__(self, backend: LocalSubprocessExecutionBackend | None = None) -> None:
+        self._backend = backend or LocalSubprocessExecutionBackend()
+
+    def execute(
+        self,
+        *,
+        code: str,
+        language: str,
+        stdin: str = "",
+        files: dict[str, str] | None = None,
+        args: list[str] | None = None,
+        timeout_seconds: float | None = None,
+        memory_limit_mb: float | None = None,
+    ) -> SandboxExecutionResult:
+        result = self._backend.execute(
+            CodeExecutionRequest(
+                code=code,
+                language=language,
+                stdin=stdin,
+                files=files or {},
+                args=args or [],
+                limits=CodeExecutionLimits(
+                    timeout_seconds=timeout_seconds or 5.0,
+                    memory_limit_mb=memory_limit_mb,
+                ),
+            )
+        )
+        return _sandbox_result_from_core(result)
 
 
 class PistonSandboxExecutor:
@@ -190,7 +239,7 @@ class CodeExecutionMetric:
             value.strip().lower() for value in supported_languages
         }
         self._supported_modes = {value.strip().lower() for value in supported_modes}
-        self._executor = executor or SandboxFusionExecutor()
+        self._executor = executor or LocalSubprocessSandboxExecutor()
 
     def fingerprint(self) -> str:
         return f"{self.component_id}-fingerprint"
@@ -214,12 +263,14 @@ class CodeExecutionMetric:
             return _score(self.component_id, 0.0, {"reason": "missing_code_or_tests"})
 
         passed = 0
+        execution_results: list[SandboxExecutionResult] = []
         for test_case in tests:
             result = self._executor.execute(
                 code=code,
                 language=language,
                 stdin=test_case["input"],
             )
+            execution_results.append(result)
             if result.ok and _normalize_output(result.stdout) == _normalize_output(
                 test_case["output"]
             ):
@@ -232,6 +283,13 @@ class CodeExecutionMetric:
                 "passed_tests": passed,
                 "total_tests": total,
                 "benchmark": self._benchmark_name,
+                "execution_backend": _executor_backend_id(self._executor),
+                "candidate_execution_statuses": [
+                    result.status for result in execution_results
+                ],
+                "candidate_execution_results": _execution_result_payloads(
+                    execution_results
+                ),
             },
         )
 
@@ -328,6 +386,7 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
                 ),
                 language=language,
             )
+            script_execution_results = [candidate_result, reference_result]
             passed = 1 if candidate_result.ok and reference_result.ok else 0
             return _score(
                 self.component_id,
@@ -336,11 +395,18 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
                     "passed_tests": passed,
                     "total_tests": 1,
                     "benchmark": self._benchmark_name,
+                    "execution_backend": _executor_backend_id(self._executor),
+                    "candidate_execution_statuses": [candidate_result.status],
+                    "candidate_execution_results": _execution_result_payloads(
+                        script_execution_results
+                    ),
                 },
             )
 
         passed = 0
         reference_cache: dict[str, tuple[bool, str]] = {}
+        execution_results: list[SandboxExecutionResult] = []
+        candidate_results: list[SandboxExecutionResult] = []
         for test_case in tests:
             candidate_result = self._executor.execute(
                 code=_humaneval_wrapper(
@@ -350,6 +416,8 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
                 ),
                 language=language,
             )
+            execution_results.append(candidate_result)
+            candidate_results.append(candidate_result)
             cache_key = json.dumps(test_case["input"], sort_keys=True)
             if cache_key not in reference_cache:
                 reference_result = self._executor.execute(
@@ -360,6 +428,7 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
                     ),
                     language=language,
                 )
+                execution_results.append(reference_result)
                 reference_cache[cache_key] = (
                     reference_result.ok,
                     _normalize_output(reference_result.stdout),
@@ -379,6 +448,13 @@ class HumanEvalExecutionMetric(CodeExecutionMetric):
                 "passed_tests": passed,
                 "total_tests": total,
                 "benchmark": self._benchmark_name,
+                "execution_backend": _executor_backend_id(self._executor),
+                "candidate_execution_statuses": [
+                    result.status for result in candidate_results
+                ],
+                "candidate_execution_results": _execution_result_payloads(
+                    execution_results
+                ),
             },
         )
 
@@ -483,6 +559,25 @@ def _normalize_output(value: str) -> str:
     return value.replace("\r\n", "\n").strip()
 
 
+def _executor_backend_id(executor: SandboxExecutor) -> str:
+    return str(getattr(executor, "backend_id", executor.__class__.__name__))
+
+
+def _execution_result_payloads(
+    results: list[SandboxExecutionResult],
+) -> list[dict[str, JSONValue]]:
+    return [
+        {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "return_code": result.return_code,
+            "status": result.status,
+            "message": result.message,
+        }
+        for result in results
+    ]
+
+
 def _score(
     metric_id: str,
     value: float,
@@ -490,8 +585,15 @@ def _score(
 ) -> MetricResult:
     resolved: dict[str, JSONValue] = {}
     for key, item in details.items():
-        if item is None or isinstance(item, (str, int, float, bool)):
-            resolved[key] = item
-        else:
-            resolved[key] = str(item)
+        resolved[key] = _json_value(item)
     return MetricResult(metric_id=metric_id, value=value, metadata=resolved)
+
+
+def _json_value(value: object) -> JSONValue:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    return str(value)

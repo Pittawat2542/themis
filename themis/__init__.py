@@ -5,7 +5,12 @@ from pathlib import Path
 import tomllib
 
 from themis.core import (
+    CodeExecutionLimits,
+    CodeExecutionRequest,
+    CodeExecutionResult,
+    CodeExecutionStatus,
     DatasetSourceSpec,
+    DockerExecutionBackend,
     EvaluationGraph,
     EvaluationStep,
     Experiment,
@@ -20,6 +25,7 @@ from themis.core import (
     GraphRunResult,
     InMemoryRunStore,
     InMemoryExecutionBackend,
+    LocalSubprocessExecutionBackend,
     PromptSpec,
     QueueExecutionBackend,
     Reporter,
@@ -84,6 +90,10 @@ __version__ = _resolve_version()
 
 __all__ = [
     "Experiment",
+    "CodeExecutionLimits",
+    "CodeExecutionRequest",
+    "CodeExecutionResult",
+    "CodeExecutionStatus",
     "EvaluationGraph",
     "EvaluationStep",
     "ExecutionBackend",
@@ -91,6 +101,7 @@ __all__ = [
     "ExecutionResourcePlan",
     "ExecutionRequest",
     "DatasetSourceSpec",
+    "DockerExecutionBackend",
     "FailureSlice",
     "FailureSliceSummary",
     "FilesystemExecutionBackend",
@@ -98,6 +109,7 @@ __all__ = [
     "GraphRunResult",
     "InMemoryRunStore",
     "InMemoryExecutionBackend",
+    "LocalSubprocessExecutionBackend",
     "PromptSpec",
     "QueueExecutionBackend",
     "Reporter",

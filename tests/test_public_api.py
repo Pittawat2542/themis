@@ -29,6 +29,11 @@ def test_root_package_exports_public_symbols() -> None:
     from themis import (
         EvaluationGraph,
         EvaluationStep,
+        CodeExecutionLimits,
+        CodeExecutionRequest,
+        CodeExecutionResult,
+        CodeExecutionStatus,
+        DockerExecutionBackend,
         ExecutionBackend,
         ExecutionResourcePlan,
         ExecutionRequest,
@@ -36,6 +41,7 @@ def test_root_package_exports_public_symbols() -> None:
         GraphRuntime,
         GraphRunResult,
         InMemoryExecutionBackend,
+        LocalSubprocessExecutionBackend,
         QueueExecutionBackend,
         StepInput,
         StepOutput,
@@ -65,6 +71,11 @@ def test_root_package_exports_public_symbols() -> None:
 
     assert EvaluationGraph is not None
     assert EvaluationStep is not None
+    assert CodeExecutionLimits is not None
+    assert CodeExecutionRequest is not None
+    assert CodeExecutionResult is not None
+    assert CodeExecutionStatus is not None
+    assert DockerExecutionBackend is not None
     assert ExecutionBackend is not None
     assert ExecutionResourcePlan is not None
     assert ExecutionRequest is not None
@@ -72,6 +83,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert GraphRuntime is not None
     assert GraphRunResult is not None
     assert InMemoryExecutionBackend is not None
+    assert LocalSubprocessExecutionBackend is not None
     assert QueueExecutionBackend is not None
     assert StepInput is not None
     assert StepOutput is not None
