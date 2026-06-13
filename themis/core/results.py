@@ -394,6 +394,22 @@ class RunResult(FrozenModel):
     cases: list[CaseResult] = Field(default_factory=list)
 
 
+class ExecutionResourcePlan(FrozenModel):
+    """Resource-facing plan derived from a compiled run snapshot."""
+
+    run_id: str
+    estimated_generation_calls: int
+    estimated_judge_calls: int
+    planned_parse_tasks: int
+    planned_score_tasks: int
+    required_execution_backends: list[str] = Field(default_factory=list)
+    provider_call_counts: dict[str, int] = Field(default_factory=dict)
+    stage_parallelism: dict[str, int] = Field(default_factory=dict)
+    provider_parallelism: dict[str, int] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    assumptions: dict[str, JSONValue] = Field(default_factory=dict)
+
+
 class RunEstimate(FrozenModel):
     """Planner estimate for the work implied by a compiled run."""
 
@@ -412,6 +428,7 @@ class RunEstimate(FrozenModel):
     estimated_judge_prompt_tokens: int = 0
     estimated_judge_output_tokens: int = 0
     estimated_total_tokens: int = 0
+    resource_plan: ExecutionResourcePlan | None = None
     assumptions: dict[str, JSONValue] = Field(default_factory=dict)
 
 

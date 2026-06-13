@@ -155,6 +155,7 @@ from themis.core.prompts import PromptSpec
 from themis.core.results import (
     CaseResult,
     ExecutionCheckpoint,
+    ExecutionResourcePlan,
     EvaluationBundle,
     EvaluationBundleRecord,
     ExecutionState,
@@ -319,6 +320,7 @@ __all__ = [
     "EvaluationBundleRecord",
     "ExecutionState",
     "ExecutionCheckpoint",
+    "ExecutionResourcePlan",
     "GenerationBundle",
     "GenerationBundleRecord",
     "get_case_audit",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 from themis.core.base import JSONValue
+from themis.core.planner import Planner
 from themis.core.reporter import Reporter
 from themis.core.store import RunStore
 
@@ -17,6 +18,14 @@ def quickcheck(store: RunStore, run_id: str) -> dict[str, JSONValue]:
         raise ValueError(f"Run projections unavailable for run_id={run_id}")
     progress = _require_mapping(run_result.get("progress"), name="run_result.progress")
     score_rows = cast(JSONValue, reporter.score_rows(run_id))
+    stored = store.resume(run_id)
+    resource_plan = (
+        Planner()
+        .resource_plan(stored.snapshot, stored.snapshot.provenance.runtime)
+        .model_dump(mode="json")
+        if stored is not None
+        else None
+    )
     return {
         "run_id": run_id,
         "status": run_result["status"],
@@ -24,6 +33,7 @@ def quickcheck(store: RunStore, run_id: str) -> dict[str, JSONValue]:
         "completed_cases": progress["completed_cases"],
         "failed_cases": progress["failed_cases"],
         "metric_means": benchmark_result["metric_means"],
+        "resource_plan": cast(JSONValue, resource_plan),
         "score_rows": score_rows,
     }
 

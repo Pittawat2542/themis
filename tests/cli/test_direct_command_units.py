@@ -45,10 +45,12 @@ def test_run_resume_estimate_and_quickcheck_commands(
     assert estimate(config=str(config_path)) == 0
     estimate_payload = json.loads(capsys.readouterr().out)
     assert estimate_payload["planned_generation_tasks"] >= 1
+    assert estimate_payload["resource_plan"]["estimated_generation_calls"] >= 1
 
     assert quickcheck(config=str(config_path)) == 0
     quickcheck_payload = json.loads(capsys.readouterr().out)
     assert quickcheck_payload["status"] == "completed"
+    assert quickcheck_payload["resource_plan"]["planned_score_tasks"] >= 1
 
 
 def test_report_export_and_compare_commands(

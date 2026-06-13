@@ -6,13 +6,20 @@ import hashlib
 import json
 
 from themis.core.case_refs import CaseRef
-from themis.core.results import GenerationWorkItem, RunEstimate
+from themis.core.config import RuntimeConfig
+from themis.core.results import ExecutionResourcePlan, GenerationWorkItem, RunEstimate
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import JudgeCall
 
 DEFAULT_GENERATION_INPUT_TOKENS_PER_CASE = 4
 DEFAULT_GENERATION_OUTPUT_TOKENS_PER_CANDIDATE = 256
 DEFAULT_JUDGE_OUTPUT_TOKENS_PER_CALL = 64
+CODE_EXECUTION_METRIC_IDS = {
+    "builtin/aethercode_pass_rate",
+    "builtin/codeforces_pass_rate",
+    "builtin/humaneval_pass_rate",
+    "builtin/livecodebench_pass_rate",
+}
 
 
 class Planner:
@@ -145,6 +152,7 @@ class Planner:
             self._estimated_judge_call_count(snapshot, total_cases)
             * DEFAULT_JUDGE_OUTPUT_TOKENS_PER_CALL
         )
+        resource_plan = self.resource_plan(snapshot, snapshot.provenance.runtime)
         return RunEstimate(
             run_id=snapshot.run_id,
             total_cases=total_cases,
@@ -166,6 +174,7 @@ class Planner:
                 + estimated_judge_prompt_tokens
                 + estimated_judge_output_tokens
             ),
+            resource_plan=resource_plan,
             assumptions={
                 "generation_input_tokens_per_case": (
                     DEFAULT_GENERATION_INPUT_TOKENS_PER_CASE
@@ -174,6 +183,57 @@ class Planner:
                     DEFAULT_GENERATION_OUTPUT_TOKENS_PER_CANDIDATE
                 ),
                 "judge_output_tokens_per_call": DEFAULT_JUDGE_OUTPUT_TOKENS_PER_CALL,
+            },
+        )
+
+    def resource_plan(
+        self, snapshot: RunSnapshot, runtime: RuntimeConfig
+    ) -> ExecutionResourcePlan:
+        """Estimate operational resource demand without changing run identity."""
+
+        self.validate_snapshot(snapshot)
+        total_cases = sum(len(dataset.cases) for dataset in snapshot.datasets)
+        candidate_count = self.candidate_count(snapshot)
+        metric_count = len(snapshot.component_refs.metrics)
+        planned_generation_tasks = total_cases * candidate_count
+        planned_parse_tasks = total_cases * max(1, len(snapshot.component_refs.parsers))
+        planned_score_tasks = total_cases * metric_count
+        estimated_judge_calls = self._estimated_judge_call_count(snapshot, total_cases)
+        provider_call_counts: dict[str, int] = {}
+        if planned_generation_tasks:
+            provider_call_counts[snapshot.component_refs.generator.component_id] = (
+                planned_generation_tasks
+            )
+        if estimated_judge_calls:
+            for judge_ref in snapshot.component_refs.judge_models:
+                provider_call_counts[judge_ref.component_id] = (
+                    total_cases
+                    * self._workflow_metric_count(snapshot)
+                    * self._judge_repeat_multiplier(snapshot)
+                )
+
+        required_execution_backends = self._required_execution_backends(snapshot)
+        warnings: list[str] = []
+        if required_execution_backends:
+            warnings.append(
+                "code execution metrics require an execution backend; "
+                "local_subprocess is the default deterministic backend"
+            )
+
+        return ExecutionResourcePlan(
+            run_id=snapshot.run_id,
+            estimated_generation_calls=planned_generation_tasks,
+            estimated_judge_calls=estimated_judge_calls,
+            planned_parse_tasks=planned_parse_tasks,
+            planned_score_tasks=planned_score_tasks,
+            required_execution_backends=required_execution_backends,
+            provider_call_counts=provider_call_counts,
+            stage_parallelism=self._stage_parallelism(runtime),
+            provider_parallelism=dict(sorted(runtime.provider_concurrency.items())),
+            warnings=warnings,
+            assumptions={
+                "runtime_resource_allocation_affects": "provenance",
+                "code_execution_default_backend": "local_subprocess",
             },
         )
 
@@ -234,10 +294,38 @@ class Planner:
     def _estimated_judge_call_count(
         self, snapshot: RunSnapshot, total_cases: int
     ) -> int:
-        workflow_metric_count = sum(
-            1 for metric_kind in snapshot.metric_kinds if metric_kind != "pure"
-        )
+        workflow_metric_count = self._workflow_metric_count(snapshot)
         if workflow_metric_count == 0:
             return 0
         judge_model_count = max(1, len(snapshot.identity.judge_model_refs))
-        return total_cases * workflow_metric_count * judge_model_count
+        return (
+            total_cases
+            * workflow_metric_count
+            * judge_model_count
+            * self._judge_repeat_multiplier(snapshot)
+        )
+
+    def _workflow_metric_count(self, snapshot: RunSnapshot) -> int:
+        return sum(1 for metric_kind in snapshot.metric_kinds if metric_kind != "pure")
+
+    def _judge_repeat_multiplier(self, snapshot: RunSnapshot) -> int:
+        repeat_count = snapshot.identity.judge_config.get("repeats", 1)
+        if isinstance(repeat_count, int) and repeat_count > 0:
+            return repeat_count
+        return 1
+
+    def _required_execution_backends(self, snapshot: RunSnapshot) -> list[str]:
+        metric_ids = {metric.component_id for metric in snapshot.component_refs.metrics}
+        manifest_requires_execution = any(
+            manifest.metadata.get("requires_code_execution") == "true"
+            for manifest in snapshot.dataset_manifests
+        )
+        if metric_ids.intersection(CODE_EXECUTION_METRIC_IDS) or manifest_requires_execution:
+            return ["local_subprocess"]
+        return []
+
+    def _stage_parallelism(self, runtime: RuntimeConfig) -> dict[str, int]:
+        return {
+            "global": runtime.max_concurrent_tasks,
+            **dict(sorted(runtime.stage_concurrency.items())),
+        }

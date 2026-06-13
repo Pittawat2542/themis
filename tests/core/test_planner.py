@@ -6,6 +6,7 @@ from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
     ParserView,
+    RuntimeConfig,
     StorageConfig,
 )
 from themis.core.experiment import Experiment
@@ -144,6 +145,68 @@ def test_planner_counts_multiple_parser_views() -> None:
     estimate = planner.estimate(snapshot)
 
     assert estimate.planned_parse_tasks == 4
+
+
+def test_planner_reports_resource_plan_for_generation_judges_and_concurrency() -> None:
+    planner = Planner()
+    snapshot = _experiment(
+        candidate_policy={"num_samples": 2},
+        metrics=[DummyLLMMetric()],
+        judge_models=[DummyJudgeModel()],
+    ).compile()
+    runtime = RuntimeConfig(
+        max_concurrent_tasks=8,
+        stage_concurrency={"score": 2},
+        provider_concurrency={"builtin/demo_generator": 3},
+    )
+
+    plan = planner.resource_plan(snapshot, runtime)
+
+    assert plan.run_id == snapshot.run_id
+    assert plan.estimated_generation_calls == 4
+    assert plan.estimated_judge_calls == 2
+    assert plan.planned_parse_tasks == 2
+    assert plan.planned_score_tasks == 2
+    assert plan.provider_call_counts["builtin/demo_generator"] == 4
+    assert plan.provider_call_counts["builtin/demo_judge"] == 2
+    assert plan.stage_parallelism == {"global": 8, "score": 2}
+    assert plan.provider_parallelism == {"builtin/demo_generator": 3}
+    assert plan.required_execution_backends == []
+
+
+def test_planner_resource_plan_declares_code_execution_backend_requirement() -> None:
+    planner = Planner()
+    snapshot = _experiment(
+        metrics=["builtin/humaneval_pass_rate"],
+        parsers=["builtin/code_text"],
+    ).compile()
+
+    plan = planner.resource_plan(snapshot, RuntimeConfig())
+
+    assert plan.required_execution_backends == ["local_subprocess"]
+    assert "code execution" in plan.warnings[0]
+
+
+def test_planner_estimate_includes_resource_plan() -> None:
+    planner = Planner()
+    snapshot = _experiment(candidate_policy={"num_samples": 2}).compile()
+
+    estimate = planner.estimate(snapshot)
+
+    assert estimate.resource_plan is not None
+    assert estimate.resource_plan.estimated_generation_calls == 4
+    assert estimate.resource_plan.provider_call_counts["builtin/demo_generator"] == 4
+
+
+def test_runtime_only_resource_planning_does_not_change_run_identity() -> None:
+    first = _experiment().model_copy(
+        update={"runtime": RuntimeConfig(max_concurrent_tasks=1)}
+    )
+    second = _experiment().model_copy(
+        update={"runtime": RuntimeConfig(max_concurrent_tasks=16)}
+    )
+
+    assert first.compile().run_id == second.compile().run_id
 
 
 def test_planner_requires_reducer_or_selector_for_multi_candidate_runs() -> None:

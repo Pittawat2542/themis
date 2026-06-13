@@ -30,6 +30,7 @@ def test_root_package_exports_public_symbols() -> None:
         EvaluationGraph,
         EvaluationStep,
         ExecutionBackend,
+        ExecutionResourcePlan,
         ExecutionRequest,
         FilesystemExecutionBackend,
         GraphRuntime,
@@ -65,6 +66,7 @@ def test_root_package_exports_public_symbols() -> None:
     assert EvaluationGraph is not None
     assert EvaluationStep is not None
     assert ExecutionBackend is not None
+    assert ExecutionResourcePlan is not None
     assert ExecutionRequest is not None
     assert FilesystemExecutionBackend is not None
     assert GraphRuntime is not None
