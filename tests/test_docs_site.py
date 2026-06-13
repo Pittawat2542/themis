@@ -145,6 +145,30 @@ def test_docs_tree_contains_required_diataxis_entrypoints() -> None:
         )
 
 
+def test_operational_depth_guardrails_are_documented() -> None:
+    adr_path = (
+        DOCS_ROOT / "adr" / "0002-operational-surfaces-remain-automation-surfaces.md"
+    )
+    context_path = REPO_ROOT / "CONTEXT.md"
+
+    adr = adr_path.read_text(encoding="utf-8")
+    context = context_path.read_text(encoding="utf-8")
+
+    for phrase in (
+        "Benchmark Kit",
+        "Suite Definition",
+        "Runtime Preset",
+        "Execution Resource Plan",
+        "Provider Telemetry",
+    ):
+        assert phrase in context
+
+    assert "Automation Surface" in adr
+    assert "Executable Definition" in adr
+    assert "RunSnapshot" in adr
+    assert "runtime resource allocation is provenance" in adr
+
+
 def test_docs_examples_are_file_backed_and_embedded() -> None:
     examples_root = REPO_ROOT / "examples" / "docs"
     expected_examples = (

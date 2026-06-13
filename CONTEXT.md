@@ -40,6 +40,26 @@ _Avoid_: arbitrary plugin hook, internal override
 A config file, CLI argument, submission manifest, worker queue, or batch request that transports or overrides an **Executable Definition** for automation.
 _Avoid_: canonical experiment definition
 
+**Benchmark Kit**:
+A Themis-owned Python helper that turns catalog benchmark metadata into a reviewed **Experiment** with dataset, generation, parsing, metric, and judge defaults.
+_Avoid_: imported task class, benchmark script, config-only benchmark
+
+**Suite Definition**:
+A named **Automation Surface** that expands to multiple benchmark or executable definitions while preserving one **RunSnapshot** per executable run.
+_Avoid_: mega-run, aggregate experiment, canonical suite source
+
+**Runtime Preset**:
+A named convenience layer that resolves to normal session, evaluation, runtime, or storage configuration for an **Experiment**.
+_Avoid_: harness runtime, hidden execution mode
+
+**Execution Resource Plan**:
+Provenance describing expected work, concurrency, provider calls, and backend requirements for a run.
+_Avoid_: run identity, scheduler truth
+
+**Provider Telemetry**:
+Evidence captured from generator or judge provider calls, such as latency, retries, token usage, model identifiers, and failure categories.
+_Avoid_: score, identity metadata
+
 ## Product philosophy
 
 - Themis is an LLM evaluation experiment platform, not a generic workflow engine.
@@ -69,6 +89,10 @@ _Avoid_: canonical experiment definition
 - A **Replaceable Boundary** lets user code customize an **Experiment** without changing Themis-owned runtime semantics.
 - A **Reporter** is a Replaceable Boundary over **Evidence** and projections; changing it does not redefine **Run Identity**.
 - An **Automation Surface** may launch, transport, or override an **Executable Definition**, but it is not the canonical definition.
+- A **Benchmark Kit** may construct an **Experiment**, but the resulting importable Python **Executable Definition** remains the canonical source for serious research.
+- A **Suite Definition** expands into separate executable runs; it does not collapse multiple logical experiments into one **RunSnapshot**.
+- A **Runtime Preset** is resolved before compilation and is recorded as provenance when it only changes runtime behavior.
+- An **Execution Resource Plan** and **Provider Telemetry** are **Evidence** or provenance; they do not redefine **Run Identity** unless their resolved choices change the logical experiment.
 
 ## Example dialogue
 
