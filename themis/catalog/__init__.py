@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from themis.catalog.benchmarks import (
         BenchmarkCatalogEntry,
+        BenchmarkExperimentDefaults,
+        BenchmarkKit,
         BenchmarkValidationResult,
     )
     from themis.core.results import RunResult
@@ -14,8 +16,11 @@ if TYPE_CHECKING:
 
 __all__ = [
     "builtin_component_refs",
+    "build_benchmark_experiment",
+    "get_benchmark_kit",
     "get_benchmark",
     "list_benchmark_ids",
+    "list_benchmark_kits",
     "list_benchmarks",
     "list_component_ids",
     "load",
@@ -86,6 +91,45 @@ def validate_benchmark(name: str) -> BenchmarkValidationResult:
     from themis.catalog.benchmarks import validate_benchmark as _validate_benchmark
 
     return _validate_benchmark(name)
+
+
+def list_benchmark_kits() -> list[str]:
+    """List benchmark identifiers that can build complete experiments."""
+
+    from themis.catalog.benchmarks import list_benchmark_kits as _list_benchmark_kits
+
+    return _list_benchmark_kits()
+
+
+def get_benchmark_kit(name: str) -> BenchmarkKit:
+    """Return a Themis-owned experiment-building kit for a benchmark."""
+
+    from themis.catalog.benchmarks import get_benchmark_kit as _get_benchmark_kit
+
+    return _get_benchmark_kit(name)
+
+
+def build_benchmark_experiment(
+    name: str,
+    *,
+    storage=None,
+    runtime=None,
+    overrides: BenchmarkExperimentDefaults | None = None,
+    dataset=None,
+):
+    """Build a complete experiment from a benchmark kit."""
+
+    from themis.catalog.benchmarks import (
+        build_benchmark_experiment as _build_benchmark_experiment,
+    )
+
+    return _build_benchmark_experiment(
+        name,
+        storage=storage,
+        runtime=runtime,
+        overrides=overrides,
+        dataset=dataset,
+    )
 
 
 def list_component_ids(*, kind: str | None = None) -> list[str]:

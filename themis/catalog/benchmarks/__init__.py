@@ -25,6 +25,24 @@ _OPEN_VARIANT_EXAMPLES = {
     "procbench": "task07",
 }
 
+__all__ = [
+    "BenchmarkCatalogEntry",
+    "BenchmarkDefinition",
+    "BenchmarkExperimentDefaults",
+    "BenchmarkKit",
+    "BenchmarkValidationCheck",
+    "BenchmarkValidationResult",
+    "build_benchmark_experiment",
+    "get_benchmark",
+    "get_benchmark_kit",
+    "list_benchmark_ids",
+    "list_benchmark_kits",
+    "list_benchmarks",
+    "load_benchmark",
+    "run_benchmark",
+    "validate_benchmark",
+]
+
 
 def _default_candidate_policy() -> dict[str, JSONValue]:
     return {"num_samples": 1}
@@ -269,9 +287,12 @@ def run_benchmark(
     definition = load_benchmark(name)
     dataset = definition.materialize_dataset()
     storage = StorageConfig(target="memory") if store is None else None
-    experiment = definition.build_experiment(
-        dataset=dataset, model=model, storage=storage
-    )
+    if model is None:
+        experiment = build_benchmark_experiment(name, dataset=dataset, storage=storage)
+    else:
+        experiment = definition.build_experiment(
+            dataset=dataset, model=model, storage=storage
+        )
     return experiment.run(store=store)
 
 
@@ -588,3 +609,12 @@ def _json_value_from_value(value: object) -> JSONValue:
 
 def _json_optional_value_from_value(value: object) -> JSONValue | None:
     return cast(JSONValue | None, value)
+
+
+from themis.catalog.benchmarks.kits import (  # noqa: E402
+    BenchmarkExperimentDefaults,
+    BenchmarkKit,
+    build_benchmark_experiment,
+    get_benchmark_kit,
+    list_benchmark_kits,
+)
