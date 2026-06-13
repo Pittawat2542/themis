@@ -11,6 +11,12 @@ if TYPE_CHECKING:
         BenchmarkKit,
         BenchmarkValidationResult,
     )
+    from themis.catalog.suites import (
+        SuiteDefinition,
+        SuiteExpansion,
+        SuiteItem,
+        SuiteRunResult,
+    )
     from themis.core.results import RunResult
     from themis.core.store import RunStore
 
@@ -24,7 +30,14 @@ __all__ = [
     "list_benchmarks",
     "list_component_ids",
     "load",
+    "SuiteDefinition",
+    "SuiteItem",
+    "expand_suite",
+    "get_suite",
+    "list_suites",
+    "register_suite",
     "run",
+    "run_suite",
     "validate_benchmark",
 ]
 
@@ -138,3 +151,51 @@ def list_component_ids(*, kind: str | None = None) -> list[str]:
     from themis.catalog.registry import list_component_ids as _list_component_ids
 
     return _list_component_ids(kind=kind)
+
+
+def register_suite(suite: SuiteDefinition) -> SuiteDefinition:
+    """Register a suite definition for this process."""
+
+    from themis.catalog.suites import register_suite as _register_suite
+
+    return _register_suite(suite)
+
+
+def get_suite(suite_id: str) -> SuiteDefinition:
+    """Return a registered suite definition."""
+
+    from themis.catalog.suites import get_suite as _get_suite
+
+    return _get_suite(suite_id)
+
+
+def list_suites(*, tags: list[str] | None = None) -> list[str]:
+    """List registered suite identifiers."""
+
+    from themis.catalog.suites import list_suites as _list_suites
+
+    return _list_suites(tags=tags)
+
+
+def expand_suite(suite_id: str) -> SuiteExpansion:
+    """Expand a suite into benchmark-backed executable items."""
+
+    from themis.catalog.suites import expand_suite as _expand_suite
+
+    return _expand_suite(suite_id)
+
+
+def run_suite(suite_id: str, *, store=None) -> SuiteRunResult:
+    """Run all executable items in a suite."""
+
+    from themis.catalog.suites import run_suite as _run_suite
+
+    return _run_suite(suite_id, store=store)
+
+
+def __getattr__(name: str) -> object:
+    if name in {"SuiteDefinition", "SuiteItem"}:
+        from themis.catalog import suites
+
+        return getattr(suites, name)
+    raise AttributeError(name)

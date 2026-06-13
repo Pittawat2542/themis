@@ -14,6 +14,7 @@ from themis.cli.commands.inspect import inspect_app
 from themis.cli.commands.quick_eval import quick_eval_app
 from themis.cli.commands.reporting import report
 from themis.cli.commands.run import estimate, quickcheck, replay, rerun, resume, run
+from themis.cli.commands.suite import suite_app
 from themis.cli.commands.worker import worker_app
 from themis.cli.helpers import dump_json, load_experiment
 from themis.core.submission import submit_experiment
@@ -48,6 +49,7 @@ app.command(report)
 app.command(quickcheck)
 app.command(compare)
 app.command(init)
+app.command(suite_app)
 app.command(inspect_app)
 app.command(quick_eval_app)
 app.command(export_app)

@@ -29,6 +29,7 @@ def test_cli_help_lists_command_groups() -> None:
         "compare",
         "export",
         "init",
+        "suite",
         "worker",
         "batch",
     ):
