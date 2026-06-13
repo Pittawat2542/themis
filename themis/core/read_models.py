@@ -206,6 +206,46 @@ class TelemetrySummary(FrozenModel):
     failure_categories: dict[str, int] = Field(default_factory=dict)
 
 
+class SuiteCoverageSummary(FrozenModel):
+    """Coverage of persisted runs tagged for one suite."""
+
+    suite_id: str
+    total_runs: int = 0
+    covered_count: int = 0
+    covered_benchmark_ids: list[str] = Field(default_factory=list)
+    missing_benchmark_ids: list[str] = Field(default_factory=list)
+    run_ids: list[str] = Field(default_factory=list)
+
+
+class PairwiseMetricClaim(FrozenModel):
+    """One metric-level paired score claim."""
+
+    metric_id: str
+    pairs: int
+    wins: int
+    losses: int
+    ties: int
+    mean_delta: float
+    ci_lower: float
+    ci_upper: float
+    p_value: float
+    effect_size: float
+
+
+class PairwiseComparisonReport(FrozenModel):
+    """Score claim comparing two persisted runs over matched case keys."""
+
+    claim_type: str = "score_claim"
+    baseline_run_id: str
+    candidate_run_id: str
+    evidence_run_ids: list[str]
+    metrics: list[PairwiseMetricClaim] = Field(default_factory=list)
+    matched_pair_count: int = 0
+    missing_baseline_rows: int = 0
+    missing_candidate_rows: int = 0
+    dropped_rows: int = 0
+
+
 class FailureSlice(FrozenModel):
     """One grouped failure slice in a benchmark result."""
 

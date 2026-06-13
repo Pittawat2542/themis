@@ -7,7 +7,7 @@ from typing import Literal, cast
 from cyclopts import App
 
 from themis.cli.commands.batch import batch_app
-from themis.cli.commands.compare import compare
+from themis.cli.commands.compare import compare, compare_latest, compare_runs
 from themis.cli.commands.export import export_app
 from themis.cli.commands.init import init
 from themis.cli.commands.inspect import inspect_app
@@ -48,6 +48,8 @@ app.command(estimate)
 app.command(report)
 app.command(quickcheck)
 app.command(compare)
+app.command(compare_runs)
+app.command(compare_latest)
 app.command(init)
 app.command(suite_app)
 app.command(inspect_app)

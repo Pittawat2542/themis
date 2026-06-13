@@ -60,6 +60,98 @@ def _snapshot():
     return experiment.compile()
 
 
+def _snapshot_with_cases(*, seed: int, case_ids: list[str]):
+    experiment = Experiment(
+        generation=GenerationConfig(
+            generator="builtin/demo_generator",
+            candidate_policy={"num_samples": 1},
+            reducer="builtin/majority_vote",
+        ),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"],
+            parsers=["builtin/json_identity"],
+        ),
+        storage=StorageConfig(target="memory"),
+        dataset_sources=[
+            Dataset(
+                dataset_id="dataset-1",
+                revision="r1",
+                cases=[
+                    Case(
+                        case_id=case_id,
+                        input={"question": case_id},
+                        expected_output={"answer": "4"},
+                    )
+                    for case_id in case_ids
+                ],
+            )
+        ],
+        seeds=[seed],
+    )
+    return experiment.compile()
+
+
+def _persist_scored_run(
+    store: InMemoryRunStore,
+    *,
+    seed: int,
+    scores: dict[str, float],
+    tags: list[str] | None = None,
+) -> str:
+    snapshot = _snapshot_with_cases(seed=seed, case_ids=list(scores))
+    store.persist_snapshot(snapshot)
+    store.persist_event(RunStartedEvent(run_id=snapshot.run_id))
+    for index, (case_id, score) in enumerate(scores.items()):
+        candidate_id = f"{case_id}-candidate-0"
+        store.persist_event(
+            GenerationCompletedEvent(
+                run_id=snapshot.run_id,
+                case_id=case_id,
+                dataset_id="dataset-1",
+                candidate_id=candidate_id,
+                candidate_index=index,
+                result={"candidate_id": candidate_id, "final_output": {"answer": "4"}},
+            )
+        )
+        store.persist_event(
+            ReductionCompletedEvent(
+                run_id=snapshot.run_id,
+                case_id=case_id,
+                dataset_id="dataset-1",
+                candidate_id=f"{case_id}-reduced",
+                source_candidate_ids=[candidate_id],
+                result={
+                    "candidate_id": f"{case_id}-reduced",
+                    "source_candidate_ids": [candidate_id],
+                    "final_output": {"answer": "4"},
+                },
+            )
+        )
+        store.persist_event(
+            ParseCompletedEvent(
+                run_id=snapshot.run_id,
+                case_id=case_id,
+                dataset_id="dataset-1",
+                candidate_id=f"{case_id}-reduced",
+                result={"value": {"answer": "4"}, "format": "json"},
+            )
+        )
+        store.persist_event(
+            ScoreCompletedEvent(
+                run_id=snapshot.run_id,
+                case_id=case_id,
+                dataset_id="dataset-1",
+                candidate_id=f"{case_id}-reduced",
+                metric_id="builtin/exact_match",
+                metric_result={"metric_id": "builtin/exact_match", "value": score},
+            )
+        )
+    store.persist_event(RunCompletedEvent(run_id=snapshot.run_id))
+    if tags:
+        store.update_run_record(snapshot.run_id, tags=tags)
+    return snapshot.run_id
+
+
 def _store() -> tuple[InMemoryRunStore, str]:
     store = InMemoryRunStore()
     snapshot = _snapshot()
@@ -163,6 +255,53 @@ def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
             "metadata": {"matched": True},
         }
     ]
+
+
+def test_reporter_compare_runs_returns_score_claim_with_missing_counts() -> None:
+    store = InMemoryRunStore()
+    store.initialize()
+    baseline_run_id = _persist_scored_run(
+        store, seed=7, scores={"case-1": 0.0, "case-2": 1.0}
+    )
+    candidate_run_id = _persist_scored_run(
+        store, seed=11, scores={"case-1": 1.0, "case-3": 1.0}
+    )
+
+    report = Reporter(store).compare_runs(baseline_run_id, candidate_run_id)
+
+    assert report.claim_type == "score_claim"
+    assert report.evidence_run_ids == [baseline_run_id, candidate_run_id]
+    assert report.metrics[0].pairs == 1
+    assert report.metrics[0].mean_delta == 1.0
+    assert report.matched_pair_count == 1
+    assert report.missing_baseline_rows == 1
+    assert report.missing_candidate_rows == 1
+    assert report.dropped_rows == 2
+
+
+def test_reporter_suite_coverage_counts_runs_tagged_by_suite() -> None:
+    store = InMemoryRunStore()
+    store.initialize()
+    first_run_id = _persist_scored_run(
+        store,
+        seed=7,
+        scores={"case-1": 1.0},
+        tags=["suite:math-core", "benchmark:gsm8k"],
+    )
+    _persist_scored_run(
+        store,
+        seed=11,
+        scores={"case-1": 1.0},
+        tags=["suite:math-core", "benchmark:math500"],
+    )
+
+    coverage = Reporter(store).suite_coverage("math-core")
+
+    assert coverage.suite_id == "math-core"
+    assert coverage.covered_count == 2
+    assert coverage.total_runs == 2
+    assert coverage.covered_benchmark_ids == ["gsm8k", "math500"]
+    assert first_run_id in coverage.run_ids
 
 
 def test_default_reporter_is_registered_and_resolved() -> None:

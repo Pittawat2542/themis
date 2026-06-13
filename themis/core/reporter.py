@@ -16,13 +16,16 @@ from themis.core.read_models import (
     BenchmarkResult,
     FailureSlice,
     FailureSliceSummary,
+    PairwiseComparisonReport,
+    PairwiseMetricClaim,
     RegressionFinding,
     RegressionSummary,
     ReliabilitySummary,
+    SuiteCoverageSummary,
     TrendPoint,
     TrendView,
 )
-from themis.core.registry import RegressionPolicy, RunQuery
+from themis.core.registry import RegressionPolicy, RunQuery, RunRecord
 from themis.core.reliability import calibration_error
 from themis.core.snapshot import RunSnapshot
 from themis.core.stats import StatsEngine, StatsSummary
@@ -82,6 +85,79 @@ class Reporter:
             self._projection(run_id, "benchmark_result")
         )
         return StatsEngine().summarize(benchmark_result)
+
+    def compare_runs(
+        self, baseline_run_id: str, candidate_run_id: str
+    ) -> PairwiseComparisonReport:
+        """Return a score claim comparing two persisted runs."""
+
+        baseline = BenchmarkResult.model_validate(
+            self._projection(baseline_run_id, "benchmark_result")
+        )
+        candidate = BenchmarkResult.model_validate(
+            self._projection(candidate_run_id, "benchmark_result")
+        )
+        comparison = StatsEngine().compare(baseline, candidate)
+        missing_baseline, missing_candidate = _pairwise_missing_counts(
+            baseline, candidate
+        )
+        matched_pair_count = sum(metric.pairs for metric in comparison.metrics)
+        return PairwiseComparisonReport(
+            baseline_run_id=baseline_run_id,
+            candidate_run_id=candidate_run_id,
+            evidence_run_ids=[baseline_run_id, candidate_run_id],
+            metrics=[
+                PairwiseMetricClaim.model_validate(metric.model_dump(mode="json"))
+                for metric in comparison.metrics
+            ],
+            matched_pair_count=matched_pair_count,
+            missing_baseline_rows=missing_baseline,
+            missing_candidate_rows=missing_candidate,
+            dropped_rows=missing_baseline + missing_candidate,
+        )
+
+    def compare_latest(
+        self, *, baseline_label: str, candidate_label: str | None = None
+    ) -> PairwiseComparisonReport:
+        """Compare latest persisted baseline and candidate labels."""
+
+        baseline = _latest_record(
+            self.store.query_runs(RunQuery(baseline_label=baseline_label))
+        )
+        candidate_records = (
+            self.store.query_runs(RunQuery(baseline_label=candidate_label))
+            if candidate_label is not None
+            else self.store.query_runs()
+        )
+        candidate = _latest_record(
+            [record for record in candidate_records if record.run_id != baseline.run_id]
+        )
+        return self.compare_runs(baseline.run_id, candidate.run_id)
+
+    def suite_coverage(self, suite_id: str) -> SuiteCoverageSummary:
+        """Return persisted run coverage for a suite tag."""
+
+        records = self.store.query_runs(RunQuery(tags=[f"suite:{suite_id}"]))
+        benchmark_ids = sorted(
+            {
+                tag.removeprefix("benchmark:")
+                for record in records
+                for tag in record.tags
+                if tag.startswith("benchmark:")
+            }
+        )
+        return SuiteCoverageSummary(
+            suite_id=suite_id,
+            total_runs=len(records),
+            covered_count=len(records),
+            covered_benchmark_ids=benchmark_ids,
+            run_ids=[record.run_id for record in records],
+        )
+
+    def suite_summary(self, suite_id: str) -> SuiteCoverageSummary:
+        """Alias for suite coverage until suite aggregation adds rollups."""
+
+        return self.suite_coverage(suite_id)
 
     def export_markdown(self, run_id: str) -> str:
         """Export a summary-first Markdown report for a persisted run."""
@@ -443,6 +519,42 @@ def _case_key_for_row(row: dict[str, JSONValue]) -> str:
     if isinstance(dataset_id, str) and dataset_id:
         return f"{len(dataset_id)}:{dataset_id}:{case_id}"
     return str(case_id)
+
+
+def _pairwise_missing_counts(
+    baseline: BenchmarkResult, candidate: BenchmarkResult
+) -> tuple[int, int]:
+    baseline_keys = {
+        (_case_key_for_benchmark_row(row), row.metric_id)
+        for row in baseline.score_rows
+        if row.value is not None and row.outcome != "error"
+    }
+    candidate_keys = {
+        (_case_key_for_benchmark_row(row), row.metric_id)
+        for row in candidate.score_rows
+        if row.value is not None and row.outcome != "error"
+    }
+    return (
+        len(candidate_keys - baseline_keys),
+        len(baseline_keys - candidate_keys),
+    )
+
+
+def _case_key_for_benchmark_row(row: object) -> str:
+    case_key = getattr(row, "case_key", None)
+    if isinstance(case_key, str) and case_key:
+        return case_key
+    dataset_id = getattr(row, "dataset_id", None)
+    case_id = getattr(row, "case_id")
+    if isinstance(dataset_id, str) and dataset_id:
+        return f"{len(dataset_id)}:{dataset_id}:{case_id}"
+    return str(case_id)
+
+
+def _latest_record(records: list[RunRecord]) -> RunRecord:
+    if not records:
+        raise ValueError("No matching runs found")
+    return sorted(records, key=lambda record: record.created_at)[-1]
 
 
 def _add_failure_slice(

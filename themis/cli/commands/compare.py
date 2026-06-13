@@ -10,6 +10,7 @@ from themis.cli.helpers import (
     load_experiment,
     resolve_persisted_run_id,
 )
+from themis.core.reporter import Reporter
 from themis.core.stats import StatsEngine
 
 
@@ -51,4 +52,33 @@ def compare(
         load_benchmark_result(candidate_store, resolved_candidate_run_id),
     )
     print(dump_json(comparison.model_dump(mode="json")))
+    return 0
+
+
+def compare_runs(
+    *,
+    config: str,
+    baseline_run_id: str,
+    candidate_run_id: str,
+) -> int:
+    experiment = load_experiment(config)
+    store = initialize_store(experiment)
+    report = Reporter(store).compare_runs(baseline_run_id, candidate_run_id)
+    print(dump_json(report.model_dump(mode="json")))
+    return 0
+
+
+def compare_latest(
+    *,
+    config: str,
+    baseline_label: str,
+    candidate_label: str | None = None,
+) -> int:
+    experiment = load_experiment(config)
+    store = initialize_store(experiment)
+    report = Reporter(store).compare_latest(
+        baseline_label=baseline_label,
+        candidate_label=candidate_label,
+    )
+    print(dump_json(report.model_dump(mode="json")))
     return 0
