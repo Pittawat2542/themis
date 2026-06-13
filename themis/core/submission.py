@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Sequence, cast
+
+from pydantic import Field, model_validator
 
 from themis.catalog.loaders import load_symbol
 from themis.catalog.registry import component_specs, load_component
@@ -26,7 +29,8 @@ from themis.core.protocols import (
     SelectionMetric,
     TraceMetric,
 )
-from themis.core.results import RunResult
+from themis.core.planner import Planner
+from themis.core.results import ExecutionResourcePlan, RunResult
 from themis.core.snapshot import RunSnapshot
 from themis.core.stores.factory import create_run_store
 
@@ -39,6 +43,25 @@ class SubmissionManifest(FrozenModel):
     snapshot: RunSnapshot
     execution_targets: ExecutionComponentTargets
     status: str = "pending"
+    suite_id: str | None = None
+    preset_ids: list[str] = Field(default_factory=list)
+    resource_plan: ExecutionResourcePlan | None = None
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_computed_snapshot_run_id(cls, payload: object) -> object:
+        if not isinstance(payload, dict):
+            return payload
+        snapshot = payload.get("snapshot")
+        if not isinstance(snapshot, dict) or "run_id" not in snapshot:
+            return payload
+        normalized = dict(payload)
+        normalized_snapshot = dict(snapshot)
+        normalized_snapshot.pop("run_id", None)
+        normalized["snapshot"] = normalized_snapshot
+        return normalized
 
 
 def submit_experiment(
@@ -46,6 +69,9 @@ def submit_experiment(
     *,
     config_path: str,
     mode: Literal["worker_pool", "batch"],
+    suite_id: str | None = None,
+    preset_ids: Sequence[str] = (),
+    tags: Sequence[str] = (),
 ) -> SubmissionManifest:
     snapshot = experiment.compile()
     absolute_config_path = _config_path_for_manifest(experiment, config_path)
@@ -82,6 +108,10 @@ def submit_experiment(
         manifest_path=manifest_path,
         snapshot=snapshot,
         execution_targets=execution_targets,
+        suite_id=suite_id,
+        preset_ids=list(preset_ids),
+        resource_plan=Planner().resource_plan(snapshot, snapshot.provenance.runtime),
+        tags=list(tags),
     )
     manifest_path.write_text(manifest.model_dump_json(indent=2))
     return manifest

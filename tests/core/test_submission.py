@@ -9,7 +9,12 @@ from themis import Experiment
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, GenerationResult
 from themis.core.results import RunStatus
-from themis.core.submission import run_batch_request, run_worker_once, submit_experiment
+from themis.core.submission import (
+    SubmissionManifest,
+    run_batch_request,
+    run_worker_once,
+    submit_experiment,
+)
 
 
 def _write_config(
@@ -90,6 +95,63 @@ def test_submit_experiment_persists_snapshot_and_writes_worker_manifest(
     assert result is not None
     assert result.status is RunStatus.COMPLETED
     assert (queue_root / "done" / f"{manifest.run_id}.json").is_file()
+
+
+def test_submission_manifest_accepts_old_payloads_without_operational_context(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "experiment.yaml"
+    store_path = tmp_path / "run.sqlite3"
+    queue_root = tmp_path / "queue"
+    batch_root = tmp_path / "batch"
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
+    experiment = Experiment.from_config(config_path)
+    manifest = submit_experiment(
+        experiment, config_path=str(config_path), mode="worker_pool"
+    )
+    payload = manifest.model_dump(mode="json")
+    for key in ("suite_id", "preset_ids", "resource_plan", "tags", "created_at"):
+        payload.pop(key, None)
+
+    restored = SubmissionManifest.model_validate(payload)
+
+    assert restored.run_id == manifest.run_id
+    assert restored.suite_id is None
+    assert restored.preset_ids == []
+    assert restored.resource_plan is None
+    assert restored.tags == []
+
+
+def test_submit_experiment_round_trips_operational_context(tmp_path: Path) -> None:
+    config_path = tmp_path / "experiment.yaml"
+    store_path = tmp_path / "run.sqlite3"
+    queue_root = tmp_path / "queue"
+    batch_root = tmp_path / "batch"
+    _write_config(
+        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
+    )
+    experiment = Experiment.from_config(config_path)
+
+    manifest = submit_experiment(
+        experiment,
+        config_path=str(config_path),
+        mode="worker_pool",
+        suite_id="math-core",
+        preset_ids=["fast-local"],
+        tags=["phase:8"],
+    )
+    restored = SubmissionManifest.model_validate_json(
+        manifest.manifest_path.read_text()
+    )
+
+    assert restored.suite_id == "math-core"
+    assert restored.preset_ids == ["fast-local"]
+    assert restored.tags == ["phase:8"]
+    assert restored.resource_plan is not None
+    assert restored.resource_plan.run_id == manifest.run_id
+    assert restored.created_at is not None
 
 
 def test_submit_experiment_writes_batch_request_and_runs_it_later(
