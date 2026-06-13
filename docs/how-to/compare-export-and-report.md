@@ -20,8 +20,11 @@ Use:
 - `Reporter.export_json(...)`, `export_markdown(...)`, `export_csv(...)`, and `export_latex(...)`
 - `Reporter.summary(...)` for typed metric summaries
 - `Reporter.score_rows(...)` for raw per-case metric rows
+- `Reporter.compare_runs(...)` for a pairwise **Score Claim** over two stored runs
+- `Reporter.suite_coverage(...)` for coverage of runs tagged with a suite id
 - `themis report --config ... --format ...`
 - `themis compare --baseline-config ... --candidate-config ...`
+- `themis compare-runs --config ... --baseline-run-id ... --candidate-run-id ...`
 - `themis export generation|evaluation --config ...`
 
 Portable artifact handoff is stage-aware:
@@ -42,6 +45,8 @@ Reporting output is summary-first. Markdown, CSV, and LaTeX exports prioritize p
 - `ci_upper`
 
 JSON exports include both the existing projections and a typed `stats_summary` payload. Raw per-case metric rows remain available through `Reporter.score_rows(...)` and `benchmark_result.score_rows`.
+
+Pairwise comparisons use matched case keys and metric ids. Unmatched baseline or candidate rows are dropped from the paired delta and reported as missing coverage. The output is intentionally named as a Score Claim: it cites `evidence_run_ids`, reports pair counts, and does not replace the underlying run Evidence.
 
 Raw score rows are outcome-aware and include:
 
@@ -67,6 +72,8 @@ Use `Reporter.export_csv(...)` or `Reporter.export_latex(...)` when you need pap
 | One-run reporting | You want human-readable or machine-readable output for one completed run | Does not compare multiple runs by itself | `Reporter`, `themis report --config ... --format ...` |
 | Portable artifact handoff | Another system should consume stored stage artifacts | You need to manage exported bundles explicitly | `themis export generation|evaluation`, `export_generation_bundle(...)`, `export_evaluation_bundle(...)` |
 | Side-by-side benchmark comparison | You want baseline vs candidate analysis inside Themis | Requires two completed persisted runs | `themis compare --baseline-config ... --candidate-config ...` |
+| Exact persisted run comparison | You already know the two run ids | Missing rows are reported and excluded from deltas | `Reporter.compare_runs(...)`, `themis compare-runs ...` |
+| Suite coverage check | You need to know which suite-tagged runs exist | Depends on run registry tags such as `suite:<id>` and `benchmark:<id>` | `Reporter.suite_coverage(...)` |
 | External leaderboard or dashboard | Aggregation belongs in notebooks, warehouses, or dashboards outside Themis | You own cross-run aggregation logic | JSON or CSV exports, `BenchmarkResult` payloads |
 | Prompt sweep analysis | You are comparing multiple prompt variants over repeated runs | Sweep aggregation still happens outside Themis | Exported `benchmark_result` payloads |
 | External judge pipeline | Judging should happen outside Themis, then come back as imported artifacts | Requires custom mapping code at the handoff boundary | Export/import bundle helpers |

@@ -21,6 +21,9 @@ goal: Summarize the shipped benchmark names and point readers to adapter-specifi
 | `themis.catalog.list_component_ids(...)` | Discovery helper | You want to see the reusable shipped component ids before deciding what to load | Returns component ids only; benchmark discovery still starts from the benchmark manifest docs |
 | `themis.catalog.list_benchmark_ids(...)` | Discovery helper | You want the canonical shipped benchmark ids without inspecting manifests | Returns benchmark ids only |
 | `themis.catalog.list_benchmarks(...)` | Metadata listing | You want structured benchmark metadata such as support tier, variants, and version notes | Best source for docs, CLIs, and validation layers |
+| `themis.catalog.list_benchmark_kits(...)` | Kit discovery | You want executable experiment-building kits for shipped benchmarks | Kits return normal `Experiment` objects and keep Python definitions canonical |
+| `themis.catalog.build_benchmark_experiment(...)` | Kit materialization | You want catalog defaults but still need a Python `Experiment` to inspect or customize | Generation/evaluation overrides affect identity; storage/runtime overrides remain provenance |
+| `themis.catalog.list_suites(...)` and `expand_suite(...)` | Suite discovery | You want named groups such as `math-core`, `qa-core`, `code-core`, or `general-core` | Suites expand to normal runs, one `RunSnapshot` per executable item |
 | `themis.catalog.load(...)` | Resolver | You want to inspect a reusable component or a `BenchmarkDefinition` before running anything | Use `load("builtin/choice_letter")` for a parser or `load("mmlu_pro")` for a benchmark recipe |
 | `themis.catalog.run(...)` | Convenience executor | You want the catalog to materialize the dataset and run the benchmark in one call | Best for benchmark execution; for custom slicing, load first and build your own `Dataset` |
 | `themis.catalog.validate_benchmark(...)` | Validation helper | You want to confirm a shipped benchmark loads, materializes, and is ready for score smoke checks | Ready code-execution benchmarks run a score smoke check; experimental ones report a skipped score smoke check |
@@ -33,6 +36,8 @@ convenience without going through the CLI. Use
 `themis.catalog.list_benchmark_ids(...)` or `themis.catalog.list_benchmarks(...)`
 when you need benchmark discovery or catalog metadata instead of component
 discovery.
+
+Benchmark kits and suite definitions are automation surfaces. They help create or group executable Python definitions, but they do not become the canonical research object. Inspect the returned `Experiment` or expanded suite items when you need to review the actual executable work.
 
 ## Reusable component ids
 
