@@ -55,6 +55,9 @@ def test_root_package_exports_public_symbols() -> None:
         get_telemetry_summary,
         get_evaluation_execution,
         get_execution_state,
+        get_preset,
+        list_presets,
+        apply_preset,
         sqlite_store,
         register_reporter,
     )
@@ -87,6 +90,9 @@ def test_root_package_exports_public_symbols() -> None:
     assert get_telemetry_summary is not None
     assert get_execution_state is not None
     assert get_evaluation_execution is not None
+    assert get_preset is not None
+    assert list_presets is not None
+    assert apply_preset is not None
     assert sqlite_store is not None
     assert register_reporter is not None
 

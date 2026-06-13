@@ -142,6 +142,15 @@ from themis.core.protocols import (
 )
 from themis.core.orchestrator import Orchestrator
 from themis.core.planner import Planner
+from themis.core.presets import (
+    EvaluationPreset,
+    ExperimentPreset,
+    RuntimePreset,
+    SessionPreset,
+    apply_preset,
+    get_preset,
+    list_presets,
+)
 from themis.core.prompts import PromptSpec
 from themis.core.results import (
     CaseResult,
@@ -231,9 +240,11 @@ __all__ = [
     "EvaluationFailedEvent",
     "EvaluationConfig",
     "EvaluationGraph",
+    "EvaluationPreset",
     "EvaluationStep",
     "EvaluationWorkflow",
     "Experiment",
+    "ExperimentPreset",
     "ExecutionBackend",
     "ExecutionRequest",
     "FailureSlice",
@@ -294,7 +305,9 @@ __all__ = [
     "RunStatus",
     "RunStore",
     "RuntimeConfig",
+    "RuntimePreset",
     "SessionConfig",
+    "SessionPreset",
     "TargetSpec",
     "CaseAuditRecord",
     "CaseAuditView",
@@ -314,6 +327,8 @@ __all__ = [
     "get_run_record",
     "get_run_snapshot",
     "get_telemetry_summary",
+    "get_preset",
+    "list_presets",
     "ProgressSnapshot",
     "ProjectionCursor",
     "RerunPlan",
@@ -365,6 +380,7 @@ __all__ = [
     "WorkflowBuildError",
     "WorkflowRunner",
     "WorkflowTrace",
+    "apply_preset",
     "build_prompt_template_context",
     "candidate_set_subject_for_llm_metric",
     "candidate_set_subject_for_selection_metric",
