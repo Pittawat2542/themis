@@ -30,18 +30,24 @@ def _run_cli(
 def _write_config(
     path: Path, *, store_path: Path, queue_root: Path, batch_root: Path, seed: int = 7
 ) -> None:
+    module = f"{path.stem}_definition"
+    path.with_name(f"{module}.py").write_text(
+        f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(dataset_id="dataset-1", cases=[Case(
+        case_id="case-1", input={{"question": "2+2"}},
+        expected_output={{"answer": "4"}},
+    )])],
+    generation=Generation(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+    evaluation=Evaluation(metrics=["builtin/exact_match"], parser="builtin/json_identity"),
+    seeds=[{seed}],
+)
+'''
+    )
     path.write_text(
         f"""
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/exact_match
-  parsers:
-    - builtin/json_identity
+definition: {module}:experiment
 storage:
   target: sqlite
   kwargs:
@@ -49,15 +55,6 @@ storage:
 runtime:
   queue_root: {queue_root}
   batch_root: {batch_root}
-dataset_sources:
-  - dataset_id: dataset-1
-    cases:
-      - case_id: case-1
-        input:
-          question: 2+2
-        expected_output:
-          answer: "4"
-seeds: [{seed}]
 """.strip()
     )
 
@@ -201,7 +198,14 @@ def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> No
         json.loads(_run_cli("resume", "--config", str(worker_config)).stdout)["status"]
         == "pending"
     )
-    worker_run = _run_cli("worker", "run", "--queue-root", str(queue_root))
+    worker_run = _run_cli(
+        "worker",
+        "run",
+        "--queue-root",
+        str(queue_root),
+        "--definition-root",
+        str(tmp_path),
+    )
     assert worker_run.returncode == 0, worker_run.stderr
     assert json.loads(worker_run.stdout)["status"] == "completed"
 
@@ -212,7 +216,12 @@ def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> No
         == "pending"
     )
     batch_run = _run_cli(
-        "batch", "run", "--request", json.loads(batch_submit.stdout)["manifest_path"]
+        "batch",
+        "run",
+        "--request",
+        json.loads(batch_submit.stdout)["manifest_path"],
+        "--definition-root",
+        str(tmp_path),
     )
     assert batch_run.returncode == 0, batch_run.stderr
     assert json.loads(batch_run.stdout)["status"] == "completed"

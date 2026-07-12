@@ -11,6 +11,8 @@ All notable changes to this project are documented in this file.
   validation with requested/applied seed telemetry.
 - Introduced schema-v2 idempotent event IDs, execution attempts, sequenced event
   queries, explicit projection freshness, and non-blocking evidence writes.
+- Added bounded worker leases, definition-root and digest validation, optional
+  HMAC-signed manifests, and terminal deferred-execution failure records.
 
 ### Security
 - Added `minimal`, `standard`, and `full` evidence retention policies with

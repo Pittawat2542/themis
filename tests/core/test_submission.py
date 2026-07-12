@@ -1,294 +1,116 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 
-from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.models import Case, GenerationResult
-from themis.core.results import RunStatus
 from themis.core.submission import (
-    SubmissionManifest,
     run_batch_request,
     run_worker_once,
     submit_experiment,
 )
+from themis.launcher import load_core_experiment
 
 
-def _write_config(
-    path: Path, *, store_path: Path, queue_root: Path, batch_root: Path
-) -> None:
-    path.write_text(
-        f"""
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/exact_match
-  parsers:
-    - builtin/json_identity
+def _write_launcher(root: Path, *, seed: int = 7) -> Path:
+    (root / "definition.py").write_text(
+        f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(
+        dataset_id="dataset-1",
+        cases=[Case(
+            case_id="case-1",
+            input={{"answer": "4"}},
+            expected_output={{"answer": "4"}},
+        )],
+    )],
+    generation=Generation(
+        generator="builtin/demo_generator",
+        reducer="builtin/majority_vote",
+    ),
+    evaluation=Evaluation(
+        metrics=["builtin/exact_match"],
+        parser="builtin/json_identity",
+    ),
+    seeds=[{seed}],
+)
+''',
+        encoding="utf-8",
+    )
+    launcher = root / "experiment.yaml"
+    launcher.write_text(
+        '''definition: definition:experiment
 storage:
   target: sqlite
   kwargs:
-    path: {store_path}
+    path: runs.sqlite3
 runtime:
-  queue_root: {queue_root}
-  batch_root: {batch_root}
-dataset_sources:
-  - dataset_id: dataset-1
-    cases:
-      - case_id: case-1
-        input:
-          question: 2+2
-        expected_output:
-          answer: "4"
-seeds: [7]
-""".strip()
+  queue_root: queue
+  batch_root: batch
+''',
+        encoding="utf-8",
     )
+    return launcher
 
 
-class SubmissionConfigGenerator:
-    component_id = "generator/submission-config"
-    version = "1.0"
-
-    def fingerprint(self) -> str:
-        return "submission-config-generator"
-
-    async def generate(self, case: Case, ctx: object) -> GenerationResult:
-        del ctx
-        return GenerationResult(
-            candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output
-        )
-
-
-SUBMISSION_CONFIG_GENERATOR = SubmissionConfigGenerator()
-
-
-def test_submit_experiment_persists_snapshot_and_writes_worker_manifest(
-    tmp_path: Path,
-) -> None:
-    config_path = tmp_path / "experiment.yaml"
-    store_path = tmp_path / "run.sqlite3"
-    queue_root = tmp_path / "queue"
-    batch_root = tmp_path / "batch"
-    _write_config(
-        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
-    )
-    experiment = Experiment.from_config(config_path)
+def test_worker_submission_round_trips_python_definition(tmp_path: Path) -> None:
+    launcher = _write_launcher(tmp_path)
+    experiment = load_core_experiment(launcher)
 
     manifest = submit_experiment(
-        experiment, config_path=str(config_path), mode="worker_pool"
+        experiment, config_path=str(launcher), mode="worker_pool"
     )
-
-    assert manifest.run_id == experiment.compile().run_id
-    assert manifest.manifest_path == queue_root / "queued" / f"{manifest.run_id}.json"
-    assert manifest.manifest_path.is_file()
-    assert manifest.status == "pending"
-
-    result = run_worker_once(queue_root)
-
-    assert result is not None
-    assert result.status is RunStatus.COMPLETED
-    assert (queue_root / "done" / f"{manifest.run_id}.json").is_file()
-
-
-def test_submission_manifest_accepts_old_payloads_without_operational_context(
-    tmp_path: Path,
-) -> None:
-    config_path = tmp_path / "experiment.yaml"
-    store_path = tmp_path / "run.sqlite3"
-    queue_root = tmp_path / "queue"
-    batch_root = tmp_path / "batch"
-    _write_config(
-        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
-    )
-    experiment = Experiment.from_config(config_path)
-    manifest = submit_experiment(
-        experiment, config_path=str(config_path), mode="worker_pool"
-    )
-    payload = manifest.model_dump(mode="json")
-    for key in ("suite_id", "preset_ids", "resource_plan", "tags", "created_at"):
-        payload.pop(key, None)
-
-    restored = SubmissionManifest.model_validate(payload)
-
-    assert restored.run_id == manifest.run_id
-    assert restored.suite_id is None
-    assert restored.preset_ids == []
-    assert restored.resource_plan is None
-    assert restored.tags == []
-
-
-def test_submit_experiment_round_trips_operational_context(tmp_path: Path) -> None:
-    config_path = tmp_path / "experiment.yaml"
-    store_path = tmp_path / "run.sqlite3"
-    queue_root = tmp_path / "queue"
-    batch_root = tmp_path / "batch"
-    _write_config(
-        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
-    )
-    experiment = Experiment.from_config(config_path)
-
-    manifest = submit_experiment(
-        experiment,
-        config_path=str(config_path),
-        mode="worker_pool",
-        suite_id="math-core",
-        preset_ids=["fast-local"],
-        tags=["phase:8"],
-    )
-    restored = SubmissionManifest.model_validate_json(
-        manifest.manifest_path.read_text()
-    )
-
-    assert restored.suite_id == "math-core"
-    assert restored.preset_ids == ["fast-local"]
-    assert restored.tags == ["phase:8"]
-    assert restored.resource_plan is not None
-    assert restored.resource_plan.run_id == manifest.run_id
-    assert restored.created_at is not None
-
-
-def test_submit_experiment_writes_batch_request_and_runs_it_later(
-    tmp_path: Path,
-) -> None:
-    config_path = tmp_path / "experiment.yaml"
-    store_path = tmp_path / "run.sqlite3"
-    queue_root = tmp_path / "queue"
-    batch_root = tmp_path / "batch"
-    _write_config(
-        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
-    )
-    experiment = Experiment.from_config(config_path)
-
-    manifest = submit_experiment(experiment, config_path=str(config_path), mode="batch")
-
-    assert manifest.manifest_path == batch_root / "requests" / f"{manifest.run_id}.json"
-    assert manifest.manifest_path.is_file()
-
-    result = run_batch_request(manifest.manifest_path)
-
-    assert result.status is RunStatus.COMPLETED
-    assert (batch_root / "completed" / f"{manifest.run_id}.json").is_file()
-
-
-def test_submit_experiment_is_immutable_after_config_changes(tmp_path: Path) -> None:
-    config_path = tmp_path / "experiment.yaml"
-    store_path = tmp_path / "run.sqlite3"
-    queue_root = tmp_path / "queue"
-    batch_root = tmp_path / "batch"
-    _write_config(
-        config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
-    )
-    experiment = Experiment.from_config(config_path)
-
-    manifest = submit_experiment(
-        experiment, config_path=str(config_path), mode="worker_pool"
-    )
-    config_path.write_text(config_path.read_text().replace("seeds: [7]", "seeds: [8]"))
-
-    result = run_worker_once(queue_root)
+    result = run_worker_once(tmp_path / "queue", definition_roots=[tmp_path])
 
     assert result is not None
     assert result.run_id == manifest.run_id
-    assert result.status is RunStatus.COMPLETED
+    assert result.status.value == "completed"
+    assert (tmp_path / "queue" / "done" / f"{manifest.run_id}.json").is_file()
 
 
-def test_run_worker_once_uses_manifest_when_current_directory_changes(
-    tmp_path: Path,
-) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    config_path = workspace / "experiment.yaml"
-    store_path = workspace / "runs" / "run.sqlite3"
-    queue_root = workspace / "queue"
-    _write_config(
-        config_path,
-        store_path=Path("runs/run.sqlite3"),
-        queue_root=Path("queue"),
-        batch_root=Path("batch"),
-    )
+def test_batch_submission_round_trips_python_definition(tmp_path: Path) -> None:
+    launcher = _write_launcher(tmp_path)
+    experiment = load_core_experiment(launcher)
+    manifest = submit_experiment(experiment, config_path=str(launcher), mode="batch")
 
-    experiment = Experiment.from_config(config_path)
-    manifest = submit_experiment(
-        experiment, config_path=str(Path("experiment.yaml")), mode="worker_pool"
-    )
+    result = run_batch_request(manifest.manifest_path, definition_roots=[tmp_path])
 
-    original_cwd = Path.cwd()
-    other_cwd = tmp_path / "other"
-    other_cwd.mkdir()
-    os.chdir(other_cwd)
-    try:
-        result = run_worker_once(queue_root)
-    finally:
-        os.chdir(original_cwd)
-
-    assert result is not None
     assert result.run_id == manifest.run_id
-    assert result.status is RunStatus.COMPLETED
-    assert store_path.is_file()
+    assert result.status.value == "completed"
 
 
-def test_submit_experiment_accepts_config_loaded_importable_components(
-    tmp_path: Path,
-) -> None:
-    config_path = tmp_path / "experiment.yaml"
-    config_path.write_text(
-        f"""
-generation:
-  generator: tests.core.test_submission:SUBMISSION_CONFIG_GENERATOR
-evaluation:
-  metrics: []
-  parsers: []
-storage:
-  target: sqlite
-  kwargs:
-    path: {tmp_path / "run.sqlite3"}
-runtime:
-  queue_root: {tmp_path / "queue"}
-  batch_root: {tmp_path / "batch"}
-dataset_sources:
-  - dataset_id: dataset-1
-    cases:
-      - case_id: case-1
-        input: "hello"
-        expected_output: "hello"
-""".strip()
-    )
-    experiment = Experiment.from_config(config_path)
+def test_worker_rejects_definition_drift_after_submission(tmp_path: Path) -> None:
+    launcher = _write_launcher(tmp_path)
+    experiment = load_core_experiment(launcher)
+    submit_experiment(experiment, config_path=str(launcher), mode="worker_pool")
+    _write_launcher(tmp_path, seed=8)
 
+    with pytest.raises(ValueError, match="digest no longer matches"):
+        run_worker_once(tmp_path / "queue", definition_roots=[tmp_path])
+
+
+def test_manifest_uses_absolute_launcher_path(tmp_path: Path, monkeypatch) -> None:
+    launcher = _write_launcher(tmp_path)
+    experiment = load_core_experiment(launcher)
     manifest = submit_experiment(
-        experiment, config_path=str(config_path), mode="worker_pool"
+        experiment, config_path=str(launcher), mode="worker_pool"
     )
-    result = run_worker_once(tmp_path / "queue")
+    monkeypatch.chdir(tmp_path.parent)
 
-    assert manifest.snapshot.run_id == manifest.run_id
+    result = run_worker_once(tmp_path / "queue", definition_roots=[tmp_path])
+
+    assert Path(manifest.config_path).is_absolute()
     assert result is not None
-    assert result.run_id == manifest.run_id
-    assert result.status is RunStatus.COMPLETED
 
 
-def test_submit_experiment_rejects_non_importable_runtime_components(
-    tmp_path: Path,
-) -> None:
-    experiment = Experiment(
-        generation=GenerationConfig(
-            generator=SubmissionConfigGenerator(),
-            candidate_policy={"num_samples": 1},
-        ),
-        evaluation=EvaluationConfig(metrics=[], parsers=[]),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[],
-    )
+def test_submission_requires_accessible_launcher(tmp_path: Path) -> None:
+    launcher = _write_launcher(tmp_path)
+    experiment = load_core_experiment(launcher)
 
-    with pytest.raises(ValueError, match="importable config symbols"):
+    with pytest.raises(ValueError, match="accessible launcher"):
         submit_experiment(
             experiment,
-            config_path=str(tmp_path / "experiment.yaml"),
+            config_path=str(tmp_path / "missing.yaml"),
             mode="worker_pool",
         )

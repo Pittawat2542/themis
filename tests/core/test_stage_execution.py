@@ -3,22 +3,21 @@ from __future__ import annotations
 from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
-    SessionConfig,
     RuntimeConfig,
     StorageConfig,
 )
-from themis.core.events import SessionCompletedEvent, StreamRecordedEvent
+from themis.core.events import GenerationCompletedEvent, StreamRecordedEvent
 from themis.core.experiment import Experiment
 from themis.core.models import (
     Case,
     Dataset,
-    GenerationResult,
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
+    MetricInterpretation,
     Message,
-    SessionResult,
-    SessionTurn,
+    Candidate,
+    GenerationTurn,
     StreamEvent,
 )
 from themis.core.stores.memory import InMemoryRunStore
@@ -91,9 +90,9 @@ class CountingGenerator:
     def fingerprint(self) -> str:
         return "generator-counting"
 
-    async def generate(self, case: Case, ctx) -> GenerationResult:
+    async def generate(self, case: Case, ctx) -> Candidate:
         self.calls += 1
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
             final_output=case.expected_output,
         )
@@ -109,7 +108,7 @@ class CountingReducer:
     def fingerprint(self) -> str:
         return "reducer-counting"
 
-    async def reduce(self, candidates: list[SessionResult], ctx) -> ReducedCandidate:
+    async def reduce(self, candidates: list[Candidate], ctx) -> ReducedCandidate:
         self.calls += 1
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
@@ -135,6 +134,7 @@ class CountingParser:
 
 
 class ExactMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/exact"
     version = "1.0"
 
@@ -150,6 +150,7 @@ class ExactMetric:
 
 
 class AlternateMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/alternate"
     version = "1.0"
 
@@ -164,19 +165,19 @@ class AlternateMetric:
         )
 
 
-class StreamingSessionGenerator:
-    component_id = "generator/session-streaming"
+class StreamingGenerator:
+    component_id = "generator/streaming"
     version = "1.0"
 
     def fingerprint(self) -> str:
-        return "session-streaming"
+        return "generation-streaming"
 
-    async def run_session(self, case: Case, ctx) -> SessionResult:
-        return SessionResult(
+    async def generate(self, case: Case, ctx) -> Candidate:
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
             final_output=case.expected_output,
             turns=[
-                SessionTurn(
+                GenerationTurn(
                     turn_index=0,
                     input_messages=[Message(role="user", content=case.input)],
                     output_messages=[
@@ -187,7 +188,7 @@ class StreamingSessionGenerator:
             stream_events=[
                 StreamEvent(
                     event_id="event-1",
-                    source_stage="session",
+                    source_stage="generate",
                     event_type="token",
                     payload={"text": "4"},
                 )
@@ -196,12 +197,10 @@ class StreamingSessionGenerator:
         )
 
 
-def test_session_config_runs_session_generator_and_persists_stream_events() -> None:
+def test_generation_config_persists_turns_and_stream_events() -> None:
     store = InMemoryRunStore()
-    session_config = SessionConfig(generator=StreamingSessionGenerator())
     experiment = Experiment(
-        generation=session_config,
-        session=session_config,
+        generation=GenerationConfig(generator=StreamingGenerator()),
         evaluation=EvaluationConfig(metrics=[ExactMetric()], parsers=[]),
         storage=StorageConfig(target="memory"),
         dataset_sources=[
@@ -225,7 +224,7 @@ def test_session_config_runs_session_generator_and_persists_stream_events() -> N
     assert result.cases[0].generated_candidates[0].turns[0].turn_index == 0
     assert result.cases[0].generated_candidates[0].termination_reason == "completed"
     assert stored is not None
-    assert any(isinstance(event, SessionCompletedEvent) for event in stored.events)
+    assert any(isinstance(event, GenerationCompletedEvent) for event in stored.events)
     assert any(isinstance(event, StreamRecordedEvent) for event in stored.events)
 
 
@@ -236,7 +235,7 @@ def _cached_experiment(
     parser,
     metric,
     store_path: str,
-    existing_run_policy: str = "auto",
+    existing_run_policy: str = "reuse",
 ) -> Experiment:
     return Experiment(
         generation=GenerationConfig(

@@ -15,9 +15,9 @@ Use this guide when the experiment definition is correct but execution behavior 
 
 ## Procedure
 
-Configure `RuntimeConfig` to change execution-time behavior:
+Pass `RunOptions` to `Experiment.run(...)` to change execution-time behavior:
 
-- `max_concurrent_tasks`
+- `max_concurrency`
 - `stage_concurrency`
 - `provider_concurrency`
 - `provider_rate_limits`
@@ -26,8 +26,16 @@ Configure `RuntimeConfig` to change execution-time behavior:
 - `store_retry_attempts`
 - `store_retry_delay`
 - `existing_run_policy`
+- `strict_determinism`
+- `evidence_retention`
+- `persistence_timeout_seconds`, `subscriber_timeout_seconds`, and `evidence_queue_capacity`
 
 Provider-backed models are treated as endpoints. Use `provider_concurrency` and `provider_rate_limits` to keep one process fair across multiple endpoint-backed models or benchmarks without changing the experiment identity.
+
+An omitted provider RPM limit means unlimited client-side request rate. Provider
+concurrency still applies, and a provider-reported rate limit becomes effective
+for later calls. `strict_determinism=True` rejects generators or judge models
+that cannot apply requested seeds before any provider call starts.
 
 Retry behavior:
 

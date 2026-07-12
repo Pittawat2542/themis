@@ -1,34 +1,23 @@
-"""Manifest-backed deferred execution helpers."""
+"""Manifest-backed deferred execution for Python-defined experiments."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
+import hashlib
+import hmac
 import json
-from datetime import UTC, datetime
+import os
 from pathlib import Path
-from typing import Literal, Sequence, cast
+import secrets
+import threading
+from typing import Literal
+from uuid import uuid4
 
 from pydantic import Field, model_validator
 
-from themis.catalog.loaders import load_symbol
-from themis.catalog.registry import component_specs, load_component
 from themis.core.base import FrozenModel
-from themis.core.config import EvaluationConfig, GenerationConfig, TargetSpec
-from themis.core.config_loading import (
-    ExecutionComponentTargets,
-    load_experiment_definition,
-)
 from themis.core.experiment import Experiment
-from themis.core.protocols import (
-    CandidateReducer,
-    CandidateSelector,
-    Generator,
-    JudgeModel,
-    LLMMetric,
-    Parser,
-    PureMetric,
-    SelectionMetric,
-    TraceMetric,
-)
 from themis.core.planner import Planner
 from themis.core.results import ExecutionResourcePlan, RunResult
 from themis.core.snapshot import RunSnapshot
@@ -36,18 +25,30 @@ from themis.core.stores.factory import create_run_store
 
 
 class SubmissionManifest(FrozenModel):
+    """Portable request that points to a reviewed launcher and frozen snapshot."""
+
+    schema_version: str = "2"
+    request_id: str = Field(default_factory=lambda: str(uuid4()))
     run_id: str
     mode: Literal["worker_pool", "batch"]
-    config_path: str | None = None
+    config_path: str
+    definition_path: str
+    definition_digest: str
     manifest_path: Path
     snapshot: RunSnapshot
-    execution_targets: ExecutionComponentTargets
     status: str = "pending"
     suite_id: str | None = None
     preset_ids: list[str] = Field(default_factory=list)
     resource_plan: ExecutionResourcePlan | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    attempt_count: int = 0
+    worker_id: str | None = None
+    claimed_at: datetime | None = None
+    lease_expires_at: datetime | None = None
+    lease_token: str | None = None
+    signature: str | None = None
+    failure: dict[str, str] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -72,73 +73,160 @@ def submit_experiment(
     suite_id: str | None = None,
     preset_ids: Sequence[str] = (),
     tags: Sequence[str] = (),
+    signing_key: str | bytes | None = None,
 ) -> SubmissionManifest:
+    """Freeze and enqueue an experiment loaded through a v5 launcher."""
+
+    launcher_path = Path(config_path).expanduser().resolve()
+    if not launcher_path.is_file():
+        raise ValueError("Deferred execution requires an accessible launcher config")
     snapshot = experiment.compile()
-    absolute_config_path = _config_path_for_manifest(experiment, config_path)
-    execution_targets = _resolve_execution_targets(
-        experiment, snapshot, config_path=absolute_config_path
-    )
+    from themis.launcher import resolve_definition_path
+
+    definition_path = resolve_definition_path(launcher_path)
     store = create_run_store(snapshot.provenance.storage)
     store.initialize()
     _persist_or_validate_snapshot(store, snapshot)
 
-    if mode == "worker_pool":
-        root = _submission_root(
-            experiment.runtime.queue_root,
-            config_path=absolute_config_path,
-            default_dir="runs/queue",
-        )
-        for name in ("queued", "claimed", "done"):
-            (root / name).mkdir(parents=True, exist_ok=True)
-        manifest_path = root / "queued" / f"{snapshot.run_id}.json"
-    else:
-        root = _submission_root(
-            experiment.runtime.batch_root,
-            config_path=absolute_config_path,
-            default_dir="runs/batch",
-        )
-        for name in ("requests", "completed"):
-            (root / name).mkdir(parents=True, exist_ok=True)
-        manifest_path = root / "requests" / f"{snapshot.run_id}.json"
+    runtime_root = (
+        experiment.runtime.queue_root
+        if mode == "worker_pool"
+        else experiment.runtime.batch_root
+    )
+    default_dir = "runs/queue" if mode == "worker_pool" else "runs/batch"
+    root = Path(runtime_root) if runtime_root else launcher_path.parent / default_dir
+    pending_dir = "queued" if mode == "worker_pool" else "requests"
+    completed_dir = "done" if mode == "worker_pool" else "completed"
+    for name in (pending_dir, completed_dir, "claimed", "failed"):
+        (root / name).mkdir(parents=True, exist_ok=True)
+    manifest_path = root / pending_dir / f"{snapshot.run_id}.json"
 
     manifest = SubmissionManifest(
         run_id=snapshot.run_id,
         mode=mode,
-        config_path=absolute_config_path,
+        config_path=str(launcher_path),
+        definition_path=str(definition_path),
+        definition_digest=_file_digest(definition_path),
         manifest_path=manifest_path,
         snapshot=snapshot,
-        execution_targets=execution_targets,
         suite_id=suite_id,
         preset_ids=list(preset_ids),
         resource_plan=Planner().resource_plan(snapshot, snapshot.provenance.runtime),
         tags=list(tags),
     )
-    manifest_path.write_text(manifest.model_dump_json(indent=2))
+    if signing_key is not None:
+        manifest = manifest.model_copy(
+            update={"signature": _manifest_signature(manifest, signing_key)}
+        )
+    _write_manifest(manifest_path, manifest)
     return manifest
 
 
-def run_worker_once(queue_root: str | Path) -> RunResult | None:
+class SubmissionSecurityError(ValueError):
+    """Manifest failed validation before executable code import."""
+
+
+def run_worker_once(
+    queue_root: str | Path,
+    *,
+    definition_roots: Sequence[str | Path],
+    worker_id: str | None = None,
+    lease_seconds: int = 300,
+    max_attempts: int = 3,
+    signing_key: str | bytes | None = None,
+    require_signature: bool = False,
+) -> RunResult | None:
     root = Path(queue_root)
+    _validate_queue_permissions(root, signatures_required=require_signature)
+    _recover_expired_claims(root, max_attempts=max_attempts)
     queued = sorted((root / "queued").glob("*.json"))
     if not queued:
         return None
-
     source = queued[0]
     claimed = root / "claimed" / source.name
     claimed.parent.mkdir(parents=True, exist_ok=True)
-    source.rename(claimed)
-    manifest = _read_manifest(claimed)
-    result = _run_manifest(manifest)
-    done = root / "done" / source.name
-    done.parent.mkdir(parents=True, exist_ok=True)
-    claimed.rename(done)
-    return result
+    try:
+        source.rename(claimed)
+    except FileNotFoundError:
+        return None
+    now = datetime.now(UTC)
+    manifest = _read_manifest(claimed).model_copy(
+        update={
+            "status": "claimed",
+            "attempt_count": _read_manifest(claimed).attempt_count + 1,
+            "worker_id": worker_id or f"worker-{os.getpid()}",
+            "claimed_at": now,
+            "lease_expires_at": now + timedelta(seconds=max(1, lease_seconds)),
+            "lease_token": secrets.token_hex(16),
+            "failure": None,
+        }
+    )
+    _write_manifest(claimed, manifest)
+    stop_renewal = threading.Event()
+    renewer = _start_lease_renewer(
+        claimed, manifest.lease_token or "", lease_seconds, stop_renewal
+    )
+    try:
+        result = _run_manifest(
+            manifest,
+            definition_roots=definition_roots,
+            signing_key=signing_key,
+            require_signature=require_signature,
+        )
+        stop_renewal.set()
+        renewer.join(timeout=1.0)
+        current = _read_manifest(claimed)
+        if current.lease_token != manifest.lease_token:
+            raise RuntimeError("Worker no longer owns the active manifest lease")
+        done = root / "done" / source.name
+        done.parent.mkdir(parents=True, exist_ok=True)
+        _write_manifest(done, current.model_copy(update={"status": "completed"}))
+        claimed.unlink()
+        return result
+    except Exception as exc:
+        current = _read_manifest(claimed)
+        failed = isinstance(exc, SubmissionSecurityError) or (
+            current.attempt_count >= max_attempts
+        )
+        destination = root / ("failed" if failed else "queued") / source.name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _write_manifest(
+            destination,
+            current.model_copy(
+                update={
+                    "status": "failed" if failed else "pending",
+                    "worker_id": None,
+                    "claimed_at": None,
+                    "lease_expires_at": None,
+                    "lease_token": None,
+                    "failure": {
+                        "exception_class": type(exc).__qualname__,
+                        "message": str(exc),
+                    },
+                }
+            ),
+        )
+        claimed.unlink(missing_ok=True)
+        raise
+    finally:
+        stop_renewal.set()
+        renewer.join(timeout=1.0)
 
 
-def run_batch_request(request: str | Path) -> RunResult:
+def run_batch_request(
+    request: str | Path,
+    *,
+    definition_roots: Sequence[str | Path],
+    signing_key: str | bytes | None = None,
+    require_signature: bool = False,
+) -> RunResult:
     request_path = Path(request)
-    manifest = _read_manifest(request_path)
-    result = _run_manifest(manifest)
+    result = _run_manifest(
+        _read_manifest(request_path),
+        definition_roots=definition_roots,
+        signing_key=signing_key,
+        require_signature=require_signature,
+    )
     completed = request_path.parent.parent / "completed" / request_path.name
     completed.parent.mkdir(parents=True, exist_ok=True)
     request_path.rename(completed)
@@ -146,104 +234,164 @@ def run_batch_request(request: str | Path) -> RunResult:
 
 
 def _read_manifest(path: Path) -> SubmissionManifest:
-    payload = json.loads(path.read_text())
-    snapshot_payload = payload.get("snapshot")
-    if isinstance(snapshot_payload, dict):
-        snapshot_payload = dict(snapshot_payload)
-        snapshot_payload.pop("run_id", None)
-        payload = dict(payload)
-        payload["snapshot"] = snapshot_payload
-    return SubmissionManifest.model_validate(payload)
+    return SubmissionManifest.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def _run_manifest(manifest: SubmissionManifest) -> RunResult:
+def _run_manifest(
+    manifest: SubmissionManifest,
+    *,
+    definition_roots: Sequence[str | Path],
+    signing_key: str | bytes | None,
+    require_signature: bool,
+) -> RunResult:
+    from themis.launcher import load_core_experiment
+
+    _validate_manifest(
+        manifest,
+        definition_roots=definition_roots,
+        signing_key=signing_key,
+        require_signature=require_signature,
+    )
+
+    experiment = load_core_experiment(manifest.config_path)
+    compiled = experiment.compile()
+    if compiled.run_id != manifest.run_id:
+        raise ValueError(
+            "Launcher experiment identity no longer matches the submitted snapshot"
+        )
     store = create_run_store(manifest.snapshot.provenance.storage)
     store.initialize()
     _persist_or_validate_snapshot(store, manifest.snapshot)
-    experiment = _experiment_from_manifest(manifest)
+    experiment._compiled_snapshot = manifest.snapshot
     return experiment.run(store=store)
 
 
-def _experiment_from_manifest(manifest: SubmissionManifest) -> Experiment:
-    snapshot = manifest.snapshot
-    targets = manifest.execution_targets
-    experiment = Experiment(
-        generation=GenerationConfig(
-            generator=cast(
-                Generator | str,
-                _resolve_execution_target(targets.generator, kind="generator"),
-            ),
-            selector=cast(
-                CandidateSelector | str | None,
-                _resolve_execution_target(targets.selector, kind="selector"),
-            )
-            if targets.selector is not None
-            else None,
-            candidate_policy=snapshot.identity.candidate_policy,
-            reducer=cast(
-                CandidateReducer | str | None,
-                _resolve_execution_target(targets.reducer, kind="reducer"),
-            )
-            if targets.reducer is not None
-            else None,
-        ),
-        evaluation=EvaluationConfig(
-            metrics=[
-                cast(
-                    PureMetric | LLMMetric | SelectionMetric | TraceMetric | str,
-                    _resolve_execution_target(target, kind="metric"),
-                )
-                for target in targets.metrics
-            ],
-            parsers=[
-                cast(Parser | str, _resolve_execution_target(target, kind="parser"))
-                for target in targets.parsers
-            ],
-            judge_models=[
-                cast(
-                    JudgeModel | str,
-                    _resolve_execution_target(target, kind="judge_model"),
-                )
-                for target in targets.judge_models
-            ],
-            judge_config=snapshot.identity.judge_config,
-            workflow_overrides=snapshot.identity.workflow_overrides,
-        ),
-        storage=snapshot.provenance.storage,
-        runtime=snapshot.provenance.runtime,
-        dataset_sources=snapshot.dataset_sources,
-        seeds=snapshot.identity.seeds,
-        environment_metadata=snapshot.provenance.environment_metadata,
-        themis_version=snapshot.provenance.themis_version,
-        python_version=snapshot.provenance.python_version,
-        platform=snapshot.provenance.platform,
-        git_commit=snapshot.provenance.git_commit,
-        dependency_versions=snapshot.provenance.dependency_versions,
-        provider_metadata=snapshot.provenance.provider_metadata,
-    )
-    experiment._compiled_snapshot = snapshot
-    return experiment
-
-
-def _resolve_execution_target(target: TargetSpec | str, *, kind: str) -> object:
-    if isinstance(target, TargetSpec):
-        target_id = target.target
-        kwargs = target.kwargs
-    else:
-        target_id = target
-        kwargs = {}
-    if target_id in component_specs() and not kwargs:
-        return load_component(target_id, kind=kind)
-    loaded = load_symbol(target_id)
-    if isinstance(loaded, type):
-        return loaded(**kwargs)
-    if callable(loaded):
-        return loaded(**kwargs)
-    if kwargs:
-        raise TypeError(
-            f"Resolved execution target {target_id} is not callable but kwargs were provided"
+def _validate_manifest(
+    manifest: SubmissionManifest,
+    *,
+    definition_roots: Sequence[str | Path],
+    signing_key: str | bytes | None,
+    require_signature: bool,
+) -> None:
+    if require_signature and manifest.signature is None:
+        raise SubmissionSecurityError("Manifest signature is required")
+    if manifest.signature is not None:
+        if signing_key is None or not hmac.compare_digest(
+            manifest.signature, _manifest_signature(manifest, signing_key)
+        ):
+            raise SubmissionSecurityError("Invalid manifest signature")
+    definition_path = Path(manifest.definition_path).expanduser().resolve()
+    roots = [Path(root).expanduser().resolve() for root in definition_roots]
+    if not roots or not any(
+        definition_path == root or root in definition_path.parents for root in roots
+    ):
+        raise SubmissionSecurityError(
+            "Definition path is outside configured definition roots"
         )
-    return loaded
+    if not definition_path.is_file():
+        raise SubmissionSecurityError("Definition path no longer exists")
+    if _file_digest(definition_path) != manifest.definition_digest:
+        raise SubmissionSecurityError("Definition digest no longer matches manifest")
+
+
+def _file_digest(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
+def _manifest_signature(
+    manifest: SubmissionManifest, key: str | bytes
+) -> str:
+    key_bytes = key.encode("utf-8") if isinstance(key, str) else key
+    payload = manifest.model_dump(
+        mode="json",
+        exclude={
+            "attempt_count",
+            "claimed_at",
+            "failure",
+            "lease_expires_at",
+            "lease_token",
+            "signature",
+            "status",
+            "worker_id",
+        },
+    )
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+    return hmac.new(key_bytes, encoded, hashlib.sha256).hexdigest()
+
+
+def _write_manifest(path: Path, manifest: SubmissionManifest) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    temporary.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+    temporary.replace(path)
+
+
+def _recover_expired_claims(root: Path, *, max_attempts: int) -> None:
+    now = datetime.now(UTC)
+    for claimed in sorted((root / "claimed").glob("*.json")):
+        manifest = _read_manifest(claimed)
+        if manifest.lease_expires_at is None or manifest.lease_expires_at > now:
+            continue
+        exhausted = manifest.attempt_count >= max_attempts
+        destination = root / ("failed" if exhausted else "queued") / claimed.name
+        _write_manifest(
+            destination,
+            manifest.model_copy(
+                update={
+                    "status": "failed" if exhausted else "pending",
+                    "worker_id": None,
+                    "claimed_at": None,
+                    "lease_expires_at": None,
+                    "lease_token": None,
+                    "failure": {
+                        "exception_class": "WorkerLeaseExpired",
+                        "message": "Worker lease expired before completion",
+                    },
+                }
+            ),
+        )
+        claimed.unlink(missing_ok=True)
+
+
+def _start_lease_renewer(
+    path: Path,
+    lease_token: str,
+    lease_seconds: int,
+    stop: threading.Event,
+) -> threading.Thread:
+    interval = max(1.0, lease_seconds / 3)
+
+    def renew() -> None:
+        while not stop.wait(interval):
+            if not path.is_file():
+                return
+            manifest = _read_manifest(path)
+            if manifest.lease_token != lease_token:
+                return
+            _write_manifest(
+                path,
+                manifest.model_copy(
+                    update={
+                        "lease_expires_at": datetime.now(UTC)
+                        + timedelta(seconds=max(1, lease_seconds))
+                    }
+                ),
+            )
+
+    thread = threading.Thread(target=renew, daemon=True, name="themis-lease-renewer")
+    thread.start()
+    return thread
+
+
+def _validate_queue_permissions(root: Path, *, signatures_required: bool) -> None:
+    if os.name != "posix" or signatures_required:
+        return
+    if root.stat().st_mode & 0o022:
+        raise PermissionError(
+            "Unsigned worker queues must not be group- or world-writable"
+        )
 
 
 def _persist_or_validate_snapshot(store, snapshot: RunSnapshot) -> None:
@@ -255,128 +403,3 @@ def _persist_or_validate_snapshot(store, snapshot: RunSnapshot) -> None:
         raise ValueError(
             f"Stored snapshot does not match submitted manifest for run_id={snapshot.run_id}"
         )
-
-
-def _submission_root(
-    runtime_root: str | None, *, config_path: str | None, default_dir: str
-) -> Path:
-    if runtime_root:
-        return Path(runtime_root)
-    if config_path is not None:
-        return Path(config_path).parent / default_dir
-    return Path(default_dir)
-
-
-def _config_path_for_manifest(experiment: Experiment, config_path: str) -> str | None:
-    if experiment._config_metadata is not None:
-        return str(experiment._config_metadata.config_path)
-    path = Path(config_path).expanduser()
-    return str(path.resolve()) if path.exists() else None
-
-
-def _resolve_execution_targets(
-    experiment: Experiment,
-    snapshot: RunSnapshot,
-    *,
-    config_path: str | None,
-) -> ExecutionComponentTargets:
-    config_targets = (
-        experiment._config_metadata.component_targets
-        if experiment._config_metadata is not None
-        else None
-    )
-    if config_targets is None and config_path is not None:
-        path = Path(config_path)
-        if path.exists():
-            loaded = load_experiment_definition(path)
-            if (
-                Experiment.model_validate(loaded.payload).compile().run_id
-                == snapshot.run_id
-            ):
-                config_targets = loaded.metadata.component_targets
-
-    generator = _select_target(
-        experiment.generation.generator,
-        config_targets.generator if config_targets else None,
-    )
-    selector = _select_target(
-        experiment.generation.selector,
-        config_targets.selector if config_targets else None,
-    )
-    reducer = _select_target(
-        experiment.generation.reducer,
-        config_targets.reducer if config_targets else None,
-    )
-    parsers = _select_target_list(
-        experiment.evaluation.parsers,
-        config_targets.parsers if config_targets is not None else None,
-    )
-    metrics = _select_target_list(
-        experiment.evaluation.metrics,
-        config_targets.metrics if config_targets is not None else None,
-    )
-    judge_models = _select_target_list(
-        experiment.evaluation.judge_models,
-        config_targets.judge_models if config_targets is not None else None,
-    )
-    if generator is None or any(
-        target is None for target in parsers + metrics + judge_models
-    ):
-        raise ValueError(
-            "submit_experiment only supports builtin components or importable config symbols; "
-            "define custom components in config via module:symbol paths."
-        )
-    if experiment.generation.selector is not None and selector is None:
-        raise ValueError(
-            "submit_experiment only supports builtin components or importable config symbols; "
-            "define custom components in config via module:symbol paths."
-        )
-    if experiment.generation.reducer is not None and reducer is None:
-        raise ValueError(
-            "submit_experiment only supports builtin components or importable config symbols; "
-            "define custom components in config via module:symbol paths."
-        )
-    return ExecutionComponentTargets(
-        generator=generator,
-        selector=selector,
-        reducer=reducer,
-        parsers=[target for target in parsers if target is not None],
-        metrics=[target for target in metrics if target is not None],
-        judge_models=[target for target in judge_models if target is not None],
-    )
-
-
-def _select_target(
-    value: object | None, fallback: TargetSpec | str | None
-) -> TargetSpec | None:
-    if value is None:
-        return None
-    if isinstance(value, TargetSpec):
-        return value
-    if isinstance(value, str):
-        return TargetSpec(target=value)
-    if isinstance(fallback, TargetSpec):
-        return fallback
-    if isinstance(fallback, str):
-        return TargetSpec(target=fallback)
-    return None
-
-
-def _select_target_list(
-    values: Sequence[object], fallback: list[TargetSpec] | None
-) -> list[TargetSpec | None]:
-    fallback_values = list(fallback or [])
-    if fallback_values and len(fallback_values) != len(values):
-        raise ValueError(
-            "Config component target metadata does not match experiment component counts"
-        )
-    targets: list[TargetSpec | None] = []
-    for index, value in enumerate(values):
-        targets.append(
-            value
-            if isinstance(value, TargetSpec)
-            else TargetSpec(target=value)
-            if isinstance(value, str)
-            else (fallback_values[index] if fallback_values else None)
-        )
-    return targets

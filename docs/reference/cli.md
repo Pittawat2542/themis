@@ -62,12 +62,17 @@ goal: Document command groups, inputs, output shapes, and persistence expectatio
 | `inspect evaluation` | Prints one stored workflow evaluation artifact | You want per-case judge execution details | Requires workflow-backed metrics |
 | `export generation` | Exports generation artifacts to a portable bundle | You want portable candidate outputs | CLI export currently covers this stage directly |
 | `export evaluation` | Exports evaluation workflow artifacts to a portable bundle | You want portable judge execution artifacts | Best for workflow-backed metrics |
-| `worker run` | Pulls manifests from the worker queue and executes them | You want queue-driven deferred execution | Requires a queue root |
-| `batch run` | Executes one explicit batch request manifest | You want request-file driven deferred execution | Requires a request manifest path |
+| `worker run` | Pulls manifests from the worker queue and executes them | You want queue-driven deferred execution | Requires a queue root and one or more `--definition-root` values |
+| `batch run` | Executes one explicit batch request manifest | You want request-file driven deferred execution | Requires a request manifest path and one or more `--definition-root` values |
 
 ## Output notes
 
 JSON-producing commands generally emit compact machine-readable JSON to stdout. Commands that inspect stored runs require a persistent store unless the current process still owns the original memory store.
+
+Workers verify that executable definitions remain inside configured roots and
+match the submitted SHA-256 digest before import. Claims use renewable leases
+and move to `failed/` after retry exhaustion. Cross-trust-boundary queues should
+require HMAC signatures and obtain the signing key from an environment variable.
 
 `report --format csv` and `report --format latex` emit compact metric summary tables with `metric_id`, `count`, `mean`, `min`, `max`, `ci_lower`, and `ci_upper`. `report --format json` includes the full stored projections plus `stats_summary`; raw per-case score rows remain in `benchmark_result.score_rows`.
 

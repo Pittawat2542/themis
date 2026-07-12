@@ -3,40 +3,41 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
+import traceback
 from time import monotonic
 from collections.abc import Mapping
 from typing import Literal, TypeGuard, cast
 
 from themis.core.base import JSONValue
 from themis.core.case_pipeline import CasePipeline, CasePipelineContext
-from themis.core.config import RuntimeConfig
+from themis.core.config import EvidenceRetention, RuntimeConfig, Stage
 from themis.core.contexts import (
     EvalScoreContext,
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     SelectContext,
-    SessionContext,
 )
 from themis.core.events import (
     ProviderCallCompletedEvent,
     ProviderCallFailedEvent,
     ProviderCallStartedEvent,
+    GenerationCompletedEvent,
+    GenerationFailedEvent,
+    GenerationStartedEvent,
     RunCompletedEvent,
     RunFailedEvent,
     RunStartedEvent,
-    SessionCompletedEvent,
-    SessionFailedEvent,
-    SessionStartedEvent,
     StreamRecordedEvent,
 )
 from themis.core.models import (
+    Candidate,
     ConversationTrace,
     MetricResult,
     ParsedOutput,
     ReducedCandidate,
-    SessionResult,
     WorkflowTrace,
 )
 from themis.core.planner import Planner
@@ -46,12 +47,10 @@ from themis.core.protocols import (
     CandidateSelector,
     Generator,
     JudgeModel,
-    LifecycleSubscriber,
-    LLMMetric,
+    EventSubscriber,
     Parser,
     PureMetric,
-    SelectionMetric,
-    TraceMetric,
+    WorkflowMetric,
     TracingProvider,
     WorkflowRunner,
 )
@@ -68,6 +67,7 @@ from themis.core.results import (
 from themis.core.runtime_support import (
     RuntimeSupport,
     classify_retryable_error,
+    failure_evidence,
     observed_token_cost,
     retry_delay_seconds,
     stable_hash,
@@ -76,7 +76,7 @@ from themis.core.snapshot import RunSnapshot
 from themis.core.store import RunStore
 from themis.core.subjects import (
     ConversationSubject,
-    SessionSubject,
+    CandidateSubject,
     TraceSubject,
     candidate_set_subject_for_llm_metric,
     candidate_set_subject_for_selection_metric,
@@ -85,7 +85,6 @@ from themis.core.tracing import NoOpTracingProvider
 from themis.core.workflow_runner import DefaultWorkflowRunner, WorkflowBuildError
 from themis.core.workflows import JudgeResponse
 
-WorkflowMetric = LLMMetric | SelectionMetric | TraceMetric
 RuntimeMetric = PureMetric | WorkflowMetric
 _classify_retryable_error = classify_retryable_error
 _retry_delay_seconds = retry_delay_seconds
@@ -127,7 +126,7 @@ class Orchestrator:
         judge_models: list[JudgeModel] | None = None,
         workflow_runner: WorkflowRunner | None = None,
         planner: Planner | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
         runtime: RuntimeConfig | None = None,
         max_concurrent_tasks: int | None = None,
@@ -140,6 +139,7 @@ class Orchestrator:
         force_workflow_metrics: set[str] | None = None,
         replay_stage: Literal["reduce", "parse", "score", "judge"] | None = None,
         rerun_plan: RerunPlan | None = None,
+        attempt_kind: Literal["initial", "replay", "rerun", "rejudge"] = "initial",
         until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
     ) -> None:
         self.store = store
@@ -154,6 +154,7 @@ class Orchestrator:
         self.force_workflow_metrics = set(force_workflow_metrics or set())
         self.replay_stage = replay_stage
         self.rerun_plan = rerun_plan
+        self.attempt_kind = attempt_kind
         self.until_stage = until_stage
         self.planner = planner or Planner()
         self.subscribers = list(subscribers or [])
@@ -205,7 +206,6 @@ class Orchestrator:
                 final_workflow_score=self._final_workflow_score,
                 persist_event=self._persist_event,
                 store_blob=self._store_blob,
-                notify=self._notify,
                 load_stage_cache=self._load_stage_cache,
                 store_stage_cache=self._store_stage_cache,
                 reduction_cache_key=self._reduction_cache_key,
@@ -215,10 +215,56 @@ class Orchestrator:
         )
 
     async def run(self, snapshot: RunSnapshot) -> RunResult:
+        try:
+            return await self._run_owned(snapshot)
+        finally:
+            await self._close_provider_components()
+            await self.runtime_support.aclose()
+
+    async def _close_provider_components(self) -> None:
+        seen: set[int] = set()
+        for component in [self.generator, *self.judge_models]:
+            if id(component) in seen:
+                continue
+            seen.add(id(component))
+            close = getattr(component, "aclose", None)
+            if close is None:
+                continue
+            if not inspect.iscoroutinefunction(close):
+                result = await asyncio.to_thread(close)
+            else:
+                result = close()
+            if inspect.isawaitable(result):
+                await result
+
+    async def _run_owned(self, snapshot: RunSnapshot) -> RunResult:
         existing_state = self._load_execution_state(snapshot)
+        checkpoint = self.store.load_execution_checkpoint(snapshot.run_id)
+        parent_attempt_id = checkpoint.attempt_id if checkpoint is not None else None
+        if parent_attempt_id is None and self.attempt_kind != "initial":
+            parent_attempt_id = next(
+                (
+                    event.attempt_id
+                    for event in reversed(self.store.query_events(snapshot.run_id))
+                    if event.attempt_id
+                ),
+                None,
+            )
+        if (
+            self.attempt_kind == "initial"
+            and existing_state.status is RunStatus.RUNNING
+            and parent_attempt_id is not None
+        ):
+            self.runtime_support.attempt_id = parent_attempt_id
         run_span = self.tracing_provider.start_span("run", {"run_id": snapshot.run_id})
-        if existing_state.status is RunStatus.PENDING:
-            await self._persist_event(RunStartedEvent(run_id=snapshot.run_id))
+        if existing_state.status is RunStatus.PENDING or self.attempt_kind != "initial":
+            await self._persist_event(
+                RunStartedEvent(
+                    run_id=snapshot.run_id,
+                    attempt_kind=self.attempt_kind,
+                    parent_attempt_id=parent_attempt_id,
+                )
+            )
 
         case_results: list[CaseResult] = []
         case_failures: list[bool] = []
@@ -244,8 +290,25 @@ class Orchestrator:
             del status, case_results, case_failures
             return self._build_run_result(snapshot)
         except Exception as exc:
+            failure = failure_evidence(
+                exc,
+                stage="run",
+                attempt_id=self.runtime_support.attempt_id,
+            )
+            if self.runtime.evidence_retention is not EvidenceRetention.MINIMAL:
+                traceback_ref = await self._store_blob(
+                    traceback.format_exc().encode("utf-8"),
+                    "text/plain",
+                )
+                failure = failure.model_copy(
+                    update={"traceback_blob_ref": traceback_ref}
+                )
             await self._persist_event(
-                RunFailedEvent(run_id=snapshot.run_id, error_message=str(exc))
+                RunFailedEvent(
+                    run_id=snapshot.run_id,
+                    error_message=str(exc),
+                    failure=failure,
+                )
             )
             self.tracing_provider.end_span(run_span, "error")
             raise
@@ -274,25 +337,30 @@ class Orchestrator:
         max_in_flight_cases = max(1, self.runtime.max_concurrent_tasks)
         pending: set[asyncio.Task[tuple[CaseResult, bool]]] = set()
 
-        async for items in self._iter_case_groups(snapshot):
-            if not items:
-                continue
-            while len(pending) >= max_in_flight_cases:
+        try:
+            async for items in self._iter_case_groups(snapshot):
+                if not items:
+                    continue
+                while len(pending) >= max_in_flight_cases:
+                    done, pending = await asyncio.wait(
+                        pending, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for task in done:
+                        yield task.result()
+                pending.add(
+                    asyncio.create_task(self._run_case(snapshot, items, existing_state))
+                )
+            while pending:
                 done, pending = await asyncio.wait(
                     pending, return_when=asyncio.FIRST_COMPLETED
                 )
                 for task in done:
                     yield task.result()
-            pending.add(
-                asyncio.create_task(self._run_case(snapshot, items, existing_state))
-            )
-
-        while pending:
-            done, pending = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in done:
-                yield task.result()
+        finally:
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
 
     async def _iter_case_groups(self, snapshot: RunSnapshot):
         current_case_key: str | None = None
@@ -321,12 +389,12 @@ class Orchestrator:
         snapshot: RunSnapshot,
         case,
         item: GenerationWorkItem,
-    ) -> tuple[int, SessionResult | None, bool]:
+    ) -> tuple[int, Candidate | None, bool]:
         termination = snapshot.identity.candidate_policy.get("termination")
         max_turns = snapshot.identity.candidate_policy.get("max_turns", 1)
         if not isinstance(max_turns, int):
             max_turns = 1
-        session_ctx = SessionContext(
+        generation_ctx = GenerationContext(
             run_id=snapshot.run_id,
             case_id=item.case_id,
             dataset_id=item.dataset_id,
@@ -337,11 +405,11 @@ class Orchestrator:
             termination=termination if isinstance(termination, dict) else {},
         )
         cache_key = self._generation_cache_key(snapshot, case, item)
-        cached_generation = self._load_stage_cache("generate", cache_key)
+        cached_generation = await self._load_stage_cache("generate", cache_key)
         if isinstance(cached_generation, dict) and isinstance(
             cached_generation.get("result"), dict
         ):
-            generated = SessionResult.model_validate(cached_generation["result"])
+            generated = Candidate.model_validate(cached_generation["result"])
             blob_ref = await self._store_blob(
                 json.dumps(generated.model_dump(mode="json"), sort_keys=True).encode(
                     "utf-8"
@@ -361,7 +429,7 @@ class Orchestrator:
                     )
                 )
             await self._persist_event(
-                SessionCompletedEvent(
+                GenerationCompletedEvent(
                     run_id=snapshot.run_id,
                     case_id=item.case_id,
                     dataset_id=item.dataset_id,
@@ -382,7 +450,7 @@ class Orchestrator:
             )
             return item.candidate_index, generated, False
         async with self._global_semaphore:
-            async with self._stage_semaphores["generation"]:
+            async with self._stage_semaphores[Stage.GENERATE]:
                 provider_key = self._provider_key()
                 provider_semaphore = (
                     self._provider_semaphore(provider_key)
@@ -401,18 +469,17 @@ class Orchestrator:
                 )
                 if provider_semaphore is not None:
                     await provider_semaphore.acquire()
-                if provider_limiter is not None:
-                    await provider_limiter.acquire()
                 if provider_token_limiter is not None:
                     await provider_token_limiter.acquire()
+                if provider_limiter is not None:
+                    await provider_limiter.acquire()
                 try:
-                    self._notify("before_generate", case, session_ctx)
                     span = self.tracing_provider.start_span(
                         "generation", {"case_id": item.case_id}
                     )
                     try:
                         await self._persist_event(
-                            SessionStartedEvent(
+                            GenerationStartedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
                                 dataset_id=item.dataset_id,
@@ -436,8 +503,8 @@ class Orchestrator:
                                 provider_key=provider_key,
                             )
                         )
-                        generated = await self._run_session_with_retries(
-                            case, session_ctx
+                        generated = await self._generate_with_retries(
+                            case, generation_ctx
                         )
                         if provider_token_limiter is not None:
                             await provider_token_limiter.acquire(
@@ -455,12 +522,11 @@ class Orchestrator:
                                 provider_id=_provider_id(self.generator),
                                 model_id=_provider_model_id(self.generator),
                                 provider_key=provider_key,
-                                telemetry=_session_provider_telemetry(
+                                telemetry=_generation_provider_telemetry(
                                     self.generator, generated
                                 ),
                             )
                         )
-                        self._notify("after_generate", generated, session_ctx)
                         blob_ref = await self._store_blob(
                             json.dumps(
                                 generated.model_dump(mode="json"), sort_keys=True
@@ -480,7 +546,7 @@ class Orchestrator:
                                 )
                             )
                         await self._persist_event(
-                            SessionCompletedEvent(
+                            GenerationCompletedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
                                 dataset_id=item.dataset_id,
@@ -493,7 +559,7 @@ class Orchestrator:
                                 result_blob_ref=blob_ref,
                             )
                         )
-                        self._store_stage_cache(
+                        await self._store_stage_cache(
                             "generate",
                             cache_key,
                             {
@@ -520,10 +586,18 @@ class Orchestrator:
                                 error_message=str(exc),
                                 failure_category=_provider_failure_category(exc),
                                 retry_history=retry_history,
+                                failure=failure_evidence(
+                                    exc,
+                                    stage="generation",
+                                    component_id=getattr(
+                                        self.generator, "component_id", None
+                                    ),
+                                    attempt_id=self.runtime_support.attempt_id,
+                                ),
                             )
                         )
                         await self._persist_event(
-                            SessionFailedEvent(
+                            GenerationFailedEvent(
                                 run_id=snapshot.run_id,
                                 case_id=item.case_id,
                                 dataset_id=item.dataset_id,
@@ -532,6 +606,14 @@ class Orchestrator:
                                 candidate_index=item.candidate_index,
                                 error_message=str(exc),
                                 retry_history=retry_history,
+                                failure=failure_evidence(
+                                    exc,
+                                    stage="generation",
+                                    component_id=getattr(
+                                        self.generator, "component_id", None
+                                    ),
+                                    attempt_id=self.runtime_support.attempt_id,
+                                ),
                             )
                         )
                         self.tracing_provider.end_span(span, "error")
@@ -542,22 +624,22 @@ class Orchestrator:
 
     async def _select_candidates(
         self,
-        generated_candidates: list[SessionResult],
+        generated_candidates: list[Candidate],
         select_ctx: SelectContext,
-    ) -> list[SessionResult]:
+    ) -> list[Candidate]:
         if self.selector is None:
             return generated_candidates
         async with self._global_semaphore:
-            async with self._stage_semaphores["selection"]:
+            async with self._stage_semaphores[Stage.SELECT]:
                 return await self.selector.select(generated_candidates, select_ctx)
 
     async def _reduce_candidates(
         self,
-        generated_candidates: list[SessionResult],
+        generated_candidates: list[Candidate],
         reduce_ctx: ReduceContext,
     ) -> ReducedCandidate:
         async with self._global_semaphore:
-            async with self._stage_semaphores["reduction"]:
+            async with self._stage_semaphores[Stage.REDUCE]:
                 if self.reducer is None:
                     candidate = generated_candidates[0]
                     return ReducedCandidate(
@@ -613,16 +695,16 @@ class Orchestrator:
         self,
         *,
         metric_kind: str,
-        generated_candidates: list[SessionResult],
+        generated_candidates: list[Candidate],
         reduced: ReducedCandidate,
     ):
-        if metric_kind == "llm":
-            reduced_candidate = SessionResult(
+        if metric_kind == "candidate":
+            reduced_candidate = Candidate(
                 candidate_id=reduced.candidate_id,
                 final_output=reduced.final_output,
             )
             return candidate_set_subject_for_llm_metric([reduced_candidate])
-        if metric_kind == "selection":
+        if metric_kind == "candidates":
             return candidate_set_subject_for_selection_metric(generated_candidates)
         if metric_kind == "trace":
             winner_id = (
@@ -652,9 +734,9 @@ class Orchestrator:
                     )
                 )
             if winner.turns or winner.stream_events:
-                return SessionSubject(session=winner)
+                return CandidateSubject(candidate=winner)
             raise WorkflowBuildError(
-                "Trace metrics require a trace, conversation, or session artifact on the winning candidate"
+                "Trace metrics require a trace, conversation, or candidate artifact on the winner"
             )
         raise WorkflowBuildError(f"Unsupported metric kind: {metric_kind}")
 
@@ -683,7 +765,7 @@ class Orchestrator:
         seed: int | None,
     ) -> JudgeResponse:
         async with self._global_semaphore:
-            async with self._stage_semaphores["evaluation"]:
+            async with self._stage_semaphores[Stage.JUDGE]:
                 provider_key = getattr(judge_model, "provider_key", None)
                 provider_semaphore = (
                     self._provider_semaphore(provider_key)
@@ -702,10 +784,10 @@ class Orchestrator:
                 )
                 if provider_semaphore is not None:
                     await provider_semaphore.acquire()
-                if provider_limiter is not None:
-                    await provider_limiter.acquire()
                 if provider_token_limiter is not None:
                     await provider_token_limiter.acquire()
+                if provider_limiter is not None:
+                    await provider_limiter.acquire()
                 try:
                     response = await self._judge_with_retries(
                         judge_model, prompt, seed=seed
@@ -894,8 +976,8 @@ class Orchestrator:
     def _selected_candidates_from_state(
         self,
         case_state: CaseExecutionState,
-        generated_candidates: list[SessionResult],
-    ) -> list[SessionResult]:
+        generated_candidates: list[Candidate],
+    ) -> list[Candidate]:
         if case_state.selected_candidate_ids is None:
             return generated_candidates
         selected_by_id = {
@@ -907,31 +989,28 @@ class Orchestrator:
             if candidate_id in selected_by_id
         ]
 
-    async def _run_session_with_retries(
-        self, case, session_ctx: SessionContext
-    ) -> SessionResult:
+    async def _generate_with_retries(
+        self, case, generation_ctx: GenerationContext
+    ) -> Candidate:
         retry_history: list[dict[str, JSONValue]] = []
         for attempt in range(self.runtime.generation_retry_attempts):
             try:
-                if hasattr(self.generator, "run_session"):
-                    generated = await self.generator.run_session(case, session_ctx)
-                else:
-                    legacy_ctx = GenerateContext.model_validate(
-                        session_ctx.model_dump(mode="json")
-                    )
-                    generated = await self.generator.generate(case, legacy_ctx)
-                session_result = SessionResult.model_validate(
+                generated = await asyncio.wait_for(
+                    self.generator.generate(case, generation_ctx),
+                    timeout=self.runtime.provider_timeout_seconds,
+                )
+                candidate = Candidate.model_validate(
                     generated.model_dump(mode="json")
                     if hasattr(generated, "model_dump")
                     else generated
                 )
                 if retry_history:
-                    artifacts = dict(session_result.artifacts or {})
+                    artifacts = dict(candidate.artifacts or {})
                     artifacts["retry_history"] = cast(JSONValue, retry_history)
-                    session_result = session_result.model_copy(
+                    candidate = candidate.model_copy(
                         update={"artifacts": artifacts}
                     )
-                return session_result
+                return candidate
             except Exception as exc:
                 retry_classification = _classify_retryable_error(exc)
                 if attempt + 1 == self.runtime.generation_retry_attempts or (
@@ -968,7 +1047,10 @@ class Orchestrator:
         retry_history: list[dict[str, JSONValue]] = []
         for attempt in range(self.runtime.judge_retry_attempts):
             try:
-                response = await judge_model.judge(prompt, seed=seed)
+                response = await asyncio.wait_for(
+                    judge_model.judge(prompt, seed=seed),
+                    timeout=self.runtime.provider_timeout_seconds,
+                )
                 if retry_history:
                     response = response.model_copy(
                         update={"retry_history": retry_history}
@@ -1006,9 +1088,6 @@ class Orchestrator:
     async def _store_blob(self, blob: bytes, media_type: str) -> str:
         return await self.runtime_support.store_blob(blob, media_type)
 
-    def _notify(self, method_name: str, *args) -> None:
-        self.runtime_support.notify(method_name, *args)
-
     def _provider_key(self) -> str | None:
         return getattr(self.generator, "provider_key", None)
 
@@ -1028,13 +1107,15 @@ class Orchestrator:
     ) -> None:
         await self.runtime_support.update_rate_limit(provider_key, artifacts)
 
-    def _load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
-        return self.runtime_support.load_stage_cache(stage_name, cache_key)
+    async def _load_stage_cache(
+        self, stage_name: str, cache_key: str
+    ) -> JSONValue | None:
+        return await self.runtime_support.load_stage_cache(stage_name, cache_key)
 
-    def _store_stage_cache(
+    async def _store_stage_cache(
         self, stage_name: str, cache_key: str, payload: JSONValue
     ) -> None:
-        self.runtime_support.store_stage_cache(stage_name, cache_key, payload)
+        await self.runtime_support.store_stage_cache(stage_name, cache_key, payload)
 
     def _generation_cache_key(
         self, snapshot: RunSnapshot, case, item: GenerationWorkItem
@@ -1057,7 +1138,7 @@ class Orchestrator:
         )
 
     def _reduction_cache_key(
-        self, snapshot: RunSnapshot, candidates: list[SessionResult]
+        self, snapshot: RunSnapshot, candidates: list[Candidate]
     ) -> str:
         return _stable_hash(
             {
@@ -1140,36 +1221,24 @@ class Orchestrator:
         base = runtime or RuntimeConfig()
         updates: dict[str, object] = {}
         if max_concurrent_tasks is not None:
-            updates["max_concurrent_tasks"] = max(1, max_concurrent_tasks)
+            updates["max_concurrent_tasks"] = max_concurrent_tasks
         if stage_concurrency is not None:
             updates["stage_concurrency"] = {
-                stage: max(1, limit) for stage, limit in stage_concurrency.items()
+                stage: limit for stage, limit in stage_concurrency.items()
             }
         if provider_concurrency is not None:
             updates["provider_concurrency"] = {
-                provider: max(1, limit)
-                for provider, limit in provider_concurrency.items()
+                provider: limit for provider, limit in provider_concurrency.items()
             }
         if provider_rate_limits is not None:
             updates["provider_rate_limits"] = {
-                provider: max(1, limit)
-                for provider, limit in provider_rate_limits.items()
+                provider: limit for provider, limit in provider_rate_limits.items()
             }
-        updates["provider_token_limits"] = {
-            provider: max(1, limit)
-            for provider, limit in base.provider_token_limits.items()
-        }
-        updates["generation_retry_attempts"] = max(1, base.generation_retry_attempts)
-        updates["generation_retry_delay"] = max(0.0, base.generation_retry_delay)
-        updates["generation_retry_backoff"] = max(1.0, base.generation_retry_backoff)
-        updates["judge_retry_attempts"] = max(1, base.judge_retry_attempts)
-        updates["judge_retry_delay"] = max(0.0, base.judge_retry_delay)
-        updates["judge_retry_backoff"] = max(1.0, base.judge_retry_backoff)
         if store_retry_delay is not None:
-            updates["store_retry_delay"] = max(0.0, store_retry_delay)
+            updates["store_retry_delay"] = store_retry_delay
         if store_retry_attempts is not None:
-            updates["store_retry_attempts"] = max(1, store_retry_attempts)
-        return base.model_copy(update=updates)
+            updates["store_retry_attempts"] = store_retry_attempts
+        return RuntimeConfig.model_validate({**base.model_dump(), **updates})
 
 
 def _provider_id(component: object) -> str:
@@ -1192,8 +1261,8 @@ def _provider_model_id(component: object) -> str:
     )
 
 
-def _session_provider_telemetry(
-    component: object, result: SessionResult
+def _generation_provider_telemetry(
+    component: object, result: Candidate
 ) -> dict[str, JSONValue]:
     artifacts = result.artifacts or {}
     retry_history = artifacts.get("retry_history", [])

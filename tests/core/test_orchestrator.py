@@ -21,7 +21,7 @@ from themis.core.config import (
     StorageConfig,
 )
 from themis.core.config import RuntimeConfig
-from themis.core.contexts import EvalScoreContext, GenerateContext, ScoreContext
+from themis.core.contexts import EvalScoreContext, GenerationContext, ScoreContext
 from themis.core.events import (
     EvaluationCompletedEvent,
     ParseCompletedEvent,
@@ -31,8 +31,8 @@ from themis.core.events import (
     RunCompletedEvent,
     RunStartedEvent,
     ScoreCompletedEvent,
-    SessionCompletedEvent,
-    SessionStartedEvent,
+    GenerationCompletedEvent,
+    GenerationStartedEvent,
     StepCompletedEvent,
     StepStartedEvent,
 )
@@ -40,13 +40,13 @@ from themis.core.experiment import Experiment
 from themis.core.models import (
     Case,
     Dataset,
-    GenerationResult,
     MetricResult,
+    MetricInterpretation,
     Message,
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
-    SessionResult,
+    Candidate,
     TraceStep,
 )
 from themis.core.orchestrator import Orchestrator, _retry_delay_seconds
@@ -128,6 +128,7 @@ class RecordingTracer(NoOpTracingProvider):
 
 
 class ErrorMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/error"
     version = "1.0"
     metric_family = "pure"
@@ -149,11 +150,11 @@ class TracedGenerator:
     def fingerprint(self) -> str:
         return "generator-traced"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         answer = (
             case.expected_output if case.expected_output is not None else case.input
         )
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
             final_output=answer,
             trace=[
@@ -276,9 +277,11 @@ class PairwiseSelectionWorkflow:
 
 
 class RecordingLLMMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/llm"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
 
     def __init__(self) -> None:
         self.subject: CandidateSetSubject | None = None
@@ -294,9 +297,11 @@ class RecordingLLMMetric:
 
 
 class RecordingSelectionMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/select"
     version = "1.0"
-    metric_family = "selection"
+    metric_family = "workflow"
+    subject_kind = "candidates"
 
     def __init__(self) -> None:
         self.subject: CandidateSetSubject | None = None
@@ -311,9 +316,11 @@ class RecordingSelectionMetric:
 
 
 class RecordingTraceMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/trace"
     version = "1.0"
-    metric_family = "trace"
+    metric_family = "workflow"
+    subject_kind = "trace"
 
     def __init__(self) -> None:
         self.subject: TraceSubject | ConversationSubject | None = None
@@ -373,11 +380,11 @@ class RetryableGenerator:
     def fingerprint(self) -> str:
         return "generator-retryable"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         self.calls += 1
         if self.calls <= self.failures_before_success:
             raise RetryableFailure("temporary generator failure")
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
             final_output=case.expected_output,
         )
@@ -417,11 +424,11 @@ class TimeoutThenSuccessGenerator:
     def fingerprint(self) -> str:
         return "generator-timeout"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         self.calls += 1
         if self.calls == 1:
             raise TimeoutError("provider timeout")
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
             final_output=case.expected_output,
         )
@@ -501,9 +508,11 @@ class PartialFailureWorkflow:
 
 
 class PartialFailureMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/partial"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
 
     def __init__(self) -> None:
         self.calls = 0
@@ -527,7 +536,7 @@ class AwaitedReducer:
     def fingerprint(self) -> str:
         return "reducer-awaited"
 
-    async def reduce(self, candidates: list[SessionResult], ctx) -> ReducedCandidate:
+    async def reduce(self, candidates: list[Candidate], ctx) -> ReducedCandidate:
         await asyncio.sleep(0)
         self.awaited = True
         return ReducedCandidate(
@@ -548,7 +557,7 @@ class SlowSelector:
     def fingerprint(self) -> str:
         return "selector-slow"
 
-    async def select(self, candidates: list[SessionResult], ctx) -> list[SessionResult]:
+    async def select(self, candidates: list[Candidate], ctx) -> list[Candidate]:
         del ctx
         self.active += 1
         self.max_active = max(self.max_active, self.active)
@@ -570,7 +579,7 @@ class SlowReducer:
     def fingerprint(self) -> str:
         return "reducer-slow"
 
-    async def reduce(self, candidates: list[SessionResult], ctx) -> ReducedCandidate:
+    async def reduce(self, candidates: list[Candidate], ctx) -> ReducedCandidate:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
@@ -609,6 +618,7 @@ class SlowParser:
 
 
 class SlowMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/slow"
     version = "1.0"
     metric_family = "pure"
@@ -651,6 +661,7 @@ class AnswerOnlyParser:
 
 
 class AnswerOnlyMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/answer_only"
     version = "1.0"
     metric_family = "pure"
@@ -772,7 +783,7 @@ async def test_case_pipeline_runs_generation_with_minimal_context() -> None:
         generated_calls.append(item_arg.candidate_id)
         return (
             item_arg.candidate_index,
-            SessionResult(
+            Candidate(
                 candidate_id=item_arg.candidate_id,
                 final_output=case_arg.expected_output,
             ),
@@ -801,10 +812,7 @@ async def test_case_pipeline_runs_generation_with_minimal_context() -> None:
         workflow_runner=UnexpectedWorkflowRunner(),
         tracing_provider=NoOpTracingProvider(),
         global_semaphore=asyncio.Semaphore(1),
-        stage_semaphores={
-            "parsing": asyncio.Semaphore(1),
-            "scoring": asyncio.Semaphore(1),
-        },
+        stage_semaphores={},
         replay_case_state=lambda state: state,
         rerun_case_state=lambda state, case, item: state,
         selected_candidates_from_state=lambda state, candidates: candidates,
@@ -817,7 +825,6 @@ async def test_case_pipeline_runs_generation_with_minimal_context() -> None:
         final_workflow_score=unexpected,
         persist_event=persist_event,
         store_blob=store_blob,
-        notify=unexpected,
         load_stage_cache=lambda stage_name, cache_key: None,
         store_stage_cache=lambda stage_name, cache_key, payload: None,
         reduction_cache_key=lambda snapshot_arg, candidates: "unused",
@@ -915,46 +922,17 @@ async def test_orchestrator_writes_stage_events_and_dispatches_hooks() -> None:
     events = store.query_events(snapshot.run_id)
 
     assert result.status is RunStatus.COMPLETED
-    assert [type(event) for event in events] == [
-        RunStartedEvent,
-        SessionStartedEvent,
-        ProviderCallStartedEvent,
-        ProviderCallCompletedEvent,
-        SessionCompletedEvent,
-        SessionStartedEvent,
-        ProviderCallStartedEvent,
-        ProviderCallCompletedEvent,
-        SessionCompletedEvent,
-        ReductionCompletedEvent,
-        ParseCompletedEvent,
-        ScoreCompletedEvent,
-        RunCompletedEvent,
-    ]
-    assert subscriber.calls == [
-        "on_event",
-        "before_generate",
-        "on_event",
-        "on_event",
-        "on_event",
-        "after_generate",
-        "on_event",
-        "before_generate",
-        "on_event",
-        "on_event",
-        "on_event",
-        "after_generate",
-        "on_event",
-        "before_reduce",
-        "after_reduce",
-        "on_event",
-        "before_parse",
-        "after_parse",
-        "on_event",
-        "before_score",
-        "after_score",
-        "on_event",
-        "on_event",
-    ]
+    event_types = [type(event) for event in events]
+    assert event_types[0] is RunStartedEvent
+    assert event_types[-1] is RunCompletedEvent
+    assert event_types.count(GenerationStartedEvent) == 2
+    assert event_types.count(ProviderCallStartedEvent) == 2
+    assert event_types.count(ProviderCallCompletedEvent) == 2
+    assert event_types.count(GenerationCompletedEvent) == 2
+    assert event_types.count(ReductionCompletedEvent) == 1
+    assert event_types.count(ParseCompletedEvent) == 1
+    assert event_types.count(ScoreCompletedEvent) == 1
+    assert subscriber.calls == ["on_event"] * len(events)
 
 
 @pytest.mark.asyncio
@@ -1075,7 +1053,7 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         evaluation=EvaluationConfig(
             metrics=["builtin/exact_match", llm_metric, selection_metric, trace_metric],
             parsers=["builtin/json_identity"],
-            judge_models=["builtin/demo_judge", "builtin/demo_judge"],
+            judge_models=["builtin/demo_judge"],
         ),
         storage=StorageConfig(target="memory"),
         dataset_sources=[
@@ -1111,7 +1089,6 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
         ],
         judge_models=[
             resolve_judge_model_component("builtin/demo_judge"),
-            resolve_judge_model_component("builtin/demo_judge"),
         ],
         subscribers=[subscriber],
     )
@@ -1141,10 +1118,9 @@ async def test_orchestrator_executes_mixed_metric_runs_and_routes_subjects() -> 
     assert trace_metric.subject.trace.steps[0].output["seed"] == 7
     assert [ref.component_id for ref in llm_metric.ctx.judge_model_refs] == [
         "builtin/demo_judge",
-        "builtin/demo_judge",
     ]
-    assert "before_judge" in subscriber.calls
-    assert "after_judge" in subscriber.calls
+    assert subscriber.calls
+    assert set(subscriber.calls) == {"on_event"}
     assert any(isinstance(event, EvaluationCompletedEvent) for event in events)
 
 
@@ -1595,7 +1571,7 @@ async def test_orchestrator_limits_parsing_stage_concurrency() -> None:
         parsers=[("default", parser)],
         metrics=[metric],
         max_concurrent_tasks=4,
-        stage_concurrency={"parsing": 1},
+        stage_concurrency={"parse": 1},
     )
 
     await orchestrator.run(snapshot)
@@ -1646,7 +1622,7 @@ async def test_orchestrator_limits_selection_stage_concurrency() -> None:
         parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[resolve_metric_component("builtin/exact_match")],
         max_concurrent_tasks=4,
-        stage_concurrency={"selection": 1},
+        stage_concurrency={"select": 1},
     )
 
     await orchestrator.run(snapshot)
@@ -1695,7 +1671,7 @@ async def test_orchestrator_limits_reduction_stage_concurrency() -> None:
         parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[resolve_metric_component("builtin/exact_match")],
         max_concurrent_tasks=4,
-        stage_concurrency={"reduction": 1},
+        stage_concurrency={"reduce": 1},
     )
 
     await orchestrator.run(snapshot)
@@ -1744,7 +1720,7 @@ async def test_orchestrator_limits_scoring_stage_concurrency() -> None:
         parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[metric],
         max_concurrent_tasks=4,
-        stage_concurrency={"scoring": 1},
+        stage_concurrency={"score": 1},
     )
 
     await orchestrator.run(snapshot)

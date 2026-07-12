@@ -5,19 +5,24 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import random
 from collections.abc import Callable, Mapping, Sequence
 from time import monotonic
+from uuid import uuid4
 
 from themis.core.base import JSONValue
-from themis.core.config import RuntimeConfig
-from themis.core.events import RunEvent
-from themis.core.store import RunStore
+from themis.core.config import RuntimeConfig, Stage
+from themis.core.events import FailureEvidence, RunEvent
+from themis.core.evidence import EvidenceWriter
+from themis.core.protocols import EventSubscriber
+from themis.core.store import AppendResult, RunStore
 from themis.core.stores.memory import InMemoryRunStore
+from themis.core.security import EvidenceSanitizer
 
-DEFAULT_PROVIDER_RATE_LIMIT = 60
 ConnectionLikeErrors = (ConnectionError, OSError)
 _RETRY_JITTER_RNG = random.Random()
+_LOGGER = logging.getLogger(__name__)
 
 
 class TokenBucketRateLimiter:
@@ -28,9 +33,10 @@ class TokenBucketRateLimiter:
         requests_per_minute: int,
         *,
         monotonic_clock: Callable[[], float] = monotonic,
+        initial_tokens: float = 1.0,
     ) -> None:
         self._requests_per_minute = max(1, requests_per_minute)
-        self._tokens = 1.0
+        self._tokens = initial_tokens
         self._monotonic = monotonic_clock
         self._updated_at = self._monotonic()
         self._lock = asyncio.Lock()
@@ -72,7 +78,7 @@ class RuntimeSupport:
         *,
         store: RunStore,
         runtime: RuntimeConfig,
-        subscribers: Sequence[object],
+        subscribers: Sequence[EventSubscriber],
         monotonic_clock: Callable[[], float] = monotonic,
     ) -> None:
         self.store = store
@@ -81,51 +87,51 @@ class RuntimeSupport:
         self._monotonic = monotonic_clock
         self.global_semaphore = asyncio.Semaphore(runtime.max_concurrent_tasks)
         self.stage_semaphores = {
-            "generation": asyncio.Semaphore(
+            Stage.GENERATE: asyncio.Semaphore(
                 max(
                     1,
                     runtime.stage_concurrency.get(
-                        "generation", runtime.max_concurrent_tasks
+                        Stage.GENERATE, runtime.max_concurrent_tasks
                     ),
                 )
             ),
-            "evaluation": asyncio.Semaphore(
+            Stage.JUDGE: asyncio.Semaphore(
                 max(
                     1,
                     runtime.stage_concurrency.get(
-                        "evaluation", runtime.max_concurrent_tasks
+                        Stage.JUDGE, runtime.max_concurrent_tasks
                     ),
                 )
             ),
-            "selection": asyncio.Semaphore(
+            Stage.SELECT: asyncio.Semaphore(
                 max(
                     1,
                     runtime.stage_concurrency.get(
-                        "selection", runtime.max_concurrent_tasks
+                        Stage.SELECT, runtime.max_concurrent_tasks
                     ),
                 )
             ),
-            "reduction": asyncio.Semaphore(
+            Stage.REDUCE: asyncio.Semaphore(
                 max(
                     1,
                     runtime.stage_concurrency.get(
-                        "reduction", runtime.max_concurrent_tasks
+                        Stage.REDUCE, runtime.max_concurrent_tasks
                     ),
                 )
             ),
-            "parsing": asyncio.Semaphore(
+            Stage.PARSE: asyncio.Semaphore(
                 max(
                     1,
                     runtime.stage_concurrency.get(
-                        "parsing", runtime.max_concurrent_tasks
+                        Stage.PARSE, runtime.max_concurrent_tasks
                     ),
                 )
             ),
-            "scoring": asyncio.Semaphore(
+            Stage.SCORE: asyncio.Semaphore(
                 max(
                     1,
                     runtime.stage_concurrency.get(
-                        "scoring", runtime.max_concurrent_tasks
+                        Stage.SCORE, runtime.max_concurrent_tasks
                     ),
                 )
             ),
@@ -133,6 +139,9 @@ class RuntimeSupport:
         self._provider_semaphores: dict[str, asyncio.Semaphore] = {}
         self._provider_limiters: dict[str, TokenBucketRateLimiter] = {}
         self._provider_token_limiters: dict[str, TokenBucketRateLimiter] = {}
+        self.evidence_sanitizer = EvidenceSanitizer(runtime.evidence_retention)
+        self.attempt_id = str(uuid4())
+        self.evidence_writer = EvidenceWriter(runtime.evidence_queue_capacity)
 
     def provider_semaphore(self, provider_key: str) -> asyncio.Semaphore:
         if provider_key not in self._provider_semaphores:
@@ -145,16 +154,17 @@ class RuntimeSupport:
             self._provider_semaphores[provider_key] = asyncio.Semaphore(limit)
         return self._provider_semaphores[provider_key]
 
-    def provider_limiter(self, provider_key: str) -> TokenBucketRateLimiter:
-        if provider_key not in self._provider_limiters:
-            requests_per_minute = self.runtime.provider_rate_limits.get(
-                provider_key,
-                DEFAULT_PROVIDER_RATE_LIMIT,
-            )
-            self._provider_limiters[provider_key] = TokenBucketRateLimiter(
-                requests_per_minute,
-                monotonic_clock=self._monotonic,
-            )
+    def provider_limiter(self, provider_key: str) -> TokenBucketRateLimiter | None:
+        existing = self._provider_limiters.get(provider_key)
+        if existing is not None:
+            return existing
+        requests_per_minute = self.runtime.provider_rate_limits.get(provider_key)
+        if requests_per_minute is None:
+            return None
+        self._provider_limiters[provider_key] = TokenBucketRateLimiter(
+            requests_per_minute,
+            monotonic_clock=self._monotonic,
+        )
         return self._provider_limiters[provider_key]
 
     def provider_token_limiter(
@@ -182,47 +192,109 @@ class RuntimeSupport:
             return
         requests_per_minute = rate_limit.get("requests_per_minute")
         if isinstance(requests_per_minute, int):
-            await self.provider_limiter(provider_key).update_limit(requests_per_minute)
+            limiter = self._provider_limiters.get(provider_key)
+            if limiter is None:
+                self._provider_limiters[provider_key] = TokenBucketRateLimiter(
+                    requests_per_minute,
+                    monotonic_clock=self._monotonic,
+                    initial_tokens=0.0,
+                )
+            else:
+                await limiter.update_limit(requests_per_minute)
 
     async def persist_event(self, event: RunEvent) -> None:
+        if not event.attempt_id:
+            updates: dict[str, object] = {"attempt_id": self.attempt_id}
+            failure = getattr(event, "failure", None)
+            if isinstance(failure, FailureEvidence) and not failure.attempt_id:
+                updates["failure"] = failure.model_copy(
+                    update={"attempt_id": self.attempt_id}
+                )
+            event = event.model_copy(update=updates)
+        event = self.evidence_sanitizer.event(event)
+        result: AppendResult | None = None
         for attempt in range(self.runtime.store_retry_attempts):
             try:
-                self.store.persist_event(event)
+                result = await self.evidence_writer.call(
+                    self.store.persist_event,
+                    event,
+                    timeout=self.runtime.persistence_timeout_seconds,
+                )
                 break
-            except Exception:
-                if attempt + 1 == self.runtime.store_retry_attempts:
+            except Exception as exc:
+                if (
+                    classify_retryable_error(exc) is None
+                    or attempt + 1 == self.runtime.store_retry_attempts
+                ):
                     raise
                 await asyncio.sleep(self.runtime.store_retry_delay)
-        self.notify("on_event", event)
+        if isinstance(result, AppendResult) and not result.inserted:
+            return
+        for subscriber in self.subscribers:
+            try:
+                await self.evidence_writer.call(
+                    subscriber.on_event,
+                    event,
+                    timeout=self.runtime.subscriber_timeout_seconds,
+                )
+            except Exception as exc:
+                _LOGGER.warning(
+                    "event subscriber failed",
+                    extra={
+                        "run_id": event.run_id,
+                        "attempt_id": event.attempt_id,
+                        "event_id": event.event_id,
+                        "exception_class": type(exc).__qualname__,
+                    },
+                )
 
     async def store_blob(self, blob: bytes, media_type: str) -> str:
+        blob = self.evidence_sanitizer.blob(blob, media_type)
         for attempt in range(self.runtime.store_retry_attempts):
             try:
-                return self.store.store_blob(blob, media_type)
-            except Exception:
-                if attempt + 1 == self.runtime.store_retry_attempts:
+                return await self.evidence_writer.call(
+                    self.store.store_blob,
+                    blob,
+                    media_type,
+                    timeout=self.runtime.persistence_timeout_seconds,
+                )
+            except Exception as exc:
+                if (
+                    classify_retryable_error(exc) is None
+                    or attempt + 1 == self.runtime.store_retry_attempts
+                ):
                     raise
                 await asyncio.sleep(self.runtime.store_retry_delay)
         raise RuntimeError("unreachable")
 
-    def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+    async def load_stage_cache(
+        self, stage_name: str, cache_key: str
+    ) -> JSONValue | None:
         if isinstance(self.store, InMemoryRunStore):
             return None
-        return self.store.load_stage_cache(stage_name, cache_key)
+        return await self.evidence_writer.call(
+            self.store.load_stage_cache,
+            stage_name,
+            cache_key,
+            timeout=self.runtime.persistence_timeout_seconds,
+        )
 
-    def store_stage_cache(
+    async def store_stage_cache(
         self, stage_name: str, cache_key: str, payload: JSONValue
     ) -> None:
         if isinstance(self.store, InMemoryRunStore):
             return
-        self.store.store_stage_cache(stage_name, cache_key, payload)
+        sanitized = self.evidence_sanitizer.value(payload)
+        await self.evidence_writer.call(
+            self.store.store_stage_cache,
+            stage_name,
+            cache_key,
+            sanitized,
+            timeout=self.runtime.persistence_timeout_seconds,
+        )
 
-    def notify(self, method_name: str, *args) -> None:
-        for subscriber in self.subscribers:
-            method = getattr(subscriber, method_name, None)
-            if method is not None:
-                method(*args)
-
+    async def aclose(self) -> None:
+        await self.evidence_writer.aclose()
 
 def classify_retryable_error(exc: Exception) -> dict[str, JSONValue] | None:
     if bool(getattr(exc, "retryable", False)):
@@ -244,6 +316,28 @@ def classify_retryable_error(exc: Exception) -> dict[str, JSONValue] | None:
             payload["retry_after_s"] = float(retry_after_s)
         return payload
     return None
+
+
+def failure_evidence(
+    exc: Exception,
+    *,
+    stage: str,
+    component_id: str | None = None,
+    attempt_id: str = "",
+    retry_attempt: int = 1,
+) -> FailureEvidence:
+    """Build stable failure evidence without persisting an unsafe traceback."""
+
+    retryable = classify_retryable_error(exc) is not None
+    return FailureEvidence(
+        error_code=f"{stage}_{'retryable' if retryable else 'failed'}",
+        exception_class=f"{type(exc).__module__}.{type(exc).__qualname__}",
+        stage=stage,
+        component_id=component_id,
+        retryable=retryable,
+        retry_attempt=retry_attempt,
+        attempt_id=attempt_id,
+    )
 
 
 def retry_delay_seconds(
