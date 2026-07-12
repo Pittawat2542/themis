@@ -18,7 +18,7 @@ from themis.core.config import (
     ReducerComponent,
     RuntimeConfig,
     SelectorComponent,
-    SessionConfig,
+    GenerationConfig,
 )
 from themis.core.experiment import Experiment
 
@@ -32,8 +32,8 @@ class RuntimePreset(FrozenModel):
     kind: Literal["runtime"] = "runtime"
 
 
-class SessionPreset(FrozenModel):
-    """Preset that changes session-stage logical experiment behavior."""
+class GenerationPreset(FrozenModel):
+    """Preset that changes candidate generation behavior."""
 
     preset_id: str
     generator: GeneratorComponent | None = None
@@ -41,7 +41,7 @@ class SessionPreset(FrozenModel):
     selector: SelectorComponent | None = None
     reducer: ReducerComponent | None = None
     description: str = ""
-    kind: Literal["session"] = "session"
+    kind: Literal["generation"] = "generation"
 
 
 class EvaluationPreset(FrozenModel):
@@ -58,17 +58,17 @@ class EvaluationPreset(FrozenModel):
 
 
 class ExperimentPreset(FrozenModel):
-    """Preset that may apply session, evaluation, and runtime overlays."""
+    """Preset that may apply generation, evaluation, and runtime overlays."""
 
     preset_id: str
-    session: SessionPreset | None = None
+    generation: GenerationPreset | None = None
     evaluation: EvaluationPreset | None = None
     runtime: RuntimePreset | None = None
     description: str = ""
     kind: Literal["experiment"] = "experiment"
 
 
-Preset = RuntimePreset | SessionPreset | EvaluationPreset | ExperimentPreset
+Preset = RuntimePreset | GenerationPreset | EvaluationPreset | ExperimentPreset
 
 
 def list_presets(*, kind: str | None = None) -> list[str]:
@@ -110,10 +110,10 @@ def _apply_preset(experiment: Experiment, preset: Preset) -> Experiment:
             runtime=preset.runtime,
             environment_metadata=_metadata_with_preset(experiment, preset.preset_id),
         )
-    if isinstance(preset, SessionPreset):
+    if isinstance(preset, GenerationPreset):
         return _copy_experiment(
             experiment,
-            generation=_apply_session_preset(experiment.generation, preset),
+            generation=_apply_generation_preset(experiment.generation, preset),
             environment_metadata=_metadata_with_preset(experiment, preset.preset_id),
         )
     if isinstance(preset, EvaluationPreset):
@@ -123,7 +123,7 @@ def _apply_preset(experiment: Experiment, preset: Preset) -> Experiment:
             environment_metadata=_metadata_with_preset(experiment, preset.preset_id),
         )
     updated = experiment
-    for child in (preset.session, preset.evaluation, preset.runtime):
+    for child in (preset.generation, preset.evaluation, preset.runtime):
         if child is not None:
             updated = _apply_preset(updated, child)
     return _copy_experiment(
@@ -132,9 +132,9 @@ def _apply_preset(experiment: Experiment, preset: Preset) -> Experiment:
     )
 
 
-def _apply_session_preset(
-    generation: SessionConfig, preset: SessionPreset
-) -> SessionConfig:
+def _apply_generation_preset(
+    generation: GenerationConfig, preset: GenerationPreset
+) -> GenerationConfig:
     update: dict[str, object] = {}
     if preset.generator is not None:
         update["generator"] = preset.generator
@@ -194,7 +194,7 @@ def _preset_registry() -> dict[str, Preset]:
         runtime=RuntimeConfig(max_concurrent_tasks=2, store_retry_attempts=8),
         description="Lower-concurrency local runtime defaults.",
     )
-    best_of_n = SessionPreset(
+    best_of_n = GenerationPreset(
         preset_id="candidate/best-of-n",
         candidate_policy={"num_samples": 2},
         selector="builtin/best_of_n",
@@ -210,8 +210,8 @@ def _preset_registry() -> dict[str, Preset]:
     )
     code_local = ExperimentPreset(
         preset_id="code/local-subprocess",
-        session=SessionPreset(
-            preset_id="code/local-subprocess:session",
+        generation=GenerationPreset(
+            preset_id="code/local-subprocess:generation",
             candidate_policy={"num_samples": 1},
         ),
         evaluation=EvaluationPreset(
@@ -224,8 +224,8 @@ def _preset_registry() -> dict[str, Preset]:
     )
     baseline = ExperimentPreset(
         preset_id="baseline/demo",
-        session=SessionPreset(
-            preset_id="baseline/demo:session",
+        generation=GenerationPreset(
+            preset_id="baseline/demo:generation",
             generator="builtin/demo_generator",
             candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",

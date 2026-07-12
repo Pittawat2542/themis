@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-from themis import (
-    InMemoryRunStore,
-    RunStatus,
-    RuntimeConfig,
-    get_evaluation_execution,
-    get_execution_state,
-)
+from themis.analysis import get_evaluation_execution, get_execution_state
 from themis.core.bundles import (
     export_evaluation_bundle,
     export_generation_bundle,
@@ -20,7 +14,10 @@ from themis.core.events import (
     RunStartedEvent,
 )
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, GenerationResult
+from themis.core.models import Case, Dataset, Candidate
+from themis.core.config import RuntimeConfig
+from themis.core.results import RunStatus
+from themis.core.stores.memory import InMemoryRunStore
 
 
 class CustomGenerator:
@@ -30,9 +27,9 @@ class CustomGenerator:
     def fingerprint(self) -> str:
         return "custom-generator-fingerprint"
 
-    async def generate(self, case: Case, ctx: object) -> GenerationResult:
+    async def generate(self, case: Case, ctx: object) -> Candidate:
         del ctx
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate", final_output={"answer": "4"}
         )
 
@@ -89,7 +86,7 @@ def test_readme_builtin_component_example_runs_end_to_end() -> None:
     result = experiment.run(
         runtime=RuntimeConfig(
             max_concurrent_tasks=8,
-            stage_concurrency={"generation": 4},
+            stage_concurrency={"generate": 4},
         )
     )
 

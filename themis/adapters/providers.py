@@ -2,28 +2,29 @@
 
 from __future__ import annotations
 
-import inspect
 from typing import Any
 
 from themis.adapters._utils import (
+    call_maybe_sync,
     extract_provider_telemetry,
     normalize_json_value,
     provider_artifacts,
     stable_fingerprint,
 )
-from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.contexts import GenerationContext
 from themis.core.models import (
+    Candidate,
     Case,
-    GenerationResult,
     Message,
-    SessionResult,
-    SessionTurn,
+    GenerationTurn,
+    SeedCapability,
 )
 from themis.core.workflows import JudgeResponse
 
 
 class ProviderAdapter:
     version = "1.0"
+    seed_capability = SeedCapability.UNSUPPORTED
 
     def __init__(
         self,
@@ -50,23 +51,28 @@ class ProviderAdapter:
                 "model_id": self.model_id,
                 "endpoint": self.endpoint,
                 "base_url": self.base_url,
+                "seed_capability": self.seed_capability.value,
             }
         )
 
-    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         request_input = _render_input(case, ctx)
         response = await self._invoke(str(request_input))
-        telemetry = extract_provider_telemetry(response)
+        telemetry = extract_provider_telemetry(
+            response,
+            seed_requested=ctx.seed,
+            seed_capability=self.seed_capability,
+        )
         final_output = _extract_text(response)
         conversation = [
             Message(role="user", content=normalize_json_value(request_input)),
             Message(role="assistant", content=final_output),
         ]
-        return SessionResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
             final_output=final_output,
             turns=[
-                SessionTurn(
+                GenerationTurn(
                     turn_index=0,
                     input_messages=conversation[:-1],
                     output_messages=conversation[-1:],
@@ -78,19 +84,18 @@ class ProviderAdapter:
             artifacts=provider_artifacts(telemetry),
         )
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult.model_validate(
-            (await self.run_session(case, ctx)).model_dump(mode="json")
-        )
-
     async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
         response = await self._invoke(prompt)
-        telemetry = extract_provider_telemetry(response)
+        telemetry = extract_provider_telemetry(
+            response,
+            seed_requested=seed,
+            seed_capability=self.seed_capability,
+        )
         return JudgeResponse(
             judge_model_id=self.component_id,
             judge_model_version=self.version,
             judge_model_fingerprint=self.fingerprint(),
-            effective_seed=seed,
+            effective_seed=None,
             raw_response=_extract_text(response),
             token_usage=telemetry.token_usage or {},
             provider_request_id=telemetry.request_id,
@@ -99,46 +104,42 @@ class ProviderAdapter:
     async def _invoke(self, prompt: str) -> object:
         client = self._require_client()
         if self.provider == "anthropic":
-            return await _maybe_await(
-                client.messages.create(
-                    model=self.model_id,
-                    messages=[{"role": "user", "content": prompt}],
-                )
+            return await call_maybe_sync(
+                client.messages.create,
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
             )
         if self.provider == "bedrock":
-            return await _maybe_await(
-                client.converse(
-                    modelId=self.model_id,
-                    messages=[
-                        {"role": "user", "content": [{"text": prompt}]},
-                    ],
-                )
+            return await call_maybe_sync(
+                client.converse,
+                modelId=self.model_id,
+                messages=[
+                    {"role": "user", "content": [{"text": prompt}]},
+                ],
             )
         if self.provider == "gemini":
-            return await _maybe_await(
-                client.models.generate_content(model=self.model_id, contents=prompt)
+            return await call_maybe_sync(
+                client.models.generate_content, model=self.model_id, contents=prompt
             )
         if self.provider == "azure_openai":
-            return await _maybe_await(
-                client.responses.create(model=self.model_id, input=prompt)
+            return await call_maybe_sync(
+                client.responses.create, model=self.model_id, input=prompt
             )
         if self.provider == "ollama":
-            return await _maybe_await(
-                client.generate(model=self.model_id, prompt=prompt)
+            return await call_maybe_sync(
+                client.generate, model=self.model_id, prompt=prompt
             )
         if self.provider == "litellm":
             if hasattr(client, "acompletion"):
-                return await _maybe_await(
-                    client.acompletion(
-                        model=self.model_id,
-                        messages=[{"role": "user", "content": prompt}],
-                    )
-                )
-            return await _maybe_await(
-                client.completion(
+                return await call_maybe_sync(
+                    client.acompletion,
                     model=self.model_id,
                     messages=[{"role": "user", "content": prompt}],
                 )
+            return await call_maybe_sync(
+                client.completion,
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
             )
         raise ValueError(f"Unsupported provider: {self.provider}")
 
@@ -174,13 +175,7 @@ def litellm(model_id: str, **kwargs: Any) -> ProviderAdapter:
     return ProviderAdapter("litellm", model_id, **kwargs)
 
 
-async def _maybe_await(value: object) -> object:
-    if inspect.isawaitable(value):
-        return await value
-    return value
-
-
-def _render_input(case: Case, ctx: SessionContext) -> object:
+def _render_input(case: Case, ctx: GenerationContext) -> object:
     if ctx.prompt_spec is None:
         return case.input
     return ctx.prompt_spec.render_input(case.input)

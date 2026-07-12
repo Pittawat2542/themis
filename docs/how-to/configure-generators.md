@@ -34,9 +34,9 @@ Use provider adapters when Themis should still own fan-out, reduction, storage, 
 
 Prompt-focused experiments:
 
-- set `GenerationConfig.prompt_spec` when you want prompt instructions, prefixes, suffixes, or generic prompt blocks to be part of the experiment identity
+- set `Generation.prompt` when prompt instructions, prefixes, suffixes, or structured blocks belong in experiment identity
 - `PromptSpec.blocks` is intentionally generic prompt material, not an example-specific feature
-- prompt specs flow into `GenerateContext`, so custom generators can consume them directly
+- prompt specs flow into `GenerationContext`, so custom generators can consume them directly
 - provider-backed adapters such as OpenAI also consume prompt specs, which means prompt changes invalidate generation-stage cache reuse as expected
 
 Review these example sources:
@@ -66,7 +66,7 @@ Review these example sources:
 | Builtin deterministic runs | You want tutorials, smoke tests, or fixture-backed examples without external providers | Not representative of production model behavior | `builtin/demo_generator` |
 | Provider-backed generation | An external endpoint or graph runtime should generate outputs while Themis owns the rest of the run | Requires provider extras, clients, or service setup | `themis.adapters.openai(...)`, `themis.adapters.vllm(...)`, `themis.adapters.langgraph(...)` |
 | Fully custom generation | Candidate production logic belongs entirely in your own code | Highest implementation effort | `Generator` |
-| Prompt-only experiment change | The generator stays fixed and prompt material is the only experiment variable | Less useful when provider or generator behavior also needs to change | `GenerationConfig.prompt_spec`, `PromptSpec.blocks` |
+| Prompt-only experiment change | The generator stays fixed and prompt material is the only experiment variable | Less useful when provider or generator behavior also needs to change | `Generation.prompt`, `PromptSpec.blocks` |
 
 ## Expected result
 

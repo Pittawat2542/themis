@@ -24,7 +24,7 @@ from themis.core.store import RunStore
 from themis.core.subjects import (
     CandidateSetSubject,
     ConversationSubject,
-    SessionSubject,
+    CandidateSubject,
     TraceSubject,
 )
 from themis.core.workflows import (
@@ -34,6 +34,8 @@ from themis.core.workflows import (
     JudgeResponse,
     ParsedJudgment,
     RenderedJudgePrompt,
+    WorkflowSubjectKind,
+    WorkflowStatus,
     WorkflowFailure,
 )
 
@@ -81,7 +83,7 @@ class DefaultWorkflowRunner:
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
+        | CandidateSubject,
         metric_id: str,
         ctx: EvalScoreContext,
     ) -> EvaluationExecution:
@@ -237,7 +239,9 @@ class DefaultWorkflowRunner:
                     error_message=str(exc),
                 )
             )
-        status = "partial_failure" if failures else "completed"
+        status = (
+            WorkflowStatus.PARTIAL_FAILURE if failures else WorkflowStatus.COMPLETED
+        )
 
         return EvaluationExecution(
             execution_id=f"{ctx.run_id}:{ctx.case.case_id}:{metric_id}:{workflow.fingerprint()}",
@@ -528,15 +532,15 @@ class DefaultWorkflowRunner:
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
-    ) -> str:
+        | CandidateSubject,
+    ) -> WorkflowSubjectKind:
         if isinstance(subject, CandidateSetSubject):
-            return "candidate_set"
+            return WorkflowSubjectKind.CANDIDATE_SET
         if isinstance(subject, TraceSubject):
-            return "trace"
-        if isinstance(subject, SessionSubject):
-            return "session"
-        return "conversation"
+            return WorkflowSubjectKind.TRACE
+        if isinstance(subject, CandidateSubject):
+            return WorkflowSubjectKind.CANDIDATE
+        return WorkflowSubjectKind.CONVERSATION
 
 
 def _provider_id(component: object) -> str:

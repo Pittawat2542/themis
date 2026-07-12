@@ -4,12 +4,18 @@ from themis.core.code_execution import (
     CodeExecutionLimits,
     CodeExecutionRequest,
     CodeExecutionStatus,
-    LocalSubprocessExecutionBackend,
+    UnsafeLocalSubprocessExecutor,
 )
+import pytest
+
+
+def test_unsafe_local_executor_requires_explicit_opt_in() -> None:
+    with pytest.raises(ValueError, match="allow_unsafe=True"):
+        UnsafeLocalSubprocessExecutor()
 
 
 def test_local_subprocess_backend_executes_python_successfully() -> None:
-    backend = LocalSubprocessExecutionBackend()
+    backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
     result = backend.execute(
         CodeExecutionRequest(
@@ -27,7 +33,7 @@ def test_local_subprocess_backend_executes_python_successfully() -> None:
 
 
 def test_local_subprocess_backend_reports_failed_processes() -> None:
-    backend = LocalSubprocessExecutionBackend()
+    backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
     result = backend.execute(
         CodeExecutionRequest(
@@ -42,7 +48,7 @@ def test_local_subprocess_backend_reports_failed_processes() -> None:
 
 
 def test_local_subprocess_backend_reports_timeouts() -> None:
-    backend = LocalSubprocessExecutionBackend()
+    backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
     result = backend.execute(
         CodeExecutionRequest(
@@ -58,7 +64,7 @@ def test_local_subprocess_backend_reports_timeouts() -> None:
 
 
 def test_local_subprocess_backend_supports_files_and_args() -> None:
-    backend = LocalSubprocessExecutionBackend()
+    backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
     result = backend.execute(
         CodeExecutionRequest(
@@ -78,7 +84,7 @@ def test_local_subprocess_backend_supports_files_and_args() -> None:
 
 
 def test_local_subprocess_backend_rejects_unsupported_languages() -> None:
-    backend = LocalSubprocessExecutionBackend()
+    backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
     result = backend.execute(
         CodeExecutionRequest(code="int main() { return 0; }", language="cpp")

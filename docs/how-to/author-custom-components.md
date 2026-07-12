@@ -20,7 +20,7 @@ Start with the smallest protocol that solves your need:
 - `Generator` for candidate production
 - `Parser` for reduced-output normalization
 - `CandidateReducer` for selection or synthesis after fan-out
-- `PureMetric`, `LLMMetric`, `SelectionMetric`, or `TraceMetric` for scoring
+- `PureMetric` for direct scoring or `WorkflowMetric` for judge-backed scoring
 
 Review the runnable examples:
 
@@ -47,8 +47,8 @@ Review the runnable examples:
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
 | Simple deterministic scoring | Parsed output alone is enough to decide correctness | Less flexible than workflow-backed judging for subjective tasks | `PureMetric` |
-| Workflow-backed evaluation | A judge model or richer workflow should score the output | Higher latency and judge-model dependencies | `LLMMetric`, `SelectionMetric` |
-| Artifact-aware generation | Generation should emit trace or conversation artifacts for later inspection | More generator responsibility and more stored artifacts | `Generator`, `GenerationResult.trace`, `GenerationResult.conversation` |
+| Workflow-backed evaluation | A judge model or richer workflow should score the output | Higher latency and judge-model dependencies | `WorkflowMetric`, `subject_kind` |
+| Artifact-aware generation | Generation should emit trace or conversation artifacts for later inspection | More generator responsibility and more stored artifacts | `Generator`, `Candidate.trace`, `Candidate.conversation` |
 
 ## Expected result
 

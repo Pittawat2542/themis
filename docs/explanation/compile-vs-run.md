@@ -22,7 +22,7 @@ flowchart LR
     A["Experiment definition"] --> B["compile()"]
     B --> C["RunSnapshot"]
     C --> D["run() / replay() / inspect stored state"]
-    E["RuntimeConfig"] --> D
+    E["RunOptions"] --> D
     C --> F["Stable run_id"]
     D --> G["Execution state, artifacts, reports"]
 ```

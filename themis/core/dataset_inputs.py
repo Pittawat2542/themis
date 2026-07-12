@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 from themis.core.models import Case, Dataset
@@ -34,13 +35,23 @@ def dataset_from_jsonl(
     path: str | Path, *, dataset_id: str | None = None, revision: str | None = None
 ) -> Dataset:
     source_path = Path(path)
-    cases: list[Case] = []
-    for index, line in enumerate(source_path.read_text().splitlines()):
-        if not line.strip():
-            continue
-        payload = json.loads(line)
-        cases.append(
-            Case(
+    return Dataset(
+        dataset_id=dataset_id or source_path.stem,
+        revision=revision,
+        cases=list(iter_cases_from_jsonl(source_path)),
+    )
+
+
+def iter_cases_from_jsonl(path: str | Path) -> Iterator[Case]:
+    """Yield JSONL cases without materializing the source file text."""
+
+    source_path = Path(path)
+    with source_path.open(encoding="utf-8") as lines:
+        for index, line in enumerate(lines):
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            yield Case(
                 case_id=str(payload.get("case_id", f"case-{index + 1}")),
                 input=payload["input"],
                 expected_output=payload.get("expected_output"),
@@ -49,12 +60,6 @@ def dataset_from_jsonl(
                     for key, value in payload.get("metadata", {}).items()
                 },
             )
-        )
-    return Dataset(
-        dataset_id=dataset_id or source_path.stem,
-        revision=revision,
-        cases=cases,
-    )
 
 
 def dataset_from_huggingface(

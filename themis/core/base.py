@@ -19,6 +19,10 @@ def _canonicalize(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, BaseModel):
+        if isinstance(value, HashableModel):
+            return value.canonical_data()
+        return {key: _canonicalize(item) for key, item in value.model_dump().items()}
     if all(hasattr(value, attr) for attr in ("component_id", "version")) and hasattr(
         value, "fingerprint"
     ):
@@ -30,10 +34,6 @@ def _canonicalize(value: Any) -> Any:
             "version": value.version,
             "fingerprint": fingerprint,
         }
-    if isinstance(value, BaseModel):
-        if isinstance(value, HashableModel):
-            return value.canonical_data()
-        return {key: _canonicalize(item) for key, item in value.model_dump().items()}
     if isinstance(value, dict):
         return {key: _canonicalize(item) for key, item in value.items()}
     if isinstance(value, list):

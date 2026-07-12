@@ -12,67 +12,57 @@ pytestmark = pytest.mark.slow
 
 
 def _write_config(path: Path, *, store_path: Path) -> None:
+    path.with_name("definition.py").write_text(
+        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(dataset_id="dataset-1", revision="r1", cases=[Case(
+        case_id="case-1", input={"question": "2+2"},
+        expected_output={"answer": "4"},
+    )])],
+    generation=Generation(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+    evaluation=Evaluation(metrics=["builtin/exact_match"], parser="builtin/json_identity"),
+    seeds=[7],
+)
+'''
+    )
     path.write_text(
         f"""
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/exact_match
-  parsers:
-    - builtin/json_identity
+definition: definition:experiment
 storage:
   target: sqlite
   kwargs:
     path: {store_path}
-dataset_sources:
-  - dataset_id: dataset-1
-    revision: r1
-    cases:
-      - case_id: case-1
-        input:
-          question: 2+2
-        expected_output:
-          answer: "4"
-seeds: [7]
 """.strip()
     )
 
 
 def _write_judge_config(path: Path, *, store_path: Path) -> None:
+    path.with_name("judge_definition.py").write_text(
+        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(dataset_id="dataset-1", revision="r1", cases=[Case(
+        case_id="case-1", input={"question": "2+2"},
+        expected_output={"answer": "4"},
+    )])],
+    generation=Generation(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+    evaluation=Evaluation(
+        metrics=["builtin/llm_rubric"], parser="builtin/json_identity",
+        judge_models=["builtin/demo_judge"],
+        workflow_options={"rubric": "pass if the answer is correct"},
+    ),
+    seeds=[7],
+)
+'''
+    )
     path.write_text(
         f"""
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/llm_rubric
-  parsers:
-    - builtin/json_identity
-  judge_models:
-    - builtin/demo_judge
-  workflow_overrides:
-    rubric: pass if the answer is correct
+definition: judge_definition:experiment
 storage:
   target: sqlite
   kwargs:
     path: {store_path}
-dataset_sources:
-  - dataset_id: dataset-1
-    revision: r1
-    cases:
-      - case_id: case-1
-        input:
-          question: 2+2
-        expected_output:
-          answer: "4"
-seeds: [7]
 """.strip()
     )
 

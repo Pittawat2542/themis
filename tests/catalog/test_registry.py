@@ -15,8 +15,8 @@ from themis.catalog.registry import (
     register_component,
 )
 from themis.core.components import component_ref_from_value
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, GenerationResult
+from themis.core.contexts import GenerationContext
+from themis.core.models import Case, Candidate
 from themis.core.protocols import Generator
 
 
@@ -48,10 +48,10 @@ async def test_manifest_registry_loads_builtin_components_with_stable_refs() -> 
         Case(
             case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
         ),
-        GenerateContext(run_id="run-1", case_id="case-1", seed=7),
+        GenerationContext(run_id="run-1", case_id="case-1", seed=7),
     )
 
-    assert isinstance(result, GenerationResult)
+    assert isinstance(result, Candidate)
     assert result.final_output == {"answer": "4"}
     assert component_ref == builtin_component_refs()["builtin/demo_generator"]
     assert "builtin/demo_generator" in list_component_ids(kind="generator")

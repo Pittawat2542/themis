@@ -11,8 +11,8 @@ batch_app = App(name="batch", help="Batch execution operations.")
 
 
 @batch_app.command
-def run(*, request: str) -> int:
-    result = run_batch_request(request)
+def run(*, request: str, definition_root: list[str]) -> int:
+    result = run_batch_request(request, definition_roots=definition_root)
     print(
         dump_json(
             {

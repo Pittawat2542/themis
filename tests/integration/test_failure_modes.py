@@ -5,7 +5,7 @@ import pytest
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import (
     EvalScoreContext,
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     ScoreContext,
@@ -14,11 +14,11 @@ from themis.core.experiment import Experiment
 from themis.core.models import (
     Case,
     Dataset,
-    GenerationResult,
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
-    SessionResult,
+    MetricInterpretation,
+    Candidate,
 )
 from themis.core.results import RunStatus
 from themis.core.stores.memory import InMemoryRunStore
@@ -41,7 +41,7 @@ class FailingGenerator:
     def fingerprint(self) -> str:
         return "generator-failing"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         del case, ctx
         raise TimeoutError("provider timeout")
 
@@ -54,7 +54,7 @@ class FailingReducer:
         return "reducer-failing"
 
     async def reduce(
-        self, candidates: list[SessionResult], ctx: ReduceContext
+        self, candidates: list[Candidate], ctx: ReduceContext
     ) -> ReducedCandidate:
         del candidates, ctx
         raise RuntimeError("reducer failed")
@@ -73,6 +73,7 @@ class FailingParser:
 
 
 class FailingMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/failing"
     version = "1.0"
 
@@ -93,8 +94,8 @@ class HappyGenerator:
     def fingerprint(self) -> str:
         return "generator-happy"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult(
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
             final_output=case.expected_output,
         )
@@ -108,7 +109,7 @@ class HappyReducer:
         return "reducer-happy"
 
     async def reduce(
-        self, candidates: list[SessionResult], ctx: ReduceContext
+        self, candidates: list[Candidate], ctx: ReduceContext
     ) -> ReducedCandidate:
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
@@ -202,9 +203,11 @@ class PartialWorkflow:
 
 
 class PartialMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/partial"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
 
     def __init__(self) -> None:
         self.calls = 0
@@ -226,7 +229,7 @@ class FlakyStore(InMemoryRunStore):
     def persist_event(self, event) -> None:
         if self.fail_next_persist:
             self.fail_next_persist = False
-            raise RuntimeError("temporary store outage")
+            raise ConnectionError("temporary store outage")
         super().persist_event(event)
 
 

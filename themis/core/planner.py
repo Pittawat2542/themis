@@ -114,7 +114,7 @@ class Planner:
         ]
         if workflow_metric_kinds and not snapshot.component_refs.judge_models:
             raise ValueError("Workflow-backed metrics require at least one judge model")
-        if "selection" in snapshot.metric_kinds and candidate_count < 2:
+        if "candidates" in snapshot.metric_kinds and candidate_count < 2:
             raise ValueError("Selection metrics require at least two candidates")
         if snapshot.identity.seeds and len(snapshot.identity.seeds) != candidate_count:
             raise ValueError("Explicit seeds must match the planned candidate count")
@@ -216,8 +216,8 @@ class Planner:
         warnings: list[str] = []
         if required_execution_backends:
             warnings.append(
-                "code execution metrics require an execution backend; "
-                "local_subprocess is the default deterministic backend"
+                "code execution metrics require an explicitly configured sandbox "
+                "executor; host subprocess execution is never selected automatically"
             )
 
         return ExecutionResourcePlan(
@@ -233,7 +233,7 @@ class Planner:
             warnings=warnings,
             assumptions={
                 "runtime_resource_allocation_affects": "provenance",
-                "code_execution_default_backend": "local_subprocess",
+                "code_execution_default_backend": None,
             },
         )
 
@@ -321,7 +321,7 @@ class Planner:
             for manifest in snapshot.dataset_manifests
         )
         if metric_ids.intersection(CODE_EXECUTION_METRIC_IDS) or manifest_requires_execution:
-            return ["local_subprocess"]
+            return ["explicit_sandbox"]
         return []
 
     def _stage_parallelism(self, runtime: RuntimeConfig) -> dict[str, int]:

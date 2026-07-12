@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 
 from themis.catalog import load
-from themis.core.contexts import GenerateContext, ParseContext, ScoreContext
+from themis.core.contexts import GenerationContext, ParseContext, ScoreContext
 from themis.core.models import Case, ParsedOutput, ReducedCandidate, MetricResult
 from themis.core.protocols import Generator, Parser, PureMetric
 
@@ -19,7 +19,7 @@ async def test_catalog_builtin_generator_and_parser_execute_through_manifest() -
     )
 
     generated = await generator.generate(
-        case, GenerateContext(run_id="run-1", case_id="case-1", seed=7)
+        case, GenerationContext(run_id="run-1", case_id="case-1", seed=7)
     )
     parsed = parser.parse(
         ReducedCandidate(

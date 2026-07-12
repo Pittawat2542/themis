@@ -6,7 +6,9 @@ import warnings
 import pytest
 from typing import Any, cast
 
-from themis import Experiment, RunSnapshot, __version__
+from themis import __version__
+from themis.core.experiment import Experiment
+from themis.core.snapshot import RunSnapshot
 from themis.core.base import JSONValue
 from themis.core.config import (
     EvaluationConfig,
@@ -15,8 +17,8 @@ from themis.core.config import (
     RuntimeConfig,
     StorageConfig,
 )
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, Dataset, GenerationResult, Message, TraceStep
+from themis.core.contexts import GenerationContext
+from themis.core.models import Case, Dataset, Candidate, Message, TraceStep
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.workflows import JudgeResponse
 from tests.release import CURRENT_VERSION
@@ -49,9 +51,9 @@ class MutableGenerator:
     def fingerprint(self) -> str:
         return self.fingerprint_value
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         del ctx
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate", final_output=case.expected_output
         )
 
@@ -63,9 +65,9 @@ class TracedGenerator:
     def fingerprint(self) -> str:
         return "generator-traced"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         dataset_id = ctx.dataset_id or "unknown"
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{dataset_id}:{case.case_id}:{ctx.seed}",
             final_output=case.expected_output,
             trace=[
@@ -324,7 +326,7 @@ def test_run_rejects_component_fingerprint_mismatch_before_auto_reuse() -> None:
             parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(target="memory"),
-        runtime=RuntimeConfig(existing_run_policy="auto"),
+        runtime=RuntimeConfig(existing_run_policy="reuse"),
         dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
@@ -420,13 +422,13 @@ def test_run_distinguishes_duplicate_case_ids_across_datasets() -> None:
     }
     assert isinstance(timeline, dict)
     timeline_entries = cast(list[dict[str, JSONValue]], timeline["entries"])
-    session_events = [
+    generation_events = [
         entry
         for entry in timeline_entries
-        if entry["event_type"] == "session_completed"
+        if entry["event_type"] == "generation_completed"
     ]
-    assert len(session_events) == 2
-    assert {(entry["dataset_id"], entry["case_key"]) for entry in session_events} == {
+    assert len(generation_events) == 2
+    assert {(entry["dataset_id"], entry["case_key"]) for entry in generation_events} == {
         ("dataset-1", result.cases[0].case_key),
         ("dataset-2", result.cases[1].case_key),
     }

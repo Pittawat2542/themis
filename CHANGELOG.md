@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## [5.0.0] - 2026-07-12
+
+Themis 5 removes the v4 compatibility surface and establishes one Python-first
+contract for researchers and evaluation engineers.
+
+### Changed
+- Replaced the broad root namespace with `Experiment`, `Generation`,
+  `Evaluation`, `RunOptions`, core data models, and the small `evaluate` helper.
+- Unified generators around `generate(...) -> Candidate` and workflow metrics
+  around `WorkflowMetric` with an explicit subject kind.
+- Made Python modules canonical experiment definitions; YAML and TOML are now
+  operational launchers using `definition: module:symbol`.
+- Added explicit metric direction and pairing coverage to statistical comparisons.
+
+### Security
+- Removed implicit host execution from code metrics. Unsafe local subprocess
+  execution now requires `allow_unsafe=True`; code benchmarks require an
+  explicitly configured sandbox executor.
+
+### Removed
+- Removed session/generation aliases, lifecycle mega-subscriber hooks, generic
+  graph/execution-backend APIs, v4 config loading, and root re-export sprawl.
+
 ## [4.0.2] - 2026-04-06
 
 Themis 4.0.2 is a patch release that tightens live benchmark materialization

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from collections.abc import Mapping
 
 from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.contexts import GenerateContext, ReduceContext
+from themis import Evaluation, Generation
+from themis.core.contexts import GenerationContext, ReduceContext
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset, GenerationResult, ReducedCandidate
+from themis.core.models import Case, Dataset, Candidate, ReducedCandidate
 
 
 class SeededGenerator:
@@ -18,9 +20,9 @@ class SeededGenerator:
     def fingerprint(self) -> str:
         return "generator-seeded-example"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         answer = "4" if (ctx.seed or 0) % 2 else "5"
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed or 0}",
             final_output={"answer": answer},
         )
@@ -36,7 +38,7 @@ class PreferCorrectReducer:
         return "reducer-prefer-correct"
 
     async def reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[Candidate], ctx: ReduceContext
     ) -> ReducedCandidate:
         winner = sorted(candidates, key=_answer_value)[0]
         return ReducedCandidate(
@@ -47,7 +49,7 @@ class PreferCorrectReducer:
         )
 
 
-def _answer_value(candidate: GenerationResult) -> int:
+def _answer_value(candidate: Candidate) -> int:
     final_output = candidate.final_output
     if isinstance(final_output, Mapping) and "answer" in final_output:
         return int(str(final_output["answer"]))
@@ -58,16 +60,15 @@ def run_example() -> dict[str, object]:
     """Execute an experiment with a custom reducer."""
 
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator=SeededGenerator(),
-            candidate_policy={"num_samples": 2},
+            samples=2,
             reducer=PreferCorrectReducer(),
         ),
-        evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        evaluation=Evaluation(
+            metrics=["builtin/exact_match"], parser="builtin/json_identity"
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -83,7 +84,7 @@ def run_example() -> dict[str, object]:
         ],
         seeds=[7, 8],
     )
-    result = experiment.run()
+    result = experiment.run(store=memory_store())
     return {
         "run_id": result.run_id,
         "status": result.status.value,

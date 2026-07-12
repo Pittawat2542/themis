@@ -24,7 +24,7 @@ from themis.cli.helpers import (
 )
 from themis.core.contexts import (
     EvalScoreContext,
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     ScoreContext,
@@ -37,10 +37,9 @@ from themis.core.protocols import (
     EvaluationWorkflow,
     Generator,
     JudgeModel,
-    LLMMetric,
     Parser,
     PureMetric,
-    TraceMetric,
+    WorkflowMetric,
     TracingProvider,
     WorkflowRunner,
 )
@@ -121,7 +120,7 @@ def test_reporting_surface_is_documented_and_typed() -> None:
 
 def test_context_models_have_docstrings() -> None:
     for context_model in (
-        GenerateContext,
+        GenerationContext,
         SelectContext,
         ReduceContext,
         ParseContext,
@@ -140,8 +139,7 @@ def test_extension_protocols_have_docstrings() -> None:
         EvaluationWorkflow,
         JudgeModel,
         PureMetric,
-        LLMMetric,
-        TraceMetric,
+        WorkflowMetric,
         WorkflowRunner,
         TracingProvider,
     ):

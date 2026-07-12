@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
 from themis.core.contexts import ParseContext
 from themis.core.dataset_sources import inline_dataset_source
 from themis.core.models import Case, Dataset, ParsedOutput, ReducedCandidate
@@ -28,14 +30,13 @@ def run_example() -> dict[str, object]:
     """Execute an experiment with a custom parser."""
 
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator", reducer="builtin/majority_vote"
         ),
-        evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match"], parsers=[AnswerStringParser()]
+        evaluation=Evaluation(
+            metrics=["builtin/exact_match"], parser=AnswerStringParser()
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -50,7 +51,7 @@ def run_example() -> dict[str, object]:
             )
         ],
     )
-    result = experiment.run()
+    result = experiment.run(store=memory_store())
     return {
         "run_id": result.run_id,
         "status": result.status.value,

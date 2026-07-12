@@ -6,9 +6,58 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from themis.core.base import HashableModel, JSONValue
+
+
+class MetricDirection(StrEnum):
+    """How to interpret movement in a metric value."""
+
+    HIGHER_IS_BETTER = "higher_is_better"
+    LOWER_IS_BETTER = "lower_is_better"
+    NEUTRAL = "neutral"
+
+
+class ScoreOutcome(StrEnum):
+    """Case-level reporting outcome derived from a metric contract."""
+
+    CORRECT = "correct"
+    INCORRECT = "incorrect"
+    SCORED = "scored"
+    ERROR = "error"
+
+
+class SeedCapability(StrEnum):
+    """Whether a provider call surface can apply a requested seed."""
+
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
+
+
+class MetricInterpretation(HashableModel):
+    """Stable interpretation contract for one metric component."""
+
+    direction: MetricDirection = MetricDirection.NEUTRAL
+    valid_range: tuple[float, float] | None = None
+    correctness_threshold: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_contract(self) -> MetricInterpretation:
+        if self.valid_range is not None:
+            lower, upper = self.valid_range
+            if lower > upper:
+                raise ValueError("Metric valid_range lower bound must not exceed upper bound")
+            if self.correctness_threshold is not None and not (
+                lower <= self.correctness_threshold <= upper
+            ):
+                raise ValueError("Metric correctness_threshold must be inside valid_range")
+        if (
+            self.direction is MetricDirection.NEUTRAL
+            and self.correctness_threshold is not None
+        ):
+            raise ValueError("Neutral metrics cannot declare a correctness threshold")
+        return self
 
 
 class Case(HashableModel):
@@ -48,7 +97,7 @@ class TraceStep(HashableModel):
 
 
 class StreamEvent(HashableModel):
-    """One persisted streaming event emitted during session or judge execution."""
+    """One persisted streaming event emitted during generation or judging."""
 
     event_id: str
     source_stage: str
@@ -75,6 +124,9 @@ class ProviderTelemetry(HashableModel):
     raw_response: dict[str, JSONValue] = Field(default_factory=dict)
     headers: dict[str, JSONValue] | None = None
     rate_limit: dict[str, JSONValue] | None = None
+    seed_requested: int | None = None
+    seed_applied: int | None = None
+    seed_capability: SeedCapability = SeedCapability.UNSUPPORTED
 
 
 class StageTelemetry(HashableModel):
@@ -87,8 +139,8 @@ class StageTelemetry(HashableModel):
     token_usage: dict[str, int] = Field(default_factory=dict)
 
 
-class SessionTurn(HashableModel):
-    """One turn in a session-native candidate execution."""
+class GenerationTurn(HashableModel):
+    """One turn in a candidate generation execution."""
 
     turn_index: int
     input_messages: list[Message] = Field(default_factory=list)
@@ -99,12 +151,12 @@ class SessionTurn(HashableModel):
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
 
 
-class SessionResult(HashableModel):
-    """The candidate artifact returned by a session generator."""
+class Candidate(HashableModel):
+    """A generated candidate, including optional multi-turn evidence."""
 
     candidate_id: str
     final_output: JSONValue
-    turns: list[SessionTurn] = Field(default_factory=list)
+    turns: list[GenerationTurn] = Field(default_factory=list)
     stream_events: list[StreamEvent] = Field(default_factory=list)
     environment_state: dict[str, JSONValue] = Field(default_factory=dict)
     termination_reason: str | None = None
@@ -113,10 +165,6 @@ class SessionResult(HashableModel):
     artifacts: dict[str, JSONValue] | None = None
     token_usage: dict[str, int] | None = None
     latency_ms: float | None = None
-
-
-class GenerationResult(SessionResult):
-    """Legacy one-shot candidate artifact retained as a session result subtype."""
 
 
 class ParsedOutput(HashableModel):

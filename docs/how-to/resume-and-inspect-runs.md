@@ -22,7 +22,7 @@ flowchart TD
     A["Persistent store"] --> B["Reopen compiled run_id"]
     B --> C["Inspect execution state"]
     C --> D{"Work still pending?"}
-    D -->|Yes| E["Run again with auto policy"]
+    D -->|Yes| E["Run again with reuse policy"]
     D -->|No| F["Report or inspect artifacts"]
 ```
 
@@ -48,13 +48,13 @@ Stage-limited execution:
 
 Existing-run behavior:
 
-- `RuntimeConfig(existing_run_policy="auto")`: completed runs are reused and incomplete runs resume
-- `RuntimeConfig(existing_run_policy="error")`: fail fast if the compiled `run_id` already exists
-- `RuntimeConfig(existing_run_policy="rerun")`: clear the stored run and execute it again
+- `RunOptions(existing_run_policy="reuse")`: completed runs are reused and incomplete runs resume
+- `RunOptions(existing_run_policy="error")`: fail fast if the compiled `run_id` already exists
+- `RunOptions(existing_run_policy="restart")`: clear the stored run and execute it again
 
 Targeted reruns:
 
-- `Experiment.rerun(stage="score", failed_only=True, metric_ids=[...])`
+- `Experiment.rerun(from_stage=Stage.SCORE, failed_only=True, metric_ids=[...])`
 - `themis rerun --config ... --stage score --failed-only --metric-id ...`
 - use `--case-id`, `--case-key`, or `--metadata key=value` to target slices without cloning the whole experiment
 
@@ -77,7 +77,7 @@ Imported artifacts are persisted through normal events, so `resume`, `report`, c
 | Stored snapshot inspection | You want identity and provenance details for the run | Does not show per-stage execution progress by itself | `get_run_snapshot(...)`, `themis inspect snapshot` |
 | Explicit persisted state inspection | You need stage completion, counts, and failure state | Lower-level than a report | `get_execution_state(...)`, `themis inspect state` |
 | Workflow execution inspection | You need judge prompts, responses, or workflow artifacts for one case | Only applies to workflow-backed metrics | `get_evaluation_execution(...)`, `themis inspect evaluation` |
-| Downstream-only recompute | Upstream artifacts are good and only later stages should rerun | Requires stored artifacts and careful stage choice | `Experiment.replay(stage="reduce"|"parse"|"score"|"judge")` |
+| Downstream-only recompute | Upstream artifacts are good and only later stages should rerun | Requires stored artifacts and careful stage choice | `Experiment.replay(from_stage=Stage.REDUCE)` |
 | Targeted rerun | Only failed cases, a case slice, or a metric should rerun | Preserves the compiled run identity and records rerun lineage | `Experiment.rerun(...)`, `themis rerun` |
 | Report generation from the stored run | You want shareable output after inspection | Requires a persistent run state to report from | `Reporter`, `themis report` |
 

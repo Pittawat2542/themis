@@ -1,42 +1,43 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from themis import (
     Experiment,
-    InMemoryRunStore,
 )
+from themis.runtime import Stage
 from themis.core.bundles import (
     export_evaluation_bundle,
     export_generation_bundle,
     import_evaluation_bundle,
     import_generation_bundle,
 )
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset
 
 
 def run_example() -> dict[str, object]:
     """Export bundle artifacts, import them into another store, and replay judge scoring in place."""
 
-    source_store = InMemoryRunStore()
-    target_store = InMemoryRunStore()
+    source_store = memory_store()
+    target_store = memory_store()
     source_store.initialize()
     target_store.initialize()
 
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
+            samples=1,
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
+        evaluation=Evaluation(
             metrics=["builtin/llm_rubric"],
-            parsers=["builtin/json_identity"],
+            parser="builtin/json_identity",
             judge_models=["builtin/demo_judge", "builtin/demo_judge"],
-            workflow_overrides={"rubric": "pass if the answer is correct"},
+            workflow_options={"rubric": "pass if the answer is correct"},
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -59,7 +60,7 @@ def run_example() -> dict[str, object]:
     import_evaluation_bundle(
         target_store, export_evaluation_bundle(source_store, initial.run_id)
     )
-    replayed = experiment.replay(stage="judge", store=source_store)
+    replayed = experiment.replay(from_stage=Stage.JUDGE, store=source_store)
     return {
         "run_id": initial.run_id,
         "replayed_run_id": replayed.run_id,

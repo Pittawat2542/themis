@@ -56,4 +56,7 @@ def test_catalog_run_executes_representative_adapter_backed_benchmarks() -> None
     codeforces_result = run("codeforces", store=codeforces_store)
 
     assert frontierscience_result.status is RunStatus.COMPLETED
-    assert codeforces_result.status is RunStatus.COMPLETED
+    assert codeforces_result.status is RunStatus.PARTIAL_FAILURE
+    assert "explicit sandbox executor" in str(
+        codeforces_result.cases[0].metric_results[0]
+    )

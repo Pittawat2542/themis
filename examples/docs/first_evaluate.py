@@ -1,24 +1,25 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.models import Case, Dataset
+from themis import Evaluation, Generation
+from themis import Case, Dataset
 
 
 def run_example() -> dict[str, object]:
     """Run a small end-to-end evaluation through an explicit experiment."""
 
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
+            samples=1,
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        evaluation=Evaluation(
+            metrics=["builtin/exact_match"], parser="builtin/json_identity"
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             Dataset(
                 dataset_id="sample",
                 cases=[
@@ -31,7 +32,7 @@ def run_example() -> dict[str, object]:
             )
         ],
     )
-    result = experiment.run()
+    result = experiment.run(store=memory_store())
     return {"run_id": result.run_id, "status": result.status.value}
 
 

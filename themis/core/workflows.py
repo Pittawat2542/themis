@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from pydantic import Field
@@ -11,7 +12,7 @@ from themis.core.models import ConversationTrace, MetricResult, WorkflowTrace
 from themis.core.subjects import (
     CandidateSetSubject,
     ConversationSubject,
-    SessionSubject,
+    CandidateSubject,
     TraceSubject,
 )
 
@@ -70,10 +71,23 @@ class WorkflowFailure(HashableModel):
     retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
 
 
+class WorkflowStatus(StrEnum):
+    COMPLETED = "completed"
+    PARTIAL_FAILURE = "partial_failure"
+    FAILED = "failed"
+
+
+class WorkflowSubjectKind(StrEnum):
+    CANDIDATE = "candidate"
+    CANDIDATE_SET = "candidate_set"
+    CONVERSATION = "conversation"
+    TRACE = "trace"
+
+
 class EvaluationExecution(HashableModel):
     execution_id: str
-    subject_kind: str
-    status: str = "completed"
+    subject_kind: WorkflowSubjectKind
+    status: WorkflowStatus = WorkflowStatus.COMPLETED
     judge_calls: list[JudgeCall] = Field(default_factory=list)
     rendered_prompts: list[RenderedJudgePrompt] = Field(default_factory=list)
     judge_responses: list[JudgeResponse] = Field(default_factory=list)
@@ -85,7 +99,7 @@ class EvaluationExecution(HashableModel):
 
 
 def build_prompt_template_context(
-    subject: CandidateSetSubject | TraceSubject | ConversationSubject | SessionSubject,
+    subject: CandidateSetSubject | TraceSubject | ConversationSubject | CandidateSubject,
     ctx: EvalScoreContext,
     call: JudgeCall | None = None,
 ) -> dict[str, JSONValue]:
@@ -110,8 +124,8 @@ def build_prompt_template_context(
         candidate_output = subject.trace.model_dump(mode="json")
     elif isinstance(subject, ConversationSubject):
         candidate_output = subject.conversation.model_dump(mode="json")
-    elif isinstance(subject, SessionSubject):
-        candidate_output = subject.session.model_dump(mode="json")
+    elif isinstance(subject, CandidateSubject):
+        candidate_output = subject.candidate.model_dump(mode="json")
 
     return {
         "candidate_output": candidate_output,

@@ -49,7 +49,7 @@ A named **Automation Surface** that expands to multiple benchmark or executable 
 _Avoid_: mega-run, aggregate experiment, canonical suite source
 
 **Runtime Preset**:
-A named convenience layer that resolves to normal session, evaluation, runtime, or storage configuration for an **Experiment**.
+A named convenience layer that resolves to normal generation, evaluation, runtime, or storage configuration for an **Experiment**.
 _Avoid_: harness runtime, hidden execution mode
 
 **Execution Resource Plan**:

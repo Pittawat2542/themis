@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import cast
 
-from themis import InMemoryRunStore
+from themis.core.stores.memory import InMemoryRunStore
 from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.dataset_inputs import dataset_from_inline, dataset_from_jsonl

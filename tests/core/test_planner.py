@@ -10,15 +10,17 @@ from themis.core.config import (
     StorageConfig,
 )
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset
+from themis.core.models import Case, Dataset, MetricInterpretation
 from themis.core.planner import Planner
 from themis.core.workflows import JudgeCall, JudgeResponse
 
 
 class DummyLLMMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/llm"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
 
     def fingerprint(self) -> str:
         return "metric-llm-fingerprint"
@@ -29,9 +31,11 @@ class DummyLLMMetric:
 
 
 class DummySelectionMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/select"
     version = "1.0"
-    metric_family = "selection"
+    metric_family = "workflow"
+    subject_kind = "candidates"
 
     def fingerprint(self) -> str:
         return "metric-select-fingerprint"
@@ -183,7 +187,7 @@ def test_planner_resource_plan_declares_code_execution_backend_requirement() -> 
 
     plan = planner.resource_plan(snapshot, RuntimeConfig())
 
-    assert plan.required_execution_backends == ["local_subprocess"]
+    assert plan.required_execution_backends == ["explicit_sandbox"]
     assert "code execution" in plan.warnings[0]
 
 

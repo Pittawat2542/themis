@@ -29,7 +29,7 @@ The runtime persists generation results, evaluation executions, snapshots, execu
 
 ## What is the difference between resume and replay?
 
-The `themis resume` command reopens the stored run and prints status/progress. Continuing unfinished work happens when you run the same compiled `run_id` again with `existing_run_policy="auto"`. Replay re-runs downstream stages from stored upstream artifacts without regenerating candidates. `rejudge()` is the workflow-metric specialization of `replay(stage="judge")`.
+The `themis resume` command reopens the stored run and prints status/progress. Continuing unfinished work happens when you run the same compiled `run_id` again with `existing_run_policy="reuse"`. Replay re-runs downstream stages from stored upstream artifacts without regenerating candidates.
 
 ## What is intentionally not supported yet?
 

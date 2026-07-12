@@ -73,11 +73,11 @@ def main() -> None:
                 "themis.catalog.run(...)",
             ],
             "observability": [
-                "LifecycleSubscriber",
+                "EventSubscriber",
                 "TracingProvider",
             ],
             "config_loading": [
-                "Experiment.from_config(...)",
+                "definition: module:symbol",
                 "YAML",
                 "TOML",
                 "overrides",

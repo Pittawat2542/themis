@@ -1,29 +1,31 @@
 from __future__ import annotations
 
-from themis import Experiment, InMemoryRunStore, get_evaluation_execution
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.storage import memory_store
+
+from themis import Experiment
+from themis.analysis import get_evaluation_execution
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset
 
 
 def run_example() -> dict[str, object]:
     """Run a workflow-backed metric with builtin demo judges."""
 
-    store = InMemoryRunStore()
+    store = memory_store()
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
+            samples=1,
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
+        evaluation=Evaluation(
             metrics=["builtin/llm_rubric"],
-            parsers=["builtin/json_identity"],
+            parser="builtin/json_identity",
             judge_models=["builtin/demo_judge", "builtin/demo_judge"],
-            workflow_overrides={"rubric": "pass if the answer is correct"},
+            workflow_options={"rubric": "pass if the answer is correct"},
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",

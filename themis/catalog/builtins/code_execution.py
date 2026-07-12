@@ -6,18 +6,23 @@ import base64
 import json
 import os
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Callable, Protocol
 from urllib import request
-
 from themis.core.base import JSONValue
 from themis.core.code_execution import (
     CodeExecutionLimits,
     CodeExecutionRequest,
     CodeExecutionResult,
-    LocalSubprocessExecutionBackend,
+    UnsafeLocalSubprocessExecutor,
 )
 from themis.core.contexts import ScoreContext
-from themis.core.models import Case, ParsedOutput, MetricResult
+from themis.core.models import (
+    Case,
+    MetricDirection,
+    MetricInterpretation,
+    MetricResult,
+    ParsedOutput,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,15 +58,23 @@ class SandboxExecutor(Protocol):
         files: dict[str, str] | None = None,
         args: list[str] | None = None,
         timeout_seconds: float | None = None,
-        memory_limit_mb: float | None = None,
     ) -> SandboxExecutionResult: ...
 
 
-class LocalSubprocessSandboxExecutor:
-    backend_id = "local_subprocess"
+class UnsafeLocalSubprocessSandboxExecutor:
+    """Explicitly unsafe executor for trusted local test code only."""
 
-    def __init__(self, backend: LocalSubprocessExecutionBackend | None = None) -> None:
-        self._backend = backend or LocalSubprocessExecutionBackend()
+    backend_id = "unsafe_local_subprocess"
+
+    def __init__(
+        self,
+        *,
+        allow_unsafe: bool = False,
+        backend: UnsafeLocalSubprocessExecutor | None = None,
+    ) -> None:
+        self._backend = backend or UnsafeLocalSubprocessExecutor(
+            allow_unsafe=allow_unsafe
+        )
 
     def execute(
         self,
@@ -72,7 +85,6 @@ class LocalSubprocessSandboxExecutor:
         files: dict[str, str] | None = None,
         args: list[str] | None = None,
         timeout_seconds: float | None = None,
-        memory_limit_mb: float | None = None,
     ) -> SandboxExecutionResult:
         result = self._backend.execute(
             CodeExecutionRequest(
@@ -83,11 +95,20 @@ class LocalSubprocessSandboxExecutor:
                 args=args or [],
                 limits=CodeExecutionLimits(
                     timeout_seconds=timeout_seconds or 5.0,
-                    memory_limit_mb=memory_limit_mb,
                 ),
             )
         )
         return _sandbox_result_from_core(result)
+
+
+class _MissingSandboxExecutor:
+    backend_id = "unconfigured"
+
+    def execute(self, **_: object) -> SandboxExecutionResult:
+        raise RuntimeError(
+            "Code metrics require an explicit sandbox executor such as "
+            "PistonSandboxExecutor or SandboxFusionExecutor."
+        )
 
 
 class PistonSandboxExecutor:
@@ -95,7 +116,7 @@ class PistonSandboxExecutor:
         self,
         *,
         base_url: str | None = None,
-        urlopen=request.urlopen,
+        urlopen: Callable[..., Any] = request.urlopen,
     ) -> None:
         self._base_url = (
             base_url or os.getenv("THEMIS_CODE_PISTON_URL") or "http://localhost:2000"
@@ -111,9 +132,7 @@ class PistonSandboxExecutor:
         files: dict[str, str] | None = None,
         args: list[str] | None = None,
         timeout_seconds: float | None = None,
-        memory_limit_mb: float | None = None,
     ) -> SandboxExecutionResult:
-        del timeout_seconds, memory_limit_mb
         piston_language, piston_version = _resolve_piston_runtime(language)
         payload = {
             "language": piston_language,
@@ -131,7 +150,7 @@ class PistonSandboxExecutor:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with self._urlopen(req) as response:
+        with self._urlopen(req, timeout=timeout_seconds or 5.0) as response:
             body = json.loads(response.read().decode("utf-8"))
         if not isinstance(body, dict):
             raise ValueError("Piston sandbox returned a non-object response.")
@@ -160,7 +179,7 @@ class SandboxFusionExecutor:
         self,
         *,
         base_url: str | None = None,
-        urlopen=request.urlopen,
+        urlopen: Callable[..., Any] = request.urlopen,
     ) -> None:
         self._base_url = (
             base_url
@@ -178,9 +197,7 @@ class SandboxFusionExecutor:
         files: dict[str, str] | None = None,
         args: list[str] | None = None,
         timeout_seconds: float | None = None,
-        memory_limit_mb: float | None = None,
     ) -> SandboxExecutionResult:
-        del timeout_seconds, memory_limit_mb
         payload: dict[str, object] = {
             "code": code,
             "language": _resolve_sandbox_fusion_language(language),
@@ -200,7 +217,7 @@ class SandboxFusionExecutor:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with self._urlopen(req) as response:
+        with self._urlopen(req, timeout=timeout_seconds or 5.0) as response:
             body = json.loads(response.read().decode("utf-8"))
         if not isinstance(body, dict):
             raise ValueError("SandboxFusion returned a non-object response.")
@@ -223,6 +240,10 @@ class SandboxFusionExecutor:
 class CodeExecutionMetric:
     version = "1.0"
     metric_family = "pure"
+    interpretation = MetricInterpretation(
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        valid_range=(0.0, 1.0),
+    )
 
     def __init__(
         self,
@@ -239,7 +260,7 @@ class CodeExecutionMetric:
             value.strip().lower() for value in supported_languages
         }
         self._supported_modes = {value.strip().lower() for value in supported_modes}
-        self._executor = executor or LocalSubprocessSandboxExecutor()
+        self._executor = executor or _MissingSandboxExecutor()
 
     def fingerprint(self) -> str:
         return f"{self.component_id}-fingerprint"

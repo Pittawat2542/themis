@@ -11,12 +11,12 @@ from themis.core.events import (
     StepCompletedEvent,
     StepStartedEvent,
 )
-from themis.core.models import Case, ParsedOutput, MetricResult, SessionResult
+from themis.core.models import Case, ParsedOutput, MetricResult, Candidate
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.subjects import (
     CandidateSetSubject,
     ConversationSubject,
-    SessionSubject,
+    CandidateSubject,
     TraceSubject,
 )
 from themis.core.workflow_runner import DefaultWorkflowRunner
@@ -45,7 +45,7 @@ class DemoEvaluationWorkflow:
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
+        | CandidateSubject,
         ctx: EvalScoreContext,
     ) -> RenderedJudgePrompt:
         del call, ctx
@@ -125,7 +125,7 @@ class PairwiseSelectionWorkflow:
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
+        | CandidateSubject,
         ctx: EvalScoreContext,
     ) -> RenderedJudgePrompt:
         del ctx
@@ -209,7 +209,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
     )
     subject = CandidateSetSubject(
         candidates=[
-            SessionResult(candidate_id="candidate-1", final_output={"answer": "4"})
+            Candidate(candidate_id="candidate-1", final_output={"answer": "4"})
         ]
     )
     ctx = EvalScoreContext(
@@ -259,8 +259,8 @@ async def test_default_workflow_runner_supports_pairwise_prompts_and_majority_vo
 ):
     subject = CandidateSetSubject(
         candidates=[
-            SessionResult(candidate_id="candidate-a", final_output={"answer": "4"}),
-            SessionResult(candidate_id="candidate-b", final_output={"answer": "5"}),
+            Candidate(candidate_id="candidate-a", final_output={"answer": "4"}),
+            Candidate(candidate_id="candidate-b", final_output={"answer": "5"}),
         ]
     )
     ctx = EvalScoreContext(

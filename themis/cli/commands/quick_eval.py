@@ -7,7 +7,6 @@ from typing import cast
 
 from cyclopts import App
 
-from themis import InMemoryRunStore
 from themis.catalog import run as run_catalog_benchmark
 from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
@@ -18,6 +17,7 @@ from themis.core.dataset_inputs import (
     dataset_from_jsonl,
 )
 from themis.core.experiment import Experiment
+from themis.storage import memory_store
 
 quick_eval_app = App(name="quick-eval", help="Quick evaluation workflows.")
 _DEFAULT_STORAGE = StorageConfig(target="memory")
@@ -35,7 +35,7 @@ def _result_payload(*, run_id: str, status: str, metric_means: dict[str, float])
 
 
 def _run_dataset(dataset) -> str:
-    store = InMemoryRunStore()
+    store = memory_store()
     experiment = Experiment(
         generation=GenerationConfig(
             generator="builtin/demo_generator",
@@ -100,7 +100,7 @@ def huggingface(
 
 @quick_eval_app.command
 def benchmark(*, name: str) -> int:
-    store = InMemoryRunStore()
+    store = memory_store()
     result = run_catalog_benchmark(name, store=store)
     benchmark_result = store.get_projection(result.run_id, "benchmark_result")
     metric_means = _metric_means_from_projection(benchmark_result)

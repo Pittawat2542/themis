@@ -23,21 +23,11 @@ Optional extras:
 ## Quick Start
 
 ```python
-from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset, Evaluation, Experiment, Generation
+from themis.storage import memory_store
 
 experiment = Experiment(
-    generation=GenerationConfig(
-        generator="builtin/demo_generator",
-        reducer="builtin/majority_vote",
-    ),
-    evaluation=EvaluationConfig(
-        metrics=["builtin/exact_match"],
-        parsers=["builtin/json_identity"],
-    ),
-    storage=StorageConfig(target="memory"),
-    dataset_sources=[
+    datasets=[
         Dataset(
             dataset_id="sample",
             cases=[
@@ -49,8 +39,16 @@ experiment = Experiment(
             ],
         )
     ],
+    generation=Generation(
+        generator="builtin/demo_generator",
+        reducer="builtin/majority_vote",
+    ),
+    evaluation=Evaluation(
+        metrics=["builtin/exact_match"],
+        parser="builtin/json_identity",
+    ),
 )
-result = experiment.run()
+result = experiment.run(store=memory_store())
 
 print(result.run_id, result.status.value)
 ```

@@ -1,80 +1,42 @@
 ---
-title: Config schema reference
+title: Launcher config reference
 diataxis: reference
-audience: config-driven Themis users
-goal: Document config model fields, defaults, and identity/persistence implications.
+audience: automation and CLI users
+goal: Document the operational launcher format without duplicating experiment meaning.
 ---
 
-# Config schema reference
+# Launcher config reference
 
-## Config file support
+Python is the canonical experiment definition. YAML and TOML only locate that
+definition and supply operational settings:
 
-| Field | Required | Purpose | Affects run_id | Notes |
-| --- | --- | --- | --- | --- |
-| Config file format | Yes | `Experiment.from_config(...)` loads `YAML` (`.yaml` / `.yml`) and `TOML` (`.toml`) automation surfaces | Depends on the fields in the file | Use config for transport, overrides, and config-loadable execution targets around reviewed Python definitions |
-| Config values | Yes | Carry strings and JSON-like values for components, prompts, storage, and runtime settings | Yes for identity-bearing fields; no for storage or runtime tuning fields | Live Python objects belong only in direct Python authoring |
+The required shape is `definition: module:symbol`.
 
-## Component target syntax
+```yaml
+definition: experiments.baseline:experiment
+storage:
+  target: sqlite
+  kwargs:
+    path: runs/themis.sqlite3
+runtime:
+  max_concurrency: 8
+  provider_timeout_seconds: 120
+  existing_run_policy: reuse
+```
 
-| Field | Required | Purpose | Affects run_id | Notes |
-| --- | --- | --- | --- | --- |
-| Builtin ids such as `builtin/exact_match` | No | Reference shipped catalog components from config files | Yes | Best when you want stable builtins without writing import paths |
-| Importable factory path such as `package.module:factory` | No | Reference your own component factory from config | Yes | Best when constructor logic belongs in Python |
-| Importable class path such as `package.module:Class` | No | Reference a component type directly from config | Yes | Themis instantiates the class without constructor arguments |
+## Launcher fields
 
-## `SessionConfig`
+| Field | Required | Meaning | Affects `run_id` |
+| --- | --- | --- | --- |
+| `definition` | Yes | Import path to an `Experiment` object or zero-argument factory | The imported experiment does |
+| `storage.target` | No | `memory`, `sqlite`, `jsonl`, `mongodb`, or `postgres` | No |
+| `storage.kwargs` | No | Backend constructor settings; relative paths resolve beside the launcher | No |
+| `runtime` | No | Fields accepted by `RunOptions` | No |
 
-| Field | Required | Purpose | Affects run_id | Notes |
-| --- | --- | --- | --- | --- |
-| `generator` | Yes | Chooses the session candidate producer | Yes | In config, use a builtin id or import path; in Python, pass an object with `run_session(...)` |
-| `candidate_policy` | No | Controls candidate fan-out such as `num_samples` | Yes | Defaults to `{}` and is part of logical experiment identity |
-| `prompt_spec` | No | Carries prompt instructions, prefixes, suffixes, and generic prompt blocks | Yes | Prompt changes invalidate session-stage cache reuse as expected |
-| `max_turns` | No | Sets the maximum session turns exposed through `SessionContext` | Yes | Defaults to `1`; single-shot runs are one-turn sessions |
-| `termination` | No | Carries session termination settings for custom generators | Yes | Themis records this in run identity and passes it to session generators |
-| `PromptSpec.blocks` | No | Stores arbitrary structured prompt material | Yes | Themis does not assign example-specific semantics to block contents |
-| `reducer` | No | Chooses how multiple candidates collapse after fan-out | Yes | Pair with selectors or reducers when `num_samples` is greater than one |
+Notable runtime defaults are `evidence_retention: standard`,
+`strict_determinism: false`, a 30-second persistence timeout, a 5-second
+subscriber timeout, and an evidence queue capacity of 256. An omitted
+`provider_rate_limits` entry means unlimited client-side RPM for that provider.
 
-## `EvaluationConfig`
-
-| Field | Required | Purpose | Affects run_id | Notes |
-| --- | --- | --- | --- | --- |
-| `metrics` | Yes | Lists the pure or workflow-backed metrics to run | Yes | Metric choice defines evaluation semantics |
-| `parsers` | No | Normalizes reduced output into metric-ready subjects | Yes | Choose parsers that match the expected output shape |
-| `judge_models` | No | Provides judge models for workflow-backed metrics | Yes | Omit when using only deterministic pure metrics |
-| `prompt_spec` | No | Adds prompt instructions or blocks for builtin judge workflows | Yes | Judge prompt changes are identity-bearing |
-| `judge_config` | No | Carries generic runtime configuration for workflow implementations | Yes | Exposed to workflows as `EvalScoreContext.judge_config`; use for custom workflow config that should affect runtime behavior and identity |
-| `workflow_overrides` | No | Carries builtin-oriented prompt and rubric overrides | Yes | Exposed as `EvalScoreContext.eval_workflow_config`; useful for rubric text and benchmark-specific builtin judge settings |
-
-## `StorageConfig`
-
-| Field | Required | Purpose | Affects run_id | Notes |
-| --- | --- | --- | --- | --- |
-| `target` | No | Selects the backend such as `memory`, `sqlite`, `jsonl`, `mongodb`, or `postgres` | No | Stored as provenance; choose based on persistence and operational needs |
-| `kwargs` | No | Supplies backend-specific settings | No | Stored as provenance rather than logical run identity |
-| Relative `kwargs.path`, `kwargs.root`, and `kwargs.blob_root` | No | Resolves storage paths from the config file directory | No | Keeps checked-in configs portable across environments |
-| `store` and `parameters` | No | Compatibility aliases for `target` and `kwargs` | No | Normalized by config loading before validation |
-
-## `RuntimeConfig`
-
-| Field | Required | Purpose | Affects run_id | Notes |
-| --- | --- | --- | --- | --- |
-| `max_concurrent_tasks` | No | Sets the global execution cap | No | Use for coarse operational throttling |
-| `stage_concurrency` | No | Sets per-stage concurrency caps | No | Useful when generation and judging need different limits |
-| `provider_concurrency` | No | Limits concurrency per provider endpoint | No | Helps share one process fairly across models or services |
-| `provider_rate_limits` | No | Sets explicit per-provider request limits | No | Use when the endpoint enforces request-per-minute quotas |
-| `provider_token_limits` | No | Sets explicit per-provider token limits | No | Uses observed token usage when providers return it; otherwise each call consumes one token unit |
-| `generation_retry_attempts`, `generation_retry_delay`, `generation_retry_backoff` | No | Controls generation retry behavior | No | Retries transient provider failures without changing identity |
-| `judge_retry_attempts`, `judge_retry_delay`, `judge_retry_backoff` | No | Controls judge retry behavior | No | Applies only to workflow-backed metrics |
-| `store_retry_attempts`, `store_retry_delay` | No | Controls persistence retry behavior | No | Use when the store can fail transiently |
-| `existing_run_policy` | No | Chooses duplicate-run handling with `auto`, `error`, or `rerun` | No | Affects execution behavior, not logical identity |
-| `queue_root` and `batch_root` | No | Select manifest output roots for deferred execution | No | Used by `submit`, `worker`, and `batch` flows |
-| Relative `queue_root` and `batch_root` | No | Resolves runtime paths from the config file directory | No | Keeps checked-in configs portable across machines |
-
-## Overrides
-
-| Field | Required | Purpose | Affects run_id | Notes |
-| --- | --- | --- | --- | --- |
-| `Experiment.from_config(path, overrides=[...])` | No | Applies OmegaConf dotlist overrides before normalization and component loading | Depends on the fields you override | Useful for environment-specific paths or small execution changes |
-| Override usage | No | Lets one checked-in config serve multiple environments or execution shapes | Depends on the fields you override | Prefer this over forking a config file for small changes |
-
-Use [Identity vs provenance](../explanation/identity-vs-provenance.md) when deciding whether a config change should create a new logical run.
+Credentials should use environment or secret-provider references and never be
+embedded in an experiment identity or launcher committed to source control.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from themis.core.models import GenerationResult
+from themis.core.models import Candidate
 from themis.core import subjects as subjects_module
 from themis.core.subjects import (
     CandidateSetSubject,
@@ -16,8 +16,8 @@ from themis.core.subjects import (
 def test_candidate_subject_reports_size() -> None:
     subject = CandidateSetSubject(
         candidates=[
-            GenerationResult(candidate_id="candidate-1", final_output="4"),
-            GenerationResult(candidate_id="candidate-2", final_output="4"),
+            Candidate(candidate_id="candidate-1", final_output="4"),
+            Candidate(candidate_id="candidate-2", final_output="4"),
         ]
     )
 
@@ -26,12 +26,12 @@ def test_candidate_subject_reports_size() -> None:
 
 def test_llm_metric_subject_validation_requires_exactly_one_candidate() -> None:
     single = CandidateSetSubject(
-        candidates=[GenerationResult(candidate_id="candidate-1", final_output="4")]
+        candidates=[Candidate(candidate_id="candidate-1", final_output="4")]
     )
     pair = CandidateSetSubject(
         candidates=[
-            GenerationResult(candidate_id="candidate-1", final_output="4"),
-            GenerationResult(candidate_id="candidate-2", final_output="4"),
+            Candidate(candidate_id="candidate-1", final_output="4"),
+            Candidate(candidate_id="candidate-2", final_output="4"),
         ]
     )
 
@@ -43,12 +43,12 @@ def test_llm_metric_subject_validation_requires_exactly_one_candidate() -> None:
 
 def test_selection_metric_subject_validation_requires_multiple_candidates() -> None:
     single = CandidateSetSubject(
-        candidates=[GenerationResult(candidate_id="candidate-1", final_output="4")]
+        candidates=[Candidate(candidate_id="candidate-1", final_output="4")]
     )
     pair = CandidateSetSubject(
         candidates=[
-            GenerationResult(candidate_id="candidate-1", final_output="4"),
-            GenerationResult(candidate_id="candidate-2", final_output="4"),
+            Candidate(candidate_id="candidate-1", final_output="4"),
+            Candidate(candidate_id="candidate-2", final_output="4"),
         ]
     )
 
@@ -73,7 +73,7 @@ def test_llm_metric_subject_factory_calls_validation(
     )
 
     subject = candidate_set_subject_for_llm_metric(
-        [GenerationResult(candidate_id="candidate-1", final_output="4")]
+        [Candidate(candidate_id="candidate-1", final_output="4")]
     )
 
     assert called is True
@@ -98,8 +98,8 @@ def test_selection_metric_subject_factory_calls_validation(
 
     subject = candidate_set_subject_for_selection_metric(
         [
-            GenerationResult(candidate_id="candidate-1", final_output="4"),
-            GenerationResult(candidate_id="candidate-2", final_output="5"),
+            Candidate(candidate_id="candidate-1", final_output="4"),
+            Candidate(candidate_id="candidate-2", final_output="5"),
         ]
     )
 

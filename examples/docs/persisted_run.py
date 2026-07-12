@@ -4,14 +4,12 @@ from pathlib import Path
 
 from themis import (
     Experiment,
-    Reporter,
-    get_execution_state,
-    get_run_snapshot,
-    sqlite_store,
 )
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
+from themis.analysis import Reporter, get_execution_state, get_run_snapshot
+from themis.storage import sqlite_store
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset
 
 
 def run_example(root: Path) -> dict[str, object]:
@@ -21,17 +19,16 @@ def run_example(root: Path) -> dict[str, object]:
     store_path.parent.mkdir(parents=True, exist_ok=True)
     store = sqlite_store(store_path)
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
+            samples=1,
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
+        evaluation=Evaluation(
             metrics=["builtin/exact_match"],
-            parsers=["builtin/json_identity"],
+            parser="builtin/json_identity",
         ),
-        storage=StorageConfig(target="sqlite", kwargs={"path": str(store_path)}),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",

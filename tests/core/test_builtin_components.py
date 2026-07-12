@@ -10,7 +10,7 @@ from themis.core.builtins import (
     resolve_selector_component,
 )
 from themis.core.contexts import (
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     ScoreContext,
@@ -18,10 +18,9 @@ from themis.core.contexts import (
 )
 from themis.core.models import (
     Case,
-    GenerationResult,
     ParsedOutput,
     ScoreError,
-    SessionResult,
+    Candidate,
 )
 from themis.core.protocols import CandidateSelector, Generator, Parser, PureMetric
 from themis.core.workflows import JudgeResponse
@@ -55,11 +54,11 @@ async def test_builtin_generator_component_is_executable() -> None:
     )
 
     result = await generator.generate(
-        case, GenerateContext(run_id="run-1", case_id="case-1", seed=7)
+        case, GenerationContext(run_id="run-1", case_id="case-1", seed=7)
     )
 
     assert isinstance(generator, Generator)
-    assert isinstance(result, GenerationResult)
+    assert isinstance(result, Candidate)
     assert result.candidate_id == "case-1-candidate-7"
     assert result.final_output == {"answer": "4"}
     assert result.token_usage == {"prompt_tokens": 1, "completion_tokens": 1}
@@ -74,8 +73,8 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
         case_id="case-1", input={"question": "2+2"}, expected_output={"answer": "4"}
     )
     candidates = [
-        SessionResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
-        SessionResult(candidate_id="case-1-candidate-1", final_output={"answer": "4"}),
+        Candidate(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
+        Candidate(candidate_id="case-1-candidate-1", final_output={"answer": "4"}),
     ]
 
     reduced = await reducer.reduce(
@@ -115,8 +114,8 @@ async def test_builtin_reducer_parser_and_metric_components_are_executable() -> 
 async def test_builtin_selector_component_is_executable() -> None:
     selector = resolve_selector_component("builtin/best_of_n")
     candidates = [
-        SessionResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
-        SessionResult(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
+        Candidate(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
+        Candidate(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
     ]
 
     selected = await selector.select(
@@ -142,9 +141,9 @@ def test_runtime_component_resolvers_preserve_custom_objects() -> None:
         def fingerprint(self) -> str:
             return "custom-generator"
 
-        async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+        async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
             del case, ctx
-            return GenerationResult(candidate_id="custom", final_output="ok")
+            return Candidate(candidate_id="custom", final_output="ok")
 
     custom = CustomGenerator()
 

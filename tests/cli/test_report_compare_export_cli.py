@@ -12,31 +12,28 @@ pytestmark = pytest.mark.slow
 
 
 def _write_config(path: Path, *, store_path: Path, answer: str, seed: int) -> None:
+    module = f"{path.stem}_definition"
+    path.with_name(f"{module}.py").write_text(
+        f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(dataset_id="dataset-1", cases=[Case(
+        case_id="case-1", input={{"question": "2+2"}},
+        expected_output={{"answer": "{answer}"}},
+    )])],
+    generation=Generation(generator="builtin/demo_generator", reducer="builtin/majority_vote"),
+    evaluation=Evaluation(metrics=["builtin/exact_match"], parser="builtin/json_identity"),
+    seeds=[{seed}],
+)
+'''
+    )
     path.write_text(
         f"""
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/exact_match
-  parsers:
-    - builtin/json_identity
+definition: {module}:experiment
 storage:
   target: sqlite
   kwargs:
     path: {store_path}
-dataset_sources:
-  - dataset_id: dataset-1
-    cases:
-      - case_id: case-1
-        input:
-          question: 2+2
-        expected_output:
-          answer: "{answer}"
-seeds: [{seed}]
 """.strip()
     )
 

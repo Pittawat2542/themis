@@ -34,7 +34,7 @@ Choose custom protocols if builtin components are not sufficient and your logic 
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
 | Python-authored run | You want a reusable canonical experiment definition with compile, run, replay, and store control | More structure than the removed one-call helper | `Experiment(...)`, `Experiment.compile()`, `Experiment.run()` |
-| Config and CLI workflow | You want automation, overrides, or worker submission around importable experiment code | Automation surface only; component references must be importable or builtin ids | `Experiment.from_config(...)`, `themis run`, `themis submit` |
+| Config and CLI workflow | You want automation, overrides, or worker submission around importable experiment code | Automation surface only; the Python definition remains canonical | launcher config, `themis run`, `themis submit` |
 | Advanced extensibility | Builtins are close but not sufficient and custom runtime behavior is required | Highest implementation cost and more protocol knowledge | `Generator`, `Parser`, `CandidateReducer`, metric protocols |
 
 ## Expected result

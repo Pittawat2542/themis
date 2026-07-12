@@ -9,11 +9,10 @@ from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import (
     EvalScoreContext,
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     ScoreContext,
-    SessionContext,
 )
 from themis.core.prompts import PromptSpec
 from themis.core.models import (
@@ -21,14 +20,13 @@ from themis.core.models import (
     ConversationTrace,
     Dataset,
     FailureCategory,
-    GenerationResult,
     MetricResult,
     Message,
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
-    SessionResult,
-    SessionTurn,
+    Candidate,
+    GenerationTurn,
     StreamEvent,
     TraceStep,
     WorkflowTrace,
@@ -49,7 +47,7 @@ def test_core_models_are_frozen() -> None:
 
 
 def test_core_models_round_trip_json() -> None:
-    result = GenerationResult(
+    result = Candidate(
         candidate_id="candidate-1",
         final_output={"answer": "4"},
         trace=[
@@ -67,7 +65,7 @@ def test_core_models_round_trip_json() -> None:
         latency_ms=12.5,
     )
 
-    restored = GenerationResult.model_validate_json(result.model_dump_json())
+    restored = Candidate.model_validate_json(result.model_dump_json())
 
     assert restored == result
 
@@ -81,11 +79,11 @@ def test_session_models_round_trip_json_and_hash_stably() -> None:
         timestamp=datetime(2026, 3, 29, 10, 0, tzinfo=UTC),
         offset_ms=12.5,
     )
-    session = SessionResult(
+    session = Candidate(
         candidate_id="candidate-1",
         final_output={"answer": "4"},
         turns=[
-            SessionTurn(
+            GenerationTurn(
                 turn_index=0,
                 input_messages=[Message(role="user", content="2+2")],
                 output_messages=[Message(role="assistant", content="4")],
@@ -107,7 +105,7 @@ def test_session_models_round_trip_json_and_hash_stably() -> None:
         latency_ms=21.0,
     )
 
-    restored = SessionResult.model_validate_json(session.model_dump_json())
+    restored = Candidate.model_validate_json(session.model_dump_json())
 
     assert restored == session
     assert restored.compute_hash() == session.compute_hash()
@@ -197,10 +195,7 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
             }
         ],
     )
-    generate = GenerateContext(
-        run_id="run-1", case_id="case-1", seed=7, prompt_spec=prompt_spec
-    )
-    session = SessionContext(
+    generation_context = GenerationContext(
         run_id="run-1",
         case_id="case-1",
         seed=7,
@@ -258,8 +253,10 @@ def test_contexts_and_configs_serialize_cleanly() -> None:
     )
     storage = StorageConfig(target="memory", kwargs={"path": ":memory:"})
 
-    assert GenerateContext.model_validate_json(generate.model_dump_json()) == generate
-    assert SessionContext.model_validate_json(session.model_dump_json()) == session
+    assert (
+        GenerationContext.model_validate_json(generation_context.model_dump_json())
+        == generation_context
+    )
     assert ReduceContext.model_validate_json(reduce.model_dump_json()) == reduce
     assert ParseContext.model_validate_json(parse.model_dump_json()) == parse
     assert ScoreContext.model_validate_json(score.model_dump_json()) == score

@@ -12,14 +12,12 @@ from themis.core.protocols import (
     CandidateSelector,
     Generator,
     JudgeModel,
-    LLMMetric,
     Parser,
     PureMetric,
-    SelectionMetric,
-    TraceMetric,
+    WorkflowMetric,
 )
 
-BuiltinMetric = PureMetric | LLMMetric | SelectionMetric | TraceMetric
+BuiltinMetric = PureMetric | WorkflowMetric
 
 
 def resolve_target_spec(spec: TargetSpec) -> object:

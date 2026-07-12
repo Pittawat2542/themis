@@ -2,28 +2,20 @@
 title: Experiment lifecycle reference
 diataxis: reference
 audience: Python users authoring and executing experiments
-goal: Document the primary experiment authoring and execution APIs.
+goal: Document the primary v5 experiment lifecycle.
 ---
 
 # Experiment lifecycle reference
 
-## Primary entry points
+## Lifecycle methods
 
-| Name | Kind | Use when | Key constraints / notes |
-| --- | --- | --- | --- |
-| `Experiment.from_config(...)` | Config loader | You want an automation surface for config-loadable targets and overrides around Python-authored experiment meaning | Resolves config and components before execution |
-| `Experiment.compile()` | Snapshot builder | You want a `RunSnapshot` before deciding whether to execute | Freezes identity and provenance but does not run work |
-| `Experiment.run()` / `run_async()` | Executor | You want to execute a compiled experiment | Use the async form when an event loop is already running |
-| `Experiment.replay()` / `replay_async()` | Downstream rerun API | You want to rerun downstream stages from stored upstream artifacts | Requires stored upstream artifacts; use the async form inside async environments |
-| `Experiment.rejudge()` / `rejudge_async()` | Judge-stage shortcut | You want to rerun only workflow-backed judging | Equivalent to `replay(stage="judge")`; use the async form inside async environments |
+| API | Purpose | Notes |
+| --- | --- | --- |
+| `Experiment.compile()` | Freeze logical identity and return a snapshot | Does not execute work |
+| `Experiment.run(store=..., options=...)` | Execute synchronously | Store is explicit; runtime options do not change identity |
+| `Experiment.run_async(...)` | Execute inside an event loop | Same contract as `run()` |
+| `Experiment.replay(store=..., from_stage=...)` | Recompute downstream stages from evidence | Requires persisted upstream artifacts |
+| `Experiment.rerun(...)` | Re-execute selected cases or failures | Records lineage |
 
-## Lookup notes
-
-| Name | Kind | Use when | Key constraints / notes |
-| --- | --- | --- | --- |
-| `compile()` | Identity step | You want to inspect what the logical run will be before execution | Produces a `RunSnapshot` and `run_id` |
-| `run()` | Execution step | You are ready to execute planned work | `compile()` alone does not perform generation or scoring; sync wrappers reject active event loops |
-| `replay()` | Artifact reuse step | You want new downstream outputs from fixed upstream artifacts | Memory-backed runs require access to the original in-process store |
-| `rejudge()` | Workflow-specialized replay | Only judge-stage artifacts need to change | A convenience wrapper around `replay(stage="judge")` |
-
-Use the generated API pages for full signatures and docstrings, and pair this page with [Compile vs run](../explanation/compile-vs-run.md) when behavior is conceptually unclear.
+Launcher configuration is handled by the CLI. It imports a reviewed Python
+`Experiment`; `Experiment` itself does not load YAML or TOML.

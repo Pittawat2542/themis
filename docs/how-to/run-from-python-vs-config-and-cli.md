@@ -30,9 +30,9 @@ Use config and CLI when you want:
 
 Config-backed execution details:
 
-- `Experiment.from_config(...)` supports `YAML` (`.yaml` / `.yml`) and `TOML` (`.toml`)
-- config component fields accept builtin ids or importable module paths such as `package.module:factory`
-- config files carry strings, not live Python objects; object instances belong in Python authoring only
+- launchers support `YAML` (`.yaml` / `.yml`) and `TOML` (`.toml`)
+- `definition: package.module:experiment` imports an `Experiment` object or factory
+- launchers carry operational settings, not component or dataset definitions
 - config files are automation surfaces, not the canonical source of serious experiment meaning
 - relative storage and runtime paths resolve relative to the config file directory
 - CLI or Python callers can pass dotlist `overrides` before compile/run time
@@ -48,7 +48,7 @@ Use the external execution example when you want one runnable path from a review
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
 | Reviewed Python module | You want the experiment meaning to live in versioned, importable code | More explicit structure than notebook-only exploration | Python authoring with `Experiment(...)`, `Experiment.run()`, and `Experiment.run_async()` |
-| Config and CLI automation | You want shell workflows, deferred execution, or environment-specific overrides around reviewed Python code | Component references must be config-loadable rather than live objects | `Experiment.from_config(...)`, `themis run`, `themis submit` |
+| Config and CLI automation | You want shell workflows, deferred execution, or environment-specific overrides around reviewed Python code | The Python definition must be importable | launcher config, `themis run`, `themis submit` |
 | Mixed approach | You want config transport for repeatable runs but still keep experiment meaning and custom components in Python | Requires discipline about what lives in config vs code | Config files plus importable module paths |
 
 ## Expected result

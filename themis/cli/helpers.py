@@ -11,6 +11,7 @@ from themis.core.read_models import BenchmarkResult
 from themis.core.registry import RunQuery
 from themis.core.store import RunStore
 from themis.core.stores.factory import create_run_store
+from themis.launcher import load_core_experiment
 
 
 def dump_json(payload: object) -> str:
@@ -22,7 +23,7 @@ def dump_json(payload: object) -> str:
 def load_experiment(config: str, *, overrides: list[str] | None = None) -> Experiment:
     """Load an experiment definition from a config file path."""
 
-    return Experiment.from_config(config, overrides=overrides)
+    return load_core_experiment(config, overrides=overrides)
 
 
 def initialize_store(experiment: Experiment) -> RunStore:

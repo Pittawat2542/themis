@@ -9,6 +9,7 @@ from themis.core.experiment import Experiment
 from themis.core.results import RunResult
 from themis.core.store import RunStore
 from themis.core.stores.factory import create_run_store
+from themis.launcher import load_core_experiment
 
 
 @pytest.fixture
@@ -28,19 +29,36 @@ def write_experiment_config(tmp_path: Path) -> Callable[..., Path]:
         resolved_store_path = store_path or (tmp_path / "runs.sqlite3")
         resolved_queue_root = queue_root or (tmp_path / "queue")
         resolved_batch_root = batch_root or (tmp_path / "batch")
-        seeds_block = "" if seed is None else f"\nseeds: [{seed}]"
+        definition_module = f"{config_path.stem}_definition"
+        seeds = [] if seed is None else [seed]
+        (tmp_path / f"{definition_module}.py").write_text(
+            f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(
+        dataset_id="cases",
+        cases=[Case(
+            case_id="case-1",
+            input={{"question": "2+2"}},
+            expected_output={{"answer": "{answer}"}},
+        )],
+    )],
+    generation=Generation(
+        generator="builtin/demo_generator",
+        reducer="builtin/majority_vote",
+    ),
+    evaluation=Evaluation(
+        metrics=["builtin/exact_match"],
+        parser="builtin/json_identity",
+    ),
+    seeds={seeds!r},
+)
+''',
+            encoding="utf-8",
+        )
         config_path.write_text(
             f"""
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/exact_match
-  parsers:
-    - builtin/json_identity
+definition: {definition_module}:experiment
 storage:
   target: sqlite
   kwargs:
@@ -48,15 +66,6 @@ storage:
 runtime:
   queue_root: {resolved_queue_root}
   batch_root: {resolved_batch_root}
-dataset_sources:
-  - dataset_id: cases
-    cases:
-      - case_id: case-1
-        input:
-          question: 2+2
-        expected_output:
-          answer: "{answer}"
-{seeds_block}
 """.strip(),
             encoding="utf-8",
         )
@@ -70,7 +79,7 @@ def run_config_experiment() -> Callable[[Path], tuple[Experiment, RunStore, RunR
     """Compile and execute an experiment config into its configured store."""
 
     def _run(config_path: Path) -> tuple[Experiment, RunStore, RunResult]:
-        experiment = Experiment.from_config(config_path)
+        experiment = load_core_experiment(config_path)
         store = create_run_store(experiment.storage)
         store.initialize()
         result = experiment.run(store=store)

@@ -10,25 +10,36 @@ def init(*, path: str) -> int:
     (root / "data").mkdir(parents=True, exist_ok=True)
     (root / "experiment.yaml").write_text(
         """
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/exact_match
-  parsers:
-    - builtin/json_identity
+definition: experiment:experiment
 storage:
   target: sqlite
   kwargs:
     path: runs/themis.sqlite3
-dataset_sources:
-  - dataset_id: sample
-    cases: []
-seeds: [7]
 """.strip()
+    )
+    (root / "experiment.py").write_text(
+        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(
+        dataset_id="sample",
+        cases=[Case(
+            case_id="case-1",
+            input={"question": "2+2"},
+            expected_output={"answer": "4"},
+        )],
+    )],
+    generation=Generation(
+        generator="builtin/demo_generator",
+        reducer="builtin/majority_vote",
+    ),
+    evaluation=Evaluation(
+        metrics=["builtin/exact_match"],
+        parser="builtin/json_identity",
+    ),
+    seeds=[7],
+)
+'''
     )
     (root / "data" / "sample.jsonl").write_text(
         '{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n'
@@ -37,11 +48,14 @@ seeds: [7]
         """
 from pathlib import Path
 
-from themis import Experiment
+from experiment import experiment
+from themis.storage import sqlite_store
 
 
 if __name__ == "__main__":
-    result = Experiment.from_config(Path(__file__).with_name("experiment.yaml")).run()
+    result = experiment.run(
+        store=sqlite_store(Path(__file__).with_name("runs/themis.sqlite3"))
+    )
     print(result.run_id)
 """.strip()
         + "\n"

@@ -415,8 +415,10 @@ def validate_benchmark(name: str) -> BenchmarkValidationResult:
     try:
         assert dataset is not None
         _validate_execution_wiring(definition, dataset)
-        _score_smoke(definition, dataset)
-        checks["score_smoke"] = BenchmarkValidationCheck(status="passed")
+        checks["score_smoke"] = BenchmarkValidationCheck(
+            status="skipped",
+            message="Configure an explicit sandbox executor to run code scoring.",
+        )
     except Exception as exc:
         message = str(exc)
         issues.append(message)

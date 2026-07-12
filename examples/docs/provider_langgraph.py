@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from themis import Experiment
 from themis.adapters import langgraph
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset
 
 
 class _FakeGraph:
@@ -16,7 +18,7 @@ class _FakeGraph:
         yield {
             "name": "plan",
             "event": "step",
-            "data": {"input": payload, "output": {"proposed_answer": "4"}},
+            "data": {"input": payload, "output": {"answer": "4"}},
         }
 
 
@@ -25,10 +27,9 @@ def run_example() -> dict[str, object]:
 
     generator = langgraph(_FakeGraph(), graph_id="fake-graph", output_key="answer")
     experiment = Experiment(
-        generation=GenerationConfig(generator=generator),
-        evaluation=EvaluationConfig(),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        generation=Generation(generator=generator),
+        evaluation=Evaluation(),
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -38,7 +39,7 @@ def run_example() -> dict[str, object]:
         ],
         seeds=[7],
     )
-    result = experiment.run()
+    result = experiment.run(store=memory_store())
     trace_steps = len(result.cases[0].generated_candidates[0].trace or [])
     return {
         "run_id": result.run_id,

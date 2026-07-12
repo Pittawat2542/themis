@@ -9,9 +9,9 @@ from themis.core.components import component_ref_from_value
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.contexts import EvalScoreContext, SelectContext
 from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset, ParsedOutput, SessionResult
+from themis.core.models import Case, Dataset, ParsedOutput, Candidate
 from themis.core.prompts import PromptSpec
-from themis.core.protocols import CandidateSelector, LLMMetric, SelectionMetric
+from themis.core.protocols import CandidateSelector, WorkflowMetric
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
 from themis.core.subjects import CandidateSetSubject
@@ -42,8 +42,8 @@ class ChoosingJudgeModel:
 async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> None:
     selector = cast(CandidateSelector, load("builtin/best_of_n"))
     candidates = [
-        SessionResult(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
-        SessionResult(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
+        Candidate(candidate_id="case-1-candidate-0", final_output={"answer": "4"}),
+        Candidate(candidate_id="case-1-candidate-1", final_output={"answer": "5"}),
     ]
 
     selected = await selector.select(
@@ -62,18 +62,18 @@ async def test_catalog_builtin_best_of_n_uses_judge_models_to_pick_winner() -> N
 
 
 def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
-    llm_rubric = cast(LLMMetric, load("builtin/llm_rubric"))
-    panel = cast(LLMMetric, load("builtin/panel_of_judges"))
-    majority = cast(LLMMetric, load("builtin/majority_vote_judge"))
-    pairwise = cast(SelectionMetric, load("builtin/pairwise_judge"))
-    ranking = cast(SelectionMetric, load("builtin/ranking_judge"))
-    candidate = SessionResult(
+    llm_rubric = cast(WorkflowMetric, load("builtin/llm_rubric"))
+    panel = cast(WorkflowMetric, load("builtin/panel_of_judges"))
+    majority = cast(WorkflowMetric, load("builtin/majority_vote_judge"))
+    pairwise = cast(WorkflowMetric, load("builtin/pairwise_judge"))
+    ranking = cast(WorkflowMetric, load("builtin/ranking_judge"))
+    candidate = Candidate(
         candidate_id="case-1-reduced", final_output={"answer": "4"}
     )
-    pair_a = SessionResult(
+    pair_a = Candidate(
         candidate_id="case-1-candidate-0", final_output={"answer": "4"}
     )
-    pair_b = SessionResult(
+    pair_b = Candidate(
         candidate_id="case-1-candidate-1", final_output={"answer": "5"}
     )
     ctx = EvalScoreContext(
@@ -138,7 +138,7 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
 
 
 def test_pairwise_judge_emits_preference_metric_result() -> None:
-    pairwise = cast(SelectionMetric, load("builtin/pairwise_judge"))
+    pairwise = cast(WorkflowMetric, load("builtin/pairwise_judge"))
     ctx = EvalScoreContext(
         run_id="run-1",
         case=Case(case_id="case-1", input={}, expected_output=None),
@@ -148,8 +148,8 @@ def test_pairwise_judge_emits_preference_metric_result() -> None:
     workflow = pairwise.build_workflow(
         CandidateSetSubject(
             candidates=[
-                SessionResult(candidate_id="a", final_output="A"),
-                SessionResult(candidate_id="b", final_output="B"),
+                Candidate(candidate_id="a", final_output="A"),
+                Candidate(candidate_id="b", final_output="B"),
             ]
         ),
         ctx,
@@ -191,7 +191,7 @@ def test_catalog_builtin_judge_metrics_run_end_to_end_through_experiment() -> No
                 "builtin/majority_vote_judge",
             ],
             parsers=["builtin/json_identity"],
-            judge_models=["builtin/demo_judge", "builtin/demo_judge"],
+            judge_models=["builtin/demo_judge"],
             workflow_overrides={"rubric": "pass if the answer is correct"},
         ),
         storage=StorageConfig(target="memory"),

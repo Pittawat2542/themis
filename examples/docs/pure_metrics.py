@@ -1,29 +1,30 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset
 
 
 def run_example() -> dict[str, object]:
     """Execute builtin pure metrics together."""
 
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator", reducer="builtin/majority_vote"
         ),
-        evaluation=EvaluationConfig(
+        evaluation=Evaluation(
             metrics=[
                 "builtin/exact_match",
                 "builtin/f1",
                 "builtin/bleu",
                 "builtin/rouge_l",
             ],
-            parsers=["builtin/json_identity"],
+            parser="builtin/json_identity",
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -38,7 +39,7 @@ def run_example() -> dict[str, object]:
             )
         ],
     )
-    result = experiment.run()
+    result = experiment.run(store=memory_store())
     return {
         "run_id": result.run_id,
         "status": result.status.value,

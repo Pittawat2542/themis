@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from themis.catalog import run
+from themis.catalog import load, run
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
 from tests.catalog_ids import catalog_benchmark_ids
@@ -17,5 +17,11 @@ def test_catalog_run_executes_manifest_benchmark_end_to_end(
 
     result = run(benchmark_id, store=store)
 
-    assert result.status is RunStatus.COMPLETED
+    definition = load(benchmark_id)
+    expected_status = (
+        RunStatus.PARTIAL_FAILURE
+        if definition.requires_code_execution
+        else RunStatus.COMPLETED
+    )
+    assert result.status is expected_status
     assert result.progress.total_cases >= 1

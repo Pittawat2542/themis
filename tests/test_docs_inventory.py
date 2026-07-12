@@ -62,33 +62,8 @@ TABLE_REQUIRED_SECTIONS = (
     ),
     (
         "reference/config-schema.md",
-        "Config file support",
-        ("Field", "Required", "Purpose", "Affects run_id", "Notes"),
-    ),
-    (
-        "reference/config-schema.md",
-        "Component target syntax",
-        ("Field", "Required", "Purpose", "Affects run_id", "Notes"),
-    ),
-    (
-        "reference/config-schema.md",
-        "`SessionConfig`",
-        ("Field", "Required", "Purpose", "Affects run_id", "Notes"),
-    ),
-    (
-        "reference/config-schema.md",
-        "`EvaluationConfig`",
-        ("Field", "Required", "Purpose", "Affects run_id", "Notes"),
-    ),
-    (
-        "reference/config-schema.md",
-        "`StorageConfig`",
-        ("Field", "Required", "Purpose", "Affects run_id", "Notes"),
-    ),
-    (
-        "reference/config-schema.md",
-        "`RuntimeConfig`",
-        ("Field", "Required", "Purpose", "Affects run_id", "Notes"),
+        "Launcher fields",
+        ("Field", "Required", "Meaning", "Affects `run_id`"),
     ),
     (
         "reference/protocols.md",
@@ -112,13 +87,8 @@ TABLE_REQUIRED_SECTIONS = (
     ),
     (
         "reference/experiment-lifecycle.md",
-        "Primary entry points",
-        ("Name", "Kind", "Use when", "Key constraints / notes"),
-    ),
-    (
-        "reference/experiment-lifecycle.md",
-        "Lookup notes",
-        ("Name", "Kind", "Use when", "Key constraints / notes"),
+        "Lifecycle methods",
+        ("API", "Purpose", "Notes"),
     ),
     (
         "reference/stores-and-inspection.md",
@@ -138,7 +108,7 @@ TABLE_REQUIRED_SECTIONS = (
     (
         "reference/python-api.md",
         "Root exports",
-        ("Name", "Kind", "Use when", "Key constraints / notes"),
+        ("Name", "Purpose"),
     ),
     (
         "reference/data-models.md",
@@ -200,7 +170,7 @@ def test_docs_inventory_script_reports_public_surface() -> None:
     assert "builtin/exact_match" in payload["builtin_components"]
     assert "mmlu_pro" in payload["benchmarks"]
     assert payload["docs_destinations"]["glossary"] == "docs/glossary.md"
-    assert "LifecycleSubscriber" in payload["required_topics"]["observability"]
+    assert "EventSubscriber" in payload["required_topics"]["observability"]
 
 
 def _section_text(doc_path: Path, heading: str) -> str:

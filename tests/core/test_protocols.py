@@ -2,49 +2,33 @@ from __future__ import annotations
 
 from themis.core.contexts import (
     EvalScoreContext,
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     ScoreContext,
-    SessionContext,
 )
 from themis.core.events import RunEvent
 from themis.core.models import (
     Case,
     ConversationTrace,
-    GenerationResult,
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
+    MetricInterpretation,
     ScoreError,
-    SessionResult,
-    SessionTurn,
+    Candidate,
     TraceStep,
     WorkflowTrace,
 )
 from themis.core.protocols import (
-    AfterGenerate,
-    AfterJudge,
-    AfterParse,
-    AfterReduce,
-    AfterScore,
-    BeforeGenerate,
-    BeforeJudge,
-    BeforeParse,
-    BeforeReduce,
-    BeforeScore,
     CandidateReducer,
     EvaluationWorkflow,
     Generator,
     JudgeModel,
-    LLMMetric,
-    LifecycleSubscriber,
-    OnEvent,
+    EventSubscriber,
     Parser,
     PureMetric,
-    SelectionMetric,
-    SessionGenerator,
-    TraceMetric,
+    WorkflowMetric,
     TracingProvider,
     WorkflowRunner,
 )
@@ -52,7 +36,7 @@ from themis.core.snapshot import ComponentRef
 from themis.core.subjects import (
     CandidateSetSubject,
     ConversationSubject,
-    SessionSubject,
+    CandidateSubject,
     TraceSubject,
 )
 from themis.core.workflows import (
@@ -113,31 +97,9 @@ class DummyGenerator:
     def fingerprint(self) -> str:
         return "generator-fingerprint"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult(
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed}
-        )
-
-
-class DummySessionGenerator:
-    component_id = "builtin/demo_session"
-    version = "1.0"
-
-    def fingerprint(self) -> str:
-        return "session-generator-fingerprint"
-
-    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
-        return SessionResult(
-            candidate_id=f"{case.case_id}-candidate",
-            final_output={"seed": ctx.seed, "turns": ctx.max_turns},
-            turns=[
-                SessionTurn(
-                    turn_index=0,
-                    output_messages=[],
-                    metadata={"case_id": case.case_id},
-                )
-            ],
-            termination_reason="completed",
         )
 
 
@@ -163,7 +125,7 @@ class DummyReducer:
 
     async def reduce(
         self,
-        candidates: list[SessionResult],
+        candidates: list[Candidate],
         ctx: ReduceContext,
     ) -> ReducedCandidate:
         return ReducedCandidate(
@@ -174,6 +136,7 @@ class DummyReducer:
 
 
 class DummyPureMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/exact_match"
     version = "1.0"
 
@@ -190,8 +153,10 @@ class DummyPureMetric:
 
 
 class DummyLLMMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/llm_judge"
     version = "1.0"
+    subject_kind = "candidate"
 
     def fingerprint(self) -> str:
         return "llm-metric-fingerprint"
@@ -206,8 +171,10 @@ class DummyLLMMetric:
 
 
 class DummySelectionMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/select"
     version = "1.0"
+    subject_kind = "candidates"
 
     def fingerprint(self) -> str:
         return "selection-metric-fingerprint"
@@ -222,15 +189,17 @@ class DummySelectionMetric:
 
 
 class DummyTraceMetric:
+    interpretation = MetricInterpretation()
     component_id = "metric/trace"
     version = "1.0"
+    subject_kind = "trace"
 
     def fingerprint(self) -> str:
         return "trace-metric-fingerprint"
 
     def build_workflow(
         self,
-        subject: TraceSubject | ConversationSubject | SessionSubject,
+        subject: TraceSubject | ConversationSubject | CandidateSubject,
         ctx: EvalScoreContext,
     ) -> DummyWorkflow:
         del subject, ctx
@@ -261,7 +230,7 @@ class DummyWorkflowRunner:
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
+        | CandidateSubject,
         metric_id: str,
         ctx: EvalScoreContext,
     ) -> EvaluationExecution:
@@ -274,14 +243,14 @@ class DummyWorkflowRunner:
 
 
 class DummySubscriber:
-    def before_generate(self, case: Case, ctx: GenerateContext) -> None:
+    def before_generate(self, case: Case, ctx: GenerationContext) -> None:
         del case, ctx
 
-    def after_generate(self, result: SessionResult, ctx: GenerateContext) -> None:
+    def after_generate(self, result: Candidate, ctx: GenerationContext) -> None:
         del result, ctx
 
     def before_reduce(
-        self, candidates: list[SessionResult], ctx: ReduceContext
+        self, candidates: list[Candidate], ctx: ReduceContext
     ) -> None:
         del candidates, ctx
 
@@ -305,7 +274,7 @@ class DummySubscriber:
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
+        | CandidateSubject,
         ctx: EvalScoreContext,
     ) -> None:
         del subject, ctx
@@ -351,29 +320,17 @@ def _score_context() -> EvalScoreContext:
 
 
 def test_protocol_dummy_implementations_satisfy_runtime_protocols() -> None:
-    assert isinstance(DummySessionGenerator(), SessionGenerator)
     assert isinstance(DummyGenerator(), Generator)
     assert isinstance(DummyParser(), Parser)
     assert isinstance(DummyReducer(), CandidateReducer)
     assert isinstance(DummyWorkflow(), EvaluationWorkflow)
     assert isinstance(DummyJudgeModel(), JudgeModel)
     assert isinstance(DummyPureMetric(), PureMetric)
-    assert isinstance(DummyLLMMetric(), LLMMetric)
-    assert isinstance(DummySelectionMetric(), SelectionMetric)
-    assert isinstance(DummyTraceMetric(), TraceMetric)
+    assert isinstance(DummyLLMMetric(), WorkflowMetric)
+    assert isinstance(DummySelectionMetric(), WorkflowMetric)
+    assert isinstance(DummyTraceMetric(), WorkflowMetric)
     assert isinstance(DummyWorkflowRunner(), WorkflowRunner)
-    assert isinstance(DummySubscriber(), BeforeGenerate)
-    assert isinstance(DummySubscriber(), AfterGenerate)
-    assert isinstance(DummySubscriber(), BeforeReduce)
-    assert isinstance(DummySubscriber(), AfterReduce)
-    assert isinstance(DummySubscriber(), BeforeParse)
-    assert isinstance(DummySubscriber(), AfterParse)
-    assert isinstance(DummySubscriber(), BeforeScore)
-    assert isinstance(DummySubscriber(), AfterScore)
-    assert isinstance(DummySubscriber(), BeforeJudge)
-    assert isinstance(DummySubscriber(), AfterJudge)
-    assert isinstance(DummySubscriber(), OnEvent)
-    assert isinstance(DummySubscriber(), LifecycleSubscriber)
+    assert isinstance(DummySubscriber(), EventSubscriber)
     assert isinstance(DummyTracingProvider(), TracingProvider)
 
 
@@ -425,12 +382,12 @@ def test_metric_protocols_accept_expected_subject_shapes() -> None:
     selection_metric = DummySelectionMetric()
     trace_metric = DummyTraceMetric()
     single = CandidateSetSubject(
-        candidates=[GenerationResult(candidate_id="candidate-1", final_output="4")]
+        candidates=[Candidate(candidate_id="candidate-1", final_output="4")]
     )
     pair = CandidateSetSubject(
         candidates=[
-            GenerationResult(candidate_id="candidate-1", final_output="4"),
-            GenerationResult(candidate_id="candidate-2", final_output="4"),
+            Candidate(candidate_id="candidate-1", final_output="4"),
+            Candidate(candidate_id="candidate-2", final_output="4"),
         ]
     )
     trace = TraceSubject(
@@ -445,8 +402,8 @@ def test_metric_protocols_accept_expected_subject_shapes() -> None:
             messages=[],
         )
     )
-    session = SessionSubject(
-        session=SessionResult(candidate_id="candidate-1", final_output="4")
+    candidate = CandidateSubject(
+        candidate=Candidate(candidate_id="candidate-1", final_output="4")
     )
     ctx = _score_context()
 
@@ -456,4 +413,4 @@ def test_metric_protocols_accept_expected_subject_shapes() -> None:
     assert (
         trace_metric.build_workflow(conversation, ctx).component_id == "workflow/demo"
     )
-    assert trace_metric.build_workflow(session, ctx).component_id == "workflow/demo"
+    assert trace_metric.build_workflow(candidate, ctx).component_id == "workflow/demo"

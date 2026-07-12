@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from types import SimpleNamespace
 
-from themis import Experiment, InMemoryRunStore
+from themis import Experiment
 from themis.adapters import openai
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset
 
 
 class _FakeResponses:
@@ -29,17 +31,16 @@ class _FakeClient:
 def run_example() -> dict[str, object]:
     """Execute the OpenAI adapter against a fake injected client."""
 
-    store = InMemoryRunStore()
+    store = memory_store()
     generator = openai(
         "gpt-fake",
         client=_FakeClient(),
         instructions="Answer with only the final number.",
     )
     experiment = Experiment(
-        generation=GenerationConfig(generator=generator),
-        evaluation=EvaluationConfig(),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        generation=Generation(generator=generator),
+        evaluation=Evaluation(),
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",

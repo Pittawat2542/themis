@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from themis import Experiment
+from themis.core.experiment import Experiment
 from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
@@ -19,7 +19,7 @@ def test_planner_estimate_returns_deterministic_counts_for_compiled_snapshot() -
             reducer="builtin/majority_vote",
         ),
         evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match", "builtin/exact_match"],
+            metrics=["builtin/exact_match"],
             parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(target="memory"),
@@ -50,7 +50,7 @@ def test_planner_estimate_returns_deterministic_counts_for_compiled_snapshot() -
     assert estimate.planned_generation_tasks == 6
     assert estimate.planned_reduction_tasks == 2
     assert estimate.planned_parse_tasks == 2
-    assert estimate.planned_score_tasks == 4
+    assert estimate.planned_score_tasks == 2
     assert estimate.estimated_generation_input_tokens == 24
     assert estimate.estimated_generation_output_tokens == 1536
     assert estimate.estimated_total_tokens == 1560

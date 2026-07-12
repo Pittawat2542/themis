@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TypeAlias
+from enum import StrEnum
+from typing import Annotated, TypeAlias
 
 from pydantic import Field, model_validator
 
@@ -13,13 +14,42 @@ from themis.core.protocols import (
     CandidateSelector,
     Generator,
     JudgeModel,
-    LLMMetric,
     Parser,
     PureMetric,
-    SelectionMetric,
-    SessionGenerator,
-    TraceMetric,
+    WorkflowMetric,
 )
+
+PositiveInt = Annotated[int, Field(ge=1)]
+NonNegativeFloat = Annotated[float, Field(ge=0.0)]
+PositiveFloat = Annotated[float, Field(gt=0.0)]
+BackoffFactor = Annotated[float, Field(ge=1.0)]
+
+
+class Stage(StrEnum):
+    """Canonical execution stages used across configuration and runtime APIs."""
+
+    GENERATE = "generate"
+    SELECT = "select"
+    REDUCE = "reduce"
+    PARSE = "parse"
+    SCORE = "score"
+    JUDGE = "judge"
+
+
+class ExistingRunPolicy(StrEnum):
+    """Behavior when a store already contains the compiled run identity."""
+
+    REUSE = "reuse"
+    ERROR = "error"
+    RESTART = "restart"
+
+
+class EvidenceRetention(StrEnum):
+    """Amount of sanitized runtime evidence retained by stores."""
+
+    MINIMAL = "minimal"
+    STANDARD = "standard"
+    FULL = "full"
 
 
 class TargetSpec(HashableModel):
@@ -29,13 +59,13 @@ class TargetSpec(HashableModel):
     kwargs: dict[str, JSONValue] = Field(default_factory=dict)
 
 
-GeneratorComponent: TypeAlias = SessionGenerator | Generator | TargetSpec | str
+GeneratorComponent: TypeAlias = Generator | TargetSpec | str
 SelectorComponent: TypeAlias = CandidateSelector | TargetSpec | str
 ReducerComponent: TypeAlias = CandidateReducer | TargetSpec | str
 ParserComponent: TypeAlias = Parser | TargetSpec | str
 JudgeModelComponent: TypeAlias = JudgeModel | TargetSpec | str
 MetricComponent: TypeAlias = (
-    PureMetric | LLMMetric | SelectionMetric | TraceMetric | TargetSpec | str
+    PureMetric | WorkflowMetric | TargetSpec | str
 )
 
 
@@ -47,8 +77,8 @@ class ParserView(HashableModel):
     fallbacks: list[ParserComponent] = Field(default_factory=list)
 
 
-class SessionConfig(HashableModel):
-    """Session-stage configuration for a run."""
+class GenerationConfig(HashableModel):
+    """Candidate generation configuration for a run."""
 
     generator: GeneratorComponent
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
@@ -57,12 +87,6 @@ class SessionConfig(HashableModel):
     termination: dict[str, JSONValue] = Field(default_factory=dict)
     selector: SelectorComponent | None = None
     reducer: ReducerComponent | None = None
-
-
-class GenerationConfig(SessionConfig):
-    """Legacy name for session-stage configuration."""
-
-
 class EvaluationConfig(HashableModel):
     """Evaluation-stage configuration for parsing, metrics, and judges."""
 
@@ -110,19 +134,26 @@ class StorageConfig(HashableModel):
 class RuntimeConfig(HashableModel):
     """Execution-time controls that do not affect snapshot identity."""
 
-    max_concurrent_tasks: int = 32
-    stage_concurrency: dict[str, int] = Field(default_factory=dict)
-    provider_concurrency: dict[str, int] = Field(default_factory=dict)
-    provider_rate_limits: dict[str, int] = Field(default_factory=dict)
-    provider_token_limits: dict[str, int] = Field(default_factory=dict)
-    generation_retry_attempts: int = 3
-    generation_retry_delay: float = 0.01
-    generation_retry_backoff: float = 2.0
-    judge_retry_attempts: int = 3
-    judge_retry_delay: float = 0.01
-    judge_retry_backoff: float = 2.0
-    store_retry_attempts: int = 5
-    store_retry_delay: float = 0.01
-    existing_run_policy: str = "auto"
+    max_concurrent_tasks: PositiveInt = 32
+    stage_concurrency: dict[Stage, PositiveInt] = Field(default_factory=dict)
+    provider_concurrency: dict[str, PositiveInt] = Field(default_factory=dict)
+    provider_rate_limits: dict[str, PositiveInt] = Field(default_factory=dict)
+    provider_token_limits: dict[str, PositiveInt] = Field(default_factory=dict)
+    provider_timeout_seconds: PositiveFloat = 120.0
+    generation_retry_attempts: PositiveInt = 3
+    generation_retry_delay: NonNegativeFloat = 0.01
+    generation_retry_backoff: BackoffFactor = 2.0
+    judge_retry_attempts: PositiveInt = 3
+    judge_retry_delay: NonNegativeFloat = 0.01
+    judge_retry_backoff: BackoffFactor = 2.0
+    store_retry_attempts: PositiveInt = 5
+    store_retry_delay: NonNegativeFloat = 0.01
+    strict_determinism: bool = False
+    evidence_retention: EvidenceRetention = EvidenceRetention.STANDARD
+    persistence_timeout_seconds: PositiveFloat = 30.0
+    subscriber_timeout_seconds: PositiveFloat = 5.0
+    evidence_queue_capacity: PositiveInt = 256
+    evidence_batch_size: PositiveInt = 1
+    existing_run_policy: ExistingRunPolicy = ExistingRunPolicy.REUSE
     queue_root: str | None = None
     batch_root: str | None = None

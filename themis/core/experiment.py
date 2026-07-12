@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version as distribution_version
+import platform as platform_module
 import subprocess
 from pathlib import Path
 import tomllib
@@ -22,14 +23,19 @@ from themis.core.builtins import (
 )
 from themis.core.base import FrozenModel
 from themis.core.base import JSONValue
-from themis.core.components import ComponentRef, component_ref_from_value
+from themis.core.components import (
+    ComponentRef,
+    MetricRef,
+    component_ref_from_value,
+    metric_ref_from_value,
+)
 from themis.core.config import (
+    ExistingRunPolicy,
     EvaluationConfig,
     RuntimeConfig,
-    SessionConfig,
+    GenerationConfig,
     StorageConfig,
 )
-from themis.core.config_loading import ExperimentConfigMetadata
 from themis.core.dataset_sources import (
     DatasetSourceSpec,
     dataset_materialization_receipt,
@@ -39,15 +45,13 @@ from themis.core.dataset_sources import (
     inline_dataset_source,
     materialize_dataset_sources,
 )
-from themis.core.models import Dataset
+from themis.core.models import Dataset, SeedCapability
 from themis.core.orchestrator import Orchestrator
 from themis.core.projections import build_run_result, build_run_result_from_state
 from themis.core.protocols import (
-    LLMMetric,
-    LifecycleSubscriber,
+    EventSubscriber,
     PureMetric,
-    SelectionMetric,
-    TraceMetric,
+    WorkflowMetric,
     TracingProvider,
 )
 from themis.core.registry import RunLineage
@@ -87,6 +91,63 @@ def _raise_if_running_loop(message: str) -> None:
     raise RuntimeError(message)
 
 
+def _workflow_subject_kind(metric: object) -> str:
+    subject_kind = getattr(metric, "subject_kind", None)
+    if subject_kind not in {"candidate", "candidates", "trace"}:
+        raise ValueError(
+            "Workflow metrics must declare subject_kind as candidate, candidates, or trace"
+        )
+    return str(subject_kind)
+
+
+def _validate_unique_component_refs(
+    label: str, refs: list[ComponentRef] | list[MetricRef]
+) -> None:
+    seen: set[str] = set()
+    for ref in refs:
+        if ref.component_id in seen:
+            raise ValueError(f"Duplicate {label} component_id: {ref.component_id}")
+        seen.add(ref.component_id)
+
+
+def _validate_dataset_identifiers(datasets: list[Dataset]) -> None:
+    dataset_ids: set[str] = set()
+    for dataset in datasets:
+        if dataset.dataset_id in dataset_ids:
+            raise ValueError(f"Duplicate dataset_id: {dataset.dataset_id}")
+        dataset_ids.add(dataset.dataset_id)
+        case_ids: set[str] = set()
+        for case in dataset.cases:
+            if case.case_id in case_ids:
+                raise ValueError(
+                    f"Duplicate case_id in dataset {dataset.dataset_id}: {case.case_id}"
+                )
+            case_ids.add(case.case_id)
+
+
+def _validate_seed_capabilities(experiment: Experiment, runtime: RuntimeConfig) -> None:
+    if not runtime.strict_determinism:
+        return
+    components = [
+        resolve_generator_component(experiment.generation.generator),
+        *[
+            resolve_judge_model_component(model)
+            for model in experiment.evaluation.judge_models
+        ],
+    ]
+    unsupported = [
+        str(getattr(component, "component_id", component.__class__.__name__))
+        for component in components
+        if getattr(component, "seed_capability", SeedCapability.UNSUPPORTED)
+        != SeedCapability.SUPPORTED
+    ]
+    if unsupported:
+        raise ValueError(
+            "Strict determinism requires seed-capable providers; unsupported: "
+            + ", ".join(unsupported)
+        )
+
+
 class Experiment(FrozenModel):
     """Authoring model for a Themis experiment.
 
@@ -94,21 +155,19 @@ class Experiment(FrozenModel):
     and provides sync and async helpers for running or rejudging that snapshot.
     """
 
-    generation: SessionConfig
+    generation: GenerationConfig
     evaluation: EvaluationConfig
     storage: StorageConfig
-    session: SessionConfig | None = Field(default=None, exclude=True)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     dataset_sources: Sequence[DatasetSourceSpec | Dataset] = Field(default_factory=list)
     seeds: list[int] = Field(default_factory=list)
     environment_metadata: dict[str, str] = Field(default_factory=dict)
     themis_version: str = Field(default_factory=_resolve_themis_version)
-    python_version: str = "3.12"
-    platform: str = "unknown"
+    python_version: str = Field(default_factory=platform_module.python_version)
+    platform: str = Field(default_factory=platform_module.platform)
     git_commit: str | None = None
     dependency_versions: dict[str, str] = Field(default_factory=dict)
     provider_metadata: dict[str, JSONValue] = Field(default_factory=dict)
-    _config_metadata: ExperimentConfigMetadata | None = PrivateAttr(default=None)
     _compiled_snapshot: RunSnapshot | None = PrivateAttr(default=None)
 
     @model_validator(mode="before")
@@ -117,10 +176,6 @@ class Experiment(FrozenModel):
         if not isinstance(payload, dict):
             return payload
         normalized = dict(payload)
-        if "generation" not in normalized and "session" in normalized:
-            normalized["generation"] = normalized["session"]
-        if "session" not in normalized and "generation" in normalized:
-            normalized["session"] = normalized["generation"]
         sources = normalized.get("dataset_sources")
         if not isinstance(sources, list):
             return normalized
@@ -136,19 +191,6 @@ class Experiment(FrozenModel):
         ]
         return normalized
 
-    @classmethod
-    def from_config(
-        cls, path: str | Path, *, overrides: list[str] | None = None
-    ) -> Experiment:
-        """Load an experiment definition from YAML or TOML configuration."""
-
-        from themis.core.config_loading import load_experiment_definition
-
-        loaded = load_experiment_definition(path, overrides=overrides)
-        experiment = cls.model_validate(loaded.payload)
-        experiment._config_metadata = loaded.metadata
-        return experiment
-
     def compile(self) -> RunSnapshot:
         """Compile the experiment into an immutable `RunSnapshot`."""
 
@@ -159,6 +201,8 @@ class Experiment(FrozenModel):
     def _compile_with_runtime(self, runtime: RuntimeConfig) -> RunSnapshot:
         dataset_sources = self._resolved_dataset_sources()
         datasets = self._materialized_datasets()
+        _validate_dataset_identifiers(datasets)
+        _validate_seed_capabilities(self, runtime)
         component_refs = ComponentRefs(
             generator=component_ref_from_value(self.generation.generator),
             selector=component_ref_from_value(self.generation.selector)
@@ -178,14 +222,14 @@ class Experiment(FrozenModel):
                 )
                 for view in self.evaluation.parser_views
             ],
-            metrics=[
-                component_ref_from_value(metric) for metric in self.evaluation.metrics
-            ],
+            metrics=[metric_ref_from_value(metric) for metric in self.evaluation.metrics],
             judge_models=[
                 component_ref_from_value(judge_model)
                 for judge_model in self.evaluation.judge_models
             ],
         )
+        _validate_unique_component_refs("metric", component_refs.metrics)
+        _validate_unique_component_refs("judge model", component_refs.judge_models)
         identity = RunIdentity(
             dataset_source_refs=[
                 DatasetSourceRef(
@@ -261,7 +305,7 @@ class Experiment(FrozenModel):
         until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         """Run the compiled snapshot asynchronously."""
@@ -276,13 +320,13 @@ class Experiment(FrozenModel):
         stored_run = None
         if existing_state is not None:
             existing_run_policy = effective_runtime.existing_run_policy
-            if existing_run_policy == "error":
+            if existing_run_policy is ExistingRunPolicy.ERROR:
                 raise ValueError(f"Run already exists for run_id={snapshot.run_id}")
-            if existing_run_policy == "rerun":
+            if existing_run_policy is ExistingRunPolicy.RESTART:
                 run_store.clear_run(snapshot.run_id)
                 existing_state = None
             elif (
-                existing_run_policy == "auto"
+                existing_run_policy is ExistingRunPolicy.REUSE
                 and existing_state.status.value == "completed"
                 and _stage_index(existing_state.completed_through_stage)
                 >= _stage_index(until_stage)
@@ -292,13 +336,13 @@ class Experiment(FrozenModel):
             stored_run = run_store.resume(snapshot.run_id)
             if stored_run is not None:
                 existing_run_policy = effective_runtime.existing_run_policy
-                if existing_run_policy == "error":
+                if existing_run_policy is ExistingRunPolicy.ERROR:
                     raise ValueError(f"Run already exists for run_id={snapshot.run_id}")
-                if existing_run_policy == "rerun":
+                if existing_run_policy is ExistingRunPolicy.RESTART:
                     run_store.clear_run(snapshot.run_id)
                     stored_run = None
                 elif (
-                    existing_run_policy == "auto"
+                    existing_run_policy is ExistingRunPolicy.REUSE
                     and stored_run.execution_state.status.value == "completed"
                     and _stage_index(stored_run.execution_state.completed_through_stage)
                     >= _stage_index(until_stage)
@@ -337,8 +381,9 @@ class Experiment(FrozenModel):
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
+        _attempt_kind: Literal["replay", "rejudge"] = "replay",
     ):
         """Replay persisted runs from a downstream stage."""
 
@@ -389,6 +434,7 @@ class Experiment(FrozenModel):
             runtime=effective_runtime,
             force_workflow_metrics=requested_metric_ids,
             replay_stage=stage,
+            attempt_kind=_attempt_kind,
         )
         return await orchestrator.run(snapshot)
 
@@ -398,7 +444,7 @@ class Experiment(FrozenModel):
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         """Re-run workflow-backed metrics from stored upstream artifacts."""
@@ -409,6 +455,7 @@ class Experiment(FrozenModel):
             store=store,
             subscribers=subscribers,
             tracing_provider=tracing_provider,
+            _attempt_kind="rejudge",
         )
 
     async def rerun_async(
@@ -422,7 +469,7 @@ class Experiment(FrozenModel):
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         """Rerun a targeted subset of an existing stored run."""
@@ -472,11 +519,26 @@ class Experiment(FrozenModel):
             runtime=effective_runtime,
             force_workflow_metrics=set(metric_ids or []) if stage == "judge" else set(),
             rerun_plan=rerun_plan,
+            attempt_kind="rerun",
+        )
+        parent_attempt_id = next(
+            (
+                event.attempt_id
+                for event in reversed(run_store.query_events(snapshot.run_id))
+                if event.attempt_id != orchestrator.runtime_support.attempt_id
+            ),
+            None,
         )
         result = await orchestrator.run(snapshot)
         record = run_store.get_run_record(snapshot.run_id)
         lineage = list(record.lineage) if record is not None else []
-        lineage.append(RunLineage(parent_run_id=snapshot.run_id, relationship="rerun"))
+        lineage.append(
+            RunLineage(
+                parent_run_id=snapshot.run_id,
+                parent_attempt_id=parent_attempt_id,
+                relationship="rerun",
+            )
+        )
         run_store.update_run_record(snapshot.run_id, lineage=lineage)
         return result
 
@@ -486,7 +548,7 @@ class Experiment(FrozenModel):
         until_stage: Literal["generate", "reduce", "parse", "score", "judge"] = "judge",
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         """Run the compiled snapshot synchronously."""
@@ -510,7 +572,7 @@ class Experiment(FrozenModel):
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         """Re-run workflow-backed metrics synchronously."""
@@ -539,7 +601,7 @@ class Experiment(FrozenModel):
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         """Rerun a targeted subset of an existing stored run synchronously."""
@@ -569,7 +631,7 @@ class Experiment(FrozenModel):
         metric_ids: list[str] | None = None,
         runtime: RuntimeConfig | None = None,
         store: RunStore | None = None,
-        subscribers: list[LifecycleSubscriber] | None = None,
+        subscribers: list[EventSubscriber] | None = None,
         tracing_provider: TracingProvider | None = None,
     ):
         """Replay persisted runs from a downstream stage synchronously."""
@@ -607,30 +669,32 @@ class Experiment(FrozenModel):
 
     def _metric_kind(self, metric: object) -> str:
         metric_family = getattr(metric, "metric_family", None)
-        if metric_family in {"pure", "llm", "selection", "trace"}:
-            return metric_family
+        if metric_family == "pure":
+            return "pure"
+        if metric_family == "workflow":
+            return _workflow_subject_kind(metric)
         target = getattr(metric, "target", None)
         kwargs = getattr(metric, "kwargs", None)
         if isinstance(target, str) and isinstance(kwargs, dict):
             resolved_metric = resolve_metric_component(metric)
             resolved_metric_family = getattr(resolved_metric, "metric_family", None)
-            if resolved_metric_family in {"pure", "llm", "selection", "trace"}:
-                return resolved_metric_family
+            if resolved_metric_family == "pure":
+                return "pure"
+            if resolved_metric_family == "workflow":
+                return _workflow_subject_kind(resolved_metric)
             raise ValueError(f"Unknown metric family for target spec: {target}")
         if isinstance(metric, str):
             resolved_metric = resolve_metric_component(metric)
             resolved_metric_family = getattr(resolved_metric, "metric_family", None)
-            if resolved_metric_family in {"pure", "llm", "selection", "trace"}:
-                return resolved_metric_family
+            if resolved_metric_family == "pure":
+                return "pure"
+            if resolved_metric_family == "workflow":
+                return _workflow_subject_kind(resolved_metric)
             raise ValueError(f"Unknown builtin metric family: {metric}")
         if isinstance(metric, PureMetric):
             return "pure"
-        if isinstance(metric, LLMMetric):
-            return "llm"
-        if isinstance(metric, SelectionMetric):
-            return "selection"
-        if isinstance(metric, TraceMetric):
-            return "trace"
+        if isinstance(metric, WorkflowMetric):
+            return _workflow_subject_kind(metric)
         raise TypeError("Metrics must satisfy a supported metric protocol.")
 
     def _build_store(self):
@@ -679,7 +743,7 @@ class Experiment(FrozenModel):
                 for view in self.evaluation.parser_views
             ],
             metrics=[
-                component_ref_from_value(resolve_metric_component(metric))
+                metric_ref_from_value(resolve_metric_component(metric))
                 for metric in self.evaluation.metrics
             ],
             judge_models=[
@@ -735,8 +799,8 @@ class Experiment(FrozenModel):
     def _validate_component_ref_list(
         self,
         label: str,
-        expected: list[ComponentRef],
-        actual: list[ComponentRef],
+        expected: list[ComponentRef] | list[MetricRef],
+        actual: list[ComponentRef] | list[MetricRef],
     ) -> None:
         if expected == actual:
             return
@@ -792,7 +856,13 @@ def _fresh_execution_state(store: RunStore, run_id: str) -> ExecutionState | Non
 
 
 def _default_dependency_versions(themis_version: str) -> dict[str, str]:
-    return {"themis-eval": themis_version}
+    versions = {"themis-eval": themis_version}
+    for distribution in ("pydantic", "omegaconf", "cyclopts"):
+        try:
+            versions[distribution] = distribution_version(distribution)
+        except PackageNotFoundError:
+            continue
+    return versions
 
 
 def _default_provider_metadata(experiment: Experiment) -> dict[str, JSONValue]:

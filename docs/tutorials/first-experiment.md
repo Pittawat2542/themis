@@ -9,7 +9,7 @@ goal: Teach explicit experiment authoring and compilation.
 
 ## What you will build
 
-You will define generation, evaluation, storage, and seeds explicitly, compile them into a `RunSnapshot`, and execute the run.
+You will define datasets, generation, evaluation, and seeds, compile them into a snapshot, and execute with an explicit store.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ You will define generation, evaluation, storage, and seeds explicitly, compile t
 
 1. Create an explicit `Experiment(...)`.
 2. Call `compile()` to inspect the stable `run_id`.
-3. Run the experiment with an explicit `RuntimeConfig`.
+3. Run the experiment with an explicit store and `RunOptions`.
 
 ```python
 --8<-- "examples/docs/first_experiment.py"

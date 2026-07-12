@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.contexts import GenerationContext
 from themis.core.models import (
+    Candidate,
     Case,
-    GenerationResult,
     Message,
-    SessionResult,
-    SessionTurn,
+    GenerationTurn,
+    SeedCapability,
 )
 from themis.core.workflows import JudgeResponse
 
@@ -16,11 +16,12 @@ from themis.core.workflows import JudgeResponse
 class DemoGenerator:
     component_id = "builtin/demo_generator"
     version = "1.0"
+    seed_capability = SeedCapability.SUPPORTED
 
     def fingerprint(self) -> str:
         return "builtin-demo-generator-fingerprint"
 
-    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         answer = (
             case.expected_output if case.expected_output is not None else case.input
         )
@@ -39,11 +40,11 @@ class DemoGenerator:
             )
         )
         conversation.append(Message(role="assistant", content=answer))
-        return SessionResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{candidate_suffix}",
             final_output=answer,
             turns=[
-                SessionTurn(
+                GenerationTurn(
                     turn_index=0,
                     input_messages=conversation[:-1],
                     output_messages=conversation[-1:],
@@ -56,25 +57,20 @@ class DemoGenerator:
             latency_ms=1.0,
         )
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult.model_validate(
-            (await self.run_session(case, ctx)).model_dump(mode="json")
-        )
-
-
 class DemoJudgeModel:
     component_id = "builtin/demo_judge"
     version = "1.0"
+    seed_capability = SeedCapability.SUPPORTED
 
     def fingerprint(self) -> str:
         return "builtin-demo-judge-fingerprint"
 
     async def judge(self, prompt: str, *, seed: int | None = None) -> JudgeResponse:
-        del seed
         return JudgeResponse(
             judge_model_id=self.component_id,
             judge_model_version=self.version,
             judge_model_fingerprint=self.fingerprint(),
+            effective_seed=seed,
             raw_response="pass" if prompt else "fail",
             token_usage={"prompt_tokens": 1, "completion_tokens": 1},
             latency_ms=1.0,

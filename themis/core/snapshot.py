@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field, computed_field, model_validator
 
 from themis.core.base import FrozenModel, HashableModel, JSONValue
-from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef
+from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef, MetricRef
 from themis.core.config import RuntimeConfig, StorageConfig
 from themis.core.dataset_sources import DatasetSourceSpec, materialize_dataset_sources
 from themis.core.events import RunEvent
@@ -87,7 +87,7 @@ class ComponentRefs(FrozenModel):
     selector: ComponentRef | None = None
     reducer: ComponentRef | None = None
     parsers: list[ParserViewRef] = Field(default_factory=list)
-    metrics: list[ComponentRef] = Field(default_factory=list)
+    metrics: list[MetricRef] = Field(default_factory=list)
     judge_models: list[ComponentRef] = Field(default_factory=list)
 
 
@@ -99,7 +99,7 @@ class RunIdentity(HashableModel):
     selector_ref: ComponentRef | None = None
     reducer_ref: ComponentRef | None = None
     parser_refs: list[ParserViewRef] = Field(default_factory=list)
-    metric_refs: list[ComponentRef] = Field(default_factory=list)
+    metric_refs: list[MetricRef] = Field(default_factory=list)
     judge_model_refs: list[ComponentRef] = Field(default_factory=list)
     candidate_policy: dict[str, JSONValue] = Field(default_factory=dict)
     generation_prompt_spec: PromptSpec | None = None

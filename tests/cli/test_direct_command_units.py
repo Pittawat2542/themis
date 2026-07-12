@@ -21,7 +21,7 @@ from themis.cli.commands.quick_eval import inline as quick_eval_inline
 from themis.cli.commands.reporting import report
 from themis.cli.commands.run import estimate, quickcheck, replay, resume, run
 from themis.cli.commands.worker import run as run_worker_command
-from themis.core.experiment import Experiment
+from themis.launcher import load_core_experiment
 from themis.core.read_models import BenchmarkResult
 from themis.core.registry import RunLineage
 from themis.core.results import RunStatus
@@ -218,7 +218,7 @@ def test_inspect_commands_and_replay_command(
         raise AssertionError("expected inspect.evaluation to report missing execution")
 
     assert (
-        Experiment.from_config(config_path).compile().run_id
+        load_core_experiment(config_path).compile().run_id
         == experiment.compile().run_id
     )
 
@@ -278,23 +278,23 @@ def test_worker_and_batch_commands_serialize_results(monkeypatch, capsys) -> Non
 
     monkeypatch.setattr(
         "themis.cli.commands.worker.run_worker_once",
-        lambda queue_root: _Result("run-1", RunStatus.COMPLETED),
+        lambda queue_root, **kwargs: _Result("run-1", RunStatus.COMPLETED),
     )
-    assert run_worker_command(queue_root="queue") == 0
+    assert run_worker_command(queue_root="queue", definition_root=["."]) == 0
     worker_payload = json.loads(capsys.readouterr().out)
     assert worker_payload == {"run_id": "run-1", "status": "completed"}
 
     monkeypatch.setattr(
         "themis.cli.commands.worker.run_worker_once",
-        lambda queue_root: None,
+        lambda queue_root, **kwargs: None,
     )
-    assert run_worker_command(queue_root="queue") == 0
+    assert run_worker_command(queue_root="queue", definition_root=["."]) == 0
     assert json.loads(capsys.readouterr().out) == {"status": "idle"}
 
     monkeypatch.setattr(
         "themis.cli.commands.batch.run_batch_request",
-        lambda request: _Result("run-2", RunStatus.COMPLETED),
+        lambda request, **kwargs: _Result("run-2", RunStatus.COMPLETED),
     )
-    assert run_batch_command(request="request.json") == 0
+    assert run_batch_command(request="request.json", definition_root=["."]) == 0
     batch_payload = json.loads(capsys.readouterr().out)
     assert batch_payload == {"run_id": "run-2", "status": "completed"}

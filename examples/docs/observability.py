@@ -2,20 +2,17 @@ from __future__ import annotations
 
 from typing import cast
 
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
+from themis.storage import memory_store
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset
-from themis.core.protocols import LifecycleSubscriber, TracingProvider
+from themis import Experiment
+from themis import Case, Dataset
+from themis.core.protocols import EventSubscriber, TracingProvider
 
 
 class RecordingSubscriber:
     def __init__(self) -> None:
         self.calls: list[str] = []
-
-    def before_generate(self, case, ctx) -> None:
-        del ctx
-        self.calls.append(f"before_generate:{case.case_id}")
 
     def on_event(self, event) -> None:
         self.calls.append(type(event).__name__)
@@ -41,17 +38,16 @@ def run_example() -> dict[str, object]:
     subscriber = RecordingSubscriber()
     tracer = RecordingTracer()
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
+            samples=1,
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
+        evaluation=Evaluation(
             metrics=["builtin/exact_match"],
-            parsers=["builtin/json_identity"],
+            parser="builtin/json_identity",
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -68,7 +64,8 @@ def run_example() -> dict[str, object]:
         seeds=[7],
     )
     result = experiment.run(
-        subscribers=[cast(LifecycleSubscriber, subscriber)],
+        store=memory_store(),
+        subscribers=[cast(EventSubscriber, subscriber)],
         tracing_provider=cast(TracingProvider, tracer),
     )
     return {

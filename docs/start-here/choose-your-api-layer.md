@@ -7,7 +7,7 @@ goal: Help readers choose between Experiment, config/CLI, and custom extension p
 
 # Choose your API layer
 
-Use `Experiment(...)` from reviewed Python modules when you want an explicit compiled object, access to `compile()`, `run()`, `replay()`, config-file loading, or long-lived experiment definitions. This is the canonical surface for serious experiment meaning.
+Use `Experiment(...)` from reviewed Python modules when you want an explicit compiled object, access to `compile()`, `run()`, `replay()`, or long-lived experiment definitions. This is the canonical surface for serious experiment meaning.
 
 Use config and CLI commands when you want shell-friendly automation, environment-specific overrides, or deferred worker and batch execution around config-loadable Python definitions and components.
 
@@ -31,7 +31,7 @@ All three paths still converge on the same runtime model, so this choice is abou
 
 | Option | Best for | Persistence / runtime behavior | Caveats |
 | --- | --- | --- | --- |
-| `Experiment(...)` | Reusable Python-authored experiment definitions and local debugging | Exposes compile, replay, config loading, and store control | Canonical surface for serious experiment meaning |
+| `Experiment(...)` | Reusable Python-authored experiment definitions and local debugging | Exposes compile, replay, and store control | Canonical surface for serious experiment meaning |
 | Config + CLI | Automation, overrides, worker submission, and batch execution | Shell-friendly execution through `themis run`, `submit`, `worker`, and `batch` | Automation surface only; component references must be importable or builtin ids |
 | Extension protocols | Custom runtime behavior when builtins are not enough | Still plugs into the same Themis runtime once implemented | Requires custom code and protocol knowledge |
 

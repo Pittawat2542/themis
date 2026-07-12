@@ -40,9 +40,8 @@ Benchmark slicing and downsampling are code-authored today. When you need a subs
 One concrete pattern is:
 
 ```python
-from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.models import Dataset
+from themis import Dataset, Evaluation, Experiment, Generation
+from themis.storage import sqlite_store
 
 source_dataset = Dataset(...)
 filtered_dataset = source_dataset.model_copy(
@@ -56,11 +55,11 @@ filtered_dataset = source_dataset.model_copy(
 )
 
 experiment = Experiment(
-    generation=GenerationConfig(...),
-    evaluation=EvaluationConfig(...),
-    storage=StorageConfig(target="sqlite", kwargs={"path": "runs.sqlite3"}),
-    dataset_sources=[filtered_dataset],
+    datasets=[filtered_dataset],
+    generation=Generation(...),
+    evaluation=Evaluation(...),
 )
+result = experiment.run(store=sqlite_store("runs.sqlite3"))
 ```
 
 This is the current supported way to run just a slice or downsample of a benchmark.

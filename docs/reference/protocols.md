@@ -13,7 +13,7 @@ Use this page when you are implementing custom components rather than using buil
 
 | Name | Kind | Use when | Key constraints / notes |
 | --- | --- | --- | --- |
-| `LifecycleSubscriber` | Instrumentation protocol | You want callbacks around stage boundaries or raw `on_event(...)` notifications | Observes execution without changing `run_id` |
+| `EventSubscriber` | Instrumentation protocol | You want persisted `on_event(...)` notifications | Observes execution without changing `run_id` |
 | `TracingProvider` | Instrumentation protocol | You want span-oriented tracing around runs or stages | Implements `start_span(...)` and `end_span(...)` hooks |
 
 ## Important config/runtime contracts
@@ -25,10 +25,12 @@ Use this page when you are implementing custom components rather than using buil
 | `CandidateReducer` | Reduction protocol | Multi-candidate output needs custom collapse or synthesis logic | Pair with fan-out generation |
 | `Parser` | Parsing protocol | Reduced output needs custom normalization before scoring | Keep parser responsibility separate from metric logic |
 | `JudgeModel` | Evaluation protocol | Workflow-backed metrics need a custom judge model | Used by judge workflows and participates in identity through component refs |
-| Metric protocols | Evaluation protocols | You need custom deterministic, workflow-backed, or trace-aware scoring | Choose the smallest metric protocol that matches the task |
-| `WorkflowRunner` | Runtime protocol | Workflow-backed metrics need custom execution semantics | Keeps workflow execution separate from observation hooks |
+| `PureMetric` | Evaluation protocol | A deterministic metric scores parsed output directly | Implements `score(...)` |
+| `WorkflowMetric` | Evaluation protocol | A judge-backed metric builds an evaluation workflow | Declares `subject_kind` explicitly |
 | `ReporterProtocol` | Reporting protocol | Stored evidence needs a custom export or reporting view | Read-side boundary; reporter selection does not change `run_id` |
 
 Generated contracts:
 
-::: themis.core.protocols
+::: themis.components
+
+::: themis.runtime

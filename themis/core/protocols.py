@@ -2,31 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from themis.core.contexts import (
     EvalScoreContext,
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     ScoreContext,
     SelectContext,
-    SessionContext,
 )
 from themis.core.events import RunEvent
 from themis.core.models import (
     Case,
-    GenerationResult,
+    Candidate,
     MetricResult,
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
-    SessionResult,
 )
 from themis.core.subjects import (
     CandidateSetSubject,
     ConversationSubject,
-    SessionSubject,
+    CandidateSubject,
     TraceSubject,
 )
 from themis.core.workflows import (
@@ -40,27 +38,15 @@ from themis.core.workflows import (
 
 
 @runtime_checkable
-class SessionGenerator(Protocol):
-    """Protocol for session-native generation components."""
-
-    component_id: str
-    version: str
-
-    def fingerprint(self) -> str: ...
-
-    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult: ...
-
-
-@runtime_checkable
 class Generator(Protocol):
-    """Legacy protocol for one-shot generation components."""
+    """Protocol for candidate generation components."""
 
     component_id: str
     version: str
 
     def fingerprint(self) -> str: ...
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult: ...
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate: ...
 
 
 @runtime_checkable
@@ -86,7 +72,7 @@ class CandidateReducer(Protocol):
 
     async def reduce(
         self,
-        candidates: list[SessionResult],
+        candidates: list[Candidate],
         ctx: ReduceContext,
     ) -> ReducedCandidate: ...
 
@@ -102,9 +88,9 @@ class CandidateSelector(Protocol):
 
     async def select(
         self,
-        candidates: list[SessionResult],
+        candidates: list[Candidate],
         ctx: SelectContext,
-    ) -> list[SessionResult]: ...
+    ) -> list[Candidate]: ...
 
 
 @runtime_checkable
@@ -124,7 +110,7 @@ class EvaluationWorkflow(Protocol):
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
+        | CandidateSubject,
         ctx: EvalScoreContext,
     ) -> RenderedJudgePrompt: ...
 
@@ -177,49 +163,18 @@ class PureMetric(Protocol):
 
 
 @runtime_checkable
-class LLMMetric(Protocol):
-    """Protocol for metrics that judge a reduced candidate set with an LLM."""
+class WorkflowMetric(Protocol):
+    """Protocol for judge-backed metrics over an explicitly declared subject."""
 
     component_id: str
     version: str
+    subject_kind: str
 
     def fingerprint(self) -> str: ...
 
     def build_workflow(
         self,
-        subject: CandidateSetSubject,
-        ctx: EvalScoreContext,
-    ) -> EvaluationWorkflow: ...
-
-
-@runtime_checkable
-class SelectionMetric(Protocol):
-    """Protocol for metrics that judge multiple generated candidates."""
-
-    component_id: str
-    version: str
-
-    def fingerprint(self) -> str: ...
-
-    def build_workflow(
-        self,
-        subject: CandidateSetSubject,
-        ctx: EvalScoreContext,
-    ) -> EvaluationWorkflow: ...
-
-
-@runtime_checkable
-class TraceMetric(Protocol):
-    """Protocol for metrics that score traces or conversations."""
-
-    component_id: str
-    version: str
-
-    def fingerprint(self) -> str: ...
-
-    def build_workflow(
-        self,
-        subject: TraceSubject | ConversationSubject | SessionSubject,
+        subject: Any,
         ctx: EvalScoreContext,
     ) -> EvaluationWorkflow: ...
 
@@ -234,118 +189,17 @@ class WorkflowRunner(Protocol):
         subject: CandidateSetSubject
         | TraceSubject
         | ConversationSubject
-        | SessionSubject,
+        | CandidateSubject,
         metric_id: str,
         ctx: EvalScoreContext,
     ) -> EvaluationExecution: ...
 
 
 @runtime_checkable
-class BeforeGenerate(Protocol):
-    """Hook invoked before a generator runs."""
-
-    def before_generate(self, case: Case, ctx: GenerateContext) -> None: ...
-
-
-@runtime_checkable
-class AfterGenerate(Protocol):
-    """Hook invoked after a generator returns a candidate."""
-
-    def after_generate(self, result: SessionResult, ctx: GenerateContext) -> None: ...
-
-
-@runtime_checkable
-class BeforeReduce(Protocol):
-    """Hook invoked before reduction starts."""
-
-    def before_reduce(
-        self, candidates: list[SessionResult], ctx: ReduceContext
-    ) -> None: ...
-
-
-@runtime_checkable
-class AfterReduce(Protocol):
-    """Hook invoked after reduction produces a final candidate."""
-
-    def after_reduce(self, reduced: ReducedCandidate, ctx: ReduceContext) -> None: ...
-
-
-@runtime_checkable
-class BeforeParse(Protocol):
-    """Hook invoked before parsing a reduced candidate."""
-
-    def before_parse(self, candidate: ReducedCandidate, ctx: ParseContext) -> None: ...
-
-
-@runtime_checkable
-class AfterParse(Protocol):
-    """Hook invoked after parsing completes."""
-
-    def after_parse(self, parsed: ParsedOutput, ctx: ParseContext) -> None: ...
-
-
-@runtime_checkable
-class BeforeScore(Protocol):
-    """Hook invoked before a pure metric runs."""
-
-    def before_score(self, parsed: ParsedOutput, ctx: ScoreContext) -> None: ...
-
-
-@runtime_checkable
-class AfterScore(Protocol):
-    """Hook invoked after a pure metric emits a score or error."""
-
-    def after_score(
-        self, metric_result: MetricResult | ScoreError, ctx: ScoreContext
-    ) -> None: ...
-
-
-@runtime_checkable
-class BeforeJudge(Protocol):
-    """Hook invoked before a workflow-backed metric begins judging."""
-
-    def before_judge(
-        self,
-        subject: CandidateSetSubject
-        | TraceSubject
-        | ConversationSubject
-        | SessionSubject,
-        ctx: EvalScoreContext,
-    ) -> None: ...
-
-
-@runtime_checkable
-class AfterJudge(Protocol):
-    """Hook invoked after a workflow-backed metric finishes."""
-
-    def after_judge(
-        self, execution: EvaluationExecution, ctx: EvalScoreContext
-    ) -> None: ...
-
-
-@runtime_checkable
-class OnEvent(Protocol):
-    """Hook invoked after an execution event is persisted."""
+class EventSubscriber(Protocol):
+    """Receives immutable events only after they have been persisted."""
 
     def on_event(self, event: RunEvent) -> None: ...
-
-
-@runtime_checkable
-class LifecycleSubscriber(
-    BeforeGenerate,
-    AfterGenerate,
-    BeforeReduce,
-    AfterReduce,
-    BeforeParse,
-    AfterParse,
-    BeforeScore,
-    AfterScore,
-    BeforeJudge,
-    AfterJudge,
-    OnEvent,
-    Protocol,
-):
-    """Aggregate lifecycle subscriber protocol."""
 
 
 @runtime_checkable

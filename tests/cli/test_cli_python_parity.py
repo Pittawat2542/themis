@@ -6,11 +6,11 @@ from typing import cast
 
 import pytest
 
-from themis import Reporter, StatsEngine
+from themis.analysis import Reporter, StatsEngine
 from themis.core.base import JSONValue
-from themis.core.experiment import Experiment
 from themis.core.read_models import BenchmarkResult
 from themis.core.stores.factory import create_run_store
+from themis.launcher import load_core_experiment
 from tests.cli.helpers import run_cli
 
 
@@ -25,19 +25,35 @@ def _write_config(
     batch_root: Path,
     seed: int | None,
 ) -> None:
-    seeds_block = "" if seed is None else f"\nseeds: [{seed}]"
+    definition_module = f"{path.stem}_definition"
+    seeds = [] if seed is None else [seed]
+    path.with_name(f"{definition_module}.py").write_text(
+        f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+
+experiment = Experiment(
+    datasets=[Dataset(
+        dataset_id="cases",
+        cases=[Case(
+            case_id="case-1",
+            input={{"question": "2+2"}},
+            expected_output={{"answer": "4"}},
+        )],
+    )],
+    generation=Generation(
+        generator="builtin/demo_generator",
+        reducer="builtin/majority_vote",
+    ),
+    evaluation=Evaluation(
+        metrics=["builtin/exact_match"],
+        parser="builtin/json_identity",
+    ),
+    seeds={seeds!r},
+)
+'''
+    )
     path.write_text(
         f"""
-generation:
-  generator: builtin/demo_generator
-  candidate_policy:
-    num_samples: 1
-  reducer: builtin/majority_vote
-evaluation:
-  metrics:
-    - builtin/exact_match
-  parsers:
-    - builtin/json_identity
+definition: {definition_module}:experiment
 storage:
   target: sqlite
   kwargs:
@@ -45,15 +61,6 @@ storage:
 runtime:
   queue_root: {queue_root}
   batch_root: {batch_root}
-dataset_sources:
-  - dataset_id: cases
-    cases:
-      - case_id: case-1
-        input:
-          question: 2+2
-        expected_output:
-          answer: "4"
-{seeds_block}
 """.strip()
     )
 
@@ -77,7 +84,7 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
         seed=None,
     )
 
-    experiment = Experiment.from_config(config_path)
+    experiment = load_core_experiment(config_path)
     python_store = create_run_store(experiment.storage)
     python_store.initialize()
     python_result = experiment.run(store=python_store)
@@ -152,8 +159,8 @@ def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
         seed=8,
     )
 
-    baseline_experiment = Experiment.from_config(baseline_config)
-    candidate_experiment = Experiment.from_config(candidate_config)
+    baseline_experiment = load_core_experiment(baseline_config)
+    candidate_experiment = load_core_experiment(candidate_config)
     store = create_run_store(baseline_experiment.storage)
     store.initialize()
     baseline_experiment.run(store=store)

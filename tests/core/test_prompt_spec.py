@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from themis import Experiment
+from themis.core.experiment import Experiment
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.models import Case, Dataset
 from themis.core.prompts import PromptSpec

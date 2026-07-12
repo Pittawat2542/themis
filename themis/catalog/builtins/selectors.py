@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from themis.core.contexts import SelectContext
-from themis.core.models import SessionResult
+from themis.core.models import Candidate
 from themis.core.protocols import JudgeModel
 
 
@@ -15,8 +15,8 @@ class BestOfNSelector:
         return "builtin-best-of-n-fingerprint"
 
     async def select(
-        self, candidates: list[SessionResult], ctx: SelectContext
-    ) -> list[SessionResult]:
+        self, candidates: list[Candidate], ctx: SelectContext
+    ) -> list[Candidate]:
         if len(candidates) <= 1 or not ctx.judge_models:
             return candidates[:1]
         winner = await _select_best_candidate(candidates, ctx.judge_models)
@@ -24,9 +24,9 @@ class BestOfNSelector:
 
 
 async def _select_best_candidate(
-    candidates: list[SessionResult],
+    candidates: list[Candidate],
     judge_models: list[JudgeModel],
-) -> SessionResult:
+) -> Candidate:
     winner = candidates[0]
     for challenger in candidates[1:]:
         votes_for_challenger = 0

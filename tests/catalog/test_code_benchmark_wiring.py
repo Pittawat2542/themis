@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import cast
 
+import pytest
+
 from themis.catalog import load
 from themis.catalog.builtins.code_execution import (
     HumanEvalExecutionMetric,
@@ -104,7 +106,7 @@ def test_humaneval_execution_metric_scores_candidate_against_reference_solution(
     assert score.value == 1.0
 
 
-def test_humaneval_execution_metric_uses_local_subprocess_by_default() -> None:
+def test_humaneval_execution_metric_requires_explicit_sandbox() -> None:
     metric = HumanEvalExecutionMetric()
     case_obj = benchmark_case(
         expected_output={
@@ -118,25 +120,16 @@ def test_humaneval_execution_metric_uses_local_subprocess_by_default() -> None:
         }
     )
 
-    score = metric.score(
-        ParsedOutput(value="def add(a, b):\n    return a + b", format="code"),
-        case_obj,
-        ScoreContext(
-            run_id="run-1",
-            case=case_obj,
-            parsed_views={
-                "default": ParsedOutput(
-                    value="def add(a, b):\n    return a + b",
-                    format="code",
-                )
-            },
-        ),
-    )
-
-    assert isinstance(score, MetricResult)
-    assert score.value == 1.0
-    assert score.metadata["execution_backend"] == "local_subprocess"
-    assert score.metadata["candidate_execution_statuses"] == ["ok"]
+    with pytest.raises(RuntimeError, match="explicit sandbox executor"):
+        metric.score(
+            ParsedOutput(value="def add(a, b):\n    return a + b", format="code"),
+            case_obj,
+            ScoreContext(
+                run_id="run-1",
+                case=case_obj,
+                parsed_views={"default": ParsedOutput(value="", format="code")},
+            ),
+        )
 
 
 def test_humaneval_execution_metric_caches_reference_solution_results() -> None:

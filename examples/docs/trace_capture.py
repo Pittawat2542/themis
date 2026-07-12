@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from themis import Experiment, InMemoryRunStore
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.storage import memory_store
+
+from themis import Experiment
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset, GenerationResult, Message, TraceStep
+from themis.core.models import Case, Dataset, Candidate, Message, TraceStep
 
 
 class TracedGenerator:
@@ -15,9 +17,9 @@ class TracedGenerator:
     def fingerprint(self) -> str:
         return "traced-example-generator"
 
-    async def generate(self, case: Case, ctx: object) -> GenerationResult:
+    async def generate(self, case: Case, ctx: object) -> Candidate:
         del ctx
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate",
             final_output={"answer": "4"},
             trace=[
@@ -38,12 +40,11 @@ class TracedGenerator:
 def run_example() -> dict[str, object]:
     """Run with trace-producing generation and inspect the trace view projection."""
 
-    store = InMemoryRunStore()
+    store = memory_store()
     experiment = Experiment(
-        generation=GenerationConfig(generator=TracedGenerator()),
-        evaluation=EvaluationConfig(),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        generation=Generation(generator=TracedGenerator()),
+        evaluation=Evaluation(),
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",

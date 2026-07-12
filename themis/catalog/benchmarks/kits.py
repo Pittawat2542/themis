@@ -16,7 +16,7 @@ from themis.core.config import (
     ReducerComponent,
     RuntimeConfig,
     SelectorComponent,
-    SessionConfig,
+    GenerationConfig,
     StorageConfig,
 )
 from themis.core.dataset_sources import catalog_dataset_source, inline_dataset_source
@@ -94,7 +94,7 @@ class BenchmarkKit:
         )
         resolved_dataset = dataset or _sample_dataset(definition)
         return Experiment(
-            generation=SessionConfig(
+            generation=GenerationConfig(
                 generator=generator,
                 candidate_policy=candidate_policy,
                 prompt_spec=defaults.prompt_spec,

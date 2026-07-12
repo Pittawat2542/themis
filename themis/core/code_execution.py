@@ -28,7 +28,6 @@ class CodeExecutionLimits(FrozenModel):
     """Best-effort local execution limits."""
 
     timeout_seconds: float = 5.0
-    memory_limit_mb: float | None = None
     max_output_chars: int = 20_000
 
 
@@ -60,10 +59,17 @@ class CodeExecutionResult(FrozenModel):
         return self.status is CodeExecutionStatus.OK and self.exit_code == 0
 
 
-class LocalSubprocessExecutionBackend:
-    """Run Python code in a temporary local subprocess."""
+class UnsafeLocalSubprocessExecutor:
+    """Run trusted Python with full host permissions in a subprocess."""
 
-    backend_id = "local_subprocess"
+    backend_id = "unsafe_local_subprocess"
+
+    def __init__(self, *, allow_unsafe: bool = False) -> None:
+        if not allow_unsafe:
+            raise ValueError(
+                "UnsafeLocalSubprocessExecutor has full host permissions; "
+                "pass allow_unsafe=True only for trusted code."
+            )
 
     def execute(self, request: CodeExecutionRequest) -> CodeExecutionResult:
         language = request.language.strip().lower()
@@ -166,6 +172,21 @@ class DockerExecutionBackend:
                     "-i",
                     "--network",
                     "none",
+                    "--read-only",
+                    "--pids-limit",
+                    "64",
+                    "--memory",
+                    "512m",
+                    "--cpus",
+                    "1.0",
+                    "--cap-drop",
+                    "ALL",
+                    "--security-opt",
+                    "no-new-privileges",
+                    "--tmpfs",
+                    "/tmp:rw,noexec,nosuid,size=64m",
+                    "--user",
+                    "65534:65534",
                     self._image,
                     "python",
                     "-c",

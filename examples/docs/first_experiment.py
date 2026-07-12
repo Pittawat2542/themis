@@ -1,26 +1,26 @@
 from __future__ import annotations
 
-from themis import Experiment, RuntimeConfig
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Experiment, RunOptions
+from themis.storage import memory_store
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset
+from themis import Case, Dataset
 
 
 def run_example() -> dict[str, object]:
     """Compile and run an explicit Experiment definition."""
 
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
+            samples=1,
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
+        evaluation=Evaluation(
             metrics=["builtin/exact_match"],
-            parsers=["builtin/json_identity"],
+            parser="builtin/json_identity",
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -37,7 +37,9 @@ def run_example() -> dict[str, object]:
         seeds=[7],
     )
     snapshot = experiment.compile()
-    result = experiment.run(runtime=RuntimeConfig(max_concurrent_tasks=4))
+    result = experiment.run(
+        store=memory_store(), options=RunOptions(max_concurrency=4)
+    )
     return {"run_id": snapshot.run_id, "status": result.status.value}
 
 

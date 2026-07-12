@@ -7,11 +7,11 @@ from collections.abc import Sequence
 from pydantic import Field
 
 from themis.core.base import HashableModel
-from themis.core.models import ConversationTrace, SessionResult, WorkflowTrace
+from themis.core.models import Candidate, ConversationTrace, WorkflowTrace
 
 
 class CandidateSetSubject(HashableModel):
-    candidates: list[SessionResult] = Field(default_factory=list, min_length=1)
+    candidates: list[Candidate] = Field(default_factory=list, min_length=1)
 
     @property
     def size(self) -> int:
@@ -26,8 +26,13 @@ class TraceSubject(HashableModel):
     trace: WorkflowTrace
 
 
-class SessionSubject(HashableModel):
-    session: SessionResult
+class CandidateSubject(HashableModel):
+    candidate: Candidate
+
+
+type EvaluationSubject = (
+    CandidateSetSubject | ConversationSubject | TraceSubject | CandidateSubject
+)
 
 
 def validate_candidate_set_for_llm_metric(subject: CandidateSetSubject) -> None:
@@ -41,7 +46,7 @@ def validate_candidate_set_for_selection_metric(subject: CandidateSetSubject) ->
 
 
 def candidate_set_subject_for_llm_metric(
-    candidates: Sequence[SessionResult],
+    candidates: Sequence[Candidate],
 ) -> CandidateSetSubject:
     subject = CandidateSetSubject(candidates=list(candidates))
     validate_candidate_set_for_llm_metric(subject)
@@ -49,7 +54,7 @@ def candidate_set_subject_for_llm_metric(
 
 
 def candidate_set_subject_for_selection_metric(
-    candidates: Sequence[SessionResult],
+    candidates: Sequence[Candidate],
 ) -> CandidateSetSubject:
     subject = CandidateSetSubject(candidates=list(candidates))
     validate_candidate_set_for_selection_metric(subject)

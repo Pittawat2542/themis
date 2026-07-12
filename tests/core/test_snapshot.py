@@ -16,7 +16,7 @@ from themis.core.config import (
 from themis.core.dataset_sources import DatasetSourceSpec
 from themis.core.experiment import Experiment
 from themis.core.contexts import (
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
     ScoreContext,
@@ -24,11 +24,11 @@ from themis.core.contexts import (
 from themis.core.models import (
     Case,
     Dataset,
-    GenerationResult,
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
-    SessionResult,
+    MetricInterpretation,
+    Candidate,
 )
 from themis.core.snapshot import BUILTIN_COMPONENT_REFS
 from tests.release import CURRENT_VERSION
@@ -44,8 +44,8 @@ class DummyGenerator:
     def fingerprint(self) -> str:
         return self.fingerprint_value
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult(
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate", final_output={"seed": ctx.seed}
         )
 
@@ -59,7 +59,7 @@ class DummyReducer:
 
     async def reduce(
         self,
-        candidates: list[SessionResult],
+        candidates: list[Candidate],
         ctx: ReduceContext,
     ) -> ReducedCandidate:
         return ReducedCandidate(
@@ -83,6 +83,7 @@ class DummyParser:
 
 
 class DummyMetric:
+    interpretation = MetricInterpretation()
     component_id = "builtin/exact_match"
     version = "1.0"
 
@@ -120,7 +121,7 @@ def _experiment(
         storage=StorageConfig(target="sqlite", kwargs={"path": "runs/themis.sqlite3"}),
         runtime=RuntimeConfig(
             max_concurrent_tasks=16,
-            stage_concurrency={"generation": 8},
+            stage_concurrency={"generate": 8},
             provider_concurrency={"openai:https://api.openai.com/v1": 4},
             provider_rate_limits={"openai:https://api.openai.com/v1": 120},
             store_retry_attempts=7,
@@ -245,7 +246,7 @@ def test_runtime_config_is_recorded_in_snapshot_provenance() -> None:
     compiled = _experiment().compile()
 
     assert compiled.provenance.runtime.max_concurrent_tasks == 16
-    assert compiled.provenance.runtime.stage_concurrency == {"generation": 8}
+    assert compiled.provenance.runtime.stage_concurrency == {"generate": 8}
     assert compiled.provenance.runtime.provider_rate_limits == {
         "openai:https://api.openai.com/v1": 120
     }
@@ -326,9 +327,10 @@ def test_builtin_component_strings_resolve_to_registry_entries() -> None:
         snapshot.component_refs.parsers[0].parser
         == BUILTIN_COMPONENT_REFS["builtin/json_identity"]
     )
-    assert snapshot.component_refs.metrics == [
-        BUILTIN_COMPONENT_REFS["builtin/exact_match"]
+    assert [ref.component_id for ref in snapshot.component_refs.metrics] == [
+        "builtin/exact_match"
     ]
+    assert snapshot.component_refs.metrics[0].interpretation.correctness_threshold == 1.0
 
 
 def test_unknown_builtin_component_strings_fail_fast() -> None:

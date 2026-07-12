@@ -9,7 +9,7 @@ from themis.core.presets import (
     EvaluationPreset,
     ExperimentPreset,
     RuntimePreset,
-    SessionPreset,
+    GenerationPreset,
     apply_preset,
     get_preset,
     list_presets,
@@ -45,11 +45,11 @@ def _experiment() -> Experiment:
 
 def test_presets_are_discoverable_by_kind() -> None:
     assert "runtime/local-fast" in list_presets(kind="runtime")
-    assert "candidate/best-of-n" in list_presets(kind="session")
+    assert "candidate/best-of-n" in list_presets(kind="generation")
     assert "judge/demo-rubric" in list_presets(kind="evaluation")
 
     assert isinstance(get_preset("runtime/local-fast"), RuntimePreset)
-    assert isinstance(get_preset("candidate/best-of-n"), SessionPreset)
+    assert isinstance(get_preset("candidate/best-of-n"), GenerationPreset)
     assert isinstance(get_preset("judge/demo-rubric"), EvaluationPreset)
     assert isinstance(get_preset("baseline/demo"), ExperimentPreset)
 

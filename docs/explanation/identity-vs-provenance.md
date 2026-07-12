@@ -30,6 +30,6 @@ flowchart TD
     C --> I["Recorded metadata only"]
 ```
 
-If the logical run changed, the difference should appear on the identity side; provenance explains where and how that same logical run happened. Changing a `LifecycleSubscriber` or `TracingProvider` changes runtime observation, not logical run identity.
+If the logical run changed, the difference should appear on the identity side; provenance explains where and how that same logical run happened. Changing an `EventSubscriber` or `TracingProvider` changes runtime observation, not logical run identity.
 
 What to inspect when it goes wrong: look at `RunSnapshot.identity` first. If the logical run should be the same, differences should only appear in `RunSnapshot.provenance`.

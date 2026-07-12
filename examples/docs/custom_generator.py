@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset, GenerationResult
+from themis import Case, Dataset
+from themis.core.models import Candidate
 
 
 class CustomGenerator:
@@ -15,9 +18,9 @@ class CustomGenerator:
     def fingerprint(self) -> str:
         return "custom-example-generator"
 
-    async def generate(self, case: Case, ctx: object) -> GenerationResult:
+    async def generate(self, case: Case, ctx: object) -> Candidate:
         del ctx
-        return GenerationResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate",
             final_output={"answer": "4"},
         )
@@ -27,12 +30,11 @@ def run_example() -> dict[str, object]:
     """Execute an experiment with a custom generator instance."""
 
     experiment = Experiment(
-        generation=GenerationConfig(generator=CustomGenerator()),
-        evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        generation=Generation(generator=CustomGenerator()),
+        evaluation=Evaluation(
+            metrics=["builtin/exact_match"], parser="builtin/json_identity"
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -47,7 +49,7 @@ def run_example() -> dict[str, object]:
             )
         ],
     )
-    result = experiment.run()
+    result = experiment.run(store=memory_store())
     return {"run_id": result.run_id, "status": result.status.value}
 
 
