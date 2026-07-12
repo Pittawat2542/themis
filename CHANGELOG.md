@@ -13,6 +13,8 @@ All notable changes to this project are documented in this file.
   queries, explicit projection freshness, and non-blocking evidence writes.
 - Added bounded worker leases, definition-root and digest validation, optional
   HMAC-signed manifests, and terminal deferred-execution failure records.
+- Added streaming JSONL reads and measured SQLite load baselines at 1k and 10k
+  events.
 
 ### Security
 - Added `minimal`, `standard`, and `full` evidence retention policies with

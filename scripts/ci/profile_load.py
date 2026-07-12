@@ -8,6 +8,7 @@ import argparse
 import json
 import sys
 import time
+import tracemalloc
 from pathlib import Path
 from typing import cast
 
@@ -19,31 +20,30 @@ from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
     RuntimeConfig,
+    Stage,
     StorageConfig,
     TargetSpec,
 )  # noqa: E402
 from themis.core.dataset_sources import inline_dataset_source  # noqa: E402
-from themis.core.events import RunEvent  # noqa: E402
 from themis.core.experiment import Experiment  # noqa: E402
 from themis.core.models import (
     Case,
     Dataset,
-    GenerationResult,
+    Candidate,
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
+    MetricDirection,
+    MetricInterpretation,
 )  # noqa: E402
 from themis.core.protocols import JudgeModel  # noqa: E402
-from themis.core.registry import RunLineage, RunQuery, RunRecord  # noqa: E402
 from themis.core.contexts import (
     EvalScoreContext,
-    GenerateContext,
+    GenerationContext,
     ParseContext,
     ReduceContext,
 )  # noqa: E402
-from themis.core.snapshot import RunSnapshot, StoredRun  # noqa: E402
-from themis.core.store import RunStore  # noqa: E402
-from themis.core.results import ExecutionCheckpoint, ProjectionCursor  # noqa: E402
+from themis.core.stores.sqlite import SqliteRunStore  # noqa: E402
 from themis.core.workflows import (
     AggregationResult,
     JudgeCall,
@@ -64,11 +64,11 @@ class ProfileGenerator:
     def fingerprint(self) -> str:
         return "generator-profile"
 
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
-            return GenerationResult(
+            return Candidate(
                 candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
                 final_output=case.expected_output,
             )
@@ -84,7 +84,7 @@ class ProfileReducer:
         return "reducer-profile"
 
     async def reduce(
-        self, candidates: list[GenerationResult], ctx: ReduceContext
+        self, candidates: list[Candidate], ctx: ReduceContext
     ) -> ReducedCandidate:
         return ReducedCandidate(
             candidate_id=f"{ctx.case_id}-reduced",
@@ -189,7 +189,9 @@ class ProfileWorkflow:
 class ProfileMetric:
     component_id = "metric/profile"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
+    interpretation = MetricInterpretation(direction=MetricDirection.HIGHER_IS_BETTER)
 
     def __init__(self, judge_models: list[ProfileJudgeModel]) -> None:
         self._judge_models = judge_models
@@ -202,92 +204,19 @@ class ProfileMetric:
         return ProfileWorkflow(self._judge_models)
 
 
-class ProfileStore(RunStore):
-    def __init__(self) -> None:
-        self._snapshots: dict[str, RunSnapshot] = {}
-        self._events: dict[str, list[RunEvent]] = {}
-        self._blobs: dict[str, tuple[str, bytes]] = {}
-        self._stage_cache: dict[tuple[str, str], object] = {}
-        self._execution_checkpoints: dict[str, ExecutionCheckpoint] = {}
-        self._projection_cursors: dict[tuple[str, str], ProjectionCursor] = {}
+class TimedSqliteRunStore(SqliteRunStore):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path)
+        self.append_latencies_ms: list[float] = []
 
-    def initialize(self) -> None:
-        return None
-
-    def persist_snapshot(self, snapshot: RunSnapshot) -> None:
-        self._snapshots[snapshot.run_id] = snapshot
-
-    def persist_event(self, event: RunEvent) -> None:
-        self._events.setdefault(event.run_id, []).append(event)
-
-    def query_events(self, run_id: str) -> list[RunEvent]:
-        return list(self._events.get(run_id, []))
-
-    def count_events(self, run_id: str) -> int:
-        return len(self._events.get(run_id, []))
-
-    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None:
-        return self._execution_checkpoints.get(run_id)
-
-    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None:
-        self._execution_checkpoints[checkpoint.run_id] = checkpoint
-
-    def load_projection_cursor(
-        self, run_id: str, projection_name: str
-    ) -> ProjectionCursor | None:
-        return self._projection_cursors.get((run_id, projection_name))
-
-    def store_projection_cursor(self, cursor: ProjectionCursor) -> None:
-        self._projection_cursors[(cursor.run_id, cursor.projection_name)] = cursor
-
-    def get_projection(self, run_id: str, projection_name: str):
-        del run_id, projection_name
-        return None
-
-    def store_blob(self, blob: bytes, media_type: str) -> str:
-        import hashlib
-
-        ref = f"sha256:{hashlib.sha256(blob).hexdigest()}"
-        self._blobs.setdefault(ref, (media_type, blob))
-        return ref
-
-    def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
-        return self._blobs.get(blob_ref)
-
-    def resume(self, run_id: str) -> StoredRun | None:
-        snapshot = self._snapshots.get(run_id)
-        if snapshot is None:
-            return None
-        return StoredRun(snapshot=snapshot, events=self.query_events(run_id))
-
-    def load_stage_cache(self, stage_name: str, cache_key: str):
-        return self._stage_cache.get((stage_name, cache_key))
-
-    def store_stage_cache(self, stage_name: str, cache_key: str, payload) -> None:
-        self._stage_cache[(stage_name, cache_key)] = payload
-
-    def get_run_record(self, run_id: str) -> RunRecord | None:
-        del run_id
-        return None
-
-    def query_runs(self, query: RunQuery | None = None) -> list[RunRecord]:
-        del query
-        return []
-
-    def update_run_record(
-        self,
-        run_id: str,
-        *,
-        tags: list[str] | None = None,
-        baseline_label: str | None = None,
-        lineage: list[RunLineage] | None = None,
-    ) -> None:
-        del run_id, tags, baseline_label, lineage
-        return None
-
-    def clear_run(self, run_id: str) -> None:
-        self._snapshots.pop(run_id, None)
-        self._events.pop(run_id, None)
+    def persist_event(self, event):
+        started = time.perf_counter()
+        try:
+            return super().persist_event(event)
+        finally:
+            self.append_latencies_ms.append(
+                (time.perf_counter() - started) * 1000
+            )
 
 
 def _build_experiment(
@@ -295,6 +224,7 @@ def _build_experiment(
     cases: int,
     samples: int,
     judge_count: int,
+    store_path: Path,
 ) -> tuple[Experiment, ProfileGenerator, list[ProfileJudgeModel]]:
     generator = ProfileGenerator()
     judge_models = [ProfileJudgeModel(index) for index in range(judge_count)]
@@ -310,12 +240,12 @@ def _build_experiment(
             parsers=[ProfileParser()],
             judge_models=configured_judge_models,
         ),
-        storage=StorageConfig(target="memory"),
+        storage=StorageConfig(target="sqlite", kwargs={"path": str(store_path)}),
         runtime=RuntimeConfig(
             max_concurrent_tasks=min(32, max(1, judge_count + samples)),
             stage_concurrency={
-                "generation": min(16, max(1, samples)),
-                "evaluation": min(16, max(1, judge_count)),
+                Stage.GENERATE: min(16, max(1, samples)),
+                Stage.JUDGE: min(16, max(1, judge_count)),
             },
         ),
         dataset_sources=[
@@ -343,18 +273,34 @@ def main() -> int:
     parser.add_argument("--cases", type=int, default=500)
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--judges", type=int, default=3)
+    parser.add_argument("--store-path", default="/tmp/themis-load-profile.sqlite3")
     args = parser.parse_args()
+    store_path = Path(args.store_path).expanduser().resolve()
+    store_path.unlink(missing_ok=True)
 
     experiment, generator, judge_models = _build_experiment(
         cases=max(1, args.cases),
         samples=max(1, args.samples),
         judge_count=max(1, args.judges),
+        store_path=store_path,
     )
-    store = ProfileStore()
+    store = TimedSqliteRunStore(store_path)
 
+    tracemalloc.start()
     started_at = time.perf_counter()
     result = experiment.run(store=store)
     duration = time.perf_counter() - started_at
+    _, peak_memory = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    projection_started = time.perf_counter()
+    store.get_projection(result.run_id, "benchmark_result")
+    projection_duration = time.perf_counter() - projection_started
+    resume_started = time.perf_counter()
+    store.resume(result.run_id)
+    resume_duration = time.perf_counter() - resume_started
+    latencies = sorted(store.append_latencies_ms)
+    p95_index = max(0, int(len(latencies) * 0.95) - 1)
 
     payload = {
         "cases": args.cases,
@@ -363,6 +309,14 @@ def main() -> int:
         "run_id": result.run_id,
         "status": result.status.value,
         "duration_seconds": round(duration, 6),
+        "event_count": store.count_events(result.run_id),
+        "append_latency_p95_ms": round(latencies[p95_index], 6)
+        if latencies
+        else 0.0,
+        "projection_duration_seconds": round(projection_duration, 6),
+        "bytes_written": store_path.stat().st_size,
+        "peak_memory_bytes": peak_memory,
+        "resume_duration_seconds": round(resume_duration, 6),
         "completed_cases": result.progress.completed_cases,
         "failed_cases": result.progress.failed_cases,
         "max_generation_concurrency": generator.max_active,

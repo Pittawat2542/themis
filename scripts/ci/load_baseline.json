@@ -1,0 +1,30 @@
+{
+  "environment": "local macOS, Python 3.12, SQLite",
+  "recorded_at": "2026-07-12",
+  "profiles": {
+    "1k": {
+      "append_latency_p95_ms": 3.282291,
+      "bytes_written": 2994176,
+      "event_count": 1202,
+      "peak_memory_bytes": 5024948,
+      "projection_duration_seconds": 0.151382,
+      "resume_duration_seconds": 0.017436
+    },
+    "10k": {
+      "append_latency_p95_ms": 4.108,
+      "bytes_written": 24768512,
+      "event_count": 10082,
+      "peak_memory_bytes": 40933062,
+      "projection_duration_seconds": 6.910504,
+      "resume_duration_seconds": 0.163099
+    }
+  },
+  "regression_budgets": {
+    "10k_append_latency_p95_ms": 8.25,
+    "10k_bytes_written": 32000000,
+    "10k_peak_memory_bytes": 64000000,
+    "10k_projection_duration_seconds": 10.0,
+    "10k_resume_duration_seconds": 0.5
+  },
+  "100k": "opt-in; establish on release hardware before enforcing a budget"
+}
