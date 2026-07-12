@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 
 from themis.core.contexts import EvalScoreContext
-from themis.core.models import MetricResult
+from themis.core.models import MetricDirection, MetricInterpretation, MetricResult
 from themis.core.prompts import render_prompt_spec
 from themis.core.subjects import CandidateSetSubject, ConversationSubject, TraceSubject
 from themis.core.workflows import (
@@ -17,11 +17,15 @@ from themis.core.workflows import (
     build_prompt_template_context,
 )
 
+_WORKFLOW_SCORE = MetricInterpretation(direction=MetricDirection.HIGHER_IS_BETTER)
+
 
 class LLMRubricMetric:
     component_id = "builtin/llm_rubric"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
+    interpretation = _WORKFLOW_SCORE
 
     def fingerprint(self) -> str:
         return "builtin-llm-rubric-fingerprint"
@@ -39,7 +43,9 @@ class LLMRubricMetric:
 class PanelOfJudgesMetric:
     component_id = "builtin/panel_of_judges"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
+    interpretation = _WORKFLOW_SCORE
 
     def fingerprint(self) -> str:
         return "builtin-panel-of-judges-fingerprint"
@@ -57,7 +63,9 @@ class PanelOfJudgesMetric:
 class MajorityVoteJudgeMetric:
     component_id = "builtin/majority_vote_judge"
     version = "1.0"
-    metric_family = "llm"
+    metric_family = "workflow"
+    subject_kind = "candidate"
+    interpretation = _WORKFLOW_SCORE
 
     def fingerprint(self) -> str:
         return "builtin-majority-vote-judge-fingerprint"
@@ -75,7 +83,9 @@ class MajorityVoteJudgeMetric:
 class PairwiseJudgeMetric:
     component_id = "builtin/pairwise_judge"
     version = "1.0"
-    metric_family = "selection"
+    metric_family = "workflow"
+    subject_kind = "candidates"
+    interpretation = _WORKFLOW_SCORE
 
     def fingerprint(self) -> str:
         return "builtin-pairwise-judge-fingerprint"
@@ -92,7 +102,9 @@ class PairwiseJudgeMetric:
 class RankingJudgeMetric:
     component_id = "builtin/ranking_judge"
     version = "1.0"
-    metric_family = "selection"
+    metric_family = "workflow"
+    subject_kind = "candidates"
+    interpretation = _WORKFLOW_SCORE
 
     def fingerprint(self) -> str:
         return "builtin-ranking-judge-fingerprint"

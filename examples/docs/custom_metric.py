@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from themis.storage import memory_store
+
 from themis import Experiment
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis import Evaluation, Generation
 from themis.core.contexts import ScoreContext
 from themis.core.dataset_sources import inline_dataset_source
-from themis.core.models import Case, Dataset, ParsedOutput, MetricResult
+from themis import Case, Dataset, MetricResult
+from themis.core.models import (
+    MetricDirection,
+    MetricInterpretation,
+    ParsedOutput,
+)
 
 
 class ExactAnswerMetric:
@@ -13,6 +20,11 @@ class ExactAnswerMetric:
     component_id = "metric/exact_answer"
     version = "1.0"
     metric_family = "pure"
+    interpretation = MetricInterpretation(
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        valid_range=(0.0, 1.0),
+        correctness_threshold=1.0,
+    )
 
     def fingerprint(self) -> str:
         return "metric-exact-answer"
@@ -33,14 +45,13 @@ def run_example() -> dict[str, object]:
     """Execute an experiment with a custom metric object."""
 
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator", reducer="builtin/majority_vote"
         ),
-        evaluation=EvaluationConfig(
-            metrics=[ExactAnswerMetric()], parsers=["builtin/json_identity"]
+        evaluation=Evaluation(
+            metrics=[ExactAnswerMetric()], parser="builtin/json_identity"
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             inline_dataset_source(
                 Dataset(
                     dataset_id="sample",
@@ -55,7 +66,7 @@ def run_example() -> dict[str, object]:
             )
         ],
     )
-    result = experiment.run()
+    result = experiment.run(store=memory_store())
     return {
         "run_id": result.run_id,
         "status": result.status.value,

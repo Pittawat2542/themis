@@ -10,13 +10,35 @@ from typing import Any
 
 from themis.core.base import JSONValue
 from themis.core.contexts import ScoreContext
-from themis.core.models import Case, MetricResult, ParsedOutput, ScoreError
+from themis.core.models import (
+    Case,
+    MetricDirection,
+    MetricInterpretation,
+    MetricResult,
+    ParsedOutput,
+    ScoreError,
+)
+
+_BINARY_ACCURACY = MetricInterpretation(
+    direction=MetricDirection.HIGHER_IS_BETTER,
+    valid_range=(0.0, 1.0),
+    correctness_threshold=1.0,
+)
+_CONTINUOUS_HIGHER = MetricInterpretation(
+    direction=MetricDirection.HIGHER_IS_BETTER,
+    valid_range=(0.0, 1.0),
+)
+_CONTINUOUS_LOWER = MetricInterpretation(
+    direction=MetricDirection.LOWER_IS_BETTER,
+    valid_range=(0.0, 1.0),
+)
 
 
 class ExactMatchMetric:
     component_id = "builtin/exact_match"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _BINARY_ACCURACY
 
     def fingerprint(self) -> str:
         return "builtin-exact-match-fingerprint"
@@ -35,6 +57,7 @@ class F1Metric:
     component_id = "builtin/f1"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_HIGHER
 
     def fingerprint(self) -> str:
         return "builtin-f1-fingerprint"
@@ -61,6 +84,7 @@ class BleuMetric:
     component_id = "builtin/bleu"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_HIGHER
 
     def fingerprint(self) -> str:
         return "builtin-bleu-fingerprint"
@@ -88,6 +112,7 @@ class ChoiceAccuracyMetric:
     component_id = "builtin/choice_accuracy"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _BINARY_ACCURACY
 
     def fingerprint(self) -> str:
         return "builtin-choice-accuracy-fingerprint"
@@ -107,6 +132,7 @@ class MathEquivalenceMetric:
     component_id = "builtin/math_equivalence"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _BINARY_ACCURACY
 
     def fingerprint(self) -> str:
         return "builtin-math-equivalence-fingerprint"
@@ -160,6 +186,7 @@ class ProcbenchFinalAccuracyMetric:
     component_id = "builtin/procbench_final_accuracy"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _BINARY_ACCURACY
 
     def fingerprint(self) -> str:
         return "builtin-procbench-final-accuracy-fingerprint"
@@ -188,6 +215,7 @@ class Rouge1Metric:
     component_id = "builtin/rouge1"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_HIGHER
 
     def fingerprint(self) -> str:
         return "builtin-rouge1-fingerprint"
@@ -207,6 +235,7 @@ class Rouge2Metric:
     component_id = "builtin/rouge2"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_HIGHER
 
     def fingerprint(self) -> str:
         return "builtin-rouge2-fingerprint"
@@ -226,6 +255,7 @@ class RougeLMetric:
     component_id = "builtin/rouge_l"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_HIGHER
 
     def fingerprint(self) -> str:
         return "builtin-rouge-l-fingerprint"
@@ -252,6 +282,7 @@ class SemanticSimilarityMetric:
     component_id = "builtin/semantic_similarity"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_HIGHER
 
     def fingerprint(self) -> str:
         return "builtin-semantic-similarity-fingerprint"
@@ -286,6 +317,7 @@ class ConfidenceCalibrationMetric:
     component_id = "builtin/confidence_calibration"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_LOWER
 
     def fingerprint(self) -> str:
         return "builtin-confidence-calibration-fingerprint"
@@ -315,6 +347,7 @@ class LabelAgreementMetric:
     component_id = "builtin/label_agreement"
     version = "1.0"
     metric_family = "pure"
+    interpretation = _CONTINUOUS_HIGHER
 
     def fingerprint(self) -> str:
         return "builtin-label-agreement-fingerprint"

@@ -6,12 +6,19 @@ from typing import Any
 
 from themis.catalog.registry import component_specs
 from themis.core.base import HashableModel
+from themis.core.models import MetricInterpretation
 
 
 class ComponentRef(HashableModel):
     component_id: str
     version: str
     fingerprint: str
+
+
+class MetricRef(ComponentRef):
+    """Identity-bearing metric reference including reporting semantics."""
+
+    interpretation: MetricInterpretation = MetricInterpretation()
 
 
 BUILTIN_COMPONENT_REFS: dict[str, ComponentRef] = {
@@ -61,3 +68,21 @@ def component_ref_from_value(value: Any) -> ComponentRef:
         version=version,
         fingerprint=fingerprint,
     )
+
+
+def metric_ref_from_value(value: Any) -> MetricRef:
+    """Resolve a metric reference and freeze its declared interpretation."""
+
+    if isinstance(value, MetricRef):
+        return value
+    if isinstance(getattr(value, "target", None), str) or isinstance(value, str):
+        from themis.core.builtins import resolve_metric_component
+
+        value = resolve_metric_component(value)
+    component = component_ref_from_value(value)
+    if not hasattr(value, "interpretation"):
+        raise TypeError(
+            f"Metric {component.component_id} must declare a MetricInterpretation"
+        )
+    interpretation = MetricInterpretation.model_validate(value.interpretation)
+    return MetricRef(**component.model_dump(), interpretation=interpretation)

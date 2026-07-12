@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from themis.core.read_models import BenchmarkResult, BenchmarkScoreRow
-from themis.core.stats import ComparisonSummary, StatsEngine, StatsSummary
+from themis.core.stats import (
+    ComparisonSummary,
+    MetricDirection,
+    StatsEngine,
+    StatsSummary,
+)
 
 
 def _benchmark_result(
@@ -170,11 +175,17 @@ def test_stats_engine_compare_aligns_rows_by_canonical_case_key_and_metric() -> 
     assert [metric.model_dump() for metric in comparison.metrics] == [
         {
             "metric_id": "accuracy",
+            "direction": "higher_is_better",
+            "baseline_count": 3,
+            "candidate_count": 3,
             "pairs": 3,
+            "unpaired_baseline": 0,
+            "unpaired_candidate": 0,
             "wins": 1,
             "losses": 1,
             "ties": 1,
             "mean_delta": 0.0,
+            "mean_improvement": 0.0,
             "ci_lower": -1.0,
             "ci_upper": 1.0,
             "p_value": 1.0,
@@ -182,11 +193,17 @@ def test_stats_engine_compare_aligns_rows_by_canonical_case_key_and_metric() -> 
         },
         {
             "metric_id": "f1",
+            "direction": "higher_is_better",
+            "baseline_count": 1,
+            "candidate_count": 2,
             "pairs": 1,
+            "unpaired_baseline": 0,
+            "unpaired_candidate": 1,
             "wins": 1,
             "losses": 0,
             "ties": 0,
             "mean_delta": 0.4,
+            "mean_improvement": 0.4,
             "ci_lower": 0.4,
             "ci_upper": 0.4,
             "p_value": 1.0,
@@ -320,3 +337,38 @@ def test_stats_engine_effect_size_is_zero_for_equal_paired_deltas() -> None:
 
     assert comparison.metrics[0].mean_delta == 0.3
     assert comparison.metrics[0].effect_size == 0.0
+
+
+def test_stats_engine_respects_lower_is_better_direction() -> None:
+    baseline = _benchmark_result(
+        "baseline",
+        [
+            BenchmarkScoreRow(
+                case_id="case-1",
+                metric_id="latency",
+                value=10.0,
+                candidate_id="candidate-a",
+            )
+        ],
+    )
+    candidate = _benchmark_result(
+        "candidate",
+        [
+            BenchmarkScoreRow(
+                case_id="case-1",
+                metric_id="latency",
+                value=8.0,
+                candidate_id="candidate-a",
+            )
+        ],
+    )
+
+    metric = StatsEngine().compare(
+        baseline,
+        candidate,
+        directions={"latency": MetricDirection.LOWER_IS_BETTER},
+    ).metrics[0]
+
+    assert metric.mean_delta == -2.0
+    assert metric.mean_improvement == 2.0
+    assert metric.wins == 1

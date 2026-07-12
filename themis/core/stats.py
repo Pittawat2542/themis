@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
+from collections.abc import Mapping
+from enum import StrEnum
 from math import comb, sqrt
 
 from themis.core.base import FrozenModel
@@ -36,11 +38,17 @@ class MetricComparison(FrozenModel):
     """Paired comparison statistics for one metric across two runs."""
 
     metric_id: str
+    direction: MetricDirection
+    baseline_count: int
+    candidate_count: int
     pairs: int
+    unpaired_baseline: int
+    unpaired_candidate: int
     wins: int
     losses: int
     ties: int
     mean_delta: float
+    mean_improvement: float
     ci_lower: float
     ci_upper: float
     p_value: float
@@ -53,6 +61,13 @@ class ComparisonSummary(FrozenModel):
     baseline_run_id: str
     candidate_run_id: str
     metrics: list[MetricComparison]
+
+
+class MetricDirection(StrEnum):
+    """Declares how a metric value maps to quality."""
+
+    HIGHER_IS_BETTER = "higher_is_better"
+    LOWER_IS_BETTER = "lower_is_better"
 
 
 class StatsEngine:
@@ -91,8 +106,10 @@ class StatsEngine:
         self,
         baseline: BenchmarkResult,
         candidate: BenchmarkResult,
+        *,
+        directions: Mapping[str, MetricDirection | str] | None = None,
     ) -> ComparisonSummary:
-        """Return a typed paired comparison between two benchmark results."""
+        """Return a paired comparison with explicit per-metric direction."""
 
         baseline_rows = {
             (_comparison_case_key(row), row.metric_id): float(row.value)
@@ -113,26 +130,76 @@ class StatsEngine:
             _, metric_id = key
             metric_deltas[metric_id].append(candidate_value - baseline_value)
 
+        resolved_directions = {
+            metric_id: MetricDirection(direction)
+            for metric_id, direction in dict(directions or {}).items()
+        }
+        baseline_counts = _metric_counts(baseline_rows)
+        candidate_counts = _metric_counts(candidate_rows)
+
         return ComparisonSummary(
             baseline_run_id=baseline.run_id,
             candidate_run_id=candidate.run_id,
             metrics=[
                 MetricComparison(
                     metric_id=metric_id,
+                    direction=resolved_directions.get(
+                        metric_id, MetricDirection.HIGHER_IS_BETTER
+                    ),
+                    baseline_count=baseline_counts[metric_id],
+                    candidate_count=candidate_counts[metric_id],
                     pairs=len(deltas),
-                    wins=sum(1 for delta in deltas if delta > 0),
-                    losses=sum(1 for delta in deltas if delta < 0),
+                    unpaired_baseline=baseline_counts[metric_id] - len(deltas),
+                    unpaired_candidate=candidate_counts[metric_id] - len(deltas),
+                    wins=sum(
+                        1
+                        for delta in _improvements(
+                            deltas, resolved_directions.get(metric_id)
+                        )
+                        if delta > 0
+                    ),
+                    losses=sum(
+                        1
+                        for delta in _improvements(
+                            deltas, resolved_directions.get(metric_id)
+                        )
+                        if delta < 0
+                    ),
                     ties=sum(1 for delta in deltas if delta == 0),
                     mean_delta=_rounded(sum(deltas) / len(deltas)),
+                    mean_improvement=_rounded(
+                        sum(
+                            _improvements(deltas, resolved_directions.get(metric_id))
+                        )
+                        / len(deltas)
+                    ),
                     ci_lower=_rounded(_bootstrap_mean_ci(deltas)[0]),
                     ci_upper=_rounded(_bootstrap_mean_ci(deltas)[1]),
                     p_value=_rounded(_paired_sign_test_p_value(deltas)),
-                    effect_size=_rounded(_effect_size(deltas)),
+                    effect_size=_rounded(
+                        _effect_size(
+                            _improvements(deltas, resolved_directions.get(metric_id))
+                        )
+                    ),
                 )
                 for metric_id, deltas in sorted(metric_deltas.items())
                 if deltas
             ],
         )
+
+
+def _metric_counts(rows: Mapping[tuple[str, str], float]) -> dict[str, int]:
+    counts: dict[str, int] = defaultdict(int)
+    for _, metric_id in rows:
+        counts[metric_id] += 1
+    return counts
+
+
+def _improvements(
+    deltas: list[float], direction: MetricDirection | None
+) -> list[float]:
+    multiplier = -1.0 if direction is MetricDirection.LOWER_IS_BETTER else 1.0
+    return [delta * multiplier for delta in deltas]
 
 
 def _rounded(value: float) -> float:

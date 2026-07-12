@@ -22,6 +22,7 @@ from themis.core.registry import RegressionPolicy, RunRecord
 from themis.core import reporter as reporter_module
 from themis.core.reporter import Reporter, snapshot_report
 from themis.core.store import RunStore
+from themis.core.results import ProjectionCursor
 from themis.core.stores.memory import InMemoryRunStore
 from tests.release import CURRENT_VERSION
 
@@ -207,6 +208,16 @@ def _store() -> tuple[InMemoryRunStore, str]:
     return store, snapshot.run_id
 
 
+def _mark_benchmark_fresh(store: InMemoryRunStore, run_id: str) -> None:
+    store.store_projection_cursor(
+        ProjectionCursor(
+            run_id=run_id,
+            projection_name="benchmark_result",
+            event_count=store.count_events(run_id),
+        )
+    )
+
+
 def test_reporter_exports_valid_json_markdown_csv_and_latex() -> None:
     store, run_id = _store()
     reporter = Reporter(store)
@@ -381,6 +392,7 @@ def test_reporter_escapes_latex_special_characters() -> None:
         "outcome_counts": {"metric_^~#": {"correct": 1}},
         "error_counts": {},
     }
+    _mark_benchmark_fresh(store, run_id)
     reporter = Reporter(store)
 
     exported_latex = reporter.export_latex(run_id)
@@ -414,6 +426,7 @@ def test_reporter_markdown_includes_failure_section_only_for_error_rows() -> Non
         "outcome_counts": {"builtin/exact_match": {"error": 1}},
         "error_counts": {"builtin/exact_match": {"parse_failure": 1}},
     }
+    _mark_benchmark_fresh(store, run_id)
     reporter = Reporter(store)
 
     exported_markdown = reporter.export_markdown(run_id)
@@ -475,6 +488,7 @@ def test_reporter_builds_failure_slices_from_error_rows() -> None:
         },
     }
 
+    _mark_benchmark_fresh(store, run_id)
     slices = Reporter(store).failure_slices(run_id)
 
     assert [item.model_dump() for item in slices.slices] == [
@@ -553,6 +567,7 @@ def test_reporter_reliability_summarizes_confidence_calibration() -> None:
         "error_counts": {},
     }
 
+    _mark_benchmark_fresh(store, run_id)
     summary = Reporter(store).reliability(run_id)
 
     assert [metric.model_dump() for metric in summary.metrics] == [

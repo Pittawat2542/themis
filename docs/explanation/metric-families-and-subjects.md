@@ -14,11 +14,16 @@ When it matters: whenever you are choosing a metric type or trying to understand
 What you provide:
 
 - pure metrics consume parsed output and case data
-- LLM metrics consume candidate-set subjects
-- selection metrics consume candidate-set subjects for pairwise or ranked comparisons
-- trace metrics consume trace or conversation subjects
+- workflow metrics declare `subject_kind` as `candidate`, `candidates`, or `trace`
 
 What Themis provides: subject construction, workflow execution, persistence, and artifact inspection.
+
+Every metric also declares a `MetricInterpretation`. Its direction and optional
+valid range are part of run identity. A correctness threshold is optional:
+metrics with one report `correct` or `incorrect`; continuous, calibration,
+agreement, ranking, and preference metrics without one report `scored`. Neutral
+metrics cannot declare a correctness threshold, and out-of-range or missing
+numeric values are reported as structured metric failures.
 
 Use this map when the metric family seems right but the evidence shape does not.
 
@@ -28,9 +33,8 @@ flowchart TD
     A --> C["Candidate set"]
     A --> D["Trace or conversation"]
     B --> E["PureMetric"]
-    C --> F["LLMMetric"]
-    C --> G["SelectionMetric"]
-    D --> H["TraceMetric"]
+    C --> F["WorkflowMetric: candidate or candidates"]
+    D --> H["WorkflowMetric: trace"]
 ```
 
 Metric families are mostly distinguished by the subject shape they need, not just by how they compute the final score.

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Changed
+- Added identity-bearing metric interpretation contracts and neutral `scored`
+  outcomes for metrics without binary correctness semantics.
+
 ## [5.0.0] - 2026-07-12
 
 Themis 5 removes the v4 compatibility surface and establishes one Python-first

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Literal
 
 from themis.core.base import JSONValue
 from themis.core.case_refs import CaseRef, resolve_case_key
@@ -13,10 +12,16 @@ from themis.core.events import (
     ProviderCallCompletedEvent,
     ProviderCallFailedEvent,
     RunEvent,
-    SessionCompletedEvent,
     StreamRecordedEvent,
 )
-from themis.core.models import MetricResult, ScoreError, SessionResult
+from themis.core.models import (
+    Candidate,
+    MetricDirection,
+    MetricInterpretation,
+    MetricResult,
+    ScoreError,
+    ScoreOutcome,
+)
 from themis.core.read_models import (
     BenchmarkResult,
     BenchmarkScoreRow,
@@ -140,6 +145,10 @@ def build_benchmark_result(
         metric_ids=[
             metric_ref.component_id for metric_ref in snapshot.component_refs.metrics
         ],
+        metric_interpretations={
+            metric_ref.component_id: metric_ref.interpretation
+            for metric_ref in snapshot.component_refs.metrics
+        },
     )
     return benchmark_result.model_copy(
         update={"dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets]}
@@ -150,6 +159,7 @@ def build_benchmark_result_from_run_result(
     run_result: RunResult,
     *,
     metric_ids: list[str] | None = None,
+    metric_interpretations: dict[str, MetricInterpretation] | None = None,
 ) -> BenchmarkResult:
     score_rows: list[BenchmarkScoreRow] = []
     metric_scores: dict[str, list[float]] = defaultdict(list)
@@ -188,6 +198,9 @@ def build_benchmark_result_from_run_result(
                 metric_results=metric_results,
                 score_errors=score_errors,
                 execution_failures=execution_failures,
+                interpretation=(metric_interpretations or {}).get(
+                    metric_id, MetricInterpretation()
+                ),
             )
             if row is None:
                 continue
@@ -249,7 +262,7 @@ def build_trace_view(snapshot: RunSnapshot, events: list[RunEvent]) -> TraceView
     return view
 
 
-def _generation_telemetry(result: SessionResult) -> TelemetryBreakdown:
+def _generation_telemetry(result: Candidate) -> TelemetryBreakdown:
     artifacts = result.artifacts or {}
     request_ids = [
         str(value)
@@ -510,7 +523,13 @@ def build_store_projection_payloads(
 ) -> dict[str, JSONValue]:
     state = ExecutionState.from_events(snapshot.run_id, events)
     run_result = build_run_result_from_state(snapshot, state)
-    benchmark_result = build_benchmark_result_from_run_result(run_result).model_copy(
+    benchmark_result = build_benchmark_result_from_run_result(
+        run_result,
+        metric_interpretations={
+            ref.component_id: ref.interpretation
+            for ref in snapshot.component_refs.metrics
+        },
+    ).model_copy(
         update={
             "dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets],
             "metric_ids": [
@@ -549,7 +568,13 @@ def apply_event_to_store_projection_payloads(
 ) -> dict[str, JSONValue]:
     state = _current_execution_state(snapshot, projections).apply_event(event)
     run_result = build_run_result_from_state(snapshot, state)
-    benchmark_result = build_benchmark_result_from_run_result(run_result).model_copy(
+    benchmark_result = build_benchmark_result_from_run_result(
+        run_result,
+        metric_interpretations={
+            ref.component_id: ref.interpretation
+            for ref in snapshot.component_refs.metrics
+        },
+    ).model_copy(
         update={
             "dataset_ids": [dataset.dataset_id for dataset in snapshot.datasets],
             "metric_ids": [
@@ -648,6 +673,7 @@ def _benchmark_row_for_metric(
     metric_results: dict[str, MetricResult],
     score_errors: dict[str, ScoreError],
     execution_failures: dict[str, str],
+    interpretation: MetricInterpretation,
 ) -> BenchmarkScoreRow | None:
     if metric_id in case.evaluation_failures:
         return BenchmarkScoreRow(
@@ -656,7 +682,7 @@ def _benchmark_row_for_metric(
             case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
-            outcome="error",
+            outcome=ScoreOutcome.ERROR,
             failure_category="evaluation_failure",
             error_message=case.evaluation_failures[metric_id],
         )
@@ -667,7 +693,7 @@ def _benchmark_row_for_metric(
             case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
-            outcome="error",
+            outcome=ScoreOutcome.ERROR,
             failure_category="evaluation_partial_failure",
             error_message=execution_failures[metric_id],
         )
@@ -679,13 +705,25 @@ def _benchmark_row_for_metric(
             case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
-            outcome="error",
+            outcome=ScoreOutcome.ERROR,
             failure_category=str(score_error.category),
             error_message=score_error.reason,
             metadata=dict(score_error.metadata),
         )
     if metric_id in metric_results:
         metric_result = metric_results[metric_id]
+        validation_error = _metric_value_error(metric_result, interpretation)
+        if validation_error is not None:
+            return BenchmarkScoreRow(
+                case_id=case.case_id,
+                dataset_id=case.dataset_id,
+                case_key=case.case_key,
+                metric_id=metric_id,
+                candidate_id=candidate_id,
+                outcome=ScoreOutcome.ERROR,
+                failure_category="metric_value_invalid",
+                error_message=validation_error,
+            )
         return BenchmarkScoreRow(
             case_id=case.case_id,
             dataset_id=case.dataset_id,
@@ -699,7 +737,7 @@ def _benchmark_row_for_metric(
             dimensions=dict(metric_result.dimensions),
             labels=dict(metric_result.labels),
             candidate_id=candidate_id,
-            outcome=_score_outcome(metric_result),
+            outcome=_score_outcome(metric_result, interpretation),
             metadata=dict(metric_result.metadata),
         )
     parse_errors_row = _parse_errors_row(case, metric_id, candidate_id)
@@ -721,7 +759,7 @@ def _parse_errors_row(
             case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
-            outcome="error",
+            outcome=ScoreOutcome.ERROR,
             failure_category="parse_failure",
             error_message=message,
             metadata={"parser_view": parser_view},
@@ -740,7 +778,7 @@ def _parse_errors_row(
             case_key=case.case_key,
             metric_id=metric_id,
             candidate_id=candidate_id,
-            outcome="error",
+            outcome=ScoreOutcome.ERROR,
             failure_category="parse_null",
             error_message="Parser returned null or invalid output",
             metadata={"parser_view": invalid_views[0]},
@@ -767,8 +805,31 @@ def _execution_failures_by_metric(case: CaseResult) -> dict[str, str]:
     return failures
 
 
-def _score_outcome(metric_result: MetricResult) -> Literal["correct", "incorrect"]:
-    return "correct" if float(metric_result.value or 0.0) >= 1.0 else "incorrect"
+def _metric_value_error(
+    metric_result: MetricResult, interpretation: MetricInterpretation
+) -> str | None:
+    if metric_result.value is None:
+        return "Metric returned no numeric value"
+    if interpretation.valid_range is None:
+        return None
+    lower, upper = interpretation.valid_range
+    if lower <= metric_result.value <= upper:
+        return None
+    return f"Metric value {metric_result.value} is outside [{lower}, {upper}]"
+
+
+def _score_outcome(
+    metric_result: MetricResult, interpretation: MetricInterpretation
+) -> ScoreOutcome:
+    threshold = interpretation.correctness_threshold
+    if threshold is None:
+        return ScoreOutcome.SCORED
+    assert metric_result.value is not None
+    if interpretation.direction is MetricDirection.HIGHER_IS_BETTER:
+        correct = metric_result.value >= threshold
+    else:
+        correct = metric_result.value <= threshold
+    return ScoreOutcome.CORRECT if correct else ScoreOutcome.INCORRECT
 
 
 def _current_execution_state(
@@ -833,10 +894,10 @@ def _apply_event_to_trace_view(
     stream_traces = list(view.stream_traces)
 
     if (
-        isinstance(event, (SessionCompletedEvent, GenerationCompletedEvent))
+        isinstance(event, GenerationCompletedEvent)
         and event.result is not None
     ):
-        result = SessionResult.model_validate(event.result)
+        result = Candidate.model_validate(event.result)
         if result.trace:
             generation_traces.append(
                 GenerationTraceRecord(
