@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
+import inspect
 import json
 from collections.abc import Mapping
 
 from themis.core.base import JSONValue
-from themis.core.models import ProviderTelemetry
+from themis.core.models import ProviderTelemetry, SeedCapability
+
+_ALLOWED_RESPONSE_HEADERS = {
+    "request-id",
+    "retry-after",
+    "x-request-id",
+    "x-ratelimit-limit",
+    "x-ratelimit-limit-requests",
+    "x-ratelimit-remaining",
+    "x-ratelimit-remaining-requests",
+    "x-ratelimit-reset",
+    "x-ratelimit-reset-requests",
+    "ratelimit-limit-requests",
+}
 
 
 def stable_fingerprint(payload: dict[str, object]) -> str:
@@ -15,6 +30,27 @@ def stable_fingerprint(payload: dict[str, object]) -> str:
         payload, sort_keys=True, separators=(",", ":"), allow_nan=False
     )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+async def call_maybe_sync(function, /, **kwargs: object) -> object:
+    """Invoke sync SDK methods off-loop while preserving async SDK methods."""
+
+    if inspect.iscoroutinefunction(function):
+        return await function(**kwargs)
+    result = await asyncio.to_thread(function, **kwargs)
+    return await result if inspect.isawaitable(result) else result
+
+
+async def close_maybe_sync(client: object) -> None:
+    close = getattr(client, "aclose", None) or getattr(client, "close", None)
+    if close is None:
+        return
+    if inspect.iscoroutinefunction(close):
+        await close()
+        return
+    result = await asyncio.to_thread(close)
+    if inspect.isawaitable(result):
+        await result
 
 
 def normalize_json_value(value: object) -> JSONValue:
@@ -72,7 +108,11 @@ def extract_headers(response: object) -> dict[str, JSONValue] | None:
     if headers is None:
         return None
     if isinstance(headers, Mapping):
-        return {str(key): normalize_json_value(value) for key, value in headers.items()}
+        return {
+            str(key).lower(): normalize_json_value(value)
+            for key, value in headers.items()
+            if str(key).lower() in _ALLOWED_RESPONSE_HEADERS
+        }
     return None
 
 
@@ -94,7 +134,13 @@ def extract_rate_limit(
     return None
 
 
-def extract_provider_telemetry(response: object) -> ProviderTelemetry:
+def extract_provider_telemetry(
+    response: object,
+    *,
+    seed_requested: int | None = None,
+    seed_applied: int | None = None,
+    seed_capability: SeedCapability = SeedCapability.UNSUPPORTED,
+) -> ProviderTelemetry:
     """Extract common telemetry fields from provider-specific response shapes."""
 
     raw_response = dump_response(response)
@@ -105,6 +151,9 @@ def extract_provider_telemetry(response: object) -> ProviderTelemetry:
         raw_response=raw_response,
         headers=headers,
         rate_limit=extract_rate_limit(headers),
+        seed_requested=seed_requested,
+        seed_applied=seed_applied,
+        seed_capability=seed_capability,
     )
 
 
@@ -113,6 +162,9 @@ def provider_artifacts(telemetry: ProviderTelemetry) -> dict[str, JSONValue]:
         "provider_request_id": telemetry.request_id,
         "raw_response": telemetry.raw_response,
         "response_headers": telemetry.headers or {},
+        "seed_requested": telemetry.seed_requested,
+        "seed_applied": telemetry.seed_applied,
+        "seed_capability": telemetry.seed_capability.value,
     }
     if telemetry.rate_limit is not None:
         artifacts["rate_limit"] = telemetry.rate_limit

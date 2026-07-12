@@ -5,17 +5,19 @@ from __future__ import annotations
 from typing import Any, Protocol, cast
 
 from themis.adapters._utils import (
+    call_maybe_sync,
+    close_maybe_sync,
     extract_provider_telemetry,
     provider_artifacts,
     stable_fingerprint,
 )
-from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.contexts import GenerationContext
 from themis.core.models import (
+    Candidate,
     Case,
-    GenerationResult,
     Message,
-    SessionResult,
-    SessionTurn,
+    GenerationTurn,
+    SeedCapability,
 )
 
 
@@ -33,6 +35,7 @@ class OpenAIGenerator:
 
     component_id = "generator/openai"
     version = "1.0"
+    seed_capability = SeedCapability.SUPPORTED
 
     def __init__(
         self,
@@ -40,14 +43,13 @@ class OpenAIGenerator:
         *,
         client: _OpenAIResponsesClient | None = None,
         instructions: str | None = None,
-        input_builder: Any | None = None,
         base_url: str | None = None,
         api_key: str | None = None,
     ) -> None:
         self.model_id = model_id
         self._client = client
+        self._owns_client = client is None
         self.instructions = instructions
-        self.input_builder = input_builder
         self.base_url = base_url
         self.api_key = api_key
         self.provider_key = (
@@ -61,17 +63,18 @@ class OpenAIGenerator:
                 "model_id": self.model_id,
                 "instructions": self.instructions,
                 "base_url": self.base_url,
+                "seed_capability": self.seed_capability.value,
             }
         )
 
-    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
-        client = self._client or self._build_client()
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
+        client = self._client_for_call()
         prompt_spec = ctx.prompt_spec
-        request_input = (
-            self.input_builder(case) if self.input_builder is not None else case.input
-        )
+        request_input = case.input
         rendered_input = (
-            prompt_spec.render_input(request_input)
+            prompt_spec.model_copy(update={"instructions": None}).render_input(
+                request_input
+            )
             if prompt_spec is not None
             else request_input
         )
@@ -79,11 +82,18 @@ class OpenAIGenerator:
             prompt_spec.instructions if prompt_spec is not None else None
         )
         payload: dict[str, object] = {"model": self.model_id, "input": rendered_input}
+        if ctx.seed is not None:
+            payload["seed"] = ctx.seed
         if instructions is not None:
             payload["instructions"] = instructions
 
-        response = await client.responses.create(**payload)
-        telemetry = extract_provider_telemetry(response)
+        response = await call_maybe_sync(client.responses.create, **payload)
+        telemetry = extract_provider_telemetry(
+            response,
+            seed_requested=ctx.seed,
+            seed_applied=ctx.seed,
+            seed_capability=self.seed_capability,
+        )
         final_output = getattr(response, "output_text", telemetry.raw_response)
 
         conversation: list[Message] = []
@@ -92,11 +102,11 @@ class OpenAIGenerator:
         conversation.append(Message(role="user", content=rendered_input))
         conversation.append(Message(role="assistant", content=final_output))
 
-        return SessionResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
             final_output=final_output,
             turns=[
-                SessionTurn(
+                GenerationTurn(
                     turn_index=0,
                     input_messages=conversation[:-1],
                     output_messages=conversation[-1:],
@@ -106,11 +116,6 @@ class OpenAIGenerator:
             termination_reason="completed",
             token_usage=telemetry.token_usage,
             artifacts=provider_artifacts(telemetry),
-        )
-
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult.model_validate(
-            (await self.run_session(case, ctx)).model_dump(mode="json")
         )
 
     def _build_client(self) -> _OpenAIResponsesClient:
@@ -131,6 +136,22 @@ class OpenAIGenerator:
         if self.api_key is not None:
             return cast(_OpenAIResponsesClient, AsyncOpenAI(api_key=self.api_key))
         return cast(_OpenAIResponsesClient, AsyncOpenAI())
+
+    def _client_for_call(self) -> _OpenAIResponsesClient:
+        if self._client is None:
+            self._client = self._build_client()
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._owns_client and self._client is not None:
+            client, self._client = self._client, None
+            await close_maybe_sync(client)
+
+    async def __aenter__(self) -> OpenAIGenerator:
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self.aclose()
 
 
 def openai(model_id: str, **kwargs: Any) -> OpenAIGenerator:

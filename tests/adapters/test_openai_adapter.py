@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from themis.adapters.openai import openai
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, GenerationResult
+from themis.core.contexts import GenerationContext
+from themis.core.models import Case, Candidate
 from themis.core.prompts import PromptSpec
 
 
@@ -45,10 +45,10 @@ async def test_openai_adapter_generates_results_from_responses_api() -> None:
     case = Case(case_id="case-1", input="What is 2+2?", expected_output="4")
 
     result = await generator.generate(
-        case, GenerateContext(run_id="run-1", case_id="case-1", seed=7)
+        case, GenerationContext(run_id="run-1", case_id="case-1", seed=7)
     )
 
-    assert isinstance(result, GenerationResult)
+    assert isinstance(result, Candidate)
     assert result.candidate_id == "case-1-candidate-7"
     assert result.final_output == "4"
     assert [
@@ -63,13 +63,17 @@ async def test_openai_adapter_generates_results_from_responses_api() -> None:
         "provider_request_id": "resp_123",
         "raw_response": {"id": "resp_123", "output_text": "4"},
         "response_headers": {"x-ratelimit-limit-requests": "60"},
-        "rate_limit": {"requests_per_minute": 60},
+            "rate_limit": {"requests_per_minute": 60},
+            "seed_requested": 7,
+            "seed_applied": 7,
+            "seed_capability": "supported",
     }
     assert client.responses.calls == [
         {
             "model": "gpt-5.4-mini",
             "input": "What is 2+2?",
-            "instructions": "Answer directly.",
+                "instructions": "Answer directly.",
+                "seed": 7,
         }
     ]
 
@@ -91,7 +95,7 @@ async def test_openai_adapter_can_take_prompt_spec_from_context() -> None:
 
     await generator.generate(
         case,
-        GenerateContext(
+        GenerationContext(
             run_id="run-1",
             case_id="case-1",
             seed=7,
@@ -107,11 +111,11 @@ async def test_openai_adapter_can_take_prompt_spec_from_context() -> None:
         {
             "model": "gpt-5.4-mini",
             "input": (
-                "Instructions:\nAnswer directly.\n\n"
                 "Use the examples.\n\n"
                 'Reference pair:\n{"input": "1+1", "output": "2"}\n\n'
                 "Input:\nWhat is 2+2?"
             ),
             "instructions": "Answer directly.",
+            "seed": 7,
         }
     ]

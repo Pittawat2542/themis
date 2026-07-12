@@ -7,6 +7,8 @@ All notable changes to this project are documented in this file.
 ### Changed
 - Added identity-bearing metric interpretation contracts and neutral `scored`
   outcomes for metrics without binary correctness semantics.
+- Made omitted provider request limits unlimited and added strict seed-capability
+  validation with requested/applied seed telemetry.
 
 ## [5.0.0] - 2026-07-12
 

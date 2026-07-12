@@ -13,8 +13,8 @@ from themis.adapters import (
     ollama,
 )
 from themis.adapters._utils import extract_provider_telemetry
-from themis.core.contexts import GenerateContext
-from themis.core.models import Case, GenerationResult
+from themis.core.contexts import GenerationContext
+from themis.core.models import Case, Candidate
 from themis.core.workflows import JudgeResponse
 
 
@@ -124,11 +124,11 @@ async def test_provider_adapters_generate_and_judge_with_shared_telemetry(
     case = Case(case_id="case-1", input="What is 2+2?", expected_output="4")
 
     generated = await adapter.generate(
-        case, GenerateContext(run_id="run-1", case_id="case-1", seed=7)
+        case, GenerationContext(run_id="run-1", case_id="case-1", seed=7)
     )
     judged = await adapter.judge("What is 2+2?", seed=7)
 
-    assert isinstance(generated, GenerationResult)
+    assert isinstance(generated, Candidate)
     assert generated.final_output == "4"
     assert generated.token_usage == {"prompt_tokens": 5, "completion_tokens": 1}
     assert generated.artifacts is not None

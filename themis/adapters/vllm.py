@@ -5,19 +5,21 @@ from __future__ import annotations
 from typing import Any, Protocol, cast
 
 from themis.adapters._utils import (
+    call_maybe_sync,
+    close_maybe_sync,
     dump_response,
     extract_provider_telemetry,
     extract_token_usage,
     provider_artifacts,
     stable_fingerprint,
 )
-from themis.core.contexts import GenerateContext, SessionContext
+from themis.core.contexts import GenerationContext
 from themis.core.models import (
+    Candidate,
     Case,
-    GenerationResult,
     Message,
-    SessionResult,
-    SessionTurn,
+    GenerationTurn,
+    SeedCapability,
 )
 
 
@@ -47,6 +49,7 @@ class VLLMGenerator:
 
     component_id = "generator/vllm"
     version = "1.0"
+    seed_capability = SeedCapability.SUPPORTED
 
     def __init__(
         self,
@@ -56,14 +59,13 @@ class VLLMGenerator:
         client: _VLLMClient | None = None,
         api_key: str = "EMPTY",
         api_mode: str = "responses",
-        input_builder: Any | None = None,
     ) -> None:
         self.model_id = model_id
         self.base_url = base_url.rstrip("/")
         self._client = client
+        self._owns_client = client is None
         self.api_key = api_key
         self.api_mode = api_mode
-        self.input_builder = input_builder
         self.provider_key = f"vllm:{self.base_url}"
 
     def fingerprint(self) -> str:
@@ -73,40 +75,51 @@ class VLLMGenerator:
                 "model_id": self.model_id,
                 "base_url": self.base_url,
                 "api_mode": self.api_mode,
+                "seed_capability": self.seed_capability.value,
             }
         )
 
-    async def run_session(self, case: Case, ctx: SessionContext) -> SessionResult:
-        client = self._client or self._build_client()
+    async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
+        client = self._client_for_call()
         request_input = (
-            self.input_builder(case) if self.input_builder is not None else case.input
+            ctx.prompt_spec.render_input(case.input)
+            if ctx.prompt_spec is not None
+            else case.input
         )
         if self.api_mode == "chat_completions":
-            response = await client.chat.completions.create(
+            response = await call_maybe_sync(
+                client.chat.completions.create,
                 model=self.model_id,
                 messages=[{"role": "user", "content": request_input}],
+                seed=ctx.seed,
             )
             raw_response = dump_response(response)
             choices = getattr(response, "choices")
             content = getattr(choices[0].message, "content", raw_response)
             usage = extract_token_usage(getattr(response, "usage", None))
         else:
-            response = await client.responses.create(
-                model=self.model_id, input=request_input
+            response = await call_maybe_sync(
+                client.responses.create,
+                model=self.model_id, input=request_input, seed=ctx.seed
             )
             raw_response = dump_response(response)
             content = getattr(response, "output_text", raw_response)
             usage = extract_token_usage(getattr(response, "usage", None))
 
-        telemetry = extract_provider_telemetry(response)
+        telemetry = extract_provider_telemetry(
+            response,
+            seed_requested=ctx.seed,
+            seed_applied=ctx.seed,
+            seed_capability=self.seed_capability,
+        )
         artifacts = provider_artifacts(telemetry)
         artifacts["api_mode"] = self.api_mode
 
-        return SessionResult(
+        return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed if ctx.seed is not None else 0}",
             final_output=content,
             turns=[
-                SessionTurn(
+                GenerationTurn(
                     turn_index=0,
                     input_messages=[Message(role="user", content=request_input)],
                     output_messages=[Message(role="assistant", content=content)],
@@ -115,11 +128,6 @@ class VLLMGenerator:
             termination_reason="completed",
             token_usage=usage or telemetry.token_usage,
             artifacts=artifacts,
-        )
-
-    async def generate(self, case: Case, ctx: GenerateContext) -> GenerationResult:
-        return GenerationResult.model_validate(
-            (await self.run_session(case, ctx)).model_dump(mode="json")
         )
 
     def _build_client(self) -> _VLLMClient:
@@ -132,6 +140,22 @@ class VLLMGenerator:
         return cast(
             _VLLMClient, AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
         )
+
+    def _client_for_call(self) -> _VLLMClient:
+        if self._client is None:
+            self._client = self._build_client()
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._owns_client and self._client is not None:
+            client, self._client = self._client, None
+            await close_maybe_sync(client)
+
+    async def __aenter__(self) -> VLLMGenerator:
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self.aclose()
 
 
 def vllm(model_id: str, **kwargs: Any) -> VLLMGenerator:

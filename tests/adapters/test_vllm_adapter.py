@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from themis.adapters.vllm import vllm
-from themis.core.contexts import GenerateContext
+from themis.core.contexts import GenerationContext
 from themis.core.models import Case
 
 
@@ -68,12 +68,14 @@ async def test_vllm_adapter_supports_openai_compatible_responses_mode() -> None:
 
     result = await generator.generate(
         Case(case_id="case-1", input="What is 2+2?", expected_output="4"),
-        GenerateContext(run_id="run-1", case_id="case-1", seed=7),
+        GenerationContext(run_id="run-1", case_id="case-1", seed=7),
     )
 
     assert result.final_output == "4"
     assert result.token_usage == {"prompt_tokens": 4, "completion_tokens": 1}
-    assert client.responses.calls == [{"model": "qwen2.5", "input": "What is 2+2?"}]
+    assert client.responses.calls == [
+        {"model": "qwen2.5", "input": "What is 2+2?", "seed": 7}
+    ]
 
 
 @pytest.mark.asyncio
@@ -88,10 +90,14 @@ async def test_vllm_adapter_supports_chat_completions_mode() -> None:
 
     result = await generator.generate(
         Case(case_id="case-1", input="What is 2+2?", expected_output="4"),
-        GenerateContext(run_id="run-1", case_id="case-1", seed=7),
+        GenerationContext(run_id="run-1", case_id="case-1", seed=7),
     )
 
     assert result.final_output == "4"
     assert client.chat.completions.calls == [
-        {"model": "qwen2.5", "messages": [{"role": "user", "content": "What is 2+2?"}]}
+        {
+            "model": "qwen2.5",
+            "messages": [{"role": "user", "content": "What is 2+2?"}],
+            "seed": 7,
+        }
     ]

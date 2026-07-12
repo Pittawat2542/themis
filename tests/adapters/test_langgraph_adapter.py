@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from themis.adapters.langgraph import langgraph
-from themis.core.contexts import GenerateContext
+from themis.core.contexts import GenerationContext
 from themis.core.models import Case
 
 
@@ -31,7 +31,7 @@ async def test_langgraph_adapter_invokes_graph_and_captures_trace() -> None:
 
     result = await generator.generate(
         Case(case_id="case-1", input={"question": "2+2"}, expected_output="4"),
-        GenerateContext(run_id="run-1", case_id="case-1", seed=7),
+        GenerationContext(run_id="run-1", case_id="case-1", seed=7),
     )
 
     assert result.final_output == "4"
