@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any, Literal
+from uuid import uuid4
 
 from pydantic import ConfigDict, Field
 
@@ -14,12 +15,27 @@ def _now_utc() -> datetime:
     return datetime.now(UTC)
 
 
+class FailureEvidence(HashableModel):
+    """Stable diagnostic fields shared by runtime failure events."""
+
+    error_code: str
+    exception_class: str
+    stage: str
+    component_id: str | None = None
+    retryable: bool = False
+    retry_attempt: int = 1
+    attempt_id: str = ""
+    traceback_blob_ref: str | None = None
+
+
 class RunEvent(HashableModel):
     """Base event persisted for a compiled run."""
 
     model_config = ConfigDict(frozen=True, extra="allow", arbitrary_types_allowed=True)
 
-    schema_version: str = "1"
+    schema_version: str = "2"
+    event_id: str = Field(default_factory=lambda: str(uuid4()))
+    attempt_id: str = ""
     event_type: str
     run_id: str
     occurred_at: datetime = Field(default_factory=_now_utc)
@@ -29,6 +45,10 @@ class RunStartedEvent(RunEvent):
     """Event emitted when orchestration starts for a run."""
 
     event_type: Literal["run_started"] = "run_started"
+    attempt_kind: Literal["initial", "resume", "replay", "rerun", "rejudge"] = (
+        "initial"
+    )
+    parent_attempt_id: str | None = None
 
 
 class RunCompletedEvent(RunEvent):
@@ -45,6 +65,7 @@ class RunFailedEvent(RunEvent):
 
     event_type: Literal["run_failed"] = "run_failed"
     error_message: str
+    failure: FailureEvidence | None = None
 
 
 class CaseRunEvent(RunEvent):
@@ -55,10 +76,10 @@ class CaseRunEvent(RunEvent):
     case_key: str | None = None
 
 
-class SessionStartedEvent(CaseRunEvent):
-    """Event emitted when a session candidate starts for a case."""
+class GenerationStartedEvent(CaseRunEvent):
+    """Event emitted when candidate generation starts for a case."""
 
-    event_type: Literal["session_started"] = "session_started"
+    event_type: Literal["generation_started"] = "generation_started"
     candidate_id: str
     candidate_index: int | None = None
     seed: int | None = None
@@ -73,30 +94,6 @@ class StreamRecordedEvent(CaseRunEvent):
     metric_id: str | None = None
     source_stage: str
     stream_event: dict[str, JSONValue]
-
-
-class SessionCompletedEvent(CaseRunEvent):
-    """Event emitted when a session candidate completes for a case."""
-
-    event_type: Literal["session_completed"] = "session_completed"
-    candidate_id: str
-    candidate_index: int | None = None
-    seed: int | None = None
-    provider_key: str | None = None
-    result: dict[str, JSONValue] | None = None
-    result_blob_ref: str | None = None
-    cache_hit: bool = False
-    source_run_id: str | None = None
-
-
-class SessionFailedEvent(CaseRunEvent):
-    """Event emitted when a session candidate fails for a case."""
-
-    event_type: Literal["session_failed"] = "session_failed"
-    candidate_id: str
-    candidate_index: int | None = None
-    error_message: str
-    retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
 
 
 class GenerationCompletedEvent(CaseRunEvent):
@@ -121,6 +118,7 @@ class GenerationFailedEvent(CaseRunEvent):
     candidate_index: int | None = None
     error_message: str
     retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
+    failure: FailureEvidence | None = None
 
 
 class SelectionCompletedEvent(CaseRunEvent):
@@ -136,6 +134,7 @@ class SelectionFailedEvent(CaseRunEvent):
 
     event_type: Literal["selection_failed"] = "selection_failed"
     error_message: str
+    failure: FailureEvidence | None = None
 
 
 class ReductionCompletedEvent(CaseRunEvent):
@@ -154,6 +153,7 @@ class ReductionFailedEvent(CaseRunEvent):
 
     event_type: Literal["reduction_failed"] = "reduction_failed"
     error_message: str
+    failure: FailureEvidence | None = None
 
 
 class ParseCompletedEvent(CaseRunEvent):
@@ -175,6 +175,7 @@ class ParseFailedEvent(CaseRunEvent):
     parser_id: str = "default"
     error_message: str
     failure_category: str = "parse_failure"
+    failure: FailureEvidence | None = None
 
 
 class EvaluationCompletedEvent(CaseRunEvent):
@@ -194,6 +195,7 @@ class EvaluationFailedEvent(CaseRunEvent):
     candidate_id: str | None = None
     metric_id: str
     error_message: str
+    failure: FailureEvidence | None = None
 
 
 class ProviderCallStartedEvent(CaseRunEvent):
@@ -238,6 +240,7 @@ class ProviderCallFailedEvent(CaseRunEvent):
     failure_category: str = "provider_failure"
     retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
     telemetry: dict[str, JSONValue] = Field(default_factory=dict)
+    failure: FailureEvidence | None = None
 
 
 class ScoreCompletedEvent(CaseRunEvent):
@@ -288,16 +291,15 @@ class StepFailedEvent(RunEvent):
     step_type: str
     error_message: str
     retry_history: list[dict[str, JSONValue]] = Field(default_factory=list)
+    failure: FailureEvidence | None = None
 
 
 EVENT_TYPES: dict[str, type[RunEvent]] = {
     "run_started": RunStartedEvent,
     "run_completed": RunCompletedEvent,
     "run_failed": RunFailedEvent,
-    "session_started": SessionStartedEvent,
+    "generation_started": GenerationStartedEvent,
     "stream_recorded": StreamRecordedEvent,
-    "session_completed": SessionCompletedEvent,
-    "session_failed": SessionFailedEvent,
     "generation_completed": GenerationCompletedEvent,
     "generation_failed": GenerationFailedEvent,
     "selection_completed": SelectionCompletedEvent,

@@ -6,8 +6,6 @@ from pydantic import ValidationError
 from themis.core.events import (
     EvaluationCompletedEvent,
     EvaluationFailedEvent,
-    GenerationCompletedEvent,
-    GenerationFailedEvent,
     ParseFailedEvent,
     ProviderCallCompletedEvent,
     ProviderCallFailedEvent,
@@ -19,9 +17,9 @@ from themis.core.events import (
     RunStartedEvent,
     ScoreCompletedEvent,
     ScoreFailedEvent,
-    SessionCompletedEvent,
-    SessionFailedEvent,
-    SessionStartedEvent,
+    GenerationCompletedEvent,
+    GenerationFailedEvent,
+    GenerationStartedEvent,
     StepCompletedEvent,
     StepFailedEvent,
     StepStartedEvent,
@@ -35,7 +33,9 @@ def test_run_events_include_schema_version() -> None:
 
     payload = event.model_dump(mode="json")
 
-    assert payload["schema_version"] == "1"
+    assert payload["schema_version"] == "2"
+    assert payload["event_id"]
+    assert "attempt_id" in payload
     assert payload["event_type"] == "run_started"
 
 
@@ -68,7 +68,7 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
             result={"candidate_id": "candidate-1", "final_output": {"answer": "4"}},
             result_blob_ref="sha256:abc123",
         ),
-        SessionStartedEvent(
+        GenerationStartedEvent(
             run_id="run-1",
             case_id="case-1",
             candidate_id="candidate-1",
@@ -87,7 +87,7 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
                 "payload": {"text": "4"},
             },
         ),
-        SessionCompletedEvent(
+        GenerationCompletedEvent(
             run_id="run-1",
             case_id="case-1",
             candidate_id="candidate-1",
@@ -101,7 +101,7 @@ def test_event_deserialization_supports_all_initial_variants() -> None:
             },
             result_blob_ref="sha256:def456",
         ),
-        SessionFailedEvent(
+        GenerationFailedEvent(
             run_id="run-1",
             case_id="case-1",
             candidate_id="candidate-2",

@@ -12,6 +12,7 @@ from themis.core.events import RunEvent, event_from_dict
 from themis.core.registry import RunRecord
 from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
+from themis.core.store import AppendResult, EventRecord
 from themis.core.stores.base import ProjectionRefreshingStore
 
 
@@ -30,6 +31,9 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         database["run_events"].create_index(
             [("run_id", 1), ("sequence", 1)], unique=True
         )
+        database["run_events"].create_index(
+            [("run_id", 1), ("event_id", 1)], unique=True
+        )
         database["run_event_counters"].create_index([("run_id", 1)], unique=True)
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
@@ -43,19 +47,31 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         )
         self._bootstrap_projections(snapshot)
 
-    def persist_event(self, event: RunEvent) -> None:
-        sequence = self._allocate_sequence(event.run_id)
-        self._db()["run_events"].insert_one(
-            {
-                "run_id": event.run_id,
-                "sequence": sequence,
-                "event_type": event.event_type,
-                "event_json": event.model_dump(mode="json"),
-            }
+    def persist_event(self, event: RunEvent) -> AppendResult:
+        existing = self._db()["run_events"].find_one(
+            {"run_id": event.run_id, "event_id": event.event_id}
         )
-        snapshot = self._load_snapshot(event.run_id)
-        if snapshot is not None:
-            self._refresh_projections_for_event(snapshot, event)
+        if existing is not None:
+            return AppendResult(sequence=int(existing["sequence"]), inserted=False)
+        sequence = self._allocate_sequence(event.run_id)
+        try:
+            self._db()["run_events"].insert_one(
+                {
+                    "run_id": event.run_id,
+                    "event_id": event.event_id,
+                    "sequence": sequence,
+                    "event_type": event.event_type,
+                    "event_json": event.model_dump(mode="json"),
+                }
+            )
+        except Exception:
+            existing = self._db()["run_events"].find_one(
+                {"run_id": event.run_id, "event_id": event.event_id}
+            )
+            if existing is None:
+                raise
+            return AppendResult(sequence=int(existing["sequence"]), inserted=False)
+        return AppendResult(sequence=sequence, inserted=True)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         rows = sorted(
@@ -69,6 +85,23 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             except KeyError:
                 continue
         return events
+
+    def query_event_records(
+        self, run_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[EventRecord]:
+        rows = sorted(
+            self._db()["run_events"].find(
+                {"run_id": run_id, "sequence": {"$gt": after_sequence}}
+            ),
+            key=lambda row: row["sequence"],
+        )[:limit]
+        return [
+            EventRecord(
+                sequence=int(row["sequence"]),
+                event=event_from_dict(dict(row["event_json"])),
+            )
+            for row in rows
+        ]
 
     def count_events(self, run_id: str) -> int:
         return len(self._db()["run_events"].find({"run_id": run_id}))

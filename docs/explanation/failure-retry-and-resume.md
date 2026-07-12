@@ -15,6 +15,11 @@ What you provide: runtime retry settings and a store that persists enough state 
 
 What Themis provides: failure events, structured retry metadata, duplicate-run handling, and per-stage resume behavior.
 
+Events have stable IDs and per-run sequences, so retrying an append cannot
+duplicate logical evidence. Failures include a stable code, exception class,
+stage, component, retryability, and attempt identity. Sanitized traceback blobs
+are retained under `standard` and `full` policies.
+
 Use this flow to reason about whether the next action is retrying a stage or continuing from stored state.
 
 ```mermaid
@@ -35,11 +40,16 @@ Important distinctions:
 - retry history explains transient recovery inside one stage execution
 - `existing_run_policy` explains what happens when you submit the same compiled `run_id` again
 - `completed_through_stage` explains whether a run intentionally stopped at `generate`, `reduce`, `parse`, `score`, or `judge`
-- `themis resume` reopens stored status; `run()` with `existing_run_policy="auto"` continues unfinished persisted work
+- `themis resume` reopens stored status; `run()` with `existing_run_policy="reuse"` continues unfinished persisted work
 - replay re-runs downstream stages from stored upstream artifacts
 - rerun targets failed cases, case slices, or metric subsets while preserving the compiled run identity
 
 Resume uses store-level execution checkpoints when they are fresh. The event stream remains authoritative for audit and recovery, so older stores or stale checkpoints can still rebuild state by replaying stored events.
+
+Each initial run, replay, rerun, or rejudge has an `attempt_id`. Resume continues
+the active attempt; new downstream work creates a child attempt, preserving
+earlier score claims for history inspection. Schema-v1 development stores are
+not migrated during the v5 pre-release reset and must be archived or recreated.
 
 Retry classification is built around common endpoint failures: explicit retryable exceptions, timeouts, connection failures, `429` rate limits, and `5xx` server failures. Persisted retry history includes the attempt number, delay, reason, and any `retry_after_s` hint that the provider returned.
 

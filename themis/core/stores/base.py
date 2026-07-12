@@ -20,6 +20,11 @@ from themis.core.projections import (
     build_store_projection_payloads,
 )
 from themis.core.snapshot import RunSnapshot
+from themis.core.store import (
+    ProjectionConsistency,
+    ProjectionFreshness,
+    ProjectionRead,
+)
 from themis.core.results import ExecutionCheckpoint, ExecutionState, ProjectionCursor
 
 
@@ -73,9 +78,10 @@ class ProjectionRefreshingStore(ABC):
 
     def _bootstrap_projections(self, snapshot: RunSnapshot) -> None:
         event_count = self.count_events(snapshot.run_id)
+        events = self.query_events(snapshot.run_id) if event_count else []
         payloads = (
             build_store_projection_payloads(
-                snapshot, self.query_events(snapshot.run_id)
+                snapshot, events
             )
             if event_count
             else build_initial_store_projection_payloads(snapshot)
@@ -95,6 +101,10 @@ class ProjectionRefreshingStore(ABC):
         self.store_execution_checkpoint(
             ExecutionCheckpoint(
                 run_id=snapshot.run_id,
+                attempt_id=next(
+                    (event.attempt_id for event in reversed(events) if event.attempt_id),
+                    None,
+                ),
                 event_count=event_count,
                 execution_state=execution_state,
             )
@@ -124,6 +134,7 @@ class ProjectionRefreshingStore(ABC):
                 self.store_execution_checkpoint(
                     ExecutionCheckpoint(
                         run_id=snapshot.run_id,
+                        attempt_id=event.attempt_id or None,
                         event_count=event_count,
                         execution_state=ExecutionState.model_validate(payload),
                     )
@@ -133,20 +144,54 @@ class ProjectionRefreshingStore(ABC):
     def _get_projection_with_backfill(
         self, run_id: str, projection_name: str
     ) -> JSONValue | None:
-        projection = self._read_projection(run_id, projection_name)
-        if projection is not None:
-            return projection
-        self._backfill_projections(run_id)
-        return self._read_projection(run_id, projection_name)
+        return self.read_projection(run_id, projection_name).payload
 
-    def _backfill_projections(self, run_id: str) -> None:
-        stored = self.resume(run_id)
-        if stored is None:
+    def read_projection(
+        self,
+        run_id: str,
+        projection_name: str,
+        *,
+        consistency: ProjectionConsistency = ProjectionConsistency.FRESH,
+    ) -> ProjectionRead:
+        payload = self._read_projection(run_id, projection_name)
+        cursor = self.load_projection_cursor(run_id, projection_name)
+        event_count = self.count_events(run_id)
+        freshness = (
+            ProjectionFreshness.MISSING
+            if payload is None
+            else ProjectionFreshness.FRESH
+            if cursor is not None and cursor.event_count == event_count
+            else ProjectionFreshness.STALE
+        )
+        if (
+            consistency is ProjectionConsistency.FRESH
+            and freshness is not ProjectionFreshness.FRESH
+        ):
+            self._backfill_projections(run_id, requested_projection=projection_name)
+            payload = self._read_projection(run_id, projection_name)
+            freshness = (
+                ProjectionFreshness.FRESH
+                if payload is not None
+                else ProjectionFreshness.MISSING
+            )
+        return ProjectionRead(payload=payload, freshness=freshness)
+
+    def _backfill_projections(
+        self, run_id: str, *, requested_projection: str | None = None
+    ) -> None:
+        snapshot = self._load_snapshot(run_id)
+        if snapshot is None:
             return
+        events = self.query_events(run_id)
         event_count = self.count_events(run_id)
         for projection_name, payload in build_store_projection_payloads(
-            stored.snapshot, stored.events
+            snapshot, events
         ).items():
+            if (
+                requested_projection is not None
+                and projection_name != requested_projection
+            ):
+                continue
             self._write_projection(run_id, projection_name, payload)
             self.store_projection_cursor(
                 ProjectionCursor(
@@ -159,6 +204,14 @@ class ProjectionRefreshingStore(ABC):
                 self.store_execution_checkpoint(
                     ExecutionCheckpoint(
                         run_id=run_id,
+                        attempt_id=next(
+                            (
+                                event.attempt_id
+                                for event in reversed(events)
+                                if event.attempt_id
+                            ),
+                            None,
+                        ),
                         event_count=event_count,
                         execution_state=ExecutionState.model_validate(payload),
                     )
@@ -171,9 +224,15 @@ class ProjectionRefreshingStore(ABC):
         }
 
     def get_run_record(self, run_id: str) -> RunRecord | None:
+        self._backfill_projections(run_id)
+        snapshot = self._load_snapshot(run_id)
+        if snapshot is not None:
+            self._refresh_run_record(snapshot)
         return self._read_run_record(run_id)
 
     def query_runs(self, query: RunQuery | None = None) -> list[RunRecord]:
+        for record in self._list_run_records():
+            self.get_run_record(record.run_id)
         records = self._list_run_records()
         if query is None:
             return sorted(records, key=lambda item: item.created_at)
@@ -197,6 +256,13 @@ class ProjectionRefreshingStore(ABC):
         current = self._read_run_record(run_id)
         if current is None:
             current = build_run_record(snapshot)
+        if lineage is not None and any(
+            item.parent_run_id == run_id and item.parent_attempt_id is None
+            for item in lineage
+        ):
+            raise ValueError(
+                "Same-run lineage must identify a parent_attempt_id"
+            )
         self._write_run_record(
             run_id,
             current.model_copy(

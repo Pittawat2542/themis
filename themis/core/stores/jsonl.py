@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None  # type: ignore[assignment]
 import shutil
 from pathlib import Path
 
@@ -12,6 +16,7 @@ from themis.core.events import RunEvent, event_from_dict
 from themis.core.registry import RunRecord
 from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
+from themis.core.store import AppendResult, EventRecord
 from themis.core.stores.base import ProjectionRefreshingStore
 
 
@@ -34,16 +39,34 @@ class JsonlRunStore(ProjectionRefreshingStore):
         )
         self._bootstrap_projections(snapshot)
 
-    def persist_event(self, event: RunEvent) -> None:
+    def persist_event(self, event: RunEvent) -> AppendResult:
         run_root = self._run_root(event.run_id)
         run_root.mkdir(parents=True, exist_ok=True)
-        with (run_root / "events.jsonl").open("a", encoding="utf-8") as handle:
+        events_path = run_root / "events.jsonl"
+        # ponytail: linear scan keeps JSONL schema-free; add a side index if profiles show it matters.
+        with events_path.open("a+", encoding="utf-8") as handle:
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            handle.seek(0)
+            sequence = 0
+            for line in handle:
+                if not line.strip():
+                    continue
+                sequence += 1
+                existing = json.loads(line)
+                if existing.get("event_id") == event.event_id:
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    return AppendResult(sequence=sequence, inserted=False)
+            sequence += 1
+            handle.seek(0, 2)
             handle.write(
                 json.dumps(event.model_dump(mode="json"), sort_keys=True) + "\n"
             )
-        snapshot = self._load_snapshot(event.run_id)
-        if snapshot is not None:
-            self._refresh_projections_for_event(snapshot, event)
+            handle.flush()
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return AppendResult(sequence=sequence, inserted=True)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         events_path = self._run_root(run_id) / "events.jsonl"
@@ -58,6 +81,16 @@ class JsonlRunStore(ProjectionRefreshingStore):
                 except KeyError:
                     continue
         return events
+
+    def query_event_records(
+        self, run_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[EventRecord]:
+        events = self.query_events(run_id)
+        return [
+            EventRecord(sequence=index, event=event)
+            for index, event in enumerate(events, start=1)
+            if index > after_sequence
+        ][:limit]
 
     def count_events(self, run_id: str) -> int:
         events_path = self._run_root(run_id) / "events.jsonl"

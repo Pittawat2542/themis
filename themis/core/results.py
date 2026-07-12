@@ -26,8 +26,6 @@ from themis.core.events import (
     RunStartedEvent,
     ScoreCompletedEvent,
     ScoreFailedEvent,
-    SessionCompletedEvent,
-    SessionFailedEvent,
 )
 from themis.core.models import (
     Case,
@@ -35,15 +33,13 @@ from themis.core.models import (
     ParsedOutput,
     ReducedCandidate,
     ScoreError,
-    SessionResult,
+    Candidate,
 )
 from themis.core.snapshot import RunSnapshot
 from themis.core.workflows import EvaluationExecution
 
 CaseStageEvent = (
-    SessionCompletedEvent
-    | SessionFailedEvent
-    | GenerationCompletedEvent
+    GenerationCompletedEvent
     | GenerationFailedEvent
     | SelectionCompletedEvent
     | SelectionFailedEvent
@@ -79,8 +75,8 @@ class ProgressSnapshot(FrozenModel):
 class CaseExecutionState(FrozenModel):
     """Persisted per-case execution state derived from stored events."""
 
-    generated_candidates: dict[str, SessionResult] = Field(default_factory=dict)
-    generated_candidates_by_index: dict[int, SessionResult] = Field(
+    generated_candidates: dict[str, Candidate] = Field(default_factory=dict)
+    generated_candidates_by_index: dict[int, Candidate] = Field(
         default_factory=dict
     )
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
@@ -168,11 +164,11 @@ class ExecutionState(FrozenModel):
         updated = current
 
         if (
-            isinstance(event, (SessionCompletedEvent, GenerationCompletedEvent))
+            isinstance(event, GenerationCompletedEvent)
             and event.result is not None
         ):
             generated = dict(current.generated_candidates)
-            generated[event.candidate_id] = SessionResult.model_validate(event.result)
+            generated[event.candidate_id] = Candidate.model_validate(event.result)
             generated_by_index = dict(current.generated_candidates_by_index)
             generated_blob_refs = dict(current.generated_candidate_blob_refs)
             failures = dict(current.generation_failures)
@@ -196,7 +192,7 @@ class ExecutionState(FrozenModel):
                     "generation_failure_keys_by_index": failure_keys_by_index,
                 }
             )
-        elif isinstance(event, (SessionFailedEvent, GenerationFailedEvent)):
+        elif isinstance(event, GenerationFailedEvent):
             failures = dict(current.generation_failures)
             failure_keys_by_index = dict(current.generation_failure_keys_by_index)
             failures[event.candidate_id] = event.error_message
@@ -318,8 +314,9 @@ class ExecutionState(FrozenModel):
 class ExecutionCheckpoint(FrozenModel):
     """Store-level checkpoint for fast resume state lookup."""
 
-    schema_version: str = "1"
+    schema_version: str = "2"
     run_id: str
+    attempt_id: str | None = None
     event_count: int
     execution_state: ExecutionState
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -328,7 +325,7 @@ class ExecutionCheckpoint(FrozenModel):
 class ProjectionCursor(FrozenModel):
     """Projection progress marker over a run event stream."""
 
-    schema_version: str = "1"
+    schema_version: str = "2"
     run_id: str
     projection_name: str
     event_count: int
@@ -371,7 +368,7 @@ class CaseResult(FrozenModel):
     case_id: str
     dataset_id: str | None = None
     case_key: str | None = None
-    generated_candidates: list[SessionResult] = Field(default_factory=list)
+    generated_candidates: list[Candidate] = Field(default_factory=list)
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
     reduced_candidate: ReducedCandidate | None = None
@@ -517,7 +514,7 @@ class GenerationBundleRecord(FrozenModel):
     candidate_index: int | None = None
     seed: int | None = None
     result_blob_ref: str | None = None
-    result: SessionResult
+    result: Candidate
 
 
 class GenerationBundle(FrozenModel):

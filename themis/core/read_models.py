@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
-
 from pydantic import Field
 
 from themis.core.base import FrozenModel, JSONValue
@@ -12,8 +11,9 @@ from themis.core.models import (
     MetricResult,
     ParsedOutput,
     ReducedCandidate,
+    ScoreOutcome,
     ScoreError,
-    SessionResult,
+    Candidate,
 )
 from themis.core.workflows import EvaluationExecution
 
@@ -31,7 +31,7 @@ class BenchmarkScoreRow(FrozenModel):
     dimensions: dict[str, float] = Field(default_factory=dict)
     labels: dict[str, str] = Field(default_factory=dict)
     candidate_id: str | None = None
-    outcome: Literal["correct", "incorrect", "error"] = "incorrect"
+    outcome: ScoreOutcome = ScoreOutcome.SCORED
     failure_category: str | None = None
     error_message: str | None = None
     metadata: dict[str, JSONValue] = Field(default_factory=dict)
@@ -70,6 +70,18 @@ class TimelineView(FrozenModel):
 
     run_id: str
     entries: list[TimelineEntry] = Field(default_factory=list)
+
+
+class AttemptSummary(FrozenModel):
+    """One auditable execution attempt within a logical run."""
+
+    attempt_id: str
+    attempt_kind: str = "initial"
+    parent_attempt_id: str | None = None
+    status: str = "running"
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    score_claim_count: int = 0
 
 
 class GenerationTraceRecord(FrozenModel):
@@ -142,7 +154,7 @@ class GenerationAuditRecord(FrozenModel):
 
     candidate_id: str
     candidate_index: int | None = None
-    result: SessionResult
+    result: Candidate
     telemetry: TelemetryBreakdown = Field(default_factory=TelemetryBreakdown)
 
 
@@ -221,11 +233,17 @@ class PairwiseMetricClaim(FrozenModel):
     """One metric-level paired score claim."""
 
     metric_id: str
+    direction: Literal["higher_is_better", "lower_is_better"]
+    baseline_count: int
+    candidate_count: int
     pairs: int
+    unpaired_baseline: int
+    unpaired_candidate: int
     wins: int
     losses: int
     ties: int
     mean_delta: float
+    mean_improvement: float
     ci_lower: float
     ci_upper: float
     p_value: float

@@ -9,6 +9,8 @@ All notable changes to this project are documented in this file.
   outcomes for metrics without binary correctness semantics.
 - Made omitted provider request limits unlimited and added strict seed-capability
   validation with requested/applied seed telemetry.
+- Introduced schema-v2 idempotent event IDs, execution attempts, sequenced event
+  queries, explicit projection freshness, and non-blocking evidence writes.
 
 ### Security
 - Added `minimal`, `standard`, and `full` evidence retention policies with

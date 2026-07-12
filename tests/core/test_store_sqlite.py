@@ -57,17 +57,21 @@ def test_sqlite_store_skips_unknown_event_types_on_read(tmp_path) -> None:
     with sqlite3.connect(path) as connection:
         connection.execute(
             """
-            INSERT INTO run_events (run_id, event_type, event_json)
-            VALUES (?, ?, ?)
+                INSERT INTO run_events (run_id, event_id, sequence, event_type, event_json)
+                VALUES (?, ?, ?, ?, ?)
             """,
             (
-                snapshot.run_id,
-                "future_event",
+                    snapshot.run_id,
+                    "future-event-id",
+                    2,
+                    "future_event",
                 json.dumps(
                     {
                         "schema_version": "2",
                         "event_type": "future_event",
-                        "run_id": snapshot.run_id,
+                            "run_id": snapshot.run_id,
+                            "event_id": "future-event-id",
+                            "attempt_id": "future-attempt",
                     }
                 ),
             ),

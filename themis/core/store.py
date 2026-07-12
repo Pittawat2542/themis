@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from themis.core.base import JSONValue
@@ -9,6 +10,33 @@ from themis.core.events import RunEvent
 from themis.core.registry import RunLineage, RunQuery, RunRecord
 from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun
+from themis.core.base import FrozenModel
+
+
+class AppendResult(FrozenModel):
+    sequence: int
+    inserted: bool
+
+
+class EventRecord(FrozenModel):
+    sequence: int
+    event: RunEvent
+
+
+class ProjectionConsistency(StrEnum):
+    FRESH = "fresh"
+    EVENTUAL = "eventual"
+
+
+class ProjectionFreshness(StrEnum):
+    FRESH = "fresh"
+    STALE = "stale"
+    MISSING = "missing"
+
+
+class ProjectionRead(FrozenModel):
+    payload: JSONValue | None = None
+    freshness: ProjectionFreshness
 
 
 @runtime_checkable
@@ -19,13 +47,25 @@ class RunStore(Protocol):
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None: ...
 
-    def persist_event(self, event: RunEvent) -> None: ...
+    def persist_event(self, event: RunEvent) -> AppendResult: ...
 
     def query_events(self, run_id: str) -> list[RunEvent]: ...
+
+    def query_event_records(
+        self, run_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[EventRecord]: ...
 
     def count_events(self, run_id: str) -> int: ...
 
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None: ...
+
+    def read_projection(
+        self,
+        run_id: str,
+        projection_name: str,
+        *,
+        consistency: ProjectionConsistency = ProjectionConsistency.FRESH,
+    ) -> ProjectionRead: ...
 
     def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None: ...
 

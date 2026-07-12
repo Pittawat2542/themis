@@ -9,6 +9,7 @@ from themis.core.events import RunEvent
 from themis.core.registry import RunRecord
 from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun
+from themis.core.store import AppendResult, EventRecord
 from themis.core.stores.base import ProjectionRefreshingStore
 
 
@@ -18,6 +19,7 @@ class InMemoryRunStore(ProjectionRefreshingStore):
     def __init__(self) -> None:
         self._snapshots: dict[str, RunSnapshot] = {}
         self._events: dict[str, list[RunEvent]] = {}
+        self._event_sequences: dict[tuple[str, str], int] = {}
         self._blobs: dict[str, tuple[str, bytes]] = {}
         self._projections: dict[tuple[str, str], JSONValue] = {}
         self._run_records: dict[str, RunRecord] = {}
@@ -31,14 +33,29 @@ class InMemoryRunStore(ProjectionRefreshingStore):
         self._snapshots[snapshot.run_id] = snapshot
         self._bootstrap_projections(snapshot)
 
-    def persist_event(self, event: RunEvent) -> None:
-        self._events.setdefault(event.run_id, []).append(event)
-        snapshot = self._load_snapshot(event.run_id)
-        if snapshot is not None:
-            self._refresh_projections_for_event(snapshot, event)
+    def persist_event(self, event: RunEvent) -> AppendResult:
+        key = (event.run_id, event.event_id)
+        existing = self._event_sequences.get(key)
+        if existing is not None:
+            return AppendResult(sequence=existing, inserted=False)
+        events = self._events.setdefault(event.run_id, [])
+        events.append(event)
+        sequence = len(events)
+        self._event_sequences[key] = sequence
+        return AppendResult(sequence=sequence, inserted=True)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         return list(self._events.get(run_id, []))
+
+    def query_event_records(
+        self, run_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[EventRecord]:
+        events = self._events.get(run_id, [])
+        return [
+            EventRecord(sequence=index, event=event)
+            for index, event in enumerate(events, start=1)
+            if index > after_sequence
+        ][:limit]
 
     def count_events(self, run_id: str) -> int:
         return len(self._events.get(run_id, []))
@@ -112,6 +129,11 @@ class InMemoryRunStore(ProjectionRefreshingStore):
     def clear_run(self, run_id: str) -> None:
         self._snapshots.pop(run_id, None)
         self._events.pop(run_id, None)
+        self._event_sequences = {
+            key: value
+            for key, value in self._event_sequences.items()
+            if key[0] != run_id
+        }
         self._run_records.pop(run_id, None)
         self._execution_checkpoints.pop(run_id, None)
         stale_projection_keys = [

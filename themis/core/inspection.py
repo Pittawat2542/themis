@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from themis.core.case_refs import resolve_case_key
-from themis.core.read_models import CaseAuditView, TelemetrySummary
+from themis.core.events import (
+    RunCompletedEvent,
+    RunFailedEvent,
+    RunStartedEvent,
+    EvaluationCompletedEvent,
+    ScoreCompletedEvent,
+)
+from themis.core.read_models import AttemptSummary, CaseAuditView, TelemetrySummary
 from themis.core.registry import RunQuery, RunRecord
 from themis.core.results import ExecutionState
 from themis.core.snapshot import RunSnapshot
-from themis.core.store import RunStore
+from themis.core.store import ProjectionConsistency, ProjectionRead, RunStore
 from themis.core.workflows import EvaluationExecution
 
 
@@ -18,6 +25,68 @@ def get_run_snapshot(store: RunStore, run_id: str) -> RunSnapshot:
     if stored is None:
         raise ValueError(f"Unknown run_id: {run_id}")
     return stored.snapshot
+
+
+def get_projection(
+    store: RunStore,
+    run_id: str,
+    projection_name: str,
+    *,
+    consistency: ProjectionConsistency = ProjectionConsistency.FRESH,
+) -> ProjectionRead:
+    """Read a projection with explicit freshness semantics."""
+
+    return store.read_projection(
+        run_id, projection_name, consistency=consistency
+    )
+
+
+def get_attempt_history(store: RunStore, run_id: str) -> list[AttemptSummary]:
+    """Return lifecycle and score-claim history for every stored attempt."""
+
+    attempts: dict[str, AttemptSummary] = {}
+    for event in store.query_events(run_id):
+        attempt_id = event.attempt_id or "legacy"
+        current = attempts.get(attempt_id, AttemptSummary(attempt_id=attempt_id))
+        if isinstance(event, RunStartedEvent):
+            current = current.model_copy(
+                update={
+                    "attempt_kind": event.attempt_kind,
+                    "parent_attempt_id": event.parent_attempt_id,
+                    "status": "running",
+                    "started_at": event.occurred_at,
+                }
+            )
+        elif isinstance(event, RunCompletedEvent):
+            current = current.model_copy(
+                update={"status": "completed", "ended_at": event.occurred_at}
+            )
+        elif isinstance(event, RunFailedEvent):
+            current = current.model_copy(
+                update={"status": "failed", "ended_at": event.occurred_at}
+            )
+        if isinstance(event, ScoreCompletedEvent | EvaluationCompletedEvent):
+            current = current.model_copy(
+                update={"score_claim_count": current.score_claim_count + 1}
+            )
+        attempts[attempt_id] = current
+    return list(attempts.values())
+
+
+def get_score_claim_history(
+    store: RunStore,
+    run_id: str,
+    *,
+    metric_id: str | None = None,
+) -> list[ScoreCompletedEvent]:
+    """Return historical pure-metric claims without collapsing attempts."""
+
+    return [
+        event
+        for event in store.query_events(run_id)
+        if isinstance(event, ScoreCompletedEvent)
+        and (metric_id is None or event.metric_id == metric_id)
+    ]
 
 
 def get_execution_state(store: RunStore, run_id: str) -> ExecutionState:

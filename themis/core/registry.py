@@ -19,6 +19,7 @@ class RunLineage(FrozenModel):
     """Relationship from one run to a parent run."""
 
     parent_run_id: str
+    parent_attempt_id: str | None = None
     relationship: str = "derived"
 
 

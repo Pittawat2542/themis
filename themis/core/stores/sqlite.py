@@ -13,6 +13,7 @@ from themis.core.events import RunEvent, event_from_dict
 from themis.core.registry import RunRecord
 from themis.core.results import ExecutionCheckpoint, ProjectionCursor
 from themis.core.snapshot import RunSnapshot, StoredRun, snapshot_from_dict
+from themis.core.store import AppendResult, EventRecord
 from themis.core.stores.base import ProjectionRefreshingStore
 
 
@@ -39,8 +40,12 @@ class SqliteRunStore(ProjectionRefreshingStore):
                 CREATE TABLE IF NOT EXISTS run_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     run_id TEXT NOT NULL,
+                    event_id TEXT NOT NULL,
+                    sequence INTEGER NOT NULL,
                     event_type TEXT NOT NULL,
-                    event_json TEXT NOT NULL
+                    event_json TEXT NOT NULL,
+                    UNIQUE (run_id, event_id),
+                    UNIQUE (run_id, sequence)
                 )
                 """
             )
@@ -99,6 +104,13 @@ class SqliteRunStore(ProjectionRefreshingStore):
                 )
                 """
             )
+            event_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(run_events)")
+            }
+            if not {"event_id", "sequence"}.issubset(event_columns):
+                raise RuntimeError(
+                    "Unsupported schema-v1 Themis store; archive or reset it before using v5."
+                )
             connection.commit()
 
     def persist_snapshot(self, snapshot: RunSnapshot) -> None:
@@ -121,20 +133,37 @@ class SqliteRunStore(ProjectionRefreshingStore):
             connection.commit()
         self._bootstrap_projections(snapshot)
 
-    def persist_event(self, event: RunEvent) -> None:
+    def persist_event(self, event: RunEvent) -> AppendResult:
         event_json = json.dumps(event.model_dump(mode="json"), sort_keys=True)
         with closing(sqlite3.connect(self.path)) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                "SELECT sequence FROM run_events WHERE run_id = ? AND event_id = ?",
+                (event.run_id, event.event_id),
+            ).fetchone()
+            if existing is not None:
+                connection.commit()
+                return AppendResult(sequence=int(existing[0]), inserted=False)
+            row = connection.execute(
+                "SELECT COALESCE(MAX(sequence), 0) + 1 FROM run_events WHERE run_id = ?",
+                (event.run_id,),
+            ).fetchone()
+            sequence = int(row[0])
             connection.execute(
                 """
-                INSERT INTO run_events (run_id, event_type, event_json)
-                VALUES (?, ?, ?)
+                INSERT INTO run_events (run_id, event_id, sequence, event_type, event_json)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (event.run_id, event.event_type, event_json),
+                (
+                    event.run_id,
+                    event.event_id,
+                    sequence,
+                    event.event_type,
+                    event_json,
+                ),
             )
             connection.commit()
-        snapshot = self._load_snapshot(event.run_id)
-        if snapshot is not None:
-            self._refresh_projections_for_event(snapshot, event)
+        return AppendResult(sequence=sequence, inserted=True)
 
     def query_events(self, run_id: str) -> list[RunEvent]:
         with closing(sqlite3.connect(self.path)) as connection:
@@ -143,7 +172,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
                 SELECT event_json
                 FROM run_events
                 WHERE run_id = ?
-                ORDER BY id ASC
+                ORDER BY sequence ASC
                 """,
                 (run_id,),
             ).fetchall()
@@ -155,6 +184,23 @@ class SqliteRunStore(ProjectionRefreshingStore):
             except KeyError:
                 continue
         return events
+
+    def query_event_records(
+        self, run_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[EventRecord]:
+        with closing(sqlite3.connect(self.path)) as connection:
+            rows = connection.execute(
+                """
+                SELECT sequence, event_json FROM run_events
+                WHERE run_id = ? AND sequence > ?
+                ORDER BY sequence ASC LIMIT ?
+                """,
+                (run_id, after_sequence, limit),
+            ).fetchall()
+        return [
+            EventRecord(sequence=int(sequence), event=event_from_dict(json.loads(payload)))
+            for sequence, payload in rows
+        ]
 
     def count_events(self, run_id: str) -> int:
         with closing(sqlite3.connect(self.path)) as connection:
