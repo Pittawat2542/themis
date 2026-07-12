@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from themis.core.config import EvaluationConfig, GenerationConfig, ParserView, StorageConfig, TargetSpec
+from themis.core.config import (
+    EvaluationConfig,
+    GenerationConfig,
+    ParserView,
+    StorageConfig,
+    TargetSpec,
+)
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 
@@ -43,7 +49,9 @@ def test_parser_view_fallback_executes_when_primary_parser_fails() -> None:
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
-                    Case(case_id="case-1", input={"question": "2+2"}, expected_output="4")
+                    Case(
+                        case_id="case-1", input={"question": "2+2"}, expected_output="4"
+                    )
                 ],
             )
         ],

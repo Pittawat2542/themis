@@ -139,11 +139,15 @@ def test_postgres_store_skips_unknown_event_types_on_read(
     with psycopg.connect(database_url) as connection:
         connection.execute(
             """
-            INSERT INTO run_events (run_id, event_type, event_json)
-            VALUES (%s, %s, %s::jsonb)
+            INSERT INTO run_events (
+                run_id, event_id, sequence, event_type, event_json
+            )
+            VALUES (%s, %s, %s, %s, %s::jsonb)
             """,
             (
                 snapshot.run_id,
+                "future-event-id",
+                2,
                 "future_event",
                 json.dumps(
                     {

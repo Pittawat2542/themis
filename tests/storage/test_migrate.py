@@ -68,7 +68,7 @@ def test_postgres_initialize_creates_schema_version_and_is_idempotent(
         ).fetchone()
 
     assert row is not None
-    assert row[0] == "1"
+    assert row[0] == "2"
 
 
 def test_postgres_initialize_migrates_from_version_zero(postgres_database) -> None:
@@ -111,6 +111,6 @@ def test_postgres_initialize_migrates_from_version_zero(postgres_database) -> No
         ).fetchone()
 
     assert row is not None
-    assert row[0] == "1"
+    assert row[0] == "2"
     assert events_table is not None
     assert events_table[0] == "run_events"

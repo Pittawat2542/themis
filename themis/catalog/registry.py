@@ -129,7 +129,9 @@ def _unknown_component_message(component_id: str) -> str:
     return f"Unknown component: {component_id}"
 
 
-def _coerce_component_spec(value: ComponentSpec | Mapping[str, object]) -> ComponentSpec:
+def _coerce_component_spec(
+    value: ComponentSpec | Mapping[str, object],
+) -> ComponentSpec:
     if isinstance(value, ComponentSpec):
         return value
     if isinstance(value, Mapping):
