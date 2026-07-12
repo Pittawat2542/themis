@@ -11,6 +11,7 @@ from themis.core.config import (
     EvaluationConfig,
     GenerationConfig,
     RuntimeConfig,
+    Stage,
     StorageConfig,
 )
 from themis.core.dataset_sources import DatasetSourceSpec
@@ -121,7 +122,7 @@ def _experiment(
         storage=StorageConfig(target="sqlite", kwargs={"path": "runs/themis.sqlite3"}),
         runtime=RuntimeConfig(
             max_concurrent_tasks=16,
-            stage_concurrency={"generate": 8},
+            stage_concurrency={Stage.GENERATE: 8},
             provider_concurrency={"openai:https://api.openai.com/v1": 4},
             provider_rate_limits={"openai:https://api.openai.com/v1": 120},
             store_retry_attempts=7,
@@ -330,7 +331,9 @@ def test_builtin_component_strings_resolve_to_registry_entries() -> None:
     assert [ref.component_id for ref in snapshot.component_refs.metrics] == [
         "builtin/exact_match"
     ]
-    assert snapshot.component_refs.metrics[0].interpretation.correctness_threshold == 1.0
+    assert (
+        snapshot.component_refs.metrics[0].interpretation.correctness_threshold == 1.0
+    )
 
 
 def test_unknown_builtin_component_strings_fail_fast() -> None:

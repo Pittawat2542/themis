@@ -11,7 +11,7 @@ def _write_config(
 ) -> None:
     definition_path = path.with_name("experiment_definition.py")
     definition_path.write_text(
-        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        """from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(
@@ -32,7 +32,7 @@ experiment = Experiment(
     ),
     seeds=[7],
 )
-'''
+"""
     )
     path.write_text(
         f"""

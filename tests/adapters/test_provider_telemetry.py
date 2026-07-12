@@ -57,7 +57,11 @@ class BedrockClient:
 class GeminiModels:
     async def generate_content(self, **kwargs: object) -> dict[str, object]:
         self.last_call = kwargs
-        return {"response_id": "gemini_req", "text": "4", "usage": {"input_tokens": 5, "output_tokens": 1}}
+        return {
+            "response_id": "gemini_req",
+            "text": "4",
+            "usage": {"input_tokens": 5, "output_tokens": 1},
+        }
 
 
 class GeminiClient:
@@ -68,7 +72,11 @@ class GeminiClient:
 class ResponsesAPI:
     async def create(self, **kwargs: object) -> dict[str, object]:
         self.last_call = kwargs
-        return {"id": "azure_req", "output_text": "4", "usage": {"prompt_tokens": 5, "completion_tokens": 1}}
+        return {
+            "id": "azure_req",
+            "output_text": "4",
+            "usage": {"prompt_tokens": 5, "completion_tokens": 1},
+        }
 
 
 class AzureClient:
@@ -79,7 +87,12 @@ class AzureClient:
 class OllamaClient:
     async def generate(self, **kwargs: object) -> dict[str, object]:
         self.last_call = kwargs
-        return {"id": "ollama_req", "response": "4", "prompt_eval_count": 5, "eval_count": 1}
+        return {
+            "id": "ollama_req",
+            "response": "4",
+            "prompt_eval_count": 5,
+            "eval_count": 1,
+        }
 
 
 class LiteLLMClient:

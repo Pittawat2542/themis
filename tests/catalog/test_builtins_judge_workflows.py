@@ -67,15 +67,9 @@ def test_catalog_builtin_judge_metrics_build_expected_workflows() -> None:
     majority = cast(WorkflowMetric, load("builtin/majority_vote_judge"))
     pairwise = cast(WorkflowMetric, load("builtin/pairwise_judge"))
     ranking = cast(WorkflowMetric, load("builtin/ranking_judge"))
-    candidate = Candidate(
-        candidate_id="case-1-reduced", final_output={"answer": "4"}
-    )
-    pair_a = Candidate(
-        candidate_id="case-1-candidate-0", final_output={"answer": "4"}
-    )
-    pair_b = Candidate(
-        candidate_id="case-1-candidate-1", final_output={"answer": "5"}
-    )
+    candidate = Candidate(candidate_id="case-1-reduced", final_output={"answer": "4"})
+    pair_a = Candidate(candidate_id="case-1-candidate-0", final_output={"answer": "4"})
+    pair_b = Candidate(candidate_id="case-1-candidate-1", final_output={"answer": "5"})
     ctx = EvalScoreContext(
         run_id="run-1",
         case=Case(

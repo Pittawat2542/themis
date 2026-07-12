@@ -893,10 +893,7 @@ def _apply_event_to_trace_view(
     evaluation_traces = list(view.evaluation_traces)
     stream_traces = list(view.stream_traces)
 
-    if (
-        isinstance(event, GenerationCompletedEvent)
-        and event.result is not None
-    ):
+    if isinstance(event, GenerationCompletedEvent) and event.result is not None:
         result = Candidate.model_validate(event.result)
         if result.trace:
             generation_traces.append(

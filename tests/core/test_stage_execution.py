@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from themis.core.config import (
     EvaluationConfig,
+    ExistingRunPolicy,
     GenerationConfig,
     RuntimeConfig,
     StorageConfig,
@@ -235,7 +236,7 @@ def _cached_experiment(
     parser,
     metric,
     store_path: str,
-    existing_run_policy: str = "reuse",
+    existing_run_policy: ExistingRunPolicy = ExistingRunPolicy.REUSE,
 ) -> Experiment:
     return Experiment(
         generation=GenerationConfig(
@@ -305,7 +306,7 @@ def test_existing_run_policy_error_rejects_rerunning_completed_run(tmp_path) -> 
         parser=parser,
         metric=ExactMetric(),
         store_path=store_path,
-        existing_run_policy="error",
+        existing_run_policy=ExistingRunPolicy.ERROR,
     )
 
     experiment.run(store=store)

@@ -1007,9 +1007,7 @@ class Orchestrator:
                 if retry_history:
                     artifacts = dict(candidate.artifacts or {})
                     artifacts["retry_history"] = cast(JSONValue, retry_history)
-                    candidate = candidate.model_copy(
-                        update={"artifacts": artifacts}
-                    )
+                    candidate = candidate.model_copy(update={"artifacts": artifacts})
                 return candidate
             except Exception as exc:
                 retry_classification = _classify_retryable_error(exc)

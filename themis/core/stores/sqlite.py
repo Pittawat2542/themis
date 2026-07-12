@@ -198,7 +198,9 @@ class SqliteRunStore(ProjectionRefreshingStore):
                 (run_id, after_sequence, limit),
             ).fetchall()
         return [
-            EventRecord(sequence=int(sequence), event=event_from_dict(json.loads(payload)))
+            EventRecord(
+                sequence=int(sequence), event=event_from_dict(json.loads(payload))
+            )
             for sequence, payload in rows
         ]
 

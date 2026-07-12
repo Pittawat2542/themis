@@ -33,7 +33,9 @@ class SuiteItem(FrozenModel):
     @model_validator(mode="after")
     def _validate_single_reference(self) -> SuiteItem:
         if (self.benchmark_id is None) == (self.suite_id is None):
-            raise ValueError("SuiteItem requires exactly one of benchmark_id or suite_id")
+            raise ValueError(
+                "SuiteItem requires exactly one of benchmark_id or suite_id"
+            )
         return self
 
 

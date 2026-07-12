@@ -13,7 +13,7 @@ pytestmark = pytest.mark.slow
 
 def _write_config(path: Path, *, store_path: Path) -> None:
     path.with_name("definition.py").write_text(
-        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        """from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(dataset_id="dataset-1", revision="r1", cases=[Case(
@@ -24,7 +24,7 @@ experiment = Experiment(
     evaluation=Evaluation(metrics=["builtin/exact_match"], parser="builtin/json_identity"),
     seeds=[7],
 )
-'''
+"""
     )
     path.write_text(
         f"""
@@ -39,7 +39,7 @@ storage:
 
 def _write_judge_config(path: Path, *, store_path: Path) -> None:
     path.with_name("judge_definition.py").write_text(
-        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        """from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(dataset_id="dataset-1", revision="r1", cases=[Case(
@@ -54,7 +54,7 @@ experiment = Experiment(
     ),
     seeds=[7],
 )
-'''
+"""
     )
     path.write_text(
         f"""

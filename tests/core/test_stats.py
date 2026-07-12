@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from themis.core.models import ScoreOutcome
 from themis.core.read_models import BenchmarkResult, BenchmarkScoreRow
 from themis.core.stats import (
     ComparisonSummary,
@@ -273,7 +274,7 @@ def test_stats_engine_ignores_error_and_missing_score_values() -> None:
                 case_id="case-3",
                 metric_id="accuracy",
                 value=0.0,
-                outcome="error",
+                outcome=ScoreOutcome.ERROR,
                 candidate_id="candidate-c",
             ),
         ],
@@ -363,11 +364,15 @@ def test_stats_engine_respects_lower_is_better_direction() -> None:
         ],
     )
 
-    metric = StatsEngine().compare(
-        baseline,
-        candidate,
-        directions={"latency": MetricDirection.LOWER_IS_BETTER},
-    ).metrics[0]
+    metric = (
+        StatsEngine()
+        .compare(
+            baseline,
+            candidate,
+            directions={"latency": MetricDirection.LOWER_IS_BETTER},
+        )
+        .metrics[0]
+    )
 
     assert metric.mean_delta == -2.0
     assert metric.mean_improvement == 2.0

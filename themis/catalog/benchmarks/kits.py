@@ -84,9 +84,11 @@ class BenchmarkKit:
             if defaults.parser_views is not None
             else [*definition.parser_ids]
         )
-        metrics = defaults.metrics if defaults.metrics is not None else [
-            *definition.metric_ids
-        ]
+        metrics = (
+            defaults.metrics
+            if defaults.metrics is not None
+            else [*definition.metric_ids]
+        )
         judge_models = (
             defaults.judge_models
             if defaults.judge_models is not None

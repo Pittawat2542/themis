@@ -12,6 +12,7 @@ from themis.core.snapshot import RunSnapshot
 from themis.core.base import JSONValue
 from themis.core.config import (
     EvaluationConfig,
+    ExistingRunPolicy,
     GenerationConfig,
     ParserView,
     RuntimeConfig,
@@ -326,7 +327,7 @@ def test_run_rejects_component_fingerprint_mismatch_before_auto_reuse() -> None:
             parsers=["builtin/json_identity"],
         ),
         storage=StorageConfig(target="memory"),
-        runtime=RuntimeConfig(existing_run_policy="reuse"),
+        runtime=RuntimeConfig(existing_run_policy=ExistingRunPolicy.REUSE),
         dataset_sources=[
             Dataset(
                 dataset_id="dataset-1",
@@ -428,7 +429,9 @@ def test_run_distinguishes_duplicate_case_ids_across_datasets() -> None:
         if entry["event_type"] == "generation_completed"
     ]
     assert len(generation_events) == 2
-    assert {(entry["dataset_id"], entry["case_key"]) for entry in generation_events} == {
+    assert {
+        (entry["dataset_id"], entry["case_key"]) for entry in generation_events
+    } == {
         ("dataset-1", result.cases[0].case_key),
         ("dataset-2", result.cases[1].case_key),
     }

@@ -80,9 +80,7 @@ class ProjectionRefreshingStore(ABC):
         event_count = self.count_events(snapshot.run_id)
         events = self.query_events(snapshot.run_id) if event_count else []
         payloads = (
-            build_store_projection_payloads(
-                snapshot, events
-            )
+            build_store_projection_payloads(snapshot, events)
             if event_count
             else build_initial_store_projection_payloads(snapshot)
         )
@@ -102,7 +100,11 @@ class ProjectionRefreshingStore(ABC):
             ExecutionCheckpoint(
                 run_id=snapshot.run_id,
                 attempt_id=next(
-                    (event.attempt_id for event in reversed(events) if event.attempt_id),
+                    (
+                        event.attempt_id
+                        for event in reversed(events)
+                        if event.attempt_id
+                    ),
                     None,
                 ),
                 event_count=event_count,
@@ -260,9 +262,7 @@ class ProjectionRefreshingStore(ABC):
             item.parent_run_id == run_id and item.parent_attempt_id is None
             for item in lineage
         ):
-            raise ValueError(
-                "Same-run lineage must identify a parent_attempt_id"
-            )
+            raise ValueError("Same-run lineage must identify a parent_attempt_id")
         self._write_run_record(
             run_id,
             current.model_copy(

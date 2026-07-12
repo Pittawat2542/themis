@@ -59,7 +59,9 @@ def test_runtime_only_preset_changes_provenance_not_run_identity() -> None:
     updated = apply_preset(experiment, "runtime/local-careful")
 
     assert updated is not experiment
-    assert updated.runtime.max_concurrent_tasks != experiment.runtime.max_concurrent_tasks
+    assert (
+        updated.runtime.max_concurrent_tasks != experiment.runtime.max_concurrent_tasks
+    )
     assert updated.compile().run_id == experiment.compile().run_id
     assert updated.environment_metadata["themis.preset.runtime/local-careful"] == "true"
 

@@ -28,7 +28,7 @@ def _write_config(
     definition_module = f"{path.stem}_definition"
     seeds = [] if seed is None else [seed]
     path.with_name(f"{definition_module}.py").write_text(
-        f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        f"""from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(
@@ -49,7 +49,7 @@ experiment = Experiment(
     ),
     seeds={seeds!r},
 )
-'''
+"""
     )
     path.write_text(
         f"""
@@ -98,10 +98,24 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
     worker_submit = run_cli(
         "submit", "--config", str(config_path), "--mode", "worker-pool"
     )
-    worker_run = run_cli("worker", "run", "--queue-root", str(queue_root))
+    worker_run = run_cli(
+        "worker",
+        "run",
+        "--queue-root",
+        str(queue_root),
+        "--definition-root",
+        str(tmp_path),
+    )
     batch_submit = run_cli("submit", "--config", str(config_path), "--mode", "batch")
     batch_manifest = json.loads(batch_submit.stdout)["manifest_path"]
-    batch_run = run_cli("batch", "run", "--request", batch_manifest)
+    batch_run = run_cli(
+        "batch",
+        "run",
+        "--request",
+        batch_manifest,
+        "--definition-root",
+        str(tmp_path),
+    )
     quickcheck = run_cli("quickcheck", "--config", str(config_path))
     report = run_cli("report", "--config", str(config_path), "--format", "json")
 

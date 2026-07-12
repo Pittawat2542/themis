@@ -62,10 +62,7 @@ def export_generation_bundle(
     case_refs = _bundle_case_refs(stored.snapshot)
     records: list[GenerationBundleRecord] = []
     for event in stored.events:
-        if (
-            isinstance(event, GenerationCompletedEvent)
-            and event.result is not None
-        ):
+        if isinstance(event, GenerationCompletedEvent) and event.result is not None:
             case_ref = _bundle_record_case_ref(case_refs, event)
             records.append(
                 GenerationBundleRecord(
@@ -80,9 +77,7 @@ def export_generation_bundle(
                     candidate_index=event.candidate_index,
                     seed=event.seed,
                     result_blob_ref=_blob_ref(
-                        Candidate.model_validate(event.result).model_dump(
-                            mode="json"
-                        )
+                        Candidate.model_validate(event.result).model_dump(mode="json")
                     ),
                     result=Candidate.model_validate(event.result),
                 )

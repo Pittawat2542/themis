@@ -57,6 +57,7 @@ class DemoGenerator:
             latency_ms=1.0,
         )
 
+
 class DemoJudgeModel:
     component_id = "builtin/demo_judge"
     version = "1.0"

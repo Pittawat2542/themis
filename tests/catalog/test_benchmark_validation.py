@@ -11,7 +11,7 @@ def test_validate_benchmark_requires_sandbox_for_code_scoring() -> None:
     assert result.checks["load"].status == "passed"
     assert result.checks["materialize"].status == "passed"
     assert result.checks["score_smoke"].status == "skipped"
-    assert "explicit sandbox executor" in result.checks["score_smoke"].message
+    assert "explicit sandbox executor" in (result.checks["score_smoke"].message or "")
 
 
 def test_validate_humaneval_plus_requires_sandbox_for_code_scoring() -> None:

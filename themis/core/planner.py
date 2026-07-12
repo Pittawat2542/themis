@@ -320,7 +320,10 @@ class Planner:
             manifest.metadata.get("requires_code_execution") == "true"
             for manifest in snapshot.dataset_manifests
         )
-        if metric_ids.intersection(CODE_EXECUTION_METRIC_IDS) or manifest_requires_execution:
+        if (
+            metric_ids.intersection(CODE_EXECUTION_METRIC_IDS)
+            or manifest_requires_execution
+        ):
             return ["explicit_sandbox"]
         return []
 

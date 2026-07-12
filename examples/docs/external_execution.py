@@ -7,7 +7,7 @@ from themis.core.submission import run_worker_once, submit_experiment
 from themis.launcher import load_core_experiment
 
 
-DEFINITION = '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+DEFINITION = """from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(
@@ -27,16 +27,16 @@ experiment = Experiment(
         parser="builtin/json_identity",
     ),
 )
-'''
+"""
 
-LAUNCHER = '''definition: definition:experiment
+LAUNCHER = """definition: definition:experiment
 storage:
   target: sqlite
   kwargs:
     path: runs/themis.sqlite3
 runtime:
   queue_root: runs/queue
-'''
+"""
 
 
 def run_example() -> dict[str, object]:
@@ -51,7 +51,7 @@ def run_example() -> dict[str, object]:
         manifest = submit_experiment(
             experiment, config_path=str(config_path), mode="worker_pool"
         )
-        result = run_worker_once(root / "runs" / "queue")
+        result = run_worker_once(root / "runs" / "queue", definition_roots=[root])
         assert result is not None
         return {
             "run_id": result.run_id,

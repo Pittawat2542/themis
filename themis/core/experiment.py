@@ -101,13 +101,18 @@ def _workflow_subject_kind(metric: object) -> str:
 
 
 def _validate_unique_component_refs(
-    label: str, refs: list[ComponentRef] | list[MetricRef]
+    label: str,
+    refs: list[ComponentRef] | list[MetricRef],
+    *,
+    allow_identical: bool = False,
 ) -> None:
-    seen: set[str] = set()
+    seen: dict[str, ComponentRef | MetricRef] = {}
     for ref in refs:
         if ref.component_id in seen:
+            if allow_identical and seen[ref.component_id] == ref:
+                continue
             raise ValueError(f"Duplicate {label} component_id: {ref.component_id}")
-        seen.add(ref.component_id)
+        seen[ref.component_id] = ref
 
 
 def _validate_dataset_identifiers(datasets: list[Dataset]) -> None:
@@ -222,14 +227,18 @@ class Experiment(FrozenModel):
                 )
                 for view in self.evaluation.parser_views
             ],
-            metrics=[metric_ref_from_value(metric) for metric in self.evaluation.metrics],
+            metrics=[
+                metric_ref_from_value(metric) for metric in self.evaluation.metrics
+            ],
             judge_models=[
                 component_ref_from_value(judge_model)
                 for judge_model in self.evaluation.judge_models
             ],
         )
         _validate_unique_component_refs("metric", component_refs.metrics)
-        _validate_unique_component_refs("judge model", component_refs.judge_models)
+        _validate_unique_component_refs(
+            "judge model", component_refs.judge_models, allow_identical=True
+        )
         identity = RunIdentity(
             dataset_source_refs=[
                 DatasetSourceRef(
@@ -734,9 +743,7 @@ class Experiment(FrozenModel):
                         resolve_parser_component(view.parser)
                     ),
                     fallbacks=[
-                        component_ref_from_value(
-                            resolve_parser_component(fallback)
-                        )
+                        component_ref_from_value(resolve_parser_component(fallback))
                         for fallback in view.fallbacks
                     ],
                 )

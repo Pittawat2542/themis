@@ -7,6 +7,7 @@ from themis.core.config import (
     GenerationConfig,
     ParserView,
     RuntimeConfig,
+    Stage,
     StorageConfig,
 )
 from themis.core.experiment import Experiment
@@ -160,7 +161,7 @@ def test_planner_reports_resource_plan_for_generation_judges_and_concurrency() -
     ).compile()
     runtime = RuntimeConfig(
         max_concurrent_tasks=8,
-        stage_concurrency={"score": 2},
+        stage_concurrency={Stage.SCORE: 2},
         provider_concurrency={"builtin/demo_generator": 3},
     )
 

@@ -62,7 +62,9 @@ def test_manifest_registry_rejects_unknown_components_with_suggestions() -> None
         component_ref_from_value("builtin/demo_generatr")
 
 
-def test_registry_discovers_entry_point_components(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_registry_discovers_entry_point_components(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import themis.catalog.registry as registry
 
     plugin_spec = ComponentSpec(

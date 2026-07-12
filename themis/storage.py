@@ -50,9 +50,7 @@ def storage_config(store: RunStore) -> StorageConfig:
     declared = getattr(store, "storage_config", None)
     if isinstance(declared, StorageConfig):
         return declared
-    raise TypeError(
-        "Custom stores must expose a StorageConfig through storage_config."
-    )
+    raise TypeError("Custom stores must expose a StorageConfig through storage_config.")
 
 
 __all__ = [

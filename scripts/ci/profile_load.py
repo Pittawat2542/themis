@@ -214,9 +214,7 @@ class TimedSqliteRunStore(SqliteRunStore):
         try:
             return super().persist_event(event)
         finally:
-            self.append_latencies_ms.append(
-                (time.perf_counter() - started) * 1000
-            )
+            self.append_latencies_ms.append((time.perf_counter() - started) * 1000)
 
 
 def _build_experiment(
@@ -310,9 +308,7 @@ def main() -> int:
         "status": result.status.value,
         "duration_seconds": round(duration, 6),
         "event_count": store.count_events(result.run_id),
-        "append_latency_p95_ms": round(latencies[p95_index], 6)
-        if latencies
-        else 0.0,
+        "append_latency_p95_ms": round(latencies[p95_index], 6) if latencies else 0.0,
         "projection_duration_seconds": round(projection_duration, 6),
         "bytes_written": store_path.stat().st_size,
         "peak_memory_bytes": peak_memory,

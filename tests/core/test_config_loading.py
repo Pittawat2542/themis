@@ -9,7 +9,7 @@ from themis.launcher import load_core_experiment
 
 def _write_definition(root: Path) -> None:
     (root / "definition.py").write_text(
-        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        """from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(
@@ -22,7 +22,7 @@ experiment = Experiment(
         parser="builtin/json_identity",
     ),
 )
-''',
+""",
         encoding="utf-8",
     )
 
@@ -31,14 +31,14 @@ def test_launcher_imports_python_experiment_and_resolves_paths(tmp_path: Path) -
     _write_definition(tmp_path)
     launcher = tmp_path / "experiment.yaml"
     launcher.write_text(
-        '''definition: definition:experiment
+        """definition: definition:experiment
 storage:
   target: sqlite
   kwargs:
     path: runs.sqlite3
 runtime:
   max_concurrency: 4
-''',
+""",
         encoding="utf-8",
     )
 

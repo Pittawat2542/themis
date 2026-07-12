@@ -193,11 +193,11 @@ class FlakyStore(InMemoryRunStore):
         super().__init__()
         self.fail_next_persist = True
 
-    def persist_event(self, event) -> None:
+    def persist_event(self, event):
         if self.fail_next_persist:
             self.fail_next_persist = False
             raise ConnectionError("temporary store outage")
-        super().persist_event(event)
+        return super().persist_event(event)
 
 
 class CountingLLMMetric:

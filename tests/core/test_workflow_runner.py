@@ -208,9 +208,7 @@ async def test_default_workflow_runner_executes_single_judge_workflow_and_persis
         judge_models=[resolve_judge_model_component("builtin/demo_judge")],
     )
     subject = CandidateSetSubject(
-        candidates=[
-            Candidate(candidate_id="candidate-1", final_output={"answer": "4"})
-        ]
+        candidates=[Candidate(candidate_id="candidate-1", final_output={"answer": "4"})]
     )
     ctx = EvalScoreContext(
         run_id="run-1",

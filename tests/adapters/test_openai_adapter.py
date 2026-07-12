@@ -63,17 +63,17 @@ async def test_openai_adapter_generates_results_from_responses_api() -> None:
         "provider_request_id": "resp_123",
         "raw_response": {"id": "resp_123", "output_text": "4"},
         "response_headers": {"x-ratelimit-limit-requests": "60"},
-            "rate_limit": {"requests_per_minute": 60},
-            "seed_requested": 7,
-            "seed_applied": 7,
-            "seed_capability": "supported",
+        "rate_limit": {"requests_per_minute": 60},
+        "seed_requested": 7,
+        "seed_applied": 7,
+        "seed_capability": "supported",
     }
     assert client.responses.calls == [
         {
             "model": "gpt-5.4-mini",
             "input": "What is 2+2?",
-                "instructions": "Answer directly.",
-                "seed": 7,
+            "instructions": "Answer directly.",
+            "seed": 7,
         }
     ]
 

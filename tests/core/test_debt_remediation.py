@@ -46,10 +46,21 @@ def test_continuous_and_lower_is_better_metric_outcomes_follow_contract() -> Non
         correctness_threshold=2.0,
     )
 
-    assert _score_outcome(MetricResult(metric_id="continuous", value=0.4), continuous) is ScoreOutcome.SCORED
-    assert _score_outcome(MetricResult(metric_id="error", value=1.5), lower_binary) is ScoreOutcome.CORRECT
-    assert _score_outcome(MetricResult(metric_id="error", value=2.5), lower_binary) is ScoreOutcome.INCORRECT
-    assert _metric_value_error(MetricResult(metric_id="continuous", value=2.0), continuous)
+    assert (
+        _score_outcome(MetricResult(metric_id="continuous", value=0.4), continuous)
+        is ScoreOutcome.SCORED
+    )
+    assert (
+        _score_outcome(MetricResult(metric_id="error", value=1.5), lower_binary)
+        is ScoreOutcome.CORRECT
+    )
+    assert (
+        _score_outcome(MetricResult(metric_id="error", value=2.5), lower_binary)
+        is ScoreOutcome.INCORRECT
+    )
+    assert _metric_value_error(
+        MetricResult(metric_id="continuous", value=2.0), continuous
+    )
 
 
 def test_evidence_sanitizer_redacts_secrets_and_applies_retention() -> None:

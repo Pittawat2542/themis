@@ -257,9 +257,7 @@ class Experiment(FrozenModel):
             failed_only=failed_only,
         )
 
-    def _core(
-        self, storage: StorageConfig, options: RunOptions
-    ) -> _CoreExperiment:
+    def _core(self, storage: StorageConfig, options: RunOptions) -> _CoreExperiment:
         return _CoreExperiment(
             generation=self.generation._core(),
             evaluation=self.evaluation._core(),

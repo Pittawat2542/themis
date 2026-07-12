@@ -61,17 +61,17 @@ def test_sqlite_store_skips_unknown_event_types_on_read(tmp_path) -> None:
                 VALUES (?, ?, ?, ?, ?)
             """,
             (
-                    snapshot.run_id,
-                    "future-event-id",
-                    2,
-                    "future_event",
+                snapshot.run_id,
+                "future-event-id",
+                2,
+                "future_event",
                 json.dumps(
                     {
                         "schema_version": "2",
                         "event_type": "future_event",
-                            "run_id": snapshot.run_id,
-                            "event_id": "future-event-id",
-                            "attempt_id": "future-attempt",
+                        "run_id": snapshot.run_id,
+                        "event_id": "future-event-id",
+                        "attempt_id": "future-attempt",
                     }
                 ),
             ),

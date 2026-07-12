@@ -36,9 +36,7 @@ def get_projection(
 ) -> ProjectionRead:
     """Read a projection with explicit freshness semantics."""
 
-    return store.read_projection(
-        run_id, projection_name, consistency=consistency
-    )
+    return store.read_projection(run_id, projection_name, consistency=consistency)
 
 
 def get_attempt_history(store: RunStore, run_id: str) -> list[AttemptSummary]:

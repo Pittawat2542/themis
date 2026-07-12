@@ -121,7 +121,9 @@ def _load_definition(target: str, base_dir: Path) -> object:
         raise ValueError(f"Invalid launcher definition: {target}")
     local_module = base_dir.joinpath(*module_name.split(".")).with_suffix(".py")
     if local_module.is_file():
-        unique_name = f"_themis_launcher_{sha256(str(local_module).encode()).hexdigest()}"
+        unique_name = (
+            f"_themis_launcher_{sha256(str(local_module).encode()).hexdigest()}"
+        )
         module = ModuleType(unique_name)
         module.__file__ = str(local_module)
         sys.modules[unique_name] = module

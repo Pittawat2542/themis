@@ -797,6 +797,13 @@ async def test_case_pipeline_runs_generation_with_minimal_context() -> None:
         del blob, media_type
         return "sha256:unused"
 
+    async def load_stage_cache(stage_name: str, cache_key: str):
+        del stage_name, cache_key
+        return None
+
+    async def store_stage_cache(stage_name: str, cache_key: str, payload) -> None:
+        del stage_name, cache_key, payload
+
     class UnexpectedWorkflowRunner:
         async def run_evaluation(self, *args, **kwargs):
             del args, kwargs
@@ -825,8 +832,8 @@ async def test_case_pipeline_runs_generation_with_minimal_context() -> None:
         final_workflow_score=unexpected,
         persist_event=persist_event,
         store_blob=store_blob,
-        load_stage_cache=lambda stage_name, cache_key: None,
-        store_stage_cache=lambda stage_name, cache_key, payload: None,
+        load_stage_cache=load_stage_cache,
+        store_stage_cache=store_stage_cache,
         reduction_cache_key=lambda snapshot_arg, candidates: "unused",
         parse_cache_key=lambda snapshot_arg, reduced, parser_view: "unused",
         score_cache_key=lambda snapshot_arg, case, parsed, metric: "unused",

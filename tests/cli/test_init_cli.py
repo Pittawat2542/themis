@@ -15,7 +15,4 @@ def test_init_scaffolds_minimal_project(tmp_path: Path) -> None:
     assert (project_root / "experiment.py").is_file()
     assert (project_root / "data" / "sample.jsonl").is_file()
     assert (project_root / "run.py").is_file()
-    assert (
-        'from experiment import experiment'
-        in (project_root / "run.py").read_text()
-    )
+    assert "from experiment import experiment" in (project_root / "run.py").read_text()

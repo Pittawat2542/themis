@@ -45,9 +45,7 @@ class RunStartedEvent(RunEvent):
     """Event emitted when orchestration starts for a run."""
 
     event_type: Literal["run_started"] = "run_started"
-    attempt_kind: Literal["initial", "resume", "replay", "rerun", "rejudge"] = (
-        "initial"
-    )
+    attempt_kind: Literal["initial", "resume", "replay", "rerun", "rejudge"] = "initial"
     parent_attempt_id: str | None = None
 
 

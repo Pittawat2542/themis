@@ -47,11 +47,15 @@ class MetricInterpretation(HashableModel):
         if self.valid_range is not None:
             lower, upper = self.valid_range
             if lower > upper:
-                raise ValueError("Metric valid_range lower bound must not exceed upper bound")
+                raise ValueError(
+                    "Metric valid_range lower bound must not exceed upper bound"
+                )
             if self.correctness_threshold is not None and not (
                 lower <= self.correctness_threshold <= upper
             ):
-                raise ValueError("Metric correctness_threshold must be inside valid_range")
+                raise ValueError(
+                    "Metric correctness_threshold must be inside valid_range"
+                )
         if (
             self.direction is MetricDirection.NEUTRAL
             and self.correctness_threshold is not None

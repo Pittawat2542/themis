@@ -7,7 +7,7 @@ from themis.core.bundles import (
     import_evaluation_bundle,
     import_generation_bundle,
 )
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
+from themis.core.config import EvaluationConfig, GenerationConfig, Stage, StorageConfig
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
@@ -86,7 +86,7 @@ def test_readme_builtin_component_example_runs_end_to_end() -> None:
     result = experiment.run(
         runtime=RuntimeConfig(
             max_concurrent_tasks=8,
-            stage_concurrency={"generate": 4},
+            stage_concurrency={Stage.GENERATE: 4},
         )
     )
 

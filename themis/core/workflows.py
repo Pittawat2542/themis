@@ -99,7 +99,10 @@ class EvaluationExecution(HashableModel):
 
 
 def build_prompt_template_context(
-    subject: CandidateSetSubject | TraceSubject | ConversationSubject | CandidateSubject,
+    subject: CandidateSetSubject
+    | TraceSubject
+    | ConversationSubject
+    | CandidateSubject,
     ctx: EvalScoreContext,
     call: JudgeCall | None = None,
 ) -> dict[str, JSONValue]:

@@ -76,9 +76,7 @@ class CaseExecutionState(FrozenModel):
     """Persisted per-case execution state derived from stored events."""
 
     generated_candidates: dict[str, Candidate] = Field(default_factory=dict)
-    generated_candidates_by_index: dict[int, Candidate] = Field(
-        default_factory=dict
-    )
+    generated_candidates_by_index: dict[int, Candidate] = Field(default_factory=dict)
     generated_candidate_blob_refs: dict[str, str] = Field(default_factory=dict)
     generation_failures: dict[str, str] = Field(default_factory=dict)
     generation_failure_keys_by_index: dict[int, str] = Field(default_factory=dict)
@@ -163,10 +161,7 @@ class ExecutionState(FrozenModel):
             current = CaseExecutionState()
         updated = current
 
-        if (
-            isinstance(event, GenerationCompletedEvent)
-            and event.result is not None
-        ):
+        if isinstance(event, GenerationCompletedEvent) and event.result is not None:
             generated = dict(current.generated_candidates)
             generated[event.candidate_id] = Candidate.model_validate(event.result)
             generated_by_index = dict(current.generated_candidates_by_index)

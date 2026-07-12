@@ -32,7 +32,7 @@ def _write_config(
 ) -> None:
     module = f"{path.stem}_definition"
     path.with_name(f"{module}.py").write_text(
-        f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        f"""from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(dataset_id="dataset-1", cases=[Case(
@@ -43,7 +43,7 @@ experiment = Experiment(
     evaluation=Evaluation(metrics=["builtin/exact_match"], parser="builtin/json_identity"),
     seeds=[{seed}],
 )
-'''
+"""
     )
     path.write_text(
         f"""

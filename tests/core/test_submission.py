@@ -14,7 +14,7 @@ from themis.launcher import load_core_experiment
 
 def _write_launcher(root: Path, *, seed: int = 7) -> Path:
     (root / "definition.py").write_text(
-        f'''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        f"""from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(
@@ -35,12 +35,12 @@ experiment = Experiment(
     ),
     seeds=[{seed}],
 )
-''',
+""",
         encoding="utf-8",
     )
     launcher = root / "experiment.yaml"
     launcher.write_text(
-        '''definition: definition:experiment
+        """definition: definition:experiment
 storage:
   target: sqlite
   kwargs:
@@ -48,7 +48,7 @@ storage:
 runtime:
   queue_root: queue
   batch_root: batch
-''',
+""",
         encoding="utf-8",
     )
     return launcher

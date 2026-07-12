@@ -32,9 +32,7 @@ def inspect(suite_id: str) -> int:
                 "aggregation": suite.aggregation.value,
                 "description": suite.description,
                 "tags": suite.tags,
-                "items": [
-                    item.model_dump(mode="json") for item in expansion.items
-                ],
+                "items": [item.model_dump(mode="json") for item in expansion.items],
             },
             sort_keys=True,
         )

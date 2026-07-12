@@ -41,7 +41,9 @@ class ProviderAdapter:
         self._client = client
         self.endpoint = endpoint
         self.base_url = base_url
-        self.provider_key = f"{provider}:{(endpoint or base_url or model_id).rstrip('/')}"
+        self.provider_key = (
+            f"{provider}:{(endpoint or base_url or model_id).rstrip('/')}"
+        )
 
     def fingerprint(self) -> str:
         return stable_fingerprint(

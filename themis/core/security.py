@@ -112,9 +112,15 @@ def _sanitize_evidence_value(
             normalized = _normalize_segment(key)
             if normalized in _EVIDENCE_SECRET_FIELDS:
                 sanitized[key] = "<redacted>"
-            elif retention is not EvidenceRetention.FULL and normalized in _STANDARD_OMITTED_FIELDS:
+            elif (
+                retention is not EvidenceRetention.FULL
+                and normalized in _STANDARD_OMITTED_FIELDS
+            ):
                 sanitized[key] = {} if isinstance(item, dict) else "<omitted>"
-            elif retention is EvidenceRetention.MINIMAL and normalized in _MINIMAL_OMITTED_FIELDS:
+            elif (
+                retention is EvidenceRetention.MINIMAL
+                and normalized in _MINIMAL_OMITTED_FIELDS
+            ):
                 if item is None:
                     sanitized[key] = None
                 elif isinstance(item, dict):

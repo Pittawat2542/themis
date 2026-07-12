@@ -296,6 +296,7 @@ class RuntimeSupport:
     async def aclose(self) -> None:
         await self.evidence_writer.aclose()
 
+
 def classify_retryable_error(exc: Exception) -> dict[str, JSONValue] | None:
     if bool(getattr(exc, "retryable", False)):
         return {"reason": "explicit_retryable"}

@@ -64,9 +64,7 @@ SelectorComponent: TypeAlias = CandidateSelector | TargetSpec | str
 ReducerComponent: TypeAlias = CandidateReducer | TargetSpec | str
 ParserComponent: TypeAlias = Parser | TargetSpec | str
 JudgeModelComponent: TypeAlias = JudgeModel | TargetSpec | str
-MetricComponent: TypeAlias = (
-    PureMetric | WorkflowMetric | TargetSpec | str
-)
+MetricComponent: TypeAlias = PureMetric | WorkflowMetric | TargetSpec | str
 
 
 class ParserView(HashableModel):
@@ -87,6 +85,8 @@ class GenerationConfig(HashableModel):
     termination: dict[str, JSONValue] = Field(default_factory=dict)
     selector: SelectorComponent | None = None
     reducer: ReducerComponent | None = None
+
+
 class EvaluationConfig(HashableModel):
     """Evaluation-stage configuration for parsing, metrics, and judges."""
 

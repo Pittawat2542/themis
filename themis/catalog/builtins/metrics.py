@@ -339,7 +339,10 @@ class ConfidenceCalibrationMetric:
             metric_id=self.component_id,
             result_type="calibration",
             value=round(gap, 12),
-            dimensions={"confidence": float(parsed.confidence), "correctness": correctness},
+            dimensions={
+                "confidence": float(parsed.confidence),
+                "correctness": correctness,
+            },
         )
 
 

@@ -82,9 +82,7 @@ def extract_token_usage(usage: object | None) -> dict[str, int] | None:
     if prompt_tokens is None:
         prompt_tokens = _read_usage_value(usage, usage_mapping, "prompt_tokens")
     if completion_tokens is None:
-        completion_tokens = _read_usage_value(
-            usage, usage_mapping, "completion_tokens"
-        )
+        completion_tokens = _read_usage_value(usage, usage_mapping, "completion_tokens")
     if prompt_tokens is None:
         prompt_tokens = _read_usage_value(usage, usage_mapping, "inputTokens")
     if completion_tokens is None:

@@ -37,9 +37,7 @@ def run_example() -> dict[str, object]:
         seeds=[7],
     )
     snapshot = experiment.compile()
-    result = experiment.run(
-        store=memory_store(), options=RunOptions(max_concurrency=4)
-    )
+    result = experiment.run(store=memory_store(), options=RunOptions(max_concurrency=4))
     return {"run_id": snapshot.run_id, "status": result.status.value}
 
 

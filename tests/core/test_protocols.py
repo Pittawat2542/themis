@@ -46,6 +46,7 @@ from themis.core.workflows import (
     JudgeResponse,
     ParsedJudgment,
     RenderedJudgePrompt,
+    WorkflowSubjectKind,
 )
 
 
@@ -237,7 +238,7 @@ class DummyWorkflowRunner:
         del workflow, subject, metric_id, ctx
         return EvaluationExecution(
             execution_id="execution-1",
-            subject_kind="candidate_set",
+            subject_kind=WorkflowSubjectKind.CANDIDATE_SET,
             trace=WorkflowTrace(trace_id="trace-1"),
         )
 
@@ -249,9 +250,7 @@ class DummySubscriber:
     def after_generate(self, result: Candidate, ctx: GenerationContext) -> None:
         del result, ctx
 
-    def before_reduce(
-        self, candidates: list[Candidate], ctx: ReduceContext
-    ) -> None:
+    def before_reduce(self, candidates: list[Candidate], ctx: ReduceContext) -> None:
         del candidates, ctx
 
     def after_reduce(self, reduced: ReducedCandidate, ctx: ReduceContext) -> None:
@@ -343,7 +342,7 @@ def test_dummy_component_fingerprints_are_deterministic() -> None:
 def test_workflow_and_execution_models_capture_judge_artifacts() -> None:
     execution = EvaluationExecution(
         execution_id="execution-1",
-        subject_kind="candidate_set",
+        subject_kind=WorkflowSubjectKind.CANDIDATE_SET,
         rendered_prompts=[
             RenderedJudgePrompt(prompt_id="prompt-1", content="Grade this")
         ],

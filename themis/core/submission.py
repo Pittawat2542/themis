@@ -298,9 +298,7 @@ def _file_digest(path: Path) -> str:
     return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
-def _manifest_signature(
-    manifest: SubmissionManifest, key: str | bytes
-) -> str:
+def _manifest_signature(manifest: SubmissionManifest, key: str | bytes) -> str:
     key_bytes = key.encode("utf-8") if isinstance(key, str) else key
     payload = manifest.model_dump(
         mode="json",

@@ -100,7 +100,7 @@ def test_evaluate_is_deliberately_small() -> None:
 )
 def test_run_options_reject_invalid_limits(field: str, value: object) -> None:
     with pytest.raises(ValidationError):
-        RunOptions(**{field: value})
+        RunOptions.model_validate({field: value})
 
 
 def test_package_includes_py_typed_marker() -> None:

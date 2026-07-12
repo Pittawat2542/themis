@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - Windows fallback

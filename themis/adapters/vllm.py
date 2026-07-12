@@ -100,7 +100,9 @@ class VLLMGenerator:
         else:
             response = await call_maybe_sync(
                 client.responses.create,
-                model=self.model_id, input=request_input, seed=ctx.seed
+                model=self.model_id,
+                input=request_input,
+                seed=ctx.seed,
             )
             raw_response = dump_response(response)
             content = getattr(response, "output_text", raw_response)

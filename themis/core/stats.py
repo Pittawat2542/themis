@@ -168,9 +168,7 @@ class StatsEngine:
                     ties=sum(1 for delta in deltas if delta == 0),
                     mean_delta=_rounded(sum(deltas) / len(deltas)),
                     mean_improvement=_rounded(
-                        sum(
-                            _improvements(deltas, resolved_directions.get(metric_id))
-                        )
+                        sum(_improvements(deltas, resolved_directions.get(metric_id)))
                         / len(deltas)
                     ),
                     ci_lower=_rounded(_bootstrap_mean_ci(deltas)[0]),

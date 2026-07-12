@@ -18,7 +18,7 @@ storage:
 """.strip()
     )
     (root / "experiment.py").write_text(
-        '''from themis import Case, Dataset, Evaluation, Experiment, Generation
+        """from themis import Case, Dataset, Evaluation, Experiment, Generation
 
 experiment = Experiment(
     datasets=[Dataset(
@@ -39,7 +39,7 @@ experiment = Experiment(
     ),
     seeds=[7],
 )
-'''
+"""
     )
     (root / "data" / "sample.jsonl").write_text(
         '{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n'
