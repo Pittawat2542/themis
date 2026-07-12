@@ -8,6 +8,8 @@ from typing import cast
 from urllib.parse import urlsplit, urlunsplit
 
 from themis.core.base import JSONValue
+from themis.core.config import EvidenceRetention
+from themis.core.events import RunEvent
 
 _SECRET_KEY_MARKERS = (
     "api_key",
@@ -34,6 +36,110 @@ _SECRET_VALUE_PATTERNS = (
     re.compile(r"^xox[baprs]-[A-Za-z0-9-]+$"),
     re.compile(r"^-----BEGIN [A-Z ]+-----$"),
 )
+_SECRET_TEXT_PATTERNS = (
+    re.compile(r"(?i)(authorization\s*[:=]\s*)\S+"),
+    re.compile(r"\b(?:sk-|sk-ant-|hf_|gh[pousr]_|xox[baprs]-)[A-Za-z0-9._-]+\b"),
+)
+
+_STANDARD_OMITTED_FIELDS = {"raw_response"}
+_MINIMAL_OMITTED_FIELDS = {
+    "artifacts",
+    "conversation",
+    "execution",
+    "final_output",
+    "input_messages",
+    "output_messages",
+    "result",
+    "stream_event",
+    "trace",
+    "turns",
+}
+_EVIDENCE_SECRET_FIELDS = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "cookie",
+    "password",
+    "private_key",
+    "proxy_authorization",
+    "secret",
+    "set_cookie",
+}
+
+
+class EvidenceSanitizer:
+    """Apply one retention policy before runtime evidence is persisted."""
+
+    def __init__(self, retention: EvidenceRetention) -> None:
+        self.retention = retention
+
+    def event(self, event: RunEvent) -> RunEvent:
+        payload = self.value(event.model_dump(mode="json"))
+        assert isinstance(payload, dict)
+        return type(event).model_validate(payload)
+
+    def value(self, value: JSONValue) -> JSONValue:
+        return _sanitize_evidence_value(value, self.retention, path=())
+
+    def blob(self, blob: bytes, media_type: str) -> bytes:
+        if "json" not in media_type:
+            if media_type.startswith("text/"):
+                text = blob.decode("utf-8", errors="replace")
+                for pattern in _SECRET_TEXT_PATTERNS:
+                    text = pattern.sub("<redacted>", text)
+                return text.encode("utf-8")
+            return blob
+        try:
+            import json
+
+            value = json.loads(blob)
+        except (UnicodeDecodeError, ValueError):
+            return blob
+        return json.dumps(
+            self.value(value), sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+
+
+def _sanitize_evidence_value(
+    value: JSONValue,
+    retention: EvidenceRetention,
+    *,
+    path: tuple[str, ...],
+) -> JSONValue:
+    if isinstance(value, dict):
+        sanitized: dict[str, JSONValue] = {}
+        for key, item in value.items():
+            normalized = _normalize_segment(key)
+            if normalized in _EVIDENCE_SECRET_FIELDS:
+                sanitized[key] = "<redacted>"
+            elif retention is not EvidenceRetention.FULL and normalized in _STANDARD_OMITTED_FIELDS:
+                sanitized[key] = {} if isinstance(item, dict) else "<omitted>"
+            elif retention is EvidenceRetention.MINIMAL and normalized in _MINIMAL_OMITTED_FIELDS:
+                if item is None:
+                    sanitized[key] = None
+                elif isinstance(item, dict):
+                    sanitized[key] = {}
+                elif isinstance(item, list):
+                    sanitized[key] = []
+                else:
+                    sanitized[key] = "<omitted>"
+            elif retention is EvidenceRetention.MINIMAL and normalized.endswith(
+                "blob_ref"
+            ):
+                sanitized[key] = None
+            else:
+                sanitized[key] = _sanitize_evidence_value(
+                    item, retention, path=path + (key,)
+                )
+        return sanitized
+    if isinstance(value, list):
+        return [
+            _sanitize_evidence_value(item, retention, path=path + (str(index),))
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, str) and _looks_like_secret_value(value):
+        return "<redacted>"
+    return value
 
 
 def is_secret_reference(value: str) -> bool:

@@ -10,6 +10,12 @@ All notable changes to this project are documented in this file.
 - Made omitted provider request limits unlimited and added strict seed-capability
   validation with requested/applied seed telemetry.
 
+### Security
+- Added `minimal`, `standard`, and `full` evidence retention policies with
+  standard sanitization by default and a strict provider-header allowlist.
+- Sanitized runtime events, JSON/text blobs, stage caches, tracebacks, and
+  imported/exported bundles before persistence.
+
 ## [5.0.0] - 2026-07-12
 
 Themis 5 removes the v4 compatibility surface and establishes one Python-first

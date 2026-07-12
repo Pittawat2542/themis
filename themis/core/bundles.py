@@ -4,21 +4,24 @@ from __future__ import annotations
 
 import json
 import hashlib
+from typing import TypeVar
+
+from pydantic import BaseModel
 
 from themis.core.case_refs import CaseRef, resolve_case_key
+from themis.core.config import EvidenceRetention
 from themis.core.events import (
     EvaluationCompletedEvent,
     GenerationCompletedEvent,
     ParseCompletedEvent,
     ReductionCompletedEvent,
     ScoreCompletedEvent,
-    SessionCompletedEvent,
 )
 from themis.core.models import (
     ParsedOutput,
     ReducedCandidate,
     MetricResult,
-    SessionResult,
+    Candidate,
 )
 from themis.core.results import (
     EvaluationBundle,
@@ -33,10 +36,23 @@ from themis.core.results import (
     GenerationBundleRecord,
 )
 from themis.core.store import RunStore
+from themis.core.security import EvidenceSanitizer
 from themis.core.workflows import EvaluationExecution
 
+BundleT = TypeVar("BundleT", bound=BaseModel)
+_RETENTION_RANK = {
+    EvidenceRetention.MINIMAL: 0,
+    EvidenceRetention.STANDARD: 1,
+    EvidenceRetention.FULL: 2,
+}
 
-def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
+
+def export_generation_bundle(
+    store: RunStore,
+    run_id: str,
+    *,
+    retention: EvidenceRetention | None = None,
+) -> GenerationBundle:
     """Export stored generation artifacts into a portable bundle."""
 
     stored = store.resume(run_id)
@@ -47,7 +63,7 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
     records: list[GenerationBundleRecord] = []
     for event in stored.events:
         if (
-            isinstance(event, (SessionCompletedEvent, GenerationCompletedEvent))
+            isinstance(event, GenerationCompletedEvent)
             and event.result is not None
         ):
             case_ref = _bundle_record_case_ref(case_refs, event)
@@ -64,20 +80,29 @@ def export_generation_bundle(store: RunStore, run_id: str) -> GenerationBundle:
                     candidate_index=event.candidate_index,
                     seed=event.seed,
                     result_blob_ref=_blob_ref(
-                        SessionResult.model_validate(event.result).model_dump(
+                        Candidate.model_validate(event.result).model_dump(
                             mode="json"
                         )
                     ),
-                    result=SessionResult.model_validate(event.result),
+                    result=Candidate.model_validate(event.result),
                 )
             )
 
-    return GenerationBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+    return _sanitize_export_bundle(
+        GenerationBundle(run_id=run_id, snapshot=stored.snapshot, records=records),
+        retention,
+    )
 
 
-def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
+def import_generation_bundle(
+    store: RunStore,
+    bundle: GenerationBundle,
+    *,
+    retention: EvidenceRetention = EvidenceRetention.STANDARD,
+) -> None:
     """Import generation artifacts from a bundle into a store."""
 
+    bundle = _sanitize_bundle(bundle, retention)
     snapshot = bundle.snapshot
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
@@ -103,7 +128,7 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
                 "Generation bundle blob ref does not match serialized result payload"
             )
         store.persist_event(
-            SessionCompletedEvent(
+            GenerationCompletedEvent(
                 run_id=bundle.run_id,
                 case_id=case_ref.case_id,
                 dataset_id=case_ref.dataset_id,
@@ -117,7 +142,9 @@ def import_generation_bundle(store: RunStore, bundle: GenerationBundle) -> None:
         )
 
 
-def export_reduction_bundle(store: RunStore, run_id: str) -> ReductionBundle:
+def export_reduction_bundle(
+    store: RunStore, run_id: str, *, retention: EvidenceRetention | None = None
+) -> ReductionBundle:
     """Export stored reduction artifacts into a portable bundle."""
 
     stored = store.resume(run_id)
@@ -143,12 +170,21 @@ def export_reduction_bundle(store: RunStore, run_id: str) -> ReductionBundle:
                 )
             )
 
-    return ReductionBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+    return _sanitize_export_bundle(
+        ReductionBundle(run_id=run_id, snapshot=stored.snapshot, records=records),
+        retention,
+    )
 
 
-def import_reduction_bundle(store: RunStore, bundle: ReductionBundle) -> None:
+def import_reduction_bundle(
+    store: RunStore,
+    bundle: ReductionBundle,
+    *,
+    retention: EvidenceRetention = EvidenceRetention.STANDARD,
+) -> None:
     """Import reduction artifacts from a bundle into a store."""
 
+    bundle = _sanitize_bundle(bundle, retention)
     snapshot = bundle.snapshot
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
@@ -177,7 +213,9 @@ def import_reduction_bundle(store: RunStore, bundle: ReductionBundle) -> None:
         )
 
 
-def export_parse_bundle(store: RunStore, run_id: str) -> ParseBundle:
+def export_parse_bundle(
+    store: RunStore, run_id: str, *, retention: EvidenceRetention | None = None
+) -> ParseBundle:
     """Export stored parse artifacts into a portable bundle."""
 
     stored = store.resume(run_id)
@@ -203,12 +241,21 @@ def export_parse_bundle(store: RunStore, run_id: str) -> ParseBundle:
                 )
             )
 
-    return ParseBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+    return _sanitize_export_bundle(
+        ParseBundle(run_id=run_id, snapshot=stored.snapshot, records=records),
+        retention,
+    )
 
 
-def import_parse_bundle(store: RunStore, bundle: ParseBundle) -> None:
+def import_parse_bundle(
+    store: RunStore,
+    bundle: ParseBundle,
+    *,
+    retention: EvidenceRetention = EvidenceRetention.STANDARD,
+) -> None:
     """Import parse artifacts from a bundle into a store."""
 
+    bundle = _sanitize_bundle(bundle, retention)
     snapshot = bundle.snapshot
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
@@ -236,7 +283,9 @@ def import_parse_bundle(store: RunStore, bundle: ParseBundle) -> None:
         )
 
 
-def export_score_bundle(store: RunStore, run_id: str) -> ScoreBundle:
+def export_score_bundle(
+    store: RunStore, run_id: str, *, retention: EvidenceRetention | None = None
+) -> ScoreBundle:
     """Export stored score artifacts into a portable bundle."""
 
     stored = store.resume(run_id)
@@ -263,12 +312,21 @@ def export_score_bundle(store: RunStore, run_id: str) -> ScoreBundle:
                 )
             )
 
-    return ScoreBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+    return _sanitize_export_bundle(
+        ScoreBundle(run_id=run_id, snapshot=stored.snapshot, records=records),
+        retention,
+    )
 
 
-def import_score_bundle(store: RunStore, bundle: ScoreBundle) -> None:
+def import_score_bundle(
+    store: RunStore,
+    bundle: ScoreBundle,
+    *,
+    retention: EvidenceRetention = EvidenceRetention.STANDARD,
+) -> None:
     """Import score artifacts from a bundle into a store."""
 
+    bundle = _sanitize_bundle(bundle, retention)
     snapshot = bundle.snapshot
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
@@ -297,7 +355,9 @@ def import_score_bundle(store: RunStore, bundle: ScoreBundle) -> None:
         )
 
 
-def export_evaluation_bundle(store: RunStore, run_id: str) -> EvaluationBundle:
+def export_evaluation_bundle(
+    store: RunStore, run_id: str, *, retention: EvidenceRetention | None = None
+) -> EvaluationBundle:
     """Export stored evaluation artifacts into a portable bundle."""
 
     stored = store.resume(run_id)
@@ -329,12 +389,21 @@ def export_evaluation_bundle(store: RunStore, run_id: str) -> EvaluationBundle:
                 )
             )
 
-    return EvaluationBundle(run_id=run_id, snapshot=stored.snapshot, records=records)
+    return _sanitize_export_bundle(
+        EvaluationBundle(run_id=run_id, snapshot=stored.snapshot, records=records),
+        retention,
+    )
 
 
-def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
+def import_evaluation_bundle(
+    store: RunStore,
+    bundle: EvaluationBundle,
+    *,
+    retention: EvidenceRetention = EvidenceRetention.STANDARD,
+) -> None:
     """Import evaluation artifacts from a bundle into a store."""
 
+    bundle = _sanitize_bundle(bundle, retention)
     snapshot = bundle.snapshot
     if snapshot.run_id != bundle.run_id:
         raise ValueError("Bundle snapshot run_id does not match bundle.run_id")
@@ -387,6 +456,27 @@ def import_evaluation_bundle(store: RunStore, bundle: EvaluationBundle) -> None:
                     metric_result=final_score.model_dump(mode="json"),
                 )
             )
+
+
+def _sanitize_bundle(bundle: BundleT, retention: EvidenceRetention) -> BundleT:
+    payload = EvidenceSanitizer(retention).value(bundle.model_dump(mode="json"))
+    if isinstance(payload, dict):
+        snapshot_payload = payload.get("snapshot")
+        if isinstance(snapshot_payload, dict):
+            snapshot_payload.pop("run_id", None)
+    return type(bundle).model_validate(payload)
+
+
+def _sanitize_export_bundle(
+    bundle: BundleT, requested: EvidenceRetention | None
+) -> BundleT:
+    source = bundle.snapshot.provenance.runtime.evidence_retention  # type: ignore[attr-defined]
+    retention = requested or source
+    if _RETENTION_RANK[retention] > _RETENTION_RANK[source]:
+        raise ValueError(
+            f"Cannot elevate bundle retention from {source.value} to {retention.value}"
+        )
+    return _sanitize_bundle(bundle, retention)
 
 
 def _final_score(metric_id: str, execution: EvaluationExecution) -> MetricResult | None:
