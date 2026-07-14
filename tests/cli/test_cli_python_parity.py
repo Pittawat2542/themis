@@ -10,11 +10,18 @@ from themis.analysis import Reporter, StatsEngine
 from themis.core.base import JSONValue
 from themis.core.read_models import BenchmarkResult
 from themis.core.stores.factory import create_run_store
-from themis.launcher import load_core_experiment
+from themis.launcher import _load_runtime_experiment
 from tests.cli.helpers import run_cli
 
 
 pytestmark = pytest.mark.slow
+
+
+def _cli_data(output: str):
+    envelope = json.loads(output)
+    assert envelope["schema_version"] == "1"
+    assert isinstance(envelope["command"], str)
+    return envelope["data"]
 
 
 def _write_config(
@@ -84,7 +91,7 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
         seed=None,
     )
 
-    experiment = load_core_experiment(config_path)
+    experiment = _load_runtime_experiment(config_path)
     python_store = create_run_store(experiment.storage)
     python_store.initialize()
     python_result = experiment.run(store=python_store)
@@ -107,7 +114,7 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
         str(tmp_path),
     )
     batch_submit = run_cli("submit", "--config", str(config_path), "--mode", "batch")
-    batch_manifest = json.loads(batch_submit.stdout)["manifest_path"]
+    batch_manifest = _cli_data(batch_submit.stdout)["manifest_path"]
     batch_run = run_cli(
         "batch",
         "run",
@@ -128,12 +135,12 @@ def test_python_api_and_cli_entrypoints_share_snapshot_identity_and_results(
     assert quickcheck.returncode == 0, quickcheck.stderr
     assert report.returncode == 0, report.stderr
 
-    cli_run_payload = json.loads(cli_run.stdout)
-    cli_quick_eval_payload = json.loads(cli_quick_eval.stdout)
-    worker_run_payload = json.loads(worker_run.stdout)
-    batch_run_payload = json.loads(batch_run.stdout)
-    quickcheck_payload = json.loads(quickcheck.stdout)
-    report_payload = json.loads(report.stdout)
+    cli_run_payload = _cli_data(cli_run.stdout)
+    cli_quick_eval_payload = _cli_data(cli_quick_eval.stdout)
+    worker_run_payload = _cli_data(worker_run.stdout)
+    batch_run_payload = _cli_data(batch_run.stdout)
+    quickcheck_payload = _cli_data(quickcheck.stdout)
+    report_payload = _cli_data(report.stdout)
 
     assert (
         python_result.run_id
@@ -173,8 +180,8 @@ def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
         seed=8,
     )
 
-    baseline_experiment = load_core_experiment(baseline_config)
-    candidate_experiment = load_core_experiment(candidate_config)
+    baseline_experiment = _load_runtime_experiment(baseline_config)
+    candidate_experiment = _load_runtime_experiment(candidate_config)
     store = create_run_store(baseline_experiment.storage)
     store.initialize()
     baseline_experiment.run(store=store)
@@ -189,7 +196,7 @@ def test_cli_compare_matches_python_stats_engine(tmp_path: Path) -> None:
     )
 
     assert cli_compare.returncode == 0, cli_compare.stderr
-    cli_payload = json.loads(cli_compare.stdout)
+    cli_payload = _cli_data(cli_compare.stdout)
     python_payload = (
         StatsEngine()
         .compare(

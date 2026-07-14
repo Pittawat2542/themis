@@ -136,4 +136,4 @@ def test_profile_script_emits_machine_readable_json() -> None:
     assert payload["samples"] == 2
     assert payload["judges"] == 2
     assert "duration_seconds" in payload
-    assert payload["status"] in {"completed", "partial_failure"}
+    assert payload["status"] == "completed"

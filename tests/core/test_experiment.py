@@ -465,7 +465,8 @@ def test_compile_keeps_cached_snapshot_until_explicit_rebuild() -> None:
     )
 
     compiled = experiment.compile()
-    cast(dict[str, JSONValue], case.input)["question"] = "3+3"
+    with pytest.raises(TypeError, match="cannot be mutated"):
+        cast(dict[str, JSONValue], case.input)["question"] = "3+3"
 
     assert experiment.compile() is compiled
     assert experiment.compile().run_id == compiled.run_id

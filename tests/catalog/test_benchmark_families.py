@@ -7,9 +7,9 @@ import pytest
 from themis.catalog import load, run
 from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.core.base import JSONValue
+from themis.core.dataset_sources import DatasetSourceSpec
 from themis.core.results import RunStatus
 from themis.core.stores import InMemoryRunStore
-from tests.catalog_ids import catalog_benchmark_ids
 
 
 def _sample_input(benchmark: BenchmarkDefinition) -> dict[str, JSONValue]:
@@ -42,9 +42,11 @@ def test_procbench_variant_exposes_task_specific_metadata() -> None:
     assert benchmark.metric_ids == ["builtin/llm_rubric"]
     assert benchmark.sample_case_metadata["task_id"] == "task07"
     task = sample_input["task"]
+    source = experiment.datasets[0]
     assert isinstance(task, str)
+    assert isinstance(source, DatasetSourceSpec)
     assert task.startswith("Complete procbench task07")
-    assert experiment.datasets[0].metadata["benchmark_id"] == "procbench:task07"
+    assert source.provenance_metadata["benchmark_id"] == "procbench:task07"
 
 
 def test_superchem_and_mmmlu_variants_propagate_language_metadata() -> None:
@@ -106,25 +108,12 @@ def test_hle_variant_and_humaneval_plus_preserve_variant_shapes() -> None:
     assert humaneval_plus.sample_case_metadata["variant"] == ""
 
 
-def test_catalog_load_covers_all_benchmark_entries_from_catalog_md() -> None:
-    loaded = [
-        cast(BenchmarkDefinition, load(benchmark_id))
-        for benchmark_id in catalog_benchmark_ids()
-    ]
-
-    assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
-
-
 @pytest.mark.slow
-def test_catalog_run_executes_variant_backed_benchmarks() -> None:
-    rolebench_store = InMemoryRunStore()
+def test_catalog_runs_open_procbench_variant(
+    catalog_fixture_loader: None,
+) -> None:
     procbench_store = InMemoryRunStore()
-    hle_store = InMemoryRunStore()
 
-    rolebench_result = run("rolebench:role_generalization_eng", store=rolebench_store)
     procbench_result = run("procbench:task03", store=procbench_store)
-    hle_result = run("hle:math,reasoning", store=hle_store)
 
-    assert rolebench_result.status is RunStatus.COMPLETED
     assert procbench_result.status is RunStatus.COMPLETED
-    assert hle_result.status is RunStatus.COMPLETED

@@ -7,6 +7,8 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from io import StringIO
 
+from cyclopts.exceptions import CycloptsError
+
 from themis.cli.app import app
 
 
@@ -43,8 +45,14 @@ def run_cli(*args: str, env: dict[str, str] | None = None) -> CliResult:
                     result_action="return_int_as_exit_code_else_zero",
                 )
         except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else 1
-        except Exception:
+            if isinstance(exc.code, int):
+                code = exc.code
+            else:
+                if exc.code is not None:
+                    print(exc.code, file=stderr)
+                code = 1
+        except CycloptsError as exc:
+            print(str(exc), file=stderr)
             code = 1
         else:
             code = int(result) if isinstance(result, int) else 0

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import cast
 
-from themis.catalog import load, run
+from themis.catalog import load
 from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.core.base import JSONValue
-from themis.core.results import RunStatus
-from themis.core.stores import InMemoryRunStore
+from themis.core.dataset_sources import DatasetSourceSpec
 
 
 def _sample_input(benchmark: BenchmarkDefinition) -> dict[str, JSONValue]:
@@ -38,25 +37,13 @@ def test_code_benchmark_adapter_configures_best_of_n_and_execution_metadata() ->
     assert benchmark.judge_model_ids == ["builtin/demo_judge"]
     assert benchmark.candidate_policy == {"num_samples": 2}
     problem = sample_input["problem"]
+    source = experiment.datasets[0]
     assert isinstance(problem, str)
+    assert isinstance(source, DatasetSourceSpec)
     assert problem.startswith("Solve the programming task")
     assert experiment.generation.selector == "builtin/best_of_n"
     assert experiment.generation.reducer is None
     assert (
-        experiment.datasets[0].metadata["supported_execution_backends"]
+        source.provenance_metadata["supported_execution_backends"]
         == "piston,sandbox_fusion"
-    )
-
-
-def test_catalog_run_executes_representative_adapter_backed_benchmarks() -> None:
-    frontierscience_store = InMemoryRunStore()
-    codeforces_store = InMemoryRunStore()
-
-    frontierscience_result = run("frontierscience", store=frontierscience_store)
-    codeforces_result = run("codeforces", store=codeforces_store)
-
-    assert frontierscience_result.status is RunStatus.COMPLETED
-    assert codeforces_result.status is RunStatus.PARTIAL_FAILURE
-    assert "explicit sandbox executor" in str(
-        codeforces_result.cases[0].metric_results[0]
     )

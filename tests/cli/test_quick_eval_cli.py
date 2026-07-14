@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 from pathlib import Path
 from typing import cast
+
+import pytest
 
 from themis.core.stores.memory import InMemoryRunStore
 from themis.core.base import JSONValue
@@ -13,6 +14,12 @@ from themis.core.dataset_inputs import dataset_from_inline, dataset_from_jsonl
 from themis.core.experiment import Experiment
 from themis.core.models import Dataset
 from tests.cli.helpers import run_cli
+
+
+def _cli_data(output: str):
+    envelope = json.loads(output)
+    assert envelope["schema_version"] == "1"
+    return envelope["data"]
 
 
 def _run_python_dataset(dataset: Dataset) -> tuple[str, dict[str, JSONValue]]:
@@ -53,7 +60,7 @@ def test_quick_eval_inline_matches_python_api() -> None:
     )
 
     assert cli_result.returncode == 0, cli_result.stderr
-    payload = json.loads(cli_result.stdout)
+    payload = _cli_data(cli_result.stdout)
     assert payload["run_id"] == python_run_id
     assert payload["metric_means"] == benchmark["metric_means"]
 
@@ -70,14 +77,22 @@ def test_quick_eval_file_matches_python_api(tmp_path: Path) -> None:
     cli_result = run_cli("quick-eval", "file", "--path", str(path))
 
     assert cli_result.returncode == 0, cli_result.stderr
-    payload = json.loads(cli_result.stdout)
+    payload = _cli_data(cli_result.stdout)
     assert payload["run_id"] == python_run_id
     assert payload["metric_means"] == benchmark["metric_means"]
 
 
-def test_quick_eval_huggingface_reports_missing_dependency() -> None:
-    if importlib.util.find_spec("datasets") is not None:
-        return
+def test_quick_eval_huggingface_reports_missing_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing_datasets(name: str):
+        if name == "datasets":
+            raise ModuleNotFoundError("No module named 'datasets'")
+        raise AssertionError(f"unexpected import: {name}")
+
+    monkeypatch.setattr(
+        "themis.core.dataset_inputs.importlib.import_module", missing_datasets
+    )
 
     cli_result = run_cli(
         "quick-eval",
@@ -129,7 +144,7 @@ def load_dataset(dataset_name, *, split):
     )
 
     assert cli_result.returncode == 0, cli_result.stderr
-    payload = json.loads(cli_result.stdout)
+    payload = _cli_data(cli_result.stdout)
     assert payload["status"] == "completed"
     assert payload["metric_means"] == {"builtin/exact_match": 1.0}
 
@@ -167,6 +182,6 @@ def load_dataset(dataset_name, *args, split=None, revision=None, **kwargs):
     )
 
     assert cli_result.returncode == 0, cli_result.stderr
-    payload = json.loads(cli_result.stdout)
+    payload = _cli_data(cli_result.stdout)
     assert payload["status"] == "completed"
     assert payload["metric_means"] == {"builtin/choice_accuracy": 1.0}

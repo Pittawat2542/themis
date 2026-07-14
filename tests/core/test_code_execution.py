@@ -14,6 +14,7 @@ def test_unsafe_local_executor_requires_explicit_opt_in() -> None:
         UnsafeLocalSubprocessExecutor()
 
 
+@pytest.mark.subprocess
 def test_local_subprocess_backend_executes_python_successfully() -> None:
     backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
@@ -32,6 +33,7 @@ def test_local_subprocess_backend_executes_python_successfully() -> None:
     assert result.timed_out is False
 
 
+@pytest.mark.subprocess
 def test_local_subprocess_backend_reports_failed_processes() -> None:
     backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
@@ -47,6 +49,7 @@ def test_local_subprocess_backend_reports_failed_processes() -> None:
     assert result.stderr.strip() == "bad"
 
 
+@pytest.mark.subprocess
 def test_local_subprocess_backend_reports_timeouts() -> None:
     backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 
@@ -63,6 +66,7 @@ def test_local_subprocess_backend_reports_timeouts() -> None:
     assert result.exit_code is None
 
 
+@pytest.mark.subprocess
 def test_local_subprocess_backend_supports_files_and_args() -> None:
     backend = UnsafeLocalSubprocessExecutor(allow_unsafe=True)
 

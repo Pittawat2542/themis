@@ -4,6 +4,7 @@ from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
+from themis.core.stores import factory as store_factory
 from themis.core.stores import (
     InMemoryRunStore,
     JsonlRunStore,
@@ -80,7 +81,11 @@ def test_create_run_store_supports_builtin_backends(monkeypatch, tmp_path) -> No
     assert isinstance(mongodb, MongoDbRunStore)
 
 
-def test_register_store_backend_allows_custom_builders() -> None:
+def test_register_store_backend_allows_custom_builders(monkeypatch) -> None:
+    monkeypatch.setattr(
+        store_factory, "_STORE_BUILDERS", dict(store_factory._STORE_BUILDERS)
+    )
+
     class DummyStore(InMemoryRunStore):
         pass
 

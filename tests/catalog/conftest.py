@@ -4,8 +4,8 @@ import pytest
 from themis.catalog.loaders import BenchmarkSourceRequest
 
 
-@pytest.fixture(autouse=True)
-def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture
+def catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     from themis.catalog.benchmarks import materializers
 
     def request_key(
@@ -428,23 +428,3 @@ def _install_catalog_fixture_loader(monkeypatch: pytest.MonkeyPatch) -> None:
             ) from None
 
     monkeypatch.setattr(materializers, "_default_loader", fake_loader)
-
-
-@pytest.fixture(autouse=True)
-def _mock_code_executors(monkeypatch: pytest.MonkeyPatch) -> None:
-    from themis.catalog.builtins.code_execution import (
-        PistonSandboxExecutor,
-        SandboxExecutionResult,
-        SandboxFusionExecutor,
-    )
-
-    def mock_execute(*args: object, **kwargs: object) -> SandboxExecutionResult:
-        return SandboxExecutionResult(
-            stdout="mocked",
-            stderr="",
-            return_code=0,
-            status="ok",
-        )
-
-    monkeypatch.setattr(PistonSandboxExecutor, "execute", mock_execute)
-    monkeypatch.setattr(SandboxFusionExecutor, "execute", mock_execute)

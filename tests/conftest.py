@@ -9,7 +9,7 @@ from themis.core.experiment import Experiment
 from themis.core.results import RunResult
 from themis.core.store import RunStore
 from themis.core.stores.factory import create_run_store
-from themis.launcher import load_core_experiment
+from themis.launcher import _load_runtime_experiment
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ def run_config_experiment() -> Callable[[Path], tuple[Experiment, RunStore, RunR
     """Compile and execute an experiment config into its configured store."""
 
     def _run(config_path: Path) -> tuple[Experiment, RunStore, RunResult]:
-        experiment = load_core_experiment(config_path)
+        experiment = _load_runtime_experiment(config_path)
         store = create_run_store(experiment.storage)
         store.initialize()
         result = experiment.run(store=store)

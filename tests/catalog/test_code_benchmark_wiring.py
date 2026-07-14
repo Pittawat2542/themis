@@ -24,7 +24,9 @@ def test_humaneval_benchmarks_use_code_execution_wiring() -> None:
     assert humaneval_plus.support_tier == "ready"
 
 
-def test_humaneval_materialization_includes_reference_solution_for_demo_runs() -> None:
+def test_humaneval_materialization_includes_reference_solution_for_demo_runs(
+    catalog_fixture_loader: None,
+) -> None:
     humaneval = cast(BenchmarkDefinition, load("humaneval_plus"))
 
     dataset = humaneval.materialize_dataset()

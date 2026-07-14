@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
-from themis.core.experiment import Experiment
-from themis.core.models import Case, Dataset
-from themis.core.presets import (
+from themis import Case, Dataset, Evaluation, Experiment, Generation, RunOptions
+from themis.presets import (
     EvaluationPreset,
     ExperimentPreset,
     RuntimePreset,
@@ -18,17 +16,15 @@ from themis.core.presets import (
 
 def _experiment() -> Experiment:
     return Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
+        evaluation=Evaluation(
             metrics=["builtin/exact_match"],
-            parsers=["builtin/json_identity"],
+            parser="builtin/json_identity",
         ),
-        storage=StorageConfig(target="memory"),
-        dataset_sources=[
+        datasets=[
             Dataset(
                 dataset_id="dataset-1",
                 cases=[
@@ -56,22 +52,23 @@ def test_presets_are_discoverable_by_kind() -> None:
 
 def test_runtime_only_preset_changes_provenance_not_run_identity() -> None:
     experiment = _experiment()
-    updated = apply_preset(experiment, "runtime/local-careful")
+    application = apply_preset(experiment, "runtime/local-careful")
 
-    assert updated is not experiment
-    assert (
-        updated.runtime.max_concurrent_tasks != experiment.runtime.max_concurrent_tasks
+    assert application.experiment is not experiment
+    assert application.options.max_concurrency != RunOptions().max_concurrency
+    assert application.experiment.compile().run_id == experiment.compile().run_id
+    assert application.preset_ids == ["runtime/local-careful"]
+    assert application.experiment.metadata["themis.preset.runtime/local-careful"] == (
+        "true"
     )
-    assert updated.compile().run_id == experiment.compile().run_id
-    assert updated.environment_metadata["themis.preset.runtime/local-careful"] == "true"
 
 
 def test_session_preset_changes_logical_identity() -> None:
     experiment = _experiment()
-    updated = apply_preset(experiment, "candidate/best-of-n")
+    application = apply_preset(experiment, "candidate/best-of-n")
 
-    assert updated.generation.candidate_policy["num_samples"] == 2
-    assert updated.compile().run_id != experiment.compile().run_id
+    assert application.experiment.generation.samples == 2
+    assert application.experiment.compile().run_id != experiment.compile().run_id
 
 
 def test_unknown_preset_error_includes_suggestion() -> None:

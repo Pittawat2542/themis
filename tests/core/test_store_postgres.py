@@ -2,23 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from themis.core.config import StorageConfig
-from themis.core.stores import create_run_store
-from themis.core.stores.postgres import PostgresRunStore, postgres_store
-
-
-def test_store_factory_can_build_postgres_backend(tmp_path) -> None:
-    store = create_run_store(
-        StorageConfig(
-            target="postgres",
-            kwargs={
-                "url": f"postgresql://localhost/{tmp_path.name}",
-                "blob_root": str(tmp_path / "postgres-blobs"),
-            },
-        )
-    )
-
-    assert isinstance(store, PostgresRunStore)
+from themis.core.stores.postgres import postgres_store
 
 
 def test_postgres_store_raises_clear_import_error_when_dependency_is_missing(

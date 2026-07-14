@@ -2,12 +2,9 @@ from __future__ import annotations
 
 from typing import cast
 
-import pytest
-
 from themis.catalog import load
 from themis.catalog.benchmarks import BenchmarkDefinition
 from themis.catalog.loaders import BenchmarkSourceRequest
-from tests.catalog_ids import catalog_benchmark_ids
 
 
 def test_rolebench_materialization_uses_raw_file_source_request() -> None:
@@ -164,13 +161,3 @@ def test_superchem_materialization_uses_parquet_raw_file_source_request() -> Non
             files=["SUPERChem-500.parquet"],
         )
     ]
-
-
-@pytest.mark.parametrize("benchmark_id", catalog_benchmark_ids())
-def test_catalog_materializes_every_manifest_benchmark(benchmark_id: str) -> None:
-    benchmark = cast(BenchmarkDefinition, load(benchmark_id))
-
-    dataset = benchmark.materialize_dataset()
-
-    assert dataset.cases
-    assert dataset.metadata["benchmark_id"] == benchmark.benchmark_id

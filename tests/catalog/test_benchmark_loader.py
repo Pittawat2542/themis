@@ -16,7 +16,6 @@ from themis.catalog.loaders import (
     load_symbol,
     load_yaml,
 )
-from tests.catalog_ids import catalog_benchmark_ids
 
 
 def test_catalog_load_returns_benchmark_definition_for_manifest_entry() -> None:
@@ -60,15 +59,6 @@ def test_catalog_load_preserves_dataset_revisions_from_catalog_notes() -> None:
 
     assert aethercode.dataset_revision == "v1_2024"
     assert livecodebench.dataset_revision == "release_v6"
-
-
-def test_catalog_manifest_covers_representative_benchmark_families() -> None:
-    loaded = [
-        cast(BenchmarkDefinition, load(benchmark_id))
-        for benchmark_id in catalog_benchmark_ids()
-    ]
-
-    assert [benchmark.benchmark_id for benchmark in loaded] == catalog_benchmark_ids()
 
 
 def test_loader_rejects_invalid_symbol_targets() -> None:

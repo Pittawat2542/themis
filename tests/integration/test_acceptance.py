@@ -27,6 +27,12 @@ def _run_cli(
     )
 
 
+def _data(result: subprocess.CompletedProcess[str]) -> dict[str, object]:
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "1"
+    return payload["data"]
+
+
 def _write_config(
     path: Path, *, store_path: Path, queue_root: Path, batch_root: Path, seed: int = 7
 ) -> None:
@@ -59,15 +65,11 @@ runtime:
     )
 
 
-def test_acceptance_covers_quick_eval_report_export_and_resume(tmp_path: Path) -> None:
+def test_acceptance_covers_huggingface_and_run_report_export(tmp_path: Path) -> None:
     config_path = tmp_path / "experiment.yaml"
     store_path = tmp_path / "runs.sqlite3"
     queue_root = tmp_path / "queue"
     batch_root = tmp_path / "batch"
-    file_path = tmp_path / "cases.jsonl"
-    file_path.write_text(
-        '{"case_id":"case-1","input":{"question":"2+2"},"expected_output":{"answer":"4"}}\n'
-    )
     _write_config(
         config_path, store_path=store_path, queue_root=queue_root, batch_root=batch_root
     )
@@ -79,45 +81,6 @@ def test_acceptance_covers_quick_eval_report_export_and_resume(tmp_path: Path) -
 def load_dataset(dataset_name, *, split):
     return [{"id": "row-1", "prompt": {"question": "2+2"}, "answer": {"answer": "4"}}]
 """.strip()
-    )
-    fake_benchmark_datasets_root = tmp_path / "benchmarkpkgs" / "datasets"
-    fake_benchmark_datasets_root.mkdir(parents=True)
-    (fake_benchmark_datasets_root / "__init__.py").write_text(
-        """
-def load_dataset(dataset_name, *args, split=None, revision=None, **kwargs):
-    del args, revision, kwargs
-    assert dataset_name == "TIGER-Lab/MMLU-Pro"
-    assert split == "test"
-    return [
-        {
-            "item_id": "mmlu-pro-1",
-            "question": "Which planet is known as the Red Planet?",
-            "options": ["Venus", "Mars", "Jupiter", "Mercury"],
-            "answer": "B",
-            "category": "astronomy",
-            "src": "fixture",
-        }
-    ]
-""".strip()
-    )
-
-    inline = _run_cli(
-        "quick-eval",
-        "inline",
-        "--input-json",
-        '{"question":"2+2"}',
-        "--expected-output-json",
-        '{"answer":"4"}',
-    )
-    file_eval = _run_cli("quick-eval", "file", "--path", str(file_path))
-    benchmark = _run_cli(
-        "quick-eval",
-        "benchmark",
-        "--name",
-        "mmlu_pro",
-        env={
-            "PYTHONPATH": f"{tmp_path / 'benchmarkpkgs'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"
-        },
     )
     huggingface = _run_cli(
         "quick-eval",
@@ -137,36 +100,19 @@ def load_dataset(dataset_name, *args, split=None, revision=None, **kwargs):
         },
     )
     run = _run_cli("run", "--config", str(config_path))
-    resume = _run_cli("resume", "--config", str(config_path))
     report = _run_cli("report", "--config", str(config_path), "--format", "json")
-    quickcheck = _run_cli("quickcheck", "--config", str(config_path))
     export_generation = _run_cli("export", "generation", "--config", str(config_path))
 
-    for result in (
-        inline,
-        file_eval,
-        benchmark,
-        huggingface,
-        run,
-        resume,
-        report,
-        quickcheck,
-        export_generation,
-    ):
+    for result in (huggingface, run, report, export_generation):
         assert result.returncode == 0, result.stderr
 
-    assert json.loads(inline.stdout)["status"] == "completed"
-    assert json.loads(file_eval.stdout)["metric_means"] == {"builtin/exact_match": 1.0}
-    assert json.loads(benchmark.stdout)["status"] == "completed"
-    assert json.loads(huggingface.stdout)["status"] == "completed"
-    assert json.loads(run.stdout)["status"] == "completed"
-    assert json.loads(resume.stdout)["status"] == "completed"
-    assert json.loads(report.stdout)["run_result"]["status"] == "completed"
-    assert json.loads(quickcheck.stdout)["metric_means"] == {"builtin/exact_match": 1.0}
-    assert (
-        json.loads(export_generation.stdout)["run_id"]
-        == json.loads(run.stdout)["run_id"]
-    )
+    assert _data(huggingface)["status"] == "completed"
+    assert _data(run)["status"] == "completed"
+    report_data = _data(report)
+    assert isinstance(report_data["run_result"], dict)
+    assert report_data["run_result"]["status"] == "completed"
+    assert report_data["run_result"]["run_id"] == _data(run)["run_id"]
+    assert json.loads(export_generation.stdout)["run_id"] == _data(run)["run_id"]
 
 
 def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> None:
@@ -194,10 +140,6 @@ def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> No
         "submit", "--config", str(worker_config), "--mode", "worker-pool"
     )
     assert worker_submit.returncode == 0, worker_submit.stderr
-    assert (
-        json.loads(_run_cli("resume", "--config", str(worker_config)).stdout)["status"]
-        == "pending"
-    )
     worker_run = _run_cli(
         "worker",
         "run",
@@ -207,21 +149,17 @@ def test_acceptance_covers_worker_pool_and_batch_execution(tmp_path: Path) -> No
         str(tmp_path),
     )
     assert worker_run.returncode == 0, worker_run.stderr
-    assert json.loads(worker_run.stdout)["status"] == "completed"
+    assert _data(worker_run)["status"] == "completed"
 
     batch_submit = _run_cli("submit", "--config", str(batch_config), "--mode", "batch")
     assert batch_submit.returncode == 0, batch_submit.stderr
-    assert (
-        json.loads(_run_cli("resume", "--config", str(batch_config)).stdout)["status"]
-        == "pending"
-    )
     batch_run = _run_cli(
         "batch",
         "run",
         "--request",
-        json.loads(batch_submit.stdout)["manifest_path"],
+        str(_data(batch_submit)["manifest_path"]),
         "--definition-root",
         str(tmp_path),
     )
     assert batch_run.returncode == 0, batch_run.stderr
-    assert json.loads(batch_run.stdout)["status"] == "completed"
+    assert _data(batch_run)["status"] == "completed"

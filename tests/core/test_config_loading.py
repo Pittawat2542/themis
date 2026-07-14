@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from themis.launcher import load_core_experiment
+from themis.launcher import _load_runtime_experiment
 
 
 def _write_definition(root: Path) -> None:
@@ -42,7 +42,7 @@ runtime:
         encoding="utf-8",
     )
 
-    experiment = load_core_experiment(launcher)
+    experiment = _load_runtime_experiment(launcher)
 
     assert experiment.storage.kwargs["path"] == str(tmp_path / "runs.sqlite3")
     assert experiment.runtime.max_concurrent_tasks == 4
@@ -60,12 +60,12 @@ def test_launcher_accepts_zero_argument_factory(tmp_path: Path) -> None:
     launcher = tmp_path / "experiment.toml"
     launcher.write_text('definition = "definition:build"\n', encoding="utf-8")
 
-    assert load_core_experiment(launcher).datasets[0].dataset_id == "sample"
+    assert _load_runtime_experiment(launcher).datasets[0].dataset_id == "sample"
 
 
 def test_launcher_rejects_v4_config_shape(tmp_path: Path) -> None:
     launcher = tmp_path / "experiment.yaml"
     launcher.write_text("generation:\n  generator: builtin/demo_generator\n")
 
-    with pytest.raises(ValueError, match="v5 does not define experiments"):
-        load_core_experiment(launcher)
+    with pytest.raises(ValueError, match="v6 does not define experiments"):
+        _load_runtime_experiment(launcher)

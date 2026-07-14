@@ -14,6 +14,7 @@ from themis import (
     Generation,
     RunOptions,
     RunResult,
+    RunSnapshot,
     evaluate,
 )
 from themis.core.results import RunStatus
@@ -31,6 +32,7 @@ EXPECTED_ROOT_EXPORTS = {
     "MetricInterpretation",
     "RunOptions",
     "RunResult",
+    "RunSnapshot",
     "__version__",
     "evaluate",
 }
@@ -58,23 +60,49 @@ def _experiment() -> Experiment:
     )
 
 
-def test_root_exports_are_the_exact_v5_contract() -> None:
+def test_root_exports_are_the_exact_v6_contract() -> None:
     assert set(themis.__all__) == EXPECTED_ROOT_EXPORTS
     assert all(hasattr(themis, name) for name in EXPECTED_ROOT_EXPORTS)
 
 
-def test_v5_experiment_runs_with_explicit_store() -> None:
+def test_v6_experiment_runs_with_explicit_store() -> None:
     result = _experiment().run(store=memory_store())
 
     assert isinstance(result, RunResult)
     assert result.status is RunStatus.COMPLETED
 
 
-def test_v5_experiment_runs_with_persistent_store(tmp_path: Path) -> None:
+def test_v6_experiment_runs_with_persistent_store(tmp_path: Path) -> None:
     store = sqlite_store(tmp_path / "runs.sqlite3")
-    result = _experiment().run(store=store)
+    experiment = _experiment()
+    snapshot = experiment.compile(store=store)
+    result = experiment.run(store=store)
 
-    assert store.resume(result.run_id) is not None
+    stored = store.resume(result.run_id)
+    assert stored is not None
+    assert stored.snapshot == snapshot
+
+
+def test_compile_defaults_to_memory_and_default_runtime_provenance() -> None:
+    snapshot = _experiment().compile()
+
+    assert snapshot.provenance.storage.target == "memory"
+    assert (
+        snapshot.provenance.runtime.max_concurrent_tasks == RunOptions().max_concurrency
+    )
+
+
+def test_compile_records_store_and_runtime_provenance(tmp_path: Path) -> None:
+    store = sqlite_store(tmp_path / "runs.sqlite3")
+    options = RunOptions(max_concurrency=3, strict_determinism=True)
+
+    snapshot = _experiment().compile(store=store, options=options)
+
+    assert isinstance(snapshot, RunSnapshot)
+    assert snapshot.provenance.storage.target == "sqlite"
+    assert snapshot.provenance.storage.kwargs["path"] == str(store.path)
+    assert snapshot.provenance.runtime.max_concurrent_tasks == 3
+    assert snapshot.provenance.runtime.strict_determinism is True
 
 
 def test_evaluate_is_deliberately_small() -> None:

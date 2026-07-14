@@ -6,6 +6,12 @@ from pathlib import Path
 from tests.cli.helpers import run_cli
 
 
+def _cli_data(output: str):
+    envelope = json.loads(output)
+    assert envelope["schema_version"] == "1"
+    return envelope["data"]
+
+
 def _write_config(
     path: Path, *, store_path: Path, queue_root: Path, batch_root: Path
 ) -> None:
@@ -59,12 +65,12 @@ def test_worker_pool_submit_resume_and_run(tmp_path: Path) -> None:
 
     submit = run_cli("submit", "--config", str(config_path), "--mode", "worker-pool")
     assert submit.returncode == 0, submit.stderr
-    submit_payload = json.loads(submit.stdout)
+    submit_payload = _cli_data(submit.stdout)
     assert submit_payload["status"] == "pending"
 
     resume_pending = run_cli("resume", "--config", str(config_path))
     assert resume_pending.returncode == 0, resume_pending.stderr
-    assert json.loads(resume_pending.stdout)["status"] == "pending"
+    assert _cli_data(resume_pending.stdout)["status"] == "pending"
 
     worker_run = run_cli(
         "worker",
@@ -75,7 +81,7 @@ def test_worker_pool_submit_resume_and_run(tmp_path: Path) -> None:
         str(tmp_path),
     )
     assert worker_run.returncode == 0, worker_run.stderr
-    assert json.loads(worker_run.stdout)["status"] == "completed"
+    assert _cli_data(worker_run.stdout)["status"] == "completed"
 
 
 def test_batch_submit_resume_and_run_request(tmp_path: Path) -> None:
@@ -89,12 +95,12 @@ def test_batch_submit_resume_and_run_request(tmp_path: Path) -> None:
 
     submit = run_cli("submit", "--config", str(config_path), "--mode", "batch")
     assert submit.returncode == 0, submit.stderr
-    submit_payload = json.loads(submit.stdout)
+    submit_payload = _cli_data(submit.stdout)
     assert submit_payload["status"] == "pending"
 
     resume_pending = run_cli("resume", "--config", str(config_path))
     assert resume_pending.returncode == 0, resume_pending.stderr
-    assert json.loads(resume_pending.stdout)["status"] == "pending"
+    assert _cli_data(resume_pending.stdout)["status"] == "pending"
 
     batch_run = run_cli(
         "batch",
@@ -105,7 +111,24 @@ def test_batch_submit_resume_and_run_request(tmp_path: Path) -> None:
         str(tmp_path),
     )
     assert batch_run.returncode == 0, batch_run.stderr
-    assert json.loads(batch_run.stdout)["status"] == "completed"
+    assert _cli_data(batch_run.stdout)["status"] == "completed"
+
+
+def test_worker_reports_idle_when_the_queue_is_empty(tmp_path: Path) -> None:
+    queue_root = tmp_path / "queue"
+    queue_root.mkdir()
+
+    worker_run = run_cli(
+        "worker",
+        "run",
+        "--queue-root",
+        str(queue_root),
+        "--definition-root",
+        str(tmp_path),
+    )
+
+    assert worker_run.returncode == 0, worker_run.stderr
+    assert _cli_data(worker_run.stdout) == {"status": "idle"}
 
 
 def test_submit_rejects_invalid_mode_without_traceback(tmp_path: Path) -> None:

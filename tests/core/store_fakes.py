@@ -62,7 +62,7 @@ class FakeCollection:
         upsert: bool = False,
     ) -> None:
         for index, row in enumerate(self.rows):
-            if all(row.get(key) == value for key, value in query.items()):
+            if self._matches(row, query):
                 self.rows[index] = dict(document)
                 return
         if upsert:
@@ -72,15 +72,11 @@ class FakeCollection:
         self.rows.append(dict(document))
 
     def find(self, query: dict[str, object]) -> list[dict[str, object]]:
-        return [
-            row
-            for row in self.rows
-            if all(row.get(key) == value for key, value in query.items())
-        ]
+        return [row for row in self.rows if self._matches(row, query)]
 
     def find_one(self, query: dict[str, object]) -> dict[str, object] | None:
         for row in self.rows:
-            if all(row.get(key) == value for key, value in query.items()):
+            if self._matches(row, query):
                 return row
         return None
 
@@ -117,14 +113,23 @@ class FakeCollection:
         return dict(row) if return_after else before
 
     def delete_many(self, query: dict[str, object]) -> None:
-        self.rows = [
-            row
-            for row in self.rows
-            if not all(row.get(key) == value for key, value in query.items())
-        ]
+        self.rows = [row for row in self.rows if not self._matches(row, query)]
 
     def create_index(self, keys, unique: bool = False) -> None:
         self.indexes.append((tuple(keys), unique))
+
+    @staticmethod
+    def _matches(row: dict[str, object], query: dict[str, object]) -> bool:
+        for key, expected in query.items():
+            actual = row.get(key)
+            if isinstance(expected, dict) and set(expected) == {"$gt"}:
+                if not isinstance(actual, int) or actual <= int(
+                    cast(int, expected["$gt"])
+                ):
+                    return False
+            elif actual != expected:
+                return False
+        return True
 
 
 class FakeDatabase:

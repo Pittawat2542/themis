@@ -325,7 +325,13 @@ def test_default_reporter_is_registered_and_resolved() -> None:
     assert reporter.summary(run_id).run_id == run_id
 
 
-def test_custom_reporter_can_be_registered_and_resolved() -> None:
+def test_custom_reporter_can_be_registered_and_resolved(monkeypatch) -> None:
+    monkeypatch.setattr(
+        reporter_module,
+        "_REPORTER_BUILDERS",
+        dict(reporter_module._REPORTER_BUILDERS),
+    )
+
     class MinimalReporter:
         def __init__(self, store: RunStore) -> None:
             self.store = store
@@ -350,7 +356,13 @@ def test_custom_reporter_can_be_registered_and_resolved() -> None:
     }
 
 
-def test_reporter_selection_does_not_affect_run_identity() -> None:
+def test_reporter_selection_does_not_affect_run_identity(monkeypatch) -> None:
+    monkeypatch.setattr(
+        reporter_module,
+        "_REPORTER_BUILDERS",
+        dict(reporter_module._REPORTER_BUILDERS),
+    )
+
     first = _snapshot()
 
     class IdentityReporter:

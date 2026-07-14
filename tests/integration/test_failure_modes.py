@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 import pytest
 
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
@@ -207,7 +209,7 @@ class PartialMetric:
     component_id = "metric/partial"
     version = "1.0"
     metric_family = "workflow"
-    subject_kind = "candidate"
+    subject_kind: Literal["candidate", "candidates", "trace"] = "candidate"
 
     def __init__(self) -> None:
         self.calls = 0
@@ -326,6 +328,8 @@ def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging(
     store = InMemoryRunStore()
     initial = experiment.run(store=store)
 
+    assert initial.status is RunStatus.PARTIAL_FAILURE
+
     stored_run = store.resume(experiment.compile().run_id)
     assert stored_run is not None
     case_key = initial.cases[0].case_key
@@ -339,7 +343,8 @@ def test_failure_modes_resume_interrupted_partial_workflow_only_retries_judging(
     resumed = experiment.run(store=store)
 
     assert resumed.run_id == experiment.compile().run_id
-    assert metric.calls == 0 or metric.calls == 1
+    assert resumed.status is RunStatus.PARTIAL_FAILURE
+    assert metric.calls == 1
 
 
 def test_failure_modes_recover_from_store_write_retry() -> None:
@@ -349,7 +354,9 @@ def test_failure_modes_recover_from_store_write_retry() -> None:
             candidate_policy={"num_samples": 1},
             reducer=HappyReducer(),
         ),
-        evaluation=EvaluationConfig(metrics=[FailingMetric()], parsers=[HappyParser()]),
+        evaluation=EvaluationConfig(
+            metrics=["builtin/exact_match"], parsers=[HappyParser()]
+        ),
         storage=StorageConfig(target="memory"),
         dataset_sources=_base_dataset(),
         seeds=[7],
@@ -358,4 +365,4 @@ def test_failure_modes_recover_from_store_write_retry() -> None:
 
     result = experiment.run(store=store)
 
-    assert result.status in {RunStatus.COMPLETED, RunStatus.PARTIAL_FAILURE}
+    assert result.status is RunStatus.COMPLETED

@@ -6,9 +6,17 @@ from pathlib import Path
 import pytest
 
 from tests.cli.helpers import run_cli
+from themis.core.stores.factory import create_run_store
+from themis.launcher import _load_runtime_experiment
 
 
 pytestmark = pytest.mark.slow
+
+
+def _cli_data(output: str):
+    envelope = json.loads(output)
+    assert envelope["schema_version"] == "1"
+    return envelope["data"]
 
 
 def _write_config(path: Path, *, store_path: Path, answer: str, seed: int) -> None:
@@ -51,21 +59,22 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(
     candidate_run = run_cli("run", "--config", str(candidate_config))
     assert baseline_run.returncode == 0, baseline_run.stderr
     assert candidate_run.returncode == 0, candidate_run.stderr
+    baseline_run_id = _cli_data(baseline_run.stdout)["run_id"]
+    candidate_run_id = _cli_data(candidate_run.stdout)["run_id"]
+
+    store = create_run_store(_load_runtime_experiment(baseline_config).storage)
+    store.initialize()
+    store.update_run_record(baseline_run_id, baseline_label="main")
+    store.update_run_record(candidate_run_id, baseline_label="candidate")
 
     report_json = run_cli(
         "report", "--config", str(baseline_config), "--format", "json"
     )
     assert report_json.returncode == 0, report_json.stderr
-    report_payload = json.loads(report_json.stdout)
+    report_payload = _cli_data(report_json.stdout)
     assert report_payload["run_result"]["status"] == "completed"
-    assert (
-        report_payload["snapshot"]["run_id"]
-        == json.loads(baseline_run.stdout)["run_id"]
-    )
-    assert (
-        report_payload["execution_state"]["run_id"]
-        == json.loads(baseline_run.stdout)["run_id"]
-    )
+    assert report_payload["snapshot"]["run_id"] == baseline_run_id
+    assert report_payload["execution_state"]["run_id"] == baseline_run_id
 
     report_markdown = run_cli(
         "report", "--config", str(baseline_config), "--format", "markdown"
@@ -94,20 +103,54 @@ def test_report_compare_and_export_commands_use_existing_read_side_helpers(
         str(candidate_config),
     )
     assert compare.returncode == 0, compare.stderr
-    compare_payload = json.loads(compare.stdout)
+    compare_payload = _cli_data(compare.stdout)
     assert compare_payload["metrics"][0]["metric_id"] == "builtin/exact_match"
     assert compare_payload["metrics"][0]["ties"] == 1
+
+    compare_run_ids = run_cli(
+        "compare-runs",
+        "--config",
+        str(baseline_config),
+        "--baseline-run-id",
+        baseline_run_id,
+        "--candidate-run-id",
+        candidate_run_id,
+    )
+    assert compare_run_ids.returncode == 0, compare_run_ids.stderr
+    compare_run_ids_payload = _cli_data(compare_run_ids.stdout)
+    assert compare_run_ids_payload["evidence_run_ids"] == [
+        baseline_run_id,
+        candidate_run_id,
+    ]
+    assert compare_run_ids_payload["metrics"][0]["pairs"] == 1
+
+    compare_labels = run_cli(
+        "compare-latest",
+        "--config",
+        str(baseline_config),
+        "--baseline-label",
+        "main",
+        "--candidate-label",
+        "candidate",
+    )
+    assert compare_labels.returncode == 0, compare_labels.stderr
+    compare_labels_payload = _cli_data(compare_labels.stdout)
+    assert compare_labels_payload["evidence_run_ids"] == [
+        baseline_run_id,
+        candidate_run_id,
+    ]
+    assert compare_labels_payload["metrics"][0]["pairs"] == 1
 
     generation_export = run_cli(
         "export", "generation", "--config", str(baseline_config)
     )
     assert generation_export.returncode == 0, generation_export.stderr
     generation_payload = json.loads(generation_export.stdout)
-    assert generation_payload["run_id"] == json.loads(baseline_run.stdout)["run_id"]
+    assert generation_payload["run_id"] == baseline_run_id
 
     evaluation_export = run_cli(
         "export", "evaluation", "--config", str(baseline_config)
     )
     assert evaluation_export.returncode == 0, evaluation_export.stderr
     evaluation_payload = json.loads(evaluation_export.stdout)
-    assert evaluation_payload["run_id"] == json.loads(baseline_run.stdout)["run_id"]
+    assert evaluation_payload["run_id"] == baseline_run_id

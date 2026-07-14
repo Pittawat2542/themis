@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from themis import Experiment
+from themis.catalog import suites as suites_module
 from themis.catalog import (
     SuiteDefinition,
     SuiteItem,
@@ -26,9 +28,21 @@ def test_builtin_suites_expand_to_benchmark_items() -> None:
     assert expansion.suite_id == "math-core"
     assert expansion.benchmark_ids
     assert all(item.source_suite_ids == ["math-core"] for item in expansion.items)
+    assert all(isinstance(item.experiment, Experiment) for item in expansion.items)
 
 
-def test_custom_suite_expansion_is_deterministic_and_nested() -> None:
+@pytest.fixture
+def isolated_suite_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        suites_module,
+        "_REGISTERED_SUITES",
+        dict(suites_module._REGISTERED_SUITES),
+    )
+
+
+def test_custom_suite_expansion_is_deterministic_and_nested(
+    isolated_suite_registry: None,
+) -> None:
     register_suite(
         SuiteDefinition(
             suite_id="test-suite-inner",
@@ -58,7 +72,9 @@ def test_custom_suite_expansion_is_deterministic_and_nested() -> None:
     assert get_suite("test-suite-inner").suite_id == "test-suite-inner"
 
 
-def test_suite_registration_rejects_cycles_and_benchmark_collisions() -> None:
+def test_suite_registration_rejects_cycles_and_benchmark_collisions(
+    isolated_suite_registry: None,
+) -> None:
     with pytest.raises(ValueError, match="collides with a benchmark"):
         register_suite(SuiteDefinition(suite_id="mmlu_pro", items=[]))
 
@@ -81,7 +97,9 @@ def test_suite_registration_rejects_cycles_and_benchmark_collisions() -> None:
         expand_suite("test-suite-cycle-a")
 
 
-def test_run_suite_executes_each_benchmark_as_normal_run() -> None:
+def test_run_suite_executes_each_benchmark_as_normal_run(
+    isolated_suite_registry: None,
+) -> None:
     register_suite(
         SuiteDefinition(
             suite_id="test-suite-run",

@@ -7,6 +7,8 @@ import sys
 import tarfile
 import zipfile
 
+import pytest
+
 from tests.release import (
     CURRENT_DIST_BASENAME,
     CURRENT_DIST_INFO,
@@ -58,6 +60,7 @@ def test_validate_release_extracts_version_headings(tmp_path: Path) -> None:
     assert module._extract_versions(changelog) == {CURRENT_VERSION, "3.9.0"}
 
 
+@pytest.mark.subprocess
 def test_validate_release_main_accepts_matching_tag(tmp_path: Path) -> None:
     script = _copy_ci_script(tmp_path, "validate_release.py")
     repo_root = script.parents[2]
@@ -82,6 +85,7 @@ def test_validate_release_main_accepts_matching_tag(tmp_path: Path) -> None:
     assert f"release metadata validated for {CURRENT_TAG}" in result.stdout
 
 
+@pytest.mark.subprocess
 def test_validate_release_main_rejects_missing_changelog_section(
     tmp_path: Path,
 ) -> None:
@@ -111,6 +115,7 @@ def test_validate_release_main_rejects_missing_changelog_section(
     )
 
 
+@pytest.mark.subprocess
 def test_extract_release_notes_writes_requested_section(tmp_path: Path) -> None:
     script = _copy_ci_script(tmp_path, "extract_release_notes.py")
     changelog = tmp_path / "CHANGELOG.md"
@@ -167,7 +172,17 @@ def test_check_built_package_inspect_wheel_requires_cli_entry_point(
 
     wheel = tmp_path / CURRENT_WHEEL
     with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr("themis/__init__.py", "__all__ = []\n")
+        for module_path in (
+            "themis/__init__.py",
+            "themis/analysis.py",
+            "themis/artifacts.py",
+            "themis/catalog/__init__.py",
+            "themis/components.py",
+            "themis/presets.py",
+            "themis/runtime.py",
+            "themis/storage.py",
+        ):
+            archive.writestr(module_path, "__all__ = []\n")
         archive.writestr(
             f"{CURRENT_DIST_INFO}/METADATA",
             f"Metadata-Version: 2.4\nName: themis-eval\nVersion: {CURRENT_VERSION}\n",

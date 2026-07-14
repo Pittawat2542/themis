@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import random
-import time
+from threading import Barrier
+from typing import Literal
 
 import pytest
 
@@ -281,7 +282,7 @@ class RecordingLLMMetric:
     component_id = "metric/llm"
     version = "1.0"
     metric_family = "workflow"
-    subject_kind = "candidate"
+    subject_kind: Literal["candidate", "candidates", "trace"] = "candidate"
 
     def __init__(self) -> None:
         self.subject: CandidateSetSubject | None = None
@@ -301,7 +302,7 @@ class RecordingSelectionMetric:
     component_id = "metric/select"
     version = "1.0"
     metric_family = "workflow"
-    subject_kind = "candidates"
+    subject_kind: Literal["candidate", "candidates", "trace"] = "candidates"
 
     def __init__(self) -> None:
         self.subject: CandidateSetSubject | None = None
@@ -320,7 +321,7 @@ class RecordingTraceMetric:
     component_id = "metric/trace"
     version = "1.0"
     metric_family = "workflow"
-    subject_kind = "trace"
+    subject_kind: Literal["candidate", "candidates", "trace"] = "trace"
 
     def __init__(self) -> None:
         self.subject: TraceSubject | ConversationSubject | None = None
@@ -512,7 +513,7 @@ class PartialFailureMetric:
     component_id = "metric/partial"
     version = "1.0"
     metric_family = "workflow"
-    subject_kind = "candidate"
+    subject_kind: Literal["candidate", "candidates", "trace"] = "candidate"
 
     def __init__(self) -> None:
         self.calls = 0
@@ -553,6 +554,7 @@ class SlowSelector:
     def __init__(self) -> None:
         self.active = 0
         self.max_active = 0
+        self.barrier = asyncio.Barrier(2)
 
     def fingerprint(self) -> str:
         return "selector-slow"
@@ -562,7 +564,8 @@ class SlowSelector:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
-            await asyncio.sleep(0.02)
+            await self.barrier.wait()
+            await asyncio.sleep(0)
             return candidates[:1]
         finally:
             self.active -= 1
@@ -575,6 +578,7 @@ class SlowReducer:
     def __init__(self) -> None:
         self.active = 0
         self.max_active = 0
+        self.barrier = asyncio.Barrier(2)
 
     def fingerprint(self) -> str:
         return "reducer-slow"
@@ -583,7 +587,8 @@ class SlowReducer:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
-            await asyncio.sleep(0.02)
+            await self.barrier.wait()
+            await asyncio.sleep(0)
             return ReducedCandidate(
                 candidate_id=f"{ctx.case_id}-reduced",
                 source_candidate_ids=[
@@ -602,6 +607,7 @@ class SlowParser:
     def __init__(self) -> None:
         self.active = 0
         self.max_active = 0
+        self.barrier = Barrier(2, timeout=5)
 
     def fingerprint(self) -> str:
         return "parser-slow"
@@ -611,7 +617,7 @@ class SlowParser:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
-            time.sleep(0.02)
+            self.barrier.wait()
             return ParsedOutput(value=candidate.final_output, format="json")
         finally:
             self.active -= 1
@@ -626,6 +632,7 @@ class SlowMetric:
     def __init__(self) -> None:
         self.active = 0
         self.max_active = 0
+        self.barrier = Barrier(2, timeout=5)
 
     def fingerprint(self) -> str:
         return "metric-slow"
@@ -637,7 +644,7 @@ class SlowMetric:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
-            time.sleep(0.02)
+            self.barrier.wait()
             return MetricResult(metric_id=self.component_id, value=1.0)
         finally:
             self.active -= 1
@@ -1578,12 +1585,13 @@ async def test_orchestrator_limits_parsing_stage_concurrency() -> None:
         parsers=[("default", parser)],
         metrics=[metric],
         max_concurrent_tasks=4,
-        stage_concurrency={"parse": 1},
+        stage_concurrency={"parse": 2},
     )
 
-    await orchestrator.run(snapshot)
+    result = await asyncio.wait_for(orchestrator.run(snapshot), timeout=10)
 
-    assert parser.max_active <= 1
+    assert result.status is RunStatus.COMPLETED
+    assert parser.max_active == 2
 
 
 @pytest.mark.asyncio
@@ -1629,12 +1637,13 @@ async def test_orchestrator_limits_selection_stage_concurrency() -> None:
         parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[resolve_metric_component("builtin/exact_match")],
         max_concurrent_tasks=4,
-        stage_concurrency={"select": 1},
+        stage_concurrency={"select": 2},
     )
 
-    await orchestrator.run(snapshot)
+    result = await asyncio.wait_for(orchestrator.run(snapshot), timeout=10)
 
-    assert selector.max_active <= 1
+    assert result.status is RunStatus.COMPLETED
+    assert selector.max_active == 2
 
 
 @pytest.mark.asyncio
@@ -1678,12 +1687,13 @@ async def test_orchestrator_limits_reduction_stage_concurrency() -> None:
         parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[resolve_metric_component("builtin/exact_match")],
         max_concurrent_tasks=4,
-        stage_concurrency={"reduce": 1},
+        stage_concurrency={"reduce": 2},
     )
 
-    await orchestrator.run(snapshot)
+    result = await asyncio.wait_for(orchestrator.run(snapshot), timeout=10)
 
-    assert reducer.max_active <= 1
+    assert result.status is RunStatus.COMPLETED
+    assert reducer.max_active == 2
 
 
 @pytest.mark.asyncio
@@ -1727,9 +1737,10 @@ async def test_orchestrator_limits_scoring_stage_concurrency() -> None:
         parsers=[("default", resolve_parser_component("builtin/json_identity"))],
         metrics=[metric],
         max_concurrent_tasks=4,
-        stage_concurrency={"score": 1},
+        stage_concurrency={"score": 2},
     )
 
-    await orchestrator.run(snapshot)
+    result = await asyncio.wait_for(orchestrator.run(snapshot), timeout=10)
 
-    assert metric.max_active <= 1
+    assert result.status is RunStatus.COMPLETED
+    assert metric.max_active == 2

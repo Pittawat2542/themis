@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
 
 import pytest
 
@@ -54,6 +55,7 @@ class ConcurrencyTrackingGenerator:
     def __init__(self) -> None:
         self.active = 0
         self.max_active = 0
+        self.barrier = asyncio.Barrier(2)
 
     def fingerprint(self) -> str:
         return "generator-tracking"
@@ -61,7 +63,8 @@ class ConcurrencyTrackingGenerator:
     async def generate(self, case: Case, ctx: GenerationContext) -> Candidate:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
-        await asyncio.sleep(0.01)
+        await self.barrier.wait()
+        await asyncio.sleep(0)
         self.active -= 1
         return Candidate(
             candidate_id=f"{case.case_id}-candidate-{ctx.seed}",
@@ -205,7 +208,7 @@ class CountingLLMMetric:
     component_id = "metric/llm"
     version = "1.0"
     metric_family = "workflow"
-    subject_kind = "candidate"
+    subject_kind: Literal["candidate", "candidates", "trace"] = "candidate"
 
     def __init__(self) -> None:
         self.calls = 0
@@ -288,12 +291,13 @@ class DemoWorkflow:
 
 
 class SlowJudgeModel:
-    component_id = "judge/slow"
+    component_id = "builtin/demo_judge"
     version = "1.0"
 
     def __init__(self) -> None:
         self.active = 0
         self.max_active = 0
+        self.barrier = asyncio.Barrier(2)
 
     def fingerprint(self) -> str:
         return "judge-slow"
@@ -302,7 +306,8 @@ class SlowJudgeModel:
         del prompt, seed
         self.active += 1
         self.max_active = max(self.max_active, self.active)
-        await asyncio.sleep(0.01)
+        await self.barrier.wait()
+        await asyncio.sleep(0)
         self.active -= 1
         return JudgeResponse(
             judge_model_id=self.component_id,
@@ -313,15 +318,17 @@ class SlowJudgeModel:
 
 
 class CaseTrackingOrchestrator(Orchestrator):
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, *, expected_concurrency: int, **kwargs) -> None:
         super().__init__(**kwargs)
         self.active_cases = 0
         self.max_active_cases = 0
+        self.barrier = asyncio.Barrier(expected_concurrency)
 
     async def _run_case(self, snapshot, items, existing_state):
         self.active_cases += 1
         self.max_active_cases = max(self.max_active_cases, self.active_cases)
         try:
+            await self.barrier.wait()
             await asyncio.sleep(0)
             return await super()._run_case(snapshot, items, existing_state)
         finally:
@@ -382,9 +389,10 @@ async def test_orchestrator_respects_generation_concurrency_cap() -> None:
         stage_concurrency={"generate": 2},
     )
 
-    await orchestrator.run(snapshot)
+    result = await asyncio.wait_for(orchestrator.run(snapshot), timeout=5)
 
-    assert generator.max_active <= 2
+    assert result.status is RunStatus.COMPLETED
+    assert generator.max_active == 2
 
 
 @pytest.mark.asyncio
@@ -413,7 +421,7 @@ async def test_orchestrator_retries_transient_store_failures() -> None:
 
     result = await orchestrator.run(snapshot)
 
-    assert result.status.value in {"completed", "partial_failure"}
+    assert result.status is RunStatus.COMPLETED
     assert store.query_events(snapshot.run_id)
 
 
@@ -1104,15 +1112,11 @@ async def test_orchestrator_respects_evaluation_concurrency_cap() -> None:
                 dataset_id="dataset-1",
                 cases=[
                     Case(
-                        case_id="case-1",
-                        input={"question": "2+2"},
-                        expected_output={"answer": "4"},
-                    ),
-                    Case(
-                        case_id="case-2",
-                        input={"question": "3+3"},
-                        expected_output={"answer": "6"},
-                    ),
+                        case_id=f"case-{index}",
+                        input={"question": f"{index}+{index}"},
+                        expected_output={"answer": str(index * 2)},
+                    )
+                    for index in range(4)
                 ],
             )
         ],
@@ -1132,12 +1136,13 @@ async def test_orchestrator_respects_evaluation_concurrency_cap() -> None:
         metrics=[metric],
         judge_models=[judge_model],
         max_concurrent_tasks=4,
-        stage_concurrency={"judge": 1},
+        stage_concurrency={"judge": 2},
     )
 
-    await orchestrator.run(snapshot)
+    result = await asyncio.wait_for(orchestrator.run(snapshot), timeout=5)
 
-    assert judge_model.max_active <= 1
+    assert result.status is RunStatus.COMPLETED
+    assert judge_model.max_active == 2
 
 
 @pytest.mark.asyncio
@@ -1176,6 +1181,7 @@ async def test_orchestrator_limits_in_flight_case_tasks() -> None:
     store.persist_snapshot(snapshot)
 
     orchestrator = CaseTrackingOrchestrator(
+        expected_concurrency=3,
         store=store,
         generator=generator,
         reducer=reducer,
@@ -1184,9 +1190,10 @@ async def test_orchestrator_limits_in_flight_case_tasks() -> None:
         max_concurrent_tasks=3,
     )
 
-    await orchestrator.run(snapshot)
+    result = await asyncio.wait_for(orchestrator.run(snapshot), timeout=5)
 
-    assert orchestrator.max_active_cases <= 3
+    assert result.status is RunStatus.COMPLETED
+    assert orchestrator.max_active_cases == 3
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import cast
 
 import pytest
+from pydantic import ValidationError
 
 from themis.core.base import JSONValue
 from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
@@ -32,6 +33,7 @@ from themis.core.models import (
     WorkflowTrace,
 )
 from themis.core.snapshot import ComponentRef
+from themis.core.events import RunEvent
 
 
 def test_core_models_are_frozen() -> None:
@@ -42,7 +44,7 @@ def test_core_models_are_frozen() -> None:
         metadata={"source": "unit"},
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         case.case_id = "mutated"  # type: ignore[misc]
 
 
@@ -137,7 +139,7 @@ def test_canonical_hashing_is_stable_for_core_models() -> None:
     assert left.compute_hash() != changed.compute_hash()
 
 
-def test_canonical_hashing_recomputes_after_nested_mutation() -> None:
+def test_canonical_hashing_rejects_nested_mutation() -> None:
     case = Case(
         case_id="case-1",
         input={"question": "2+2"},
@@ -145,9 +147,50 @@ def test_canonical_hashing_recomputes_after_nested_mutation() -> None:
     )
 
     initial_hash = case.compute_hash()
-    cast(dict[str, JSONValue], case.input)["question"] = "3+3"
+    with pytest.raises(TypeError, match="cannot be mutated"):
+        cast(dict[str, JSONValue], case.input)["question"] = "3+3"
 
-    assert case.compute_hash() != initial_hash
+    assert case.compute_hash() == initial_hash
+
+
+def test_model_copy_remains_deeply_immutable() -> None:
+    case = Case(
+        case_id="case-1",
+        input={"messages": [{"role": "user", "parts": ["2+2"]}]},
+        metadata={"topic": "math"},
+    )
+
+    copied = case.model_copy(
+        update={
+            "input": {"messages": [{"role": "user", "parts": ["3+3"]}]},
+            "metadata": {"topic": "copied"},
+        }
+    )
+
+    with pytest.raises(TypeError, match="cannot be mutated"):
+        cast(dict[str, list[dict[str, list[str]]]], copied.input)["messages"][0][
+            "parts"
+        ].append("mutable")
+    with pytest.raises(TypeError, match="cannot be mutated"):
+        cast(dict[str, list[dict[str, object]]], copied.input)["messages"][0][
+            "parts"
+        ] = []
+
+    assert copied.model_dump(mode="json")["metadata"] == {"topic": "copied"}
+
+
+def test_extra_event_payloads_are_deeply_immutable() -> None:
+    event = RunEvent.model_validate(
+        {
+            "event_type": "extension_event",
+            "run_id": "run-1",
+            "payload": {"steps": [{"name": "start"}]},
+        }
+    )
+    payload = cast(dict[str, list[dict[str, str]]], getattr(event, "payload"))
+
+    with pytest.raises(TypeError, match="cannot be mutated"):
+        payload["steps"].append({"name": "finish"})
 
 
 def test_dataset_and_trace_models_embed_core_records() -> None:
