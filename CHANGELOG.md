@@ -22,6 +22,20 @@ All notable changes to this project are documented in this file.
 - Sanitized runtime events, JSON/text blobs, stage caches, tracebacks, and
   imported/exported bundles before persistence.
 
+## [6.0.0] - 2026-07-13
+
+### Changed
+- Consolidated all public authoring paths on `themis.Experiment` and made
+  catalog kits return that canonical type.
+- Made frozen models deeply immutable and allowed `Experiment.compile()` to
+  record explicit store and runtime provenance.
+- Completed the focused component, runtime, storage, analysis, preset, and
+  artifact APIs and versioned CLI JSON responses.
+
+### Breaking Changes
+- Removed public core-returning launcher and catalog APIs, moved presets to
+  `themis.presets`, and changed machine-readable CLI output to a v1 envelope.
+
 ## [5.0.0] - 2026-07-12
 
 Themis 5 removes the v4 compatibility surface and establishes one Python-first

@@ -91,10 +91,10 @@ def test_release_notes_and_citation_match_current_release() -> None:
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     citation = (REPO_ROOT / "CITATION.cff").read_text(encoding="utf-8")
 
-    assert f"## [{CURRENT_VERSION}] - 2026-07-12" in changelog
+    assert f"## [{CURRENT_VERSION}] - 2026-07-13" in changelog
     assert "## 4.0.0 - 2026-04-05" not in changelog
     assert f"version: {CURRENT_VERSION}" in citation
-    assert "date-released: 2026-07-12" in citation
+    assert "date-released: 2026-07-13" in citation
 
 
 def test_lockfile_excludes_vulnerable_anthropic_release() -> None:

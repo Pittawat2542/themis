@@ -164,7 +164,7 @@
   ],
   "provenance": {
     "dependency_versions": {
-      "themis-eval": "5.0.0"
+      "themis-eval": "6.0.0"
     },
     "environment_metadata": {
       "env": "test"
@@ -210,7 +210,7 @@
       },
       "target": "sqlite"
     },
-    "themis_version": "5.0.0"
+    "themis_version": "6.0.0"
   },
   "run_id": "2b79259b263e14d1f154690b2de3d995662747eff924baca1ac414f5165605ea"
 }
