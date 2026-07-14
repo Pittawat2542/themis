@@ -200,6 +200,42 @@ jobs:
       - name: Run Postgres storage tests
         run: uv run pytest tests/storage/test_postgres_backend.py tests/storage/test_migrate.py -m external -q
 
+  tests-mongodb:
+    name: Tests (MongoDB, Python 3.12)
+    needs: quality
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      THEMIS_TEST_MONGODB_URL: mongodb://127.0.0.1:27017
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: 'latest'
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Run MongoDB storage tests
+        run: uv run pytest tests/storage/test_mongodb_backend.py -m external -q
+
   coverage:
     name: Coverage
     needs: quality

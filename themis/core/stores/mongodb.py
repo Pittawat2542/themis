@@ -268,7 +268,7 @@ class MongoDbRunStore(ProjectionRefreshingStore):
             raise RuntimeError(
                 f"Unable to allocate MongoDB event sequence for {run_id}"
             )
-        return int(row["next_sequence"]) - 1
+        return int(row["next_sequence"])
 
     def _db(self):
         if self._database_handle is not None:

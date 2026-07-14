@@ -1,8 +1,6 @@
-"""Shared store helpers for projection-refreshing backends."""
+"""Shared implementation for custom and built-in run stores."""
 
 from __future__ import annotations
-
-from abc import ABC, abstractmethod
 
 from themis.core.base import JSONValue
 from themis.core.events import RunEvent
@@ -19,8 +17,10 @@ from themis.core.projections import (
     build_initial_store_projection_payloads,
     build_store_projection_payloads,
 )
-from themis.core.snapshot import RunSnapshot
+from themis.core.snapshot import RunSnapshot, StoredRun
 from themis.core.store import (
+    AppendResult,
+    EventRecord,
     ProjectionConsistency,
     ProjectionFreshness,
     ProjectionRead,
@@ -28,53 +28,165 @@ from themis.core.store import (
 from themis.core.results import ExecutionCheckpoint, ExecutionState, ProjectionCursor
 
 
-class ProjectionRefreshingStore(ABC):
-    """Mixin for stores that maintain projection documents alongside events."""
+class RunStoreBase:
+    """Derive the full :class:`RunStore` contract from persistence primitives.
 
-    @abstractmethod
-    def resume(self, run_id: str): ...
+    Backend authors implement ``initialize``, snapshot read/write, idempotent event
+    append and sequenced reads, run-id listing, generic document operations, blob
+    operations, and run deletion. Built-in stores may override derived methods for
+    efficiency.
+    """
 
-    @abstractmethod
-    def query_events(self, run_id: str) -> list[RunEvent]: ...
+    # Persistence primitives -------------------------------------------------
+    # These deliberately raise instead of being abstract methods so existing
+    # optimized backends can override the consumer-facing operations directly.
 
-    @abstractmethod
+    def initialize(self) -> None:
+        raise NotImplementedError
+
+    def write_snapshot(self, snapshot: RunSnapshot) -> None:
+        raise NotImplementedError
+
+    def read_snapshot(self, run_id: str) -> RunSnapshot | None:
+        raise NotImplementedError
+
+    def append_event(self, event: RunEvent) -> AppendResult:
+        raise NotImplementedError
+
+    def read_event_records(
+        self, run_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[EventRecord]:
+        raise NotImplementedError
+
+    def list_run_ids(self) -> list[str]:
+        raise NotImplementedError
+
+    def write_document(self, collection: str, key: str, payload: JSONValue) -> None:
+        raise NotImplementedError
+
+    def read_document(self, collection: str, key: str) -> JSONValue | None:
+        raise NotImplementedError
+
+    def delete_document(self, collection: str, key: str) -> None:
+        raise NotImplementedError
+
+    def store_blob(self, blob: bytes, media_type: str) -> str:
+        raise NotImplementedError
+
+    def load_blob(self, blob_ref: str) -> tuple[str, bytes] | None:
+        raise NotImplementedError
+
+    def delete_run(self, run_id: str) -> None:
+        raise NotImplementedError
+
+    # Consumer-facing RunStore operations -----------------------------------
+
+    def persist_snapshot(self, snapshot: RunSnapshot) -> None:
+        self.write_snapshot(snapshot)
+        self._bootstrap_projections(snapshot)
+
+    def persist_event(self, event: RunEvent) -> AppendResult:
+        return self.append_event(event)
+
+    def query_event_records(
+        self, run_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[EventRecord]:
+        return self.read_event_records(
+            run_id, after_sequence=after_sequence, limit=limit
+        )
+
+    def query_events(self, run_id: str) -> list[RunEvent]:
+        records: list[EventRecord] = []
+        after_sequence = 0
+        while True:
+            page = self.read_event_records(
+                run_id, after_sequence=after_sequence, limit=1000
+            )
+            if not page:
+                break
+            records.extend(page)
+            after_sequence = page[-1].sequence
+        return [record.event for record in records]
+
+    def count_events(self, run_id: str) -> int:
+        return len(self.query_events(run_id))
+
+    def resume(self, run_id: str) -> StoredRun | None:
+        snapshot = self._load_snapshot(run_id)
+        if snapshot is None:
+            return None
+        events = self.query_events(run_id)
+        return StoredRun(
+            snapshot=snapshot,
+            events=events,
+            execution_checkpoint=self.load_execution_checkpoint(run_id),
+            event_count=len(events),
+        )
+
     def _write_projection(
         self, run_id: str, projection_name: str, payload: JSONValue
-    ) -> None: ...
+    ) -> None:
+        self.write_document("projection", f"{run_id}:{projection_name}", payload)
 
-    @abstractmethod
-    def _read_projection(
-        self, run_id: str, projection_name: str
-    ) -> JSONValue | None: ...
+    def _read_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
+        return self.read_document("projection", f"{run_id}:{projection_name}")
 
-    @abstractmethod
-    def _load_snapshot(self, run_id: str) -> RunSnapshot | None: ...
+    def _load_snapshot(self, run_id: str) -> RunSnapshot | None:
+        return self.read_snapshot(run_id)
 
-    @abstractmethod
-    def _write_run_record(self, run_id: str, record: RunRecord) -> None: ...
+    def _write_run_record(self, run_id: str, record: RunRecord) -> None:
+        self.write_document("run_record", run_id, record.model_dump(mode="json"))
 
-    @abstractmethod
-    def _read_run_record(self, run_id: str) -> RunRecord | None: ...
+    def _read_run_record(self, run_id: str) -> RunRecord | None:
+        payload = self.read_document("run_record", run_id)
+        return RunRecord.model_validate(payload) if payload is not None else None
 
-    @abstractmethod
-    def _list_run_records(self) -> list[RunRecord]: ...
+    def _list_run_records(self) -> list[RunRecord]:
+        return [
+            record
+            for run_id in self.list_run_ids()
+            if (record := self._read_run_record(run_id)) is not None
+        ]
 
-    @abstractmethod
-    def count_events(self, run_id: str) -> int: ...
+    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None:
+        payload = self.read_document("execution_checkpoint", run_id)
+        return (
+            ExecutionCheckpoint.model_validate(payload) if payload is not None else None
+        )
 
-    @abstractmethod
-    def load_execution_checkpoint(self, run_id: str) -> ExecutionCheckpoint | None: ...
+    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None:
+        self.write_document(
+            "execution_checkpoint",
+            checkpoint.run_id,
+            checkpoint.model_dump(mode="json"),
+        )
 
-    @abstractmethod
-    def store_execution_checkpoint(self, checkpoint: ExecutionCheckpoint) -> None: ...
-
-    @abstractmethod
     def load_projection_cursor(
         self, run_id: str, projection_name: str
-    ) -> ProjectionCursor | None: ...
+    ) -> ProjectionCursor | None:
+        payload = self.read_document("projection_cursor", f"{run_id}:{projection_name}")
+        return ProjectionCursor.model_validate(payload) if payload is not None else None
 
-    @abstractmethod
-    def store_projection_cursor(self, cursor: ProjectionCursor) -> None: ...
+    def store_projection_cursor(self, cursor: ProjectionCursor) -> None:
+        self.write_document(
+            "projection_cursor",
+            f"{cursor.run_id}:{cursor.projection_name}",
+            cursor.model_dump(mode="json"),
+        )
+
+    def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
+        return self._get_projection_with_backfill(run_id, projection_name)
+
+    def load_stage_cache(self, stage_name: str, cache_key: str) -> JSONValue | None:
+        return self.read_document("stage_cache", f"{stage_name}:{cache_key}")
+
+    def store_stage_cache(
+        self, stage_name: str, cache_key: str, payload: JSONValue
+    ) -> None:
+        self.write_document("stage_cache", f"{stage_name}:{cache_key}", payload)
+
+    def clear_run(self, run_id: str) -> None:
+        self.delete_run(run_id)
 
     def _bootstrap_projections(self, snapshot: RunSnapshot) -> None:
         event_count = self.count_events(snapshot.run_id)
@@ -292,3 +404,7 @@ class ProjectionRefreshingStore(ABC):
             snapshot.run_id,
             build_run_record(snapshot, state=state, existing=existing),
         )
+
+
+# Internal compatibility name for existing backend modules.
+ProjectionRefreshingStore = RunStoreBase

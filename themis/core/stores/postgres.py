@@ -47,7 +47,7 @@ class PostgresRunStore(ProjectionRefreshingStore):
             current_version = str(row["value"]) if row is not None else "0"
             if current_version == "1":
                 raise RuntimeError(
-                    "Unsupported schema-v1 Themis store; archive or reset it before using v5."
+                    "Unsupported schema-v1 Themis store; archive or reset it before continuing."
                 )
             if current_version == "0":
                 self._migrate_to_v1(connection)

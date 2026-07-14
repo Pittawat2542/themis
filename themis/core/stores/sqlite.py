@@ -109,7 +109,7 @@ class SqliteRunStore(ProjectionRefreshingStore):
             }
             if not {"event_id", "sequence"}.issubset(event_columns):
                 raise RuntimeError(
-                    "Unsupported schema-v1 Themis store; archive or reset it before using v5."
+                    "Unsupported schema-v1 Themis store; archive or reset it before continuing."
                 )
             connection.commit()
 
