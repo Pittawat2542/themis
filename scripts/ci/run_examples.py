@@ -1,13 +1,14 @@
-"""Run the current examples directory as a CI smoke test."""
+"""Run the documentation examples as a CI smoke test."""
 
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
-def _reset_example_cache_dirs() -> None:
-    for cache_dir in [Path(".cache"), Path(".themis_cache")]:
+def _reset_example_cache_dirs(root_dir: Path = Path(".")) -> None:
+    for cache_dir in [root_dir / ".cache", root_dir / ".themis_cache"]:
         if cache_dir.exists():
             shutil.rmtree(cache_dir, ignore_errors=True)
 
@@ -22,8 +23,8 @@ def _run_example(script: Path, *, root_dir: Path) -> subprocess.CompletedProcess
 
 
 def main():
-    root_dir = Path(__file__).parent.parent.parent
-    examples_dir = root_dir / "examples"
+    root_dir = Path(__file__).resolve().parents[2]
+    examples_dir = root_dir / "examples" / "docs"
 
     if not examples_dir.exists():
         print(f"Examples directory not found at {examples_dir}")
@@ -36,10 +37,11 @@ def main():
     print("Starting example validation...")
 
     for script in python_files:
-        _reset_example_cache_dirs()
-
         print(f"Running {script.name}...")
-        result = _run_example(script, root_dir=root_dir)
+        with TemporaryDirectory() as temporary_dir:
+            run_dir = Path(temporary_dir)
+            _reset_example_cache_dirs(run_dir)
+            result = _run_example(script, root_dir=run_dir)
         if result.stdout:
             print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
         if result.stderr:

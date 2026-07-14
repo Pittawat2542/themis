@@ -93,7 +93,7 @@ Generation-model smoke check against your local OpenAI-compatible endpoint:
 ```python
 from themis.adapters.openai import openai
 from themis.catalog import run
-from themis.core.stores import InMemoryRunStore
+from themis.storage import memory_store
 
 result = run(
     "frontierscience",
@@ -101,7 +101,7 @@ result = run(
         "google/gemma-4-26b-a4b",
         base_url="http://127.0.0.1:1234/v1",
     ),
-    store=InMemoryRunStore(),
+    store=memory_store(),
 )
 print(result.status)
 ```

@@ -15,7 +15,7 @@ Use reference docs when you already know what concept you need and want precise 
 | --- | --- | --- | --- |
 | [Python API](python-api.md) | Reference page | You want the generated API reference entry point | Best when you already know the symbol family you need |
 | [Root package API](root-package-api.md) | Reference page | You want a category-level view of top-level exports from `themis` | Pairs well with the generated API page |
-| [Experiment lifecycle](experiment-lifecycle.md) | Reference page | You want `evaluate`, `Experiment`, `compile`, `run`, or `rejudge` details | Focused on authoring and execution flow |
+| [Experiment lifecycle](experiment-lifecycle.md) | Reference page | You want `evaluate`, `Experiment`, `compile`, `run`, `replay`, or `rerun` details | Focused on authoring and execution flow |
 | [Stores and inspection](stores-and-inspection.md) | Reference page | You want persistence, reporting, bundle, or inspection helpers | Best for resume, reporting, and export workflows |
 | [Adapters](adapters.md) | Reference page | You want provider-backed generator adapter details | Covers OpenAI, vLLM, and LangGraph adapters |
 | [CLI](cli.md) | Reference page | You want commands, inputs, and output shapes | Best for shell-driven workflows |

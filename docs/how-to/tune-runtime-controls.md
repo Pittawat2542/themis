@@ -46,14 +46,14 @@ Retry behavior:
 
 Estimate behavior:
 
-- `themis estimate --config ...` now returns task counts, token-level estimates, and a nested `resource_plan`
+- `themis estimate --config ...` returns task counts, token-level estimates, and a nested `resource_plan`
 - generation estimates report input and assumed output tokens
 - judge estimates report estimated prompt and assumed output tokens
 - resource plans report generation calls, judge calls, parse and score tasks, provider call counts, required execution backends, and concurrency settings
 - Themis does not price those tokens; use the estimate JSON as input to an external cost model
 - the estimate payload includes `estimated_total_tokens` plus its assumptions, so external pricing can remain versioned outside Themis
 
-Resource plans are operational provenance. Changing `max_concurrent_tasks`, provider limits, queue roots, or resource-plan inspection changes how work is launched or understood; it does not change the logical experiment identity by itself.
+Resource plans are operational provenance. Changing `max_concurrency`, provider limits, queue roots, or resource-plan inspection changes how work is launched or understood; it does not change the logical experiment identity by itself.
 
 Provider telemetry is persisted as Evidence when adapters expose it. The telemetry summary can include request ids, token usage, latency, retry counts, provider-call counts, and failure categories. Missing provider telemetry produces empty summary fields rather than failing a report.
 
@@ -62,8 +62,8 @@ Provider telemetry is persisted as Evidence when adapters expose it. The telemet
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
 | Conservative provider rollout | A provider has strict quotas or unstable limits and you want safety first | Lower throughput | `provider_concurrency`, `provider_rate_limits`, retry settings |
-| Throughput-oriented local runs | Local hardware or permissive endpoints can handle more parallel work | Higher pressure on stores, providers, and error handling | `max_concurrent_tasks`, `stage_concurrency`, `provider_concurrency` |
-| Code benchmark planning | You need to know whether execution backends are required before running | Planning does not execute code | `Planner.resource_plan(...)`, `themis estimate --config ...` |
+| Throughput-oriented local runs | Local hardware or permissive endpoints can handle more parallel work | Higher pressure on stores, providers, and error handling | `max_concurrency`, `stage_concurrency`, `provider_concurrency` |
+| Code benchmark planning | You need to know whether execution backends are required before running | Planning does not execute code | `themis.runtime.resource_plan(snapshot)`, `themis estimate --config ...` |
 
 ## Expected result
 

@@ -25,37 +25,39 @@ sequenceDiagram
     participant B as Batch request
     participant R as Batch runner
     U->>Q: themis submit --mode worker-pool
-    W->>Q: themis worker run --queue-root ...
+    W->>Q: themis worker run --definition-root ...
     Q-->>W: queued manifest
     U->>B: themis submit --mode batch
-    R->>B: themis batch run --request ...
+    R->>B: themis batch run --request ... --definition-root ...
 ```
 
 Both flows hand execution off through a manifest, but they differ in whether work is pulled from a queue or invoked by an explicit request file.
 
-Submission manifests persist the compiled snapshot plus execution targets. New operational fields such as `suite_id`, `preset_ids`, `tags`, `created_at`, and `resource_plan` are context for workers and launch adapters. They do not replace the compiled `RunSnapshot`, and workers validate the stored snapshot before execution.
+Submission manifests persist the compiled snapshot, definition digest, execution target, timestamps, and resource plan. They do not replace the compiled `RunSnapshot`, and workers validate the definition root, digest, and stored snapshot before execution.
 
 Worker-pool flow:
 
 ```bash
 themis submit --config experiment.yaml --mode worker-pool
-themis worker run --queue-root runs/queue
+themis worker run --queue-root runs/queue --definition-root .
 ```
 
 Batch flow:
 
 ```bash
 themis submit --config experiment.yaml --mode batch
-themis batch run --request runs/batch/requests/<run-id>.json
+themis batch run \
+  --request runs/batch/requests/<run-id>.json \
+  --definition-root .
 ```
 
 ## Variants
 
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
-| Single-host queued work | Workers should pull manifests from a shared queue root | Requires a worker process to keep polling | `themis submit --mode worker-pool`, `themis worker run --queue-root ...` |
-| Request and completed manifest flow | Each run should execute from an explicit request file | Less queue-like than worker-pool mode | `themis submit --mode batch`, `themis batch run --request ...` |
-| Suite or preset handoff | A launcher needs grouping and runtime context | Suite and preset ids are metadata; each expanded item still has its own snapshot | `SubmissionManifest.suite_id`, `preset_ids`, `tags`, `resource_plan` |
+| Single-host queued work | Workers should pull manifests from a shared queue root | Requires a worker process to keep polling | `themis submit --mode worker-pool`, `themis worker run --definition-root ...` |
+| Request and completed manifest flow | Each run should execute from an explicit request file | Less queue-like than worker-pool mode | `themis submit --mode batch`, `themis batch run --request ... --definition-root ...` |
+| Signed worker queue | The queue crosses a trust boundary | Requires shared secret management | `themis worker run --signing-key-env ... --require-signature` |
 
 ## Expected result
 

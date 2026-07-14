@@ -4,13 +4,12 @@ from themis.storage import memory_store
 
 from themis import Experiment
 from themis import Evaluation, Generation
-from themis.core.contexts import ScoreContext
-from themis.core.dataset_sources import inline_dataset_source
 from themis import Case, Dataset, MetricResult
-from themis.core.models import (
+from themis.components import (
     MetricDirection,
     MetricInterpretation,
     ParsedOutput,
+    ScoreContext,
 )
 
 
@@ -52,17 +51,15 @@ def run_example() -> dict[str, object]:
             metrics=[ExactAnswerMetric()], parser="builtin/json_identity"
         ),
         datasets=[
-            inline_dataset_source(
-                Dataset(
-                    dataset_id="sample",
-                    cases=[
-                        Case(
-                            case_id="case-1",
-                            input={"question": "2+2"},
-                            expected_output={"answer": "4"},
-                        )
-                    ],
-                )
+            Dataset(
+                dataset_id="sample",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
     )

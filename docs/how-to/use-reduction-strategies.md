@@ -11,7 +11,7 @@ Goal: choose a selector or reducer for multi-candidate generation.
 
 When to use this:
 
-Use this guide when `num_samples` is greater than one and you need candidate selection or reduction before parsing or scoring.
+Use this guide when `Generation.samples` is greater than one and you need candidate selection or reduction before parsing or scoring.
 
 ## Procedure
 

@@ -33,7 +33,7 @@ Provide:
 - one or more workflow-backed metrics
 - parsers for the reduced candidate
 - judge models
-- optional `prompt_spec` for judge prompt instructions or generic prompt blocks
+- an optional `Evaluation.prompt` for judge instructions or generic prompt blocks
 - any workflow overrides such as a rubric
 
 ```python

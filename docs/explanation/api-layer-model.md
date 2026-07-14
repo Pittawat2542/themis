@@ -15,14 +15,19 @@ What you provide: the smallest layer that expresses the task cleanly.
 
 What Themis provides: compatibility between layers because they all compile to the same snapshot-centric runtime model.
 
-This diagram shows the layers as progressively more explicit authoring surfaces over one shared runtime.
+Convenience and automation are entry paths. Components are an extension plane,
+not a parallel experiment format. Every path meets at the public authoring and
+compile boundaries before entering private execution internals.
 
 ```mermaid
-flowchart TD
-    A["Python-authored Experiment(...)"] --> D["RunSnapshot"]
-    B["Config + CLI"] --> D
-    C["Custom protocols"] --> D
-    D --> F["Execution, persistence, inspection"]
+flowchart LR
+    A["Convenience and catalog"] --> D["themis.Experiment"]
+    B["Config and CLI automation"] --> D
+    C["Custom components and adapters"] --> D
+    D --> E["RunSnapshot"]
+    E --> F["Private runtime and evidence internals"]
+    F --> G["RunStore"]
+    G --> H["Analysis and reporting"]
 ```
 
 The important point is that the user-facing surfaces differ, but the compiled artifact and execution model do not.

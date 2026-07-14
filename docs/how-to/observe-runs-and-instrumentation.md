@@ -19,7 +19,7 @@ Use `EventSubscriber` when you want notifications after events have been persist
 
 Use `TracingProvider` when you want span-oriented tracing around the run, generation, reduction, parsing, scoring, or judging stages.
 
-Wire them into `Experiment.run(...)` or `Experiment.rejudge(...)` at execution time:
+Wire them into `Experiment.run(...)` at execution time:
 
 ```python
 --8<-- "examples/docs/observability.py"
@@ -32,7 +32,7 @@ Instrumentation is runtime-only. Swapping subscribers or tracing backends change
 | Variant | Best when | Tradeoff | Related APIs / commands |
 | --- | --- | --- | --- |
 | Experiment flow | You want observability on reusable experiments or replay flows | Requires explicit experiment construction | `Experiment.run(...)`, `Experiment.replay(...)` |
-| Config and CLI flow | You want observability in automation-oriented runs | Instrumentation is configured in the imported Python definition | launcher config, `Experiment.run(...)` |
+| Config and CLI flow | You want observability in automation-oriented runs | Launcher config has no subscriber or tracing fields | Wrap the Python `Experiment.run(...)` call; use CLI only when custom instrumentation is not required |
 | No-op default | You do not need explicit instrumentation for this run | No trace or subscriber output to inspect later | Omit `subscribers` and `tracing_provider` |
 
 ## Expected result

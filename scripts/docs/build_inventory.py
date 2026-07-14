@@ -26,6 +26,22 @@ def _cli_commands() -> list[str]:
             )
         elif command == "export":
             commands.extend(f"{command} {sub}" for sub in ("generation", "evaluation"))
+        elif command == "inspect":
+            commands.extend(
+                f"{command} {sub}"
+                for sub in (
+                    "case",
+                    "evaluation",
+                    "lineage",
+                    "run-record",
+                    "runs",
+                    "snapshot",
+                    "state",
+                    "telemetry",
+                )
+            )
+        elif command == "suite":
+            commands.extend(f"{command} {sub}" for sub in ("inspect", "list", "run"))
         elif command == "worker":
             commands.append("worker run")
         elif command == "batch":

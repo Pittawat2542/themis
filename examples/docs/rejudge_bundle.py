@@ -6,14 +6,13 @@ from themis import (
     Experiment,
 )
 from themis.runtime import Stage
-from themis.core.bundles import (
+from themis.artifacts import (
     export_evaluation_bundle,
     export_generation_bundle,
     import_evaluation_bundle,
     import_generation_bundle,
 )
 from themis import Evaluation, Generation
-from themis.core.dataset_sources import inline_dataset_source
 from themis import Case, Dataset
 
 
@@ -38,17 +37,15 @@ def run_example() -> dict[str, object]:
             workflow_options={"rubric": "pass if the answer is correct"},
         ),
         datasets=[
-            inline_dataset_source(
-                Dataset(
-                    dataset_id="sample",
-                    cases=[
-                        Case(
-                            case_id="case-1",
-                            input={"question": "2+2"},
-                            expected_output={"answer": "4"},
-                        )
-                    ],
-                )
+            Dataset(
+                dataset_id="sample",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],
@@ -60,7 +57,7 @@ def run_example() -> dict[str, object]:
     import_evaluation_bundle(
         target_store, export_evaluation_bundle(source_store, initial.run_id)
     )
-    replayed = experiment.replay(from_stage=Stage.JUDGE, store=source_store)
+    replayed = experiment.replay(from_stage=Stage.JUDGE, store=target_store)
     return {
         "run_id": initial.run_id,
         "replayed_run_id": replayed.run_id,

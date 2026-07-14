@@ -87,11 +87,12 @@ nav:
       - Use pure metrics: how-to/use-pure-metrics.md
       - Use workflow-backed metrics: how-to/use-workflow-backed-metrics.md
       - Resume and inspect runs: how-to/resume-and-inspect-runs.md
-      - Reproduce and rejudge runs: how-to/reproduce-and-rejudge-runs.md
+      - Reproduce and replay runs: how-to/reproduce-and-rejudge-runs.md
       - Compare, export, and report: how-to/compare-export-and-report.md
       - Tune runtime controls: how-to/tune-runtime-controls.md
       - Use submit, worker, and batch: how-to/use-submit-worker-and-batch.md
       - Run benchmarks: how-to/run-benchmarks.md
+      - Migrate from v5 to v6: how-to/migrate-v5-to-v6.md
   - Reference:
       - Overview: reference/index.md
       - Python API: reference/python-api.md
@@ -116,7 +117,7 @@ nav:
       - Reducer vs parser vs metric: explanation/reducer-parser-metric-boundaries.md
       - Events, stores, and read models: explanation/events-stores-and-read-models.md
       - Artifacts and inspection: explanation/artifacts-and-inspection.md
-      - Reproducibility and rejudge: explanation/reproducibility-and-rejudge.md
+      - Reproducibility and replay: explanation/reproducibility-and-rejudge.md
       - Failure, retry, and resume: explanation/failure-retry-and-resume.md
       - Extension boundaries: explanation/extension-boundaries.md
       - API layer model: explanation/api-layer-model.md
@@ -136,3 +137,5 @@ nav:
       - Release and versioning: project/release-and-versioning.md
       - Decisions:
           - Python executable definitions are canonical: adr/0001-python-executable-definitions-are-canonical.md
+          - Operational surfaces remain automation surfaces: adr/0002-operational-surfaces-remain-automation-surfaces.md
+          - Public Experiment and snapshot boundaries: adr/0003-public-experiment-and-snapshot-boundaries.md

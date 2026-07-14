@@ -22,7 +22,8 @@ flowchart TD
     B -->|Yes| C["Config + CLI"]
     B -->|No| D{"Need custom runtime behavior?"}
     D -->|No| E["Experiment(...)"]
-    D -->|Yes| F["Custom extension protocols"]
+    D -->|Yes| F["Custom components"]
+    F --> E
 ```
 
 All three paths still converge on the same runtime model, so this choice is about authoring surface, not a different engine.
@@ -33,7 +34,7 @@ All three paths still converge on the same runtime model, so this choice is abou
 | --- | --- | --- | --- |
 | `Experiment(...)` | Reusable Python-authored experiment definitions and local debugging | Exposes compile, replay, and store control | Canonical surface for serious experiment meaning |
 | Config + CLI | Automation, overrides, worker submission, and batch execution | Shell-friendly execution through `themis run`, `submit`, `worker`, and `batch` | Automation surface only; component references must be importable or builtin ids |
-| Extension protocols | Custom runtime behavior when builtins are not enough | Still plugs into the same Themis runtime once implemented | Requires custom code and protocol knowledge |
+| Extension protocols | Custom behavior when builtins are not enough | Components plug into `Experiment`; they are not a separate authoring format | Requires custom code and protocol knowledge |
 
 Next:
 

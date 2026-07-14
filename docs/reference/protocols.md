@@ -9,6 +9,11 @@ goal: Document the extension contracts exposed by Themis.
 
 Use this page when you are implementing custom components rather than using builtin ids.
 
+Custom component instances are trust-boundary objects. Themis freezes its own
+models deeply, but it does not clone arbitrary provider objects. A component's
+identity-bearing `fingerprint()` must remain stable for the lifetime of an
+experiment and any compiled snapshot derived from it.
+
 ## Important runtime instrumentation contracts
 
 | Name | Kind | Use when | Key constraints / notes |
@@ -27,6 +32,7 @@ Use this page when you are implementing custom components rather than using buil
 | `JudgeModel` | Evaluation protocol | Workflow-backed metrics need a custom judge model | Used by judge workflows and participates in identity through component refs |
 | `PureMetric` | Evaluation protocol | A deterministic metric scores parsed output directly | Implements `score(...)` |
 | `WorkflowMetric` | Evaluation protocol | A judge-backed metric builds an evaluation workflow | Declares `subject_kind` explicitly |
+| `WorkflowRunner` | Evaluation protocol | A custom runner should execute a workflow produced by a workflow metric | Execution boundary only; workflow definitions and results stay typed |
 | `ReporterProtocol` | Reporting protocol | Stored evidence needs a custom export or reporting view | Read-side boundary; reporter selection does not change `run_id` |
 
 Generated contracts:

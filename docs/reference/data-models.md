@@ -25,22 +25,22 @@ Case-level runtime and read-model payloads now carry three related fields:
 
 `CaseResult`, `BenchmarkScoreRow`, `TimelineEntry`, and trace records all expose `dataset_id` and `case_key` additively. New runs persist these fields directly. Older stored runs remain readable via `case_key` or `case_id` fallback, but only new runs provide full duplicate-`case_id` safety across datasets.
 
-Core runtime and output models:
+Public authoring and result models:
 
-::: themis.core.models
+::: themis
 
-Prompt-oriented models:
+Component input/output and workflow models:
 
-::: themis.core.prompts
+::: themis.components
 
-Run state, results, and bundle models:
+Planning models:
 
-::: themis.core.results
+::: themis.runtime
 
-Snapshot and identity models:
+Portable bundle models:
 
-::: themis.core.snapshot
+::: themis.artifacts
 
-Projection/read-model types:
+Inspection and reporting APIs:
 
-::: themis.core.read_models
+::: themis.analysis

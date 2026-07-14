@@ -42,7 +42,7 @@ Checkpointed resume:
 
 Stage-limited execution:
 
-- `Experiment.run(..., until_stage="generate"|"reduce"|"parse"|"score"|"judge")`
+- `Experiment.run(..., until_stage=Stage.GENERATE|REDUCE|PARSE|SCORE|JUDGE)`
 - `themis run --config ... --until-stage generate|reduce|parse|score|judge`
 - stored runs record `completed_through_stage`, so a generation-only run is considered complete for that stage instead of looking like an interrupted failure
 

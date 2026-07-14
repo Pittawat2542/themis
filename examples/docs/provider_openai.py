@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from themis import Experiment
 from themis.adapters import openai
 from themis import Evaluation, Generation
-from themis.core.dataset_sources import inline_dataset_source
 from themis import Case, Dataset
 
 
@@ -41,11 +40,9 @@ def run_example() -> dict[str, object]:
         generation=Generation(generator=generator),
         evaluation=Evaluation(),
         datasets=[
-            inline_dataset_source(
-                Dataset(
-                    dataset_id="sample",
-                    cases=[Case(case_id="case-1", input={"question": "2+2"})],
-                )
+            Dataset(
+                dataset_id="sample",
+                cases=[Case(case_id="case-1", input={"question": "2+2"})],
             )
         ],
         seeds=[7],

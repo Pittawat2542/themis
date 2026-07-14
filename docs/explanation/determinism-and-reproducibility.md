@@ -13,6 +13,6 @@ When it matters: whenever you expect the same `run_id`, the same outputs, or the
 
 What you provide: identity-bearing settings such as seeds, stable component fingerprints, and persisted artifacts when rerunning evaluation.
 
-What Themis provides: snapshot identity, artifact persistence, and rejudge flows that avoid regenerating candidates.
+What Themis provides: snapshot identity, artifact persistence, and replay flows that avoid regenerating candidates.
 
 What to inspect when it goes wrong: verify seeds, component identity, optional provider nondeterminism, and whether the workflow is rerunning generation or only reusing stored artifacts.

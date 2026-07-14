@@ -2,12 +2,12 @@
 title: Python API reference
 diataxis: reference
 audience: Python users of Themis
-goal: Describe the supported v5 Python contract.
+goal: Describe the supported v6 Python contract.
 ---
 
 # Python API reference
 
-The v5 root package is deliberately small. These are its complete stable exports:
+The v6 root package is deliberately small. These are its complete stable exports:
 
 ## Root exports
 
@@ -18,6 +18,7 @@ The v5 root package is deliberately small. These are its complete stable exports
 | `Evaluation` | Configure parsing, metrics, and judge models |
 | `Experiment` | Define, compile, run, replay, or rerun an evaluation |
 | `RunOptions` | Validate runtime concurrency, timeout, retry, and reuse controls |
+| `RunSnapshot` | Inspect the immutable compiled boundary passed to runtime planning and execution |
 | `RunResult`, `MetricResult`, `MetricInterpretation` | Consume outcomes and declare metric direction, range, and correctness semantics |
 | `evaluate` | Run a deliberately small one-off evaluation |
 | `__version__` | Read the installed package version |
@@ -30,7 +31,11 @@ Use focused modules for the rest:
 - `themis.storage` for memory, SQLite, JSONL, PostgreSQL, and MongoDB stores;
 - `themis.metrics` for metric constructors;
 - `themis.analysis` for inspection, reporting, and statistics;
-- `themis.catalog` for reviewed benchmark definitions.
+- `themis.artifacts` for portable generation and evaluation bundles;
+- `themis.catalog` for reviewed benchmark and suite definitions;
+- `themis.components` for custom component protocols and their input/output models;
+- `themis.presets` for immutable experiment and runtime preset application;
+- `themis.runtime` for snapshot estimates and resource plans.
 
 `themis.core` is private implementation. It has no compatibility contract.
 
@@ -44,6 +49,16 @@ Use focused modules for the rest:
 
 ::: themis.analysis
 
+::: themis.artifacts
+
 ::: themis.adapters
 
 ::: themis.catalog
+
+::: themis.components
+
+::: themis.presets
+
+::: themis.metrics
+
+::: themis.runtime

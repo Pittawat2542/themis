@@ -66,11 +66,8 @@ After installation, the package exposes the `themis` CLI:
 
 ```bash
 themis quick-eval inline \
-  --model builtin/demo_generator \
-  --metric builtin/exact_match \
-  --parser builtin/json_identity \
-  --input '{"question":"2+2"}' \
-  --expected-output '{"answer":"4"}'
+  --input-json '{"question":"2+2"}' \
+  --expected-output-json '{"answer":"4"}'
 ```
 
 ## Documentation

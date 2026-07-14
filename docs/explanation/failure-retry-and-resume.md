@@ -46,10 +46,10 @@ Important distinctions:
 
 Resume uses store-level execution checkpoints when they are fresh. The event stream remains authoritative for audit and recovery, so older stores or stale checkpoints can still rebuild state by replaying stored events.
 
-Each initial run, replay, rerun, or rejudge has an `attempt_id`. Resume continues
+Each initial run, replay, or rerun has an `attempt_id`. Resume continues
 the active attempt; new downstream work creates a child attempt, preserving
-earlier score claims for history inspection. Schema-v1 development stores are
-not migrated during the v5 pre-release reset and must be archived or recreated.
+earlier score claims for history inspection. Unsupported schema-v1 development
+stores must be archived or recreated.
 
 Retry classification is built around common endpoint failures: explicit retryable exceptions, timeouts, connection failures, `429` rate limits, and `5xx` server failures. Persisted retry history includes the attempt number, delay, reason, and any `retry_after_s` hint that the provider returned.
 

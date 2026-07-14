@@ -18,7 +18,7 @@ You will run multiple candidates per case, reduce them to one reduced candidate,
 
 ## Steps
 
-1. Configure `num_samples` greater than one.
+1. Configure `Generation.samples` greater than one.
 2. Keep a reducer in the generation stage.
 3. Add both pure and workflow-backed metrics to evaluation.
 
@@ -32,7 +32,7 @@ You will run multiple candidates per case, reduce them to one reduced candidate,
 
 ## Common failure points
 
-- expecting multiple candidates to appear when `num_samples` is left at `1`
+- expecting multiple candidates to appear when `Generation.samples` is left at `1`
 - mixing up reducer responsibilities with metric responsibilities
 
 ## Next steps

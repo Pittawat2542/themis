@@ -3,7 +3,6 @@ from __future__ import annotations
 from themis import Experiment, RunOptions
 from themis.storage import memory_store
 from themis import Evaluation, Generation
-from themis.core.dataset_sources import inline_dataset_source
 from themis import Case, Dataset
 
 
@@ -21,17 +20,15 @@ def run_example() -> dict[str, object]:
             parser="builtin/json_identity",
         ),
         datasets=[
-            inline_dataset_source(
-                Dataset(
-                    dataset_id="sample",
-                    cases=[
-                        Case(
-                            case_id="case-1",
-                            input={"question": "2+2"},
-                            expected_output={"answer": "4"},
-                        )
-                    ],
-                )
+            Dataset(
+                dataset_id="sample",
+                cases=[
+                    Case(
+                        case_id="case-1",
+                        input={"question": "2+2"},
+                        expected_output={"answer": "4"},
+                    )
+                ],
             )
         ],
         seeds=[7],

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import tomllib
 
+import pytest
+
 import themis
 from themis.catalog import list_benchmarks
 
@@ -231,12 +233,18 @@ def test_reference_docs_cover_cli_public_api_and_catalogs() -> None:
     for command in (
         "quick-eval",
         "run",
+        "replay",
+        "rerun",
         "submit",
         "resume",
         "estimate",
         "report",
         "quickcheck",
         "compare",
+        "compare-runs",
+        "compare-latest",
+        "inspect",
+        "suite",
         "export",
         "init",
         "worker",
@@ -309,6 +317,7 @@ def test_benchmark_reference_tracks_catalog_metadata() -> None:
             assert entry.version_notes in row_text
 
 
+@pytest.mark.subprocess
 def test_docs_cover_required_topics_and_optional_extras() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/docs/build_inventory.py"],

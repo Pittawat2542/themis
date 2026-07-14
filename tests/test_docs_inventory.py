@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_ROOT = REPO_ROOT / "docs"
@@ -143,6 +145,7 @@ VARIANT_SECTIONS = (
 )
 
 
+@pytest.mark.subprocess
 def test_docs_inventory_script_reports_public_surface() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/docs/build_inventory.py"],
@@ -167,6 +170,8 @@ def test_docs_inventory_script_reports_public_surface() -> None:
     assert "Experiment" in payload["public_exports"]
     assert "load" in payload["catalog_exports"]
     assert "quick-eval benchmark" in payload["cli_commands"]
+    assert "inspect case" in payload["cli_commands"]
+    assert "suite run" in payload["cli_commands"]
     assert "builtin/exact_match" in payload["builtin_components"]
     assert "mmlu_pro" in payload["benchmarks"]
     assert payload["docs_destinations"]["glossary"] == "docs/glossary.md"

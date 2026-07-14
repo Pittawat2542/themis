@@ -1,1 +1,1 @@
-Bundle export/import preserves stored artifacts. `Experiment.replay(...)` re-runs downstream stages from stored upstream artifacts instead of regenerating candidates, and `rejudge()` is the workflow-metric shorthand.
+Bundle export/import preserves stored artifacts. `Experiment.replay(...)` re-runs downstream stages from stored upstream artifacts instead of regenerating candidates; use `from_stage=Stage.JUDGE` for workflow-backed judging.

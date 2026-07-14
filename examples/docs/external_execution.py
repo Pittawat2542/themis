@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import subprocess
+import sys
 from tempfile import TemporaryDirectory
-
-from themis.core.submission import run_worker_once, submit_experiment
-from themis.launcher import load_core_experiment
 
 
 DEFINITION = """from themis import Case, Dataset, Evaluation, Experiment, Generation
@@ -47,16 +47,43 @@ def run_example() -> dict[str, object]:
         (root / "definition.py").write_text(DEFINITION, encoding="utf-8")
         config_path = root / "experiment.yaml"
         config_path.write_text(LAUNCHER, encoding="utf-8")
-        experiment = load_core_experiment(config_path)
-        manifest = submit_experiment(
-            experiment, config_path=str(config_path), mode="worker_pool"
+        submitted = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "themis.cli",
+                "submit",
+                "--config",
+                str(config_path),
+                "--mode",
+                "worker-pool",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
         )
-        result = run_worker_once(root / "runs" / "queue", definition_roots=[root])
-        assert result is not None
+        worker = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "themis.cli",
+                "worker",
+                "run",
+                "--queue-root",
+                str(root / "runs" / "queue"),
+                "--definition-root",
+                str(root),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        submission_data = json.loads(submitted.stdout)["data"]
+        result_data = json.loads(worker.stdout)["data"]
         return {
-            "run_id": result.run_id,
-            "status": result.status.value,
-            "manifest_path": str(manifest.manifest_path),
+            "run_id": result_data["run_id"],
+            "status": result_data["status"],
+            "manifest_path": submission_data["manifest_path"],
         }
 
 

@@ -5,6 +5,26 @@ from collections.abc import Callable
 
 from themis import __all__ as root_all
 from themis import __version__
+from themis.analysis import (
+    Reporter,
+    ReporterProtocol,
+    available_reporters,
+    create_reporter,
+    get_attempt_history,
+    get_case_audit,
+    get_evaluation_execution,
+    get_execution_state,
+    get_projection,
+    get_run_record,
+    get_run_snapshot,
+    get_score_claim_history,
+    get_telemetry_summary,
+    query_run_records,
+    register_reporter,
+    resolve_run_id,
+    resolve_run_record,
+    snapshot_report,
+)
 from themis.catalog import (
     builtin_component_refs,
     get_benchmark,
@@ -16,51 +36,34 @@ from themis.catalog import (
     validate_benchmark,
 )
 from themis.cli import main
-from themis.cli.helpers import (
-    dump_json,
-    initialize_store,
-    load_benchmark_result,
-    load_experiment,
-)
-from themis.core.contexts import (
+from themis.components import (
+    CandidateReducer,
+    CandidateSelector,
     EvalScoreContext,
+    EvaluationWorkflow,
     GenerationContext,
+    Generator,
+    JudgeModel,
     ParseContext,
+    Parser,
+    PureMetric,
     ReduceContext,
     ScoreContext,
     SelectContext,
-)
-from themis.core.events import RunEvent, RunStartedEvent, event_from_dict
-from themis.core.protocols import (
-    CandidateReducer,
-    CandidateSelector,
-    EvaluationWorkflow,
-    Generator,
-    JudgeModel,
-    Parser,
-    PureMetric,
     WorkflowMetric,
-    TracingProvider,
     WorkflowRunner,
 )
-from themis.core.reporter import (
-    Reporter,
-    ReporterProtocol,
-    available_reporters,
-    create_reporter,
-    register_reporter,
-    snapshot_report,
-)
-from themis.core.stores.base import ProjectionRefreshingStore
-from themis.core.stores.factory import (
+from themis.runtime import TracingProvider
+from themis.storage import (
+    JsonlRunStore,
+    MongoDbRunStore,
+    PostgresRunStore,
+    RunStoreBase,
     available_store_backends,
     create_run_store,
     memory_store,
     register_store_backend,
 )
-from themis.core.stores.jsonl import JsonlRunStore
-from themis.core.stores.mongodb import MongoDbRunStore
-from themis.core.stores.postgres import PostgresRunStore
 from tests.release import CURRENT_VERSION
 
 
@@ -146,12 +149,9 @@ def test_extension_protocols_have_docstrings() -> None:
         _assert_docstring(protocol)
 
 
-def test_events_and_store_surface_have_docstrings() -> None:
+def test_store_surface_has_docstrings() -> None:
     for symbol in (
-        RunEvent,
-        RunStartedEvent,
-        event_from_dict,
-        ProjectionRefreshingStore,
+        RunStoreBase,
         memory_store,
         register_store_backend,
         available_store_backends,
@@ -159,10 +159,24 @@ def test_events_and_store_surface_have_docstrings() -> None:
         JsonlRunStore,
         MongoDbRunStore,
         PostgresRunStore,
-        dump_json,
-        load_experiment,
-        initialize_store,
-        load_benchmark_result,
+    ):
+        _assert_docstring(symbol)
+
+
+def test_inspection_surface_has_docstrings() -> None:
+    for symbol in (
+        get_attempt_history,
+        get_case_audit,
+        get_evaluation_execution,
+        get_execution_state,
+        get_projection,
+        get_run_record,
+        get_run_snapshot,
+        get_score_claim_history,
+        get_telemetry_summary,
+        query_run_records,
+        resolve_run_id,
+        resolve_run_record,
     ):
         _assert_docstring(symbol)
 
