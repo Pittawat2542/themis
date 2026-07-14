@@ -104,7 +104,7 @@ class MongoDbRunStore(ProjectionRefreshingStore):
         ]
 
     def count_events(self, run_id: str) -> int:
-        return len(self._db()["run_events"].find({"run_id": run_id}))
+        return self._db()["run_events"].count_documents({"run_id": run_id})
 
     def get_projection(self, run_id: str, projection_name: str) -> JSONValue | None:
         return self._get_projection_with_backfill(run_id, projection_name)

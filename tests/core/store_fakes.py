@@ -74,6 +74,9 @@ class FakeCollection:
     def find(self, query: dict[str, object]) -> list[dict[str, object]]:
         return [row for row in self.rows if self._matches(row, query)]
 
+    def count_documents(self, query: dict[str, object]) -> int:
+        return len(self.find(query))
+
     def find_one(self, query: dict[str, object]) -> dict[str, object] | None:
         for row in self.rows:
             if self._matches(row, query):
