@@ -6,13 +6,14 @@ from enum import StrEnum
 
 from pydantic import Field, model_validator
 
+from themis import Experiment
 from themis.catalog.benchmarks import get_benchmark_kit, list_benchmark_kits
 from themis.catalog.benchmarks.kits import _sample_dataset
 from themis.catalog.benchmarks import load_benchmark
 from themis.core.base import FrozenModel
 from themis.core.results import RunResult, RunStatus
 from themis.core.store import RunStore
-from themis.core.stores import InMemoryRunStore
+from themis.storage import memory_store
 
 
 class SuiteAggregation(StrEnum):
@@ -54,6 +55,7 @@ class SuiteExpansionItem(FrozenModel):
 
     benchmark_id: str
     source_suite_ids: list[str]
+    experiment: Experiment
 
 
 class SuiteExpansion(FrozenModel):
@@ -138,16 +140,12 @@ def expand_suite(suite_id: str) -> SuiteExpansion:
 def run_suite(suite_id: str, *, store: RunStore | None = None) -> SuiteRunResult:
     """Run each expanded suite item as a normal Themis run."""
 
-    run_store = store or InMemoryRunStore()
+    run_store = store or memory_store()
     run_store.initialize()
     expansion = expand_suite(suite_id)
     runs: list[SuiteRunItem] = []
     for item in expansion.items:
-        definition = load_benchmark(item.benchmark_id)
-        experiment = get_benchmark_kit(item.benchmark_id).build_experiment(
-            dataset=_sample_dataset(definition)
-        )
-        result: RunResult = experiment.run(store=run_store)
+        result: RunResult = item.experiment.run(store=run_store)
         _tag_suite_run(run_store, result.run_id, suite_id=suite_id)
         runs.append(
             SuiteRunItem(
@@ -169,10 +167,14 @@ def _expand_items(
     expanded: list[SuiteExpansionItem] = []
     for item in suite.items:
         if item.benchmark_id is not None:
+            definition = load_benchmark(item.benchmark_id)
             expanded.append(
                 SuiteExpansionItem(
                     benchmark_id=item.benchmark_id,
                     source_suite_ids=next_stack,
+                    experiment=get_benchmark_kit(item.benchmark_id).build_experiment(
+                        dataset=_sample_dataset(definition)
+                    ),
                 )
             )
         elif item.suite_id is not None:

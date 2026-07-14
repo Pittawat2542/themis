@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from themis.core.contexts import (
     EvalScoreContext,
@@ -35,6 +35,8 @@ from themis.core.workflows import (
     ParsedJudgment,
     RenderedJudgePrompt,
 )
+
+type MetricSubjectKind = Literal["candidate", "candidates", "trace"]
 
 
 @runtime_checkable
@@ -168,7 +170,7 @@ class WorkflowMetric(Protocol):
 
     component_id: str
     version: str
-    subject_kind: str
+    subject_kind: MetricSubjectKind
 
     def fingerprint(self) -> str: ...
 

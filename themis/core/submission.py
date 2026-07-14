@@ -75,7 +75,7 @@ def submit_experiment(
     tags: Sequence[str] = (),
     signing_key: str | bytes | None = None,
 ) -> SubmissionManifest:
-    """Freeze and enqueue an experiment loaded through a v5 launcher."""
+    """Freeze and enqueue an experiment loaded through a v6 launcher."""
 
     launcher_path = Path(config_path).expanduser().resolve()
     if not launcher_path.is_file():
@@ -244,7 +244,7 @@ def _run_manifest(
     signing_key: str | bytes | None,
     require_signature: bool,
 ) -> RunResult:
-    from themis.launcher import load_core_experiment
+    from themis.launcher import _load_runtime_experiment
 
     _validate_manifest(
         manifest,
@@ -253,7 +253,7 @@ def _run_manifest(
         require_signature=require_signature,
     )
 
-    experiment = load_core_experiment(manifest.config_path)
+    experiment = _load_runtime_experiment(manifest.config_path)
     compiled = experiment.compile()
     if compiled.run_id != manifest.run_id:
         raise ValueError(

@@ -51,7 +51,7 @@ def compare(
         load_benchmark_result(baseline_store, resolved_baseline_run_id),
         load_benchmark_result(candidate_store, resolved_candidate_run_id),
     )
-    print(dump_json(comparison.model_dump(mode="json")))
+    print(dump_json("compare", comparison.model_dump(mode="json")))
     return 0
 
 
@@ -64,7 +64,7 @@ def compare_runs(
     experiment = load_experiment(config)
     store = initialize_store(experiment)
     report = Reporter(store).compare_runs(baseline_run_id, candidate_run_id)
-    print(dump_json(report.model_dump(mode="json")))
+    print(dump_json("compare-runs", report.model_dump(mode="json")))
     return 0
 
 
@@ -80,5 +80,5 @@ def compare_latest(
         baseline_label=baseline_label,
         candidate_label=candidate_label,
     )
-    print(dump_json(report.model_dump(mode="json")))
+    print(dump_json("compare-latest", report.model_dump(mode="json")))
     return 0

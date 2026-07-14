@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 from themis.cli.helpers import (
     build_run_query,
+    dump_json,
     initialize_store,
     load_experiment,
     resolve_persisted_run_id,
@@ -59,7 +61,7 @@ def report(
     )
     reporter = Reporter(store)
     if format == "json":
-        print(reporter.export_json(resolved_run_id))
+        print(dump_json("report", json.loads(reporter.export_json(resolved_run_id))))
         return 0
     if format == "markdown":
         print(reporter.export_markdown(resolved_run_id))

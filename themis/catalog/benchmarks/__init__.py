@@ -8,16 +8,16 @@ from typing import cast
 
 from pydantic import Field
 
+from themis.api import Evaluation, Experiment, Generation
 from themis.catalog.benchmarks.adapters import apply_benchmark_adapter
 from themis.catalog.benchmarks.materializers import materialize_benchmark_dataset
 from themis.catalog.loaders import load_toml
 from themis.core.base import FrozenModel, JSONValue
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.dataset_sources import catalog_dataset_source, inline_dataset_source
-from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.protocols import Generator
 from themis.core.store import RunStore
+from themis.storage import memory_store
 
 _OPEN_VARIANT_EXAMPLES = {
     "hle": "math,reasoning",
@@ -86,7 +86,6 @@ class BenchmarkDefinition(FrozenModel):
         *,
         dataset: Dataset | None = None,
         model: object | None = None,
-        storage: StorageConfig | None = None,
     ) -> Experiment:
         generator: Generator | str = (
             cast(Generator | str, model) if model is not None else self.generator_id
@@ -115,20 +114,19 @@ class BenchmarkDefinition(FrozenModel):
             ],
         )
         return Experiment(
-            generation=GenerationConfig(
+            generation=Generation(
                 generator=generator,
-                candidate_policy=self.candidate_policy,
+                samples=_candidate_count(self.candidate_policy),
                 selector=self.selector_id,
                 reducer=self.reducer_id,
             ),
-            evaluation=EvaluationConfig(
+            evaluation=Evaluation(
                 metrics=[*self.metric_ids],
-                parsers=[*self.parser_ids],
+                parser=self.parser_ids[0] if self.parser_ids else None,
                 judge_models=[*self.judge_model_ids],
-                workflow_overrides=self.workflow_overrides,
+                workflow_options=self.workflow_overrides,
             ),
-            storage=storage or StorageConfig(target="memory"),
-            dataset_sources=[
+            datasets=[
                 inline_dataset_source(resolved_dataset)
                 if dataset is not None
                 else catalog_dataset_source(
@@ -286,14 +284,12 @@ def run_benchmark(
 ):
     definition = load_benchmark(name)
     dataset = definition.materialize_dataset()
-    storage = StorageConfig(target="memory") if store is None else None
+    run_store = store or memory_store()
     if model is None:
-        experiment = build_benchmark_experiment(name, dataset=dataset, storage=storage)
+        experiment = build_benchmark_experiment(name, dataset=dataset)
     else:
-        experiment = definition.build_experiment(
-            dataset=dataset, model=model, storage=storage
-        )
-    return experiment.run(store=store)
+        experiment = definition.build_experiment(dataset=dataset, model=model)
+    return experiment.run(store=run_store)
 
 
 def list_benchmark_ids() -> list[str]:

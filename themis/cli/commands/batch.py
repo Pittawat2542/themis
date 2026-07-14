@@ -15,10 +15,11 @@ def run(*, request: str, definition_root: list[str]) -> int:
     result = run_batch_request(request, definition_roots=definition_root)
     print(
         dump_json(
+            "batch.run",
             {
                 "run_id": result.run_id,
                 "status": result.status.value,
-            }
+            },
         )
     )
     return 0

@@ -17,10 +17,10 @@ from themis.core.config import RuntimeConfig, StorageConfig
 from themis.core.experiment import Experiment as CoreExperiment
 
 
-def load_core_experiment(
+def _load_runtime_experiment(
     path: str | Path, *, overrides: list[str] | None = None
 ) -> CoreExperiment:
-    """Load a Python experiment through an operational YAML/TOML launcher."""
+    """Load a public definition into the private operational runtime model."""
 
     launcher_path = Path(path).expanduser().resolve()
     payload = _load_payload(launcher_path, overrides=overrides)
@@ -28,7 +28,7 @@ def load_core_experiment(
     if not isinstance(definition, str) or not definition:
         raise ValueError(
             "Launcher config requires 'definition: module:symbol'; "
-            "v5 does not define experiments in YAML or TOML."
+            "v6 does not define experiments in YAML or TOML."
         )
 
     loaded = _load_definition(definition, launcher_path.parent)

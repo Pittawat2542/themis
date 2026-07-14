@@ -31,7 +31,10 @@ def snapshot(*, config: str) -> int:
     store = initialize_store(experiment)
     print(
         dump_json(
-            get_run_snapshot(store, experiment.compile().run_id).model_dump(mode="json")
+            "inspect.snapshot",
+            get_run_snapshot(store, experiment.compile().run_id).model_dump(
+                mode="json"
+            ),
         )
     )
     return 0
@@ -43,9 +46,10 @@ def state(*, config: str) -> int:
     store = initialize_store(experiment)
     print(
         dump_json(
+            "inspect.state",
             get_execution_state(store, experiment.compile().run_id).model_dump(
                 mode="json"
-            )
+            ),
         )
     )
     return 0
@@ -86,7 +90,8 @@ def runs(
     )
     print(
         dump_json(
-            [record.model_dump(mode="json") for record in store.query_runs(query)]
+            "inspect.runs",
+            [record.model_dump(mode="json") for record in store.query_runs(query)],
         )
     )
     return 0
@@ -96,7 +101,11 @@ def runs(
 def run_record(*, config: str, run_id: str) -> int:
     experiment = load_experiment(config)
     store = initialize_store(experiment)
-    print(dump_json(get_run_record(store, run_id).model_dump(mode="json")))
+    print(
+        dump_json(
+            "inspect.run-record", get_run_record(store, run_id).model_dump(mode="json")
+        )
+    )
     return 0
 
 
@@ -114,10 +123,11 @@ def lineage(
     record = get_run_record(store, resolved_run_id)
     print(
         dump_json(
+            "inspect.lineage",
             {
                 "run_id": record.run_id,
                 "lineage": [item.model_dump(mode="json") for item in record.lineage],
-            }
+            },
         )
     )
     return 0
@@ -147,7 +157,7 @@ def evaluation(
         if dataset_id is not None:
             message += f" dataset_id={dataset_id}"
         raise SystemExit(message)
-    print(dump_json(execution.model_dump(mode="json")))
+    print(dump_json("inspect.evaluation", execution.model_dump(mode="json")))
     return 0
 
 
@@ -172,7 +182,7 @@ def case(
         if dataset_id is not None:
             message += f" dataset_id={dataset_id}"
         raise SystemExit(message)
-    print(dump_json(audit.model_dump(mode="json")))
+    print(dump_json("inspect.case", audit.model_dump(mode="json")))
     return 0
 
 
@@ -180,5 +190,10 @@ def case(
 def telemetry(*, config: str, run_id: str) -> int:
     experiment = load_experiment(config)
     store = initialize_store(experiment)
-    print(dump_json(get_telemetry_summary(store, run_id).model_dump(mode="json")))
+    print(
+        dump_json(
+            "inspect.telemetry",
+            get_telemetry_summary(store, run_id).model_dump(mode="json"),
+        )
+    )
     return 0

@@ -32,14 +32,15 @@ def run(
         require_signature=require_signature,
     )
     if result is None:
-        print(dump_json({"status": "idle"}))
+        print(dump_json("worker.run", {"status": "idle"}))
         return 0
     print(
         dump_json(
+            "worker.run",
             {
                 "run_id": result.run_id,
                 "status": result.status.value,
-            }
+            },
         )
     )
     return 0

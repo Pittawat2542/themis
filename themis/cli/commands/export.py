@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from cyclopts import App
 
-from themis.cli.helpers import dump_json, initialize_store, load_experiment
+from themis.cli.helpers import initialize_store, load_experiment
 from themis.core.bundles import export_evaluation_bundle, export_generation_bundle
 
 export_app = App(name="export", help="Export stored run artifacts.")
@@ -16,7 +16,7 @@ def generation(*, config: str) -> int:
     bundle = export_generation_bundle(
         initialize_store(experiment), experiment.compile().run_id
     )
-    print(dump_json(bundle.model_dump(mode="json")))
+    print(bundle.model_dump_json(indent=2))
     return 0
 
 
@@ -26,5 +26,5 @@ def evaluation(*, config: str) -> int:
     bundle = export_evaluation_bundle(
         initialize_store(experiment), experiment.compile().run_id
     )
-    print(dump_json(bundle.model_dump(mode="json")))
+    print(bundle.model_dump_json(indent=2))
     return 0

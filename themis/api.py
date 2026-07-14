@@ -1,4 +1,4 @@
-"""Small public API for authoring and running Themis v5 experiments."""
+"""Small public API for authoring and running Themis v6 experiments."""
 
 from __future__ import annotations
 
@@ -166,10 +166,19 @@ class Experiment(FrozenModel):
     seeds: list[int] = Field(default_factory=list)
     metadata: dict[str, str] = Field(default_factory=dict)
 
-    def compile(self) -> RunSnapshot:
-        """Compile logical identity using an in-memory execution provenance."""
+    def compile(
+        self,
+        *,
+        store: RunStore | None = None,
+        options: RunOptions | None = None,
+    ) -> RunSnapshot:
+        """Compile identity and the supplied execution provenance."""
 
-        return self._core(StorageConfig(), RunOptions()).compile()
+        resolved_options = options or RunOptions()
+        return self._core(
+            storage_config(store) if store is not None else StorageConfig(),
+            resolved_options,
+        ).compile()
 
     async def run_async(
         self,

@@ -11,19 +11,23 @@ from themis.core.read_models import BenchmarkResult
 from themis.core.registry import RunQuery
 from themis.core.store import RunStore
 from themis.core.stores.factory import create_run_store
-from themis.launcher import load_core_experiment
+from themis.launcher import _load_runtime_experiment
 
 
-def dump_json(payload: object) -> str:
-    """Render a JSON payload with stable formatting for CLI output."""
+def dump_json(command: str, payload: object) -> str:
+    """Render one versioned machine-readable CLI response."""
 
-    return json.dumps(payload, indent=2, sort_keys=True)
+    return json.dumps(
+        {"schema_version": "1", "command": command, "data": payload},
+        indent=2,
+        sort_keys=True,
+    )
 
 
 def load_experiment(config: str, *, overrides: list[str] | None = None) -> Experiment:
     """Load an experiment definition from a config file path."""
 
-    return load_core_experiment(config, overrides=overrides)
+    return _load_runtime_experiment(config, overrides=overrides)
 
 
 def initialize_store(experiment: Experiment) -> RunStore:

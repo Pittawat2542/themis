@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import cast
+from typing import Annotated
 
+from pydantic import Field
+
+from themis.api import Evaluation, Experiment, Generation
 from themis.core.base import FrozenModel, JSONValue
 from themis.core.config import (
-    EvaluationConfig,
     GeneratorComponent,
     JudgeModelComponent,
     MetricComponent,
     ParserComponent,
-    ParserView,
     ReducerComponent,
-    RuntimeConfig,
     SelectorComponent,
-    GenerationConfig,
-    StorageConfig,
 )
 from themis.core.dataset_sources import catalog_dataset_source, inline_dataset_source
-from themis.core.experiment import Experiment
 from themis.core.models import Case, Dataset
 from themis.core.prompts import PromptSpec
 
@@ -29,16 +27,17 @@ class BenchmarkExperimentDefaults(FrozenModel):
     """Defaults or overrides used when a Benchmark Kit builds an experiment."""
 
     generator: GeneratorComponent | None = None
-    candidate_policy: dict[str, JSONValue] | None = None
-    prompt_spec: PromptSpec | None = None
+    samples: Annotated[int, Field(ge=1)] | None = None
+    generation_prompt: PromptSpec | None = None
     selector: SelectorComponent | None = None
     reducer: ReducerComponent | None = None
-    parser_views: list[ParserView | ParserComponent] | None = None
+    parser: ParserComponent | None = None
+    parser_views: Mapping[str, ParserComponent] | None = None
     metrics: list[MetricComponent] | None = None
     judge_models: list[JudgeModelComponent] | None = None
-    evaluation_prompt_spec: PromptSpec | None = None
-    judge_config: dict[str, JSONValue] | None = None
-    workflow_overrides: dict[str, JSONValue] | None = None
+    evaluation_prompt: PromptSpec | None = None
+    judge_options: dict[str, JSONValue] | None = None
+    workflow_options: dict[str, JSONValue] | None = None
 
     def merged_with(
         self, overrides: BenchmarkExperimentDefaults | None
@@ -66,8 +65,6 @@ class BenchmarkKit:
     def build_experiment(
         self,
         *,
-        storage: StorageConfig | None = None,
-        runtime: RuntimeConfig | None = None,
         overrides: BenchmarkExperimentDefaults | None = None,
         dataset: Dataset | None = None,
     ) -> Experiment:
@@ -78,12 +75,15 @@ class BenchmarkKit:
         definition = load_benchmark(self.benchmark_id)
         defaults = self.defaults.merged_with(overrides)
         generator = defaults.generator or definition.generator_id
-        candidate_policy = defaults.candidate_policy or definition.candidate_policy
-        parser_views = (
-            defaults.parser_views
-            if defaults.parser_views is not None
-            else [*definition.parser_ids]
+        samples = (
+            defaults.samples
+            if defaults.samples is not None
+            else _candidate_count(definition.candidate_policy)
         )
+        parser = defaults.parser
+        parser_views = defaults.parser_views or {}
+        if parser is None and not parser_views and definition.parser_ids:
+            parser = definition.parser_ids[0]
         metrics = (
             defaults.metrics
             if defaults.metrics is not None
@@ -96,10 +96,10 @@ class BenchmarkKit:
         )
         resolved_dataset = dataset or _sample_dataset(definition)
         return Experiment(
-            generation=GenerationConfig(
+            generation=Generation(
                 generator=generator,
-                candidate_policy=candidate_policy,
-                prompt_spec=defaults.prompt_spec,
+                samples=samples,
+                prompt=defaults.generation_prompt,
                 selector=defaults.selector
                 if defaults.selector is not None
                 else definition.selector_id,
@@ -107,19 +107,18 @@ class BenchmarkKit:
                 if defaults.reducer is not None
                 else definition.reducer_id,
             ),
-            evaluation=EvaluationConfig(
-                metrics=cast(list[MetricComponent], metrics),
-                parsers=cast(list[ParserView | ParserComponent], parser_views),
-                judge_models=cast(list[JudgeModelComponent], judge_models),
-                prompt_spec=defaults.evaluation_prompt_spec,
-                judge_config=defaults.judge_config or {},
-                workflow_overrides=defaults.workflow_overrides
-                if defaults.workflow_overrides is not None
+            evaluation=Evaluation(
+                metrics=list(metrics),
+                parser=parser,
+                parser_views=parser_views,
+                judge_models=list(judge_models),
+                prompt=defaults.evaluation_prompt,
+                judge_options=defaults.judge_options or {},
+                workflow_options=defaults.workflow_options
+                if defaults.workflow_options is not None
                 else definition.workflow_overrides,
             ),
-            storage=storage or StorageConfig(target="memory"),
-            runtime=runtime or RuntimeConfig(),
-            dataset_sources=[
+            datasets=[
                 inline_dataset_source(resolved_dataset)
                 if dataset is not None
                 else catalog_dataset_source(
@@ -129,7 +128,7 @@ class BenchmarkKit:
                     provenance_metadata=resolved_dataset.metadata,
                 )
             ],
-            seeds=list(range(7, 7 + _candidate_count(candidate_policy))),
+            seeds=list(range(7, 7 + samples)),
         )
 
 
@@ -156,13 +155,13 @@ def get_benchmark_kit(benchmark_id: str) -> BenchmarkKit:
         ),
         defaults=BenchmarkExperimentDefaults(
             generator=definition.generator_id,
-            candidate_policy=definition.candidate_policy,
+            samples=_candidate_count(definition.candidate_policy),
             selector=definition.selector_id,
             reducer=definition.reducer_id,
-            parser_views=[*definition.parser_ids],
+            parser=definition.parser_ids[0] if definition.parser_ids else None,
             metrics=[*definition.metric_ids],
             judge_models=[*definition.judge_model_ids],
-            workflow_overrides=definition.workflow_overrides,
+            workflow_options=definition.workflow_overrides,
         ),
     )
 
@@ -170,16 +169,12 @@ def get_benchmark_kit(benchmark_id: str) -> BenchmarkKit:
 def build_benchmark_experiment(
     benchmark_id: str,
     *,
-    storage: StorageConfig | None = None,
-    runtime: RuntimeConfig | None = None,
     overrides: BenchmarkExperimentDefaults | None = None,
     dataset: Dataset | None = None,
 ) -> Experiment:
     """Build a complete experiment from a benchmark kit."""
 
     return get_benchmark_kit(benchmark_id).build_experiment(
-        storage=storage,
-        runtime=runtime,
         overrides=overrides,
         dataset=dataset,
     )

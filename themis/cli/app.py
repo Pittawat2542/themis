@@ -29,12 +29,13 @@ def submit(*, config: str, mode: Literal["worker-pool", "batch"]) -> int:
     manifest = submit_experiment(experiment, config_path=config, mode=normalized_mode)
     print(
         dump_json(
+            "submit",
             {
                 "run_id": manifest.run_id,
                 "status": manifest.status,
                 "manifest_path": str(manifest.manifest_path),
                 "mode": manifest.mode,
-            }
+            },
         )
     )
     return 0

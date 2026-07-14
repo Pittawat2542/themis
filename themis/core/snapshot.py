@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, computed_field, model_validator
 
-from themis.core.base import FrozenModel, HashableModel, JSONValue
+from themis.core.base import FrozenModel, HashableModel, JSONValue, deep_freeze
 from themis.core.components import BUILTIN_COMPONENT_REFS, ComponentRef, MetricRef
 from themis.core.config import RuntimeConfig, StorageConfig
 from themis.core.dataset_sources import DatasetSourceSpec, materialize_dataset_sources
@@ -191,7 +191,7 @@ class RunSnapshot(FrozenModel):
                     "Dataset source materialization no longer matches the persisted snapshot "
                     f"for dataset_id={dataset.dataset_id}"
                 )
-        object.__setattr__(self, "datasets", datasets)
+        object.__setattr__(self, "datasets", deep_freeze(datasets))
         return self
 
     @computed_field  # type: ignore[prop-decorator]

@@ -73,13 +73,13 @@ from themis.core.snapshot import (
 def _resolve_themis_version() -> str:
     """Resolve the release version for runtime provenance defaults."""
 
+    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    if pyproject_path.is_file():
+        payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        return str(payload["project"]["version"])
     try:
         return distribution_version("themis-eval")
     except PackageNotFoundError:
-        pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
-        if pyproject_path.is_file():
-            payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-            return str(payload["project"]["version"])
         return "0+unknown"
 
 

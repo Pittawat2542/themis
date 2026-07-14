@@ -7,46 +7,36 @@ from typing import cast
 
 from cyclopts import App
 
+from themis import Evaluation, Experiment, Generation
 from themis.catalog import run as run_catalog_benchmark
+from themis.cli.helpers import dump_json
 from themis.core.base import JSONValue
-from themis.core.config import EvaluationConfig, GenerationConfig, StorageConfig
 from themis.core.dataset_inputs import (
     MissingOptionalDependencyError,
     dataset_from_huggingface,
     dataset_from_inline,
     dataset_from_jsonl,
 )
-from themis.core.experiment import Experiment
 from themis.storage import memory_store
 
 quick_eval_app = App(name="quick-eval", help="Quick evaluation workflows.")
-_DEFAULT_STORAGE = StorageConfig(target="memory")
 
 
-def _result_payload(*, run_id: str, status: str, metric_means: dict[str, float]) -> str:
-    return json.dumps(
-        {
-            "run_id": run_id,
-            "status": status,
-            "metric_means": metric_means,
-        },
-        sort_keys=True,
-    )
+def _result_payload(*, run_id: str, status: str, metric_means: dict[str, float]):
+    return {"run_id": run_id, "status": status, "metric_means": metric_means}
 
 
-def _run_dataset(dataset) -> str:
+def _run_dataset(dataset) -> dict[str, object]:
     store = memory_store()
     experiment = Experiment(
-        generation=GenerationConfig(
+        generation=Generation(
             generator="builtin/demo_generator",
-            candidate_policy={"num_samples": 1},
             reducer="builtin/majority_vote",
         ),
-        evaluation=EvaluationConfig(
-            metrics=["builtin/exact_match"], parsers=["builtin/json_identity"]
+        evaluation=Evaluation(
+            metrics=["builtin/exact_match"], parser="builtin/json_identity"
         ),
-        storage=_DEFAULT_STORAGE,
-        dataset_sources=[dataset],
+        datasets=[dataset],
     )
     result = experiment.run(store=store)
     benchmark = store.get_projection(result.run_id, "benchmark_result")
@@ -64,14 +54,14 @@ def inline(*, input_json: str, expected_output_json: str | None = None) -> int:
         if expected_output_json is None
         else json.loads(expected_output_json),
     )
-    print(_run_dataset(dataset))
+    print(dump_json("quick-eval.inline", _run_dataset(dataset)))
     return 0
 
 
 @quick_eval_app.command
 def file(*, path: str) -> int:
     dataset = dataset_from_jsonl(path)
-    print(_run_dataset(dataset))
+    print(dump_json("quick-eval.file", _run_dataset(dataset)))
     return 0
 
 
@@ -94,7 +84,7 @@ def huggingface(
         )
     except MissingOptionalDependencyError as exc:
         raise SystemExit(str(exc)) from exc
-    print(_run_dataset(loaded_dataset))
+    print(dump_json("quick-eval.huggingface", _run_dataset(loaded_dataset)))
     return 0
 
 
@@ -105,8 +95,13 @@ def benchmark(*, name: str) -> int:
     benchmark_result = store.get_projection(result.run_id, "benchmark_result")
     metric_means = _metric_means_from_projection(benchmark_result)
     print(
-        _result_payload(
-            run_id=result.run_id, status=result.status.value, metric_means=metric_means
+        dump_json(
+            "quick-eval.benchmark",
+            _result_payload(
+                run_id=result.run_id,
+                status=result.status.value,
+                metric_means=metric_means,
+            ),
         )
     )
     return 0

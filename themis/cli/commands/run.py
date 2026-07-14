@@ -27,12 +27,13 @@ def run(
             metric_means = dict(metric_means_payload)
     print(
         dump_json(
+            "run",
             {
                 "run_id": result.run_id,
                 "status": result.status.value,
                 "completed_through_stage": result.completed_through_stage,
                 "metric_means": metric_means,
-            }
+            },
         )
     )
     return 0
@@ -47,6 +48,7 @@ def resume(*, config: str) -> int:
         raise SystemExit(f"Unknown run_id: {snapshot.run_id}")
     print(
         dump_json(
+            "resume",
             {
                 "run_id": snapshot.run_id,
                 "status": stored.execution_state.status.value,
@@ -55,7 +57,7 @@ def resume(*, config: str) -> int:
                     len(dataset.cases) for dataset in stored.snapshot.datasets
                 ),
                 "completed_cases": len(stored.execution_state.case_states),
-            }
+            },
         )
     )
     return 0
@@ -64,7 +66,7 @@ def resume(*, config: str) -> int:
 def estimate(*, config: str) -> int:
     experiment = load_experiment(config)
     estimate_result = Planner().estimate(experiment.compile())
-    print(dump_json(estimate_result.model_dump(mode="json")))
+    print(dump_json("estimate", estimate_result.model_dump(mode="json")))
     return 0
 
 
@@ -74,7 +76,7 @@ def quickcheck(*, config: str) -> int:
     store = initialize_store(experiment)
     from themis.core.quickcheck import quickcheck as quickcheck_run
 
-    print(dump_json(quickcheck_run(store, snapshot.run_id)))
+    print(dump_json("quickcheck", quickcheck_run(store, snapshot.run_id)))
     return 0
 
 
@@ -95,11 +97,12 @@ def replay(
             metric_means = dict(metric_means_payload)
     print(
         dump_json(
+            "replay",
             {
                 "run_id": result.run_id,
                 "status": result.status.value,
                 "metric_means": metric_means,
-            }
+            },
         )
     )
     return 0
@@ -135,11 +138,12 @@ def rerun(
             metric_means = dict(metric_means_payload)
     print(
         dump_json(
+            "rerun",
             {
                 "run_id": result.run_id,
                 "status": result.status.value,
                 "metric_means": metric_means,
-            }
+            },
         )
     )
     return 0

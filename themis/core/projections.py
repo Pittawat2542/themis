@@ -1,4 +1,4 @@
-"""Projection builders for Phase 4 read models."""
+"""Projection builders for persisted read models."""
 
 from __future__ import annotations
 

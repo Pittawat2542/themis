@@ -1,4 +1,4 @@
-"""Public helpers for inspecting stored execution state."""
+"""Implementation helpers re-exported through :mod:`themis.analysis`."""
 
 from __future__ import annotations
 

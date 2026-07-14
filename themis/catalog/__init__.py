@@ -7,21 +7,32 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from themis.catalog.benchmarks import (
         BenchmarkCatalogEntry,
+        BenchmarkDefinition,
         BenchmarkExperimentDefaults,
         BenchmarkKit,
+        BenchmarkValidationCheck,
         BenchmarkValidationResult,
     )
     from themis.catalog.suites import (
+        SuiteAggregation,
         SuiteDefinition,
         SuiteExpansion,
+        SuiteExpansionItem,
         SuiteItem,
+        SuiteRunItem,
         SuiteRunResult,
     )
-    from themis.core.results import RunResult
-    from themis.core.store import RunStore
+    from themis import RunResult
+    from themis.storage import RunStore
 
 __all__ = [
     "builtin_component_refs",
+    "BenchmarkCatalogEntry",
+    "BenchmarkDefinition",
+    "BenchmarkExperimentDefaults",
+    "BenchmarkKit",
+    "BenchmarkValidationCheck",
+    "BenchmarkValidationResult",
     "build_benchmark_experiment",
     "get_benchmark_kit",
     "get_benchmark",
@@ -31,7 +42,12 @@ __all__ = [
     "list_component_ids",
     "load",
     "SuiteDefinition",
+    "SuiteAggregation",
+    "SuiteExpansion",
+    "SuiteExpansionItem",
     "SuiteItem",
+    "SuiteRunItem",
+    "SuiteRunResult",
     "expand_suite",
     "get_suite",
     "list_suites",
@@ -125,8 +141,6 @@ def get_benchmark_kit(name: str) -> BenchmarkKit:
 def build_benchmark_experiment(
     name: str,
     *,
-    storage=None,
-    runtime=None,
     overrides: BenchmarkExperimentDefaults | None = None,
     dataset=None,
 ):
@@ -138,8 +152,6 @@ def build_benchmark_experiment(
 
     return _build_benchmark_experiment(
         name,
-        storage=storage,
-        runtime=runtime,
         overrides=overrides,
         dataset=dataset,
     )
@@ -194,7 +206,26 @@ def run_suite(suite_id: str, *, store=None) -> SuiteRunResult:
 
 
 def __getattr__(name: str) -> object:
-    if name in {"SuiteDefinition", "SuiteItem"}:
+    if name in {
+        "BenchmarkCatalogEntry",
+        "BenchmarkDefinition",
+        "BenchmarkExperimentDefaults",
+        "BenchmarkKit",
+        "BenchmarkValidationCheck",
+        "BenchmarkValidationResult",
+    }:
+        from themis.catalog import benchmarks
+
+        return getattr(benchmarks, name)
+    if name in {
+        "SuiteAggregation",
+        "SuiteDefinition",
+        "SuiteExpansion",
+        "SuiteExpansionItem",
+        "SuiteItem",
+        "SuiteRunItem",
+        "SuiteRunResult",
+    }:
         from themis.catalog import suites
 
         return getattr(suites, name)

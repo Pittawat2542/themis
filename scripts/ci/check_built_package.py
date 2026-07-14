@@ -60,8 +60,21 @@ def _inspect_wheel(path: Path) -> None:
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         _assert_archive_contents(path, names)
-        if "themis/__init__.py" not in names:
-            raise SystemExit(f"{path.name} does not contain themis/__init__.py")
+        public_modules = {
+            "themis/__init__.py",
+            "themis/analysis.py",
+            "themis/artifacts.py",
+            "themis/catalog/__init__.py",
+            "themis/components.py",
+            "themis/presets.py",
+            "themis/runtime.py",
+            "themis/storage.py",
+        }
+        missing_modules = sorted(public_modules.difference(names))
+        if missing_modules:
+            raise SystemExit(
+                f"{path.name} is missing public modules: {', '.join(missing_modules)}"
+            )
         metadata_name = next(
             (name for name in names if name.endswith(".dist-info/METADATA")),
             None,
@@ -131,11 +144,14 @@ def main() -> int:
             str(python),
             "-c",
             (
+                "import themis.analysis, themis.artifacts, themis.catalog, "
+                "themis.components, themis.presets, themis.runtime, themis.storage; "
                 "from importlib.metadata import version; "
-                "from themis import Experiment, __all__, __version__; "
+                "from themis import Experiment, RunSnapshot, __all__, __version__; "
                 "assert 'Experiment' in __all__; "
+                "assert 'RunSnapshot' in __all__; "
                 "assert '__version__' in __all__; "
-                "assert Experiment is not None; "
+                "assert Experiment is not None and RunSnapshot is not None; "
                 "assert __version__ == version('themis-eval')"
             ),
             cwd=temp_path,
