@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches: [main]
+    tags: ['v*.*.*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -11,20 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  actions: read
   contents: read
 
 env:
   PYTHONUNBUFFERED: '1'
+  UV_NO_PROGRESS: '1'
 
 jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -38,100 +39,22 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --frozen --extra dev
 
-      - name: Detect changed Python files
-        id: changed-python
-        shell: bash
-        run: |
-          : > changed_python_files.txt
+      - name: Check formatting
+        run: uv run ruff format --check .
 
-          if [[ "${{ github.ref_type }}" == "tag" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            true
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            git diff --name-only --diff-filter=ACMRT "${BASE_SHA}" "${{ github.sha }}" -- '*.py' > changed_python_files.txt
-          else
-            BASE_SHA="${{ github.event.before }}"
-
-            if [[ -z "${BASE_SHA}" || "${BASE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
-              git ls-files '*.py' > changed_python_files.txt
-            else
-              git diff --name-only --diff-filter=ACMRT "${BASE_SHA}" "${{ github.sha }}" -- '*.py' > changed_python_files.txt
-            fi
-          fi
-
-          COUNT="$(wc -l < changed_python_files.txt | tr -d ' ')"
-          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
-          echo "Detected ${COUNT} changed Python files"
-
-      - name: Check formatting on changed Python files
-        if: steps.changed-python.outputs.count != '0'
-        shell: bash
-        run: |
-          mapfile -t changed_files < changed_python_files.txt
-          uv run ruff format --check "${changed_files[@]}"
-
-      - name: Run lint on changed Python files
-        if: steps.changed-python.outputs.count != '0'
-        shell: bash
-        run: |
-          mapfile -t changed_files < changed_python_files.txt
-          uv run ruff check "${changed_files[@]}"
-
-      - name: Run full repo lint
-        run: uv run ruff check themis tests examples scripts
+      - name: Run lint
+        run: uv run ruff check .
 
       - name: Run type check
         run: uv run mypy themis tests
-
-  docs-changes:
-    name: Detect docs changes
-    runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.detect.outputs.changed }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed docs files
-        id: detect
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            : > changed_docs_files.txt
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE_SHA="${{ github.event.before }}"
-          fi
-
-          if [[ "${{ github.ref_type }}" != "tag" ]]; then
-            if [[ -z "${BASE_SHA}" || "${BASE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
-              git ls-files -- docs mkdocs.yml pyproject.toml uv.lock .github/workflows/docs.yml > changed_docs_files.txt
-            else
-              git diff --name-only --diff-filter=ACMRT "${BASE_SHA}" "${{ github.sha }}" -- docs mkdocs.yml pyproject.toml uv.lock .github/workflows/docs.yml > changed_docs_files.txt
-            fi
-          fi
-
-          COUNT="$(wc -l < changed_docs_files.txt | tr -d ' ')"
-          if [[ "${COUNT}" == "0" ]]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Detected ${COUNT} docs-related changed files"
 
   tests:
     name: Tests (Python ${{ matrix.python-version }})
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -151,19 +74,34 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --frozen --extra dev --extra datasets
 
-      - name: Run test suite
-        run: uv run pytest -m "not external" -q
-
-      - name: Validate examples
+      - name: Run full suite with coverage
         if: matrix.python-version == '3.12'
-        run: uv run pytest tests/test_docs_examples.py tests/test_readme_examples.py -m "not external" -q
+        run: uv run pytest -m "not external" -q --cov=themis --cov-report=xml --cov-report=json:coverage.json --cov-fail-under=60
+
+      - name: Enforce module-level coverage thresholds
+        if: matrix.python-version == '3.12'
+        run: uv run python scripts/check_coverage_thresholds.py coverage.json
+
+      - name: Upload coverage artifact
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run Python 3.13 compatibility suite
+        if: matrix.python-version == '3.13'
+        run: uv run pytest
 
   tests-postgres:
     name: Tests (Postgres, Python 3.12)
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -195,7 +133,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --frozen --extra dev --extra postgres
 
       - name: Run Postgres storage tests
         run: uv run pytest tests/storage/test_postgres_backend.py tests/storage/test_migrate.py -m external -q
@@ -204,6 +142,7 @@ jobs:
     name: Tests (MongoDB, Python 3.12)
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       mongodb:
         image: mongo:7
@@ -231,50 +170,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --frozen --extra dev --extra mongodb
 
       - name: Run MongoDB storage tests
         run: uv run pytest tests/storage/test_mongodb_backend.py -m external -q
 
-  coverage:
-    name: Coverage
-    needs: quality
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: 'latest'
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
-
-      - name: Run coverage
-        run: uv run pytest -m "not external" -q --cov=themis --cov-report=xml --cov-report=json:coverage.json --cov-fail-under=60
-
-      - name: Enforce module-level coverage thresholds
-        run: uv run python scripts/check_coverage_thresholds.py coverage.json
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-xml
-          path: coverage.xml
-
   docs-build:
     name: Build Documentation
-    if: needs.docs-changes.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
-    needs: [quality, docs-changes]
+    needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
@@ -290,37 +195,10 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --frozen --extra dev --extra docs
 
       - name: Run docs verification tests
         run: uv run pytest tests/test_docs_site.py tests/test_docs_inventory.py tests/test_docs_examples.py tests/test_readme_examples.py -m "not external" -q
-
-  package-build:
-    name: Build Package
-    needs: quality
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: 'latest'
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
-
-      - name: Build distributions
-        run: uv build
-
-      - name: Validate built distributions
-        run: uv run python scripts/ci/check_built_package.py
 
       - name: Build documentation (strict)
         run: uv run mkdocs build --strict
@@ -329,6 +207,7 @@ jobs:
     name: Build Package
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
@@ -343,9 +222,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
-
       - name: Build package
         run: uv build
 
@@ -353,18 +229,21 @@ jobs:
         run: uvx --from twine twine check dist/*
 
       - name: Smoke test built wheel
-        run: uv run python scripts/ci/check_built_package.py
+        run: python scripts/ci/check_built_package.py
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
+          if-no-files-found: error
+          retention-days: 7
 
   dependency-review:
     name: Dependency Review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -373,114 +252,16 @@ jobs:
       - name: Dependency vulnerability review
         uses: actions/dependency-review-action@v4
 
-  compatibility-precheck:
-    name: Compatibility Precheck
-    runs-on: ubuntu-latest
-    outputs:
-      skip: ${{ steps.evaluate.outputs.skip }}
-    steps:
-      - uses: actions/checkout@v6
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        with:
-          fetch-depth: 0
-
-      - name: Resolve target SHA
-        id: resolve-sha
-        shell: bash
-        run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/v* ]]; then
-            SHA="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
-          else
-            SHA="${GITHUB_SHA}"
-          fi
-
-          if [[ -z "${SHA}" ]]; then
-            echo "Unable to determine target SHA" >&2
-            exit 1
-          fi
-
-          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
-          echo "Resolved compatibility target SHA ${SHA}"
-
-      - name: Check for prior successful compatibility matrix
-        id: evaluate
-        uses: actions/github-script@v8
-        env:
-          TARGET_SHA: ${{ steps.resolve-sha.outputs.sha }}
-        with:
-          script: |
-            if (!(context.eventName === "push" && context.ref.startsWith("refs/tags/v"))) {
-              core.setOutput("skip", "false");
-              return;
-            }
-
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const targetSha = process.env.TARGET_SHA;
-            const workflowId = "ci.yml";
-            const checkName = "Compatibility Matrix";
-
-            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-              owner,
-              repo,
-              workflow_id: workflowId,
-              head_sha: targetSha,
-              per_page: 100,
-            });
-
-            for (const run of runs) {
-              if (run.id === context.runId) {
-                continue;
-              }
-
-              if (run.status !== "completed" || run.conclusion !== "success") {
-                continue;
-              }
-
-              if (run.event !== "push" && run.event !== "workflow_dispatch") {
-                continue;
-              }
-
-              if (!run.head_branch) {
-                continue;
-              }
-
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-                owner,
-                repo,
-                run_id: run.id,
-                per_page: 100,
-              });
-
-              const compatibilityJobs = jobs.filter((job) =>
-                job.name.startsWith(checkName),
-              );
-
-              if (
-                compatibilityJobs.length > 0 &&
-                compatibilityJobs.every((job) => job.conclusion === "success")
-              ) {
-                core.info(
-                  `Found prior compatibility success in run ${run.id} for ${targetSha}.`,
-                );
-                core.setOutput("skip", "true");
-                return;
-              }
-            }
-
-            core.info(`No prior compatibility success found for ${targetSha}.`);
-            core.setOutput("skip", "false");
-
   release-compatibility:
-    name: Compatibility Matrix
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/v') || needs.compatibility-precheck.outputs.skip != 'true')
-    needs: [quality, tests, package, compatibility-precheck]
+    name: Compatibility (${{ matrix.os }}, Python 3.12)
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs: [quality, tests, package]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.12']
     steps:
       - uses: actions/checkout@v6
 
@@ -490,13 +271,13 @@ jobs:
           version: 'latest'
           enable-cache: true
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --frozen --extra dev --extra datasets
 
       - name: Run test suite
         run: uv run pytest -m "not external" -q

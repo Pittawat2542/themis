@@ -5,9 +5,13 @@ on:
     branches:
       - main
     paths:
+      - 'README.md'
       - 'docs/**'
+      - 'examples/docs/**'
       - 'mkdocs.yml'
       - 'pyproject.toml'
+      - 'scripts/docs/**'
+      - 'themis/**'
       - 'uv.lock'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
@@ -25,6 +29,7 @@ jobs:
   build:
     name: Build docs site
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
@@ -40,7 +45,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --frozen --extra dev --extra docs
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
@@ -63,6 +68,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
