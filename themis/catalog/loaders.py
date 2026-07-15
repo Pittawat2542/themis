@@ -148,7 +148,7 @@ def _read_jsonl_rows(path: Path) -> list[dict[str, object]]:
 
 def _read_parquet_rows(path: Path) -> list[dict[str, object]]:
     try:
-        import pyarrow.parquet as pq  # type: ignore[import-untyped]
+        import pyarrow.parquet as pq  # type: ignore[import-not-found, import-untyped]
     except ModuleNotFoundError as exc:
         raise MissingOptionalDependencyError(
             "Catalog parquet benchmark loading requires the optional `pyarrow` "

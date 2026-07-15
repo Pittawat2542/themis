@@ -264,8 +264,8 @@ def test_huggingface_raw_loading_rejects_unsupported_file_types(tmp_path) -> Non
 
 
 def test_huggingface_raw_loading_supports_parquet_rows(tmp_path) -> None:
-    import pyarrow as pa  # type: ignore[import-untyped]
-    import pyarrow.parquet as pq  # type: ignore[import-untyped]
+    import pyarrow as pa  # type: ignore[import-not-found, import-untyped]
+    import pyarrow.parquet as pq  # type: ignore[import-not-found, import-untyped]
 
     path = tmp_path / "sample.parquet"
     table = pa.table(
